@@ -1,0 +1,41 @@
+.App {
+  text-align: center;
+  background-color: white;
+  color: rgb(110,109,95);
+  font-size: 20px;
+
+  div {
+    margin: 10px;
+  }
+  .buttons {
+    display: flex;
+    flex-direction: column;
+  }
+
+  button {
+    margin: 10px;
+  }
+  .response-area {
+    display: flex;
+    flex-direction: column;
+    span {
+      position: relative;
+      top: 0;
+      left: 0;
+    }
+    .response {
+      resize: vertical;
+      min-height: 2em;
+      height: 10em;
+      overflow-y: scroll;
+      border: thin solid darkslategrey;
+      background-color: rgba(0,0,255,0.1);
+      margin: 10px;
+      padding: 0;
+      font-size: small;
+      text-align: left;
+      white-space: pre-wrap;
+      user-select: text;
+    }
+  }
+}
