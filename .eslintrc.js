@@ -4,7 +4,7 @@ module.exports = {
     ecmaVersion: 2018,
     sourceType: "module",
   },
-  plugins: ["@typescript-eslint", "json", "react", "react-hooks"],
+  plugins: ["@typescript-eslint", "json", "jsx-a11y", "react", "react-hooks"],
   env: {
     browser: true,
     es6: true
@@ -34,6 +34,7 @@ module.exports = {
     "plugin:import/recommended",
     "plugin:import/typescript",
     "plugin:json/recommended",
+    "plugin:jsx-a11y/recommended",
     "plugin:react/recommended",
     "plugin:react-hooks/recommended"
   ],

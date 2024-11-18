@@ -1,11 +1,20 @@
 .App {
-  text-align: center;
   background-color: white;
   color: rgb(110,109,95);
-  font-size: 20px;
+  text-align: center;
 
   div {
     margin: 10px;
+  }
+  h1 {
+    font-size: 12px;
+    font-weight: bold;
+    margin: 10px;
+
+    span {
+      display: block;
+      font-size: 10px;
+    }
   }
   .buttons {
     display: flex;
@@ -37,5 +46,16 @@
       white-space: pre-wrap;
       user-select: text;
     }
+  }
+
+  .visually-hidden {
+    border: 0;
+    clip: rect(0, 0, 0, 0);
+    height: 1px;
+    margin: -1px;
+    overflow: hidden;
+    padding: 0;
+    position: absolute;
+    width: 1px;
   }
 }

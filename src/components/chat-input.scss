@@ -1,0 +1,43 @@
+@use "vars" as *;
+
+.chat-input {
+  fieldset {
+    border: none;
+    display: flex;
+    flex-wrap: wrap;
+    margin: 0;
+    padding: 0;
+  }
+
+  textarea {
+    border: solid 1px $medium-gray;
+    border-radius: 6px;
+    flex: 1 0 calc(100% - 22px); // full width of container minus 10px padding and 1px border on either side
+    height: 75px;
+    padding: 8px 10px;
+  }
+
+  .buttons-container {
+    align-items: center;
+    display: flex;
+    flex-wrap: nowrap;
+    justify-content: space-between;
+    margin: 10px 0;
+    padding: 0;
+    width: 100%;
+
+    button {
+      display: block;
+      flex: 0 0 auto;
+      margin: 0;
+      width: auto;
+
+      &.send {
+        order: 2;
+      }
+      &.dictate {
+        order: 1;
+      }
+    }
+  }
+}
