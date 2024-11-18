@@ -1,5 +1,9 @@
 @use "vars" as *;
 
+.App .chat-transcript {
+  margin: 0;
+}
+
 .chat-transcript {
   background: white;
   color: $dark-gray;
