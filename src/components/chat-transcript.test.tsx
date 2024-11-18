@@ -28,16 +28,13 @@ describe("test chat transcript component", () => {
     const messages = within(transcript).getAllByTestId("chat-message");
     expect(messages).toHaveLength(2);
 
+    // note: messages from AI should be assertive, while messages from user will not have aria-live
+    expect(messages[0]).toHaveAttribute("aria-live", "assertive");
+    expect(messages[1]).not.toHaveAttribute("aria-live");
+
     messages.forEach((message: HTMLElement, index: number) => {
       const labelContent = `${chatTranscript.messages[index].speaker} at ${chatTranscript.messages[index].timestamp}`;
-      const shouldBeLive = chatTranscript.messages[index].speaker === "DAVAI";
-
       expect(message).toHaveAttribute("aria-label", labelContent);
-      if (shouldBeLive) {
-        expect(message).toHaveAttribute("aria-live", "assertive");
-      } else {
-        expect(message).not.toHaveAttribute("aria-live");
-      }
 
       const speaker = within(message).getByTestId("chat-message-speaker");
       expect(speaker).toBeInTheDocument();
