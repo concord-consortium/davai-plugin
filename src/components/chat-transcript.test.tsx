@@ -33,8 +33,11 @@ describe("test chat transcript component", () => {
       const shouldBeLive = chatTranscript.messages[index].speaker === "DAVAI";
 
       expect(message).toHaveAttribute("aria-label", labelContent);
-      const matcher = shouldBeLive ? expect(message).toHaveAttribute : expect(message).not.toHaveAttribute;
-      matcher.call(expect(message), "aria-live", shouldBeLive ? "assertive" : undefined);
+      if (shouldBeLive) {
+        expect(message).toHaveAttribute("aria-live", "assertive");
+      } else {
+        expect(message).not.toHaveAttribute("aria-live");
+      }
 
       const speaker = within(message).getByTestId("chat-message-speaker");
       expect(speaker).toBeInTheDocument();
