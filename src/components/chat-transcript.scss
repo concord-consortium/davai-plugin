@@ -1,6 +1,10 @@
 @use "vars" as *;
 
-.chat-transcript__messages {
+.App .chat-transcript {
+  margin: 0;
+}
+
+.chat-transcript {
   background: white;
   color: $dark-gray;
   list-style: none;
