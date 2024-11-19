@@ -2,10 +2,8 @@
   background-color: white;
   color: rgb(110,109,95);
   text-align: center;
+  padding: 10px;
 
-  div {
-    margin: 10px;
-  }
   h1 {
     font-size: 12px;
     font-weight: bold;

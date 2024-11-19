@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from "react";
 import { initializePlugin } from "@concord-consortium/codap-plugin-api";
-
+import { ReadAloudMenu } from "./readaloud-menu";
 import { ChatInputComponent } from "./chat-input";
 import { ChatTranscriptComponent } from "./chat-transcript";
 import { ChatTranscript, ChatMessage } from "../types";
@@ -27,10 +27,20 @@ const mockAiResponse = (): ChatMessage => {
 export const App = () => {
   const greeting = "Hello! I'm DAVAI, your Data Analysis through Voice and Artificial Intelligence partner.";
   const [chatTranscript, setChatTranscript] = useState<ChatTranscript>({messages: [{speaker: "DAVAI", content: greeting, timestamp: timeStamp()}]});
+  const [readAloudEnabled, setReadAloudEnabled] = useState(false);
+  const [playbackSpeed, setPlaybackSpeed] = useState(1);
 
   useEffect(() => {
     initializePlugin({pluginName: kPluginName, version: kVersion, dimensions: kInitialDimensions});
   }, []);
+
+  const handleSetReadAloudEnabled = () => {
+    setReadAloudEnabled(!readAloudEnabled);
+  };
+
+  const handleSetPlaybackSpeed = (speed: number) => {
+    setPlaybackSpeed(speed);
+  };
 
   const handleChatInputSubmit = (messageText: string) => {
     setChatTranscript(prevTranscript => ({
@@ -52,6 +62,12 @@ export const App = () => {
       </h1>
       <ChatTranscriptComponent chatTranscript={chatTranscript} />
       <ChatInputComponent onSubmit={handleChatInputSubmit} />
+      <ReadAloudMenu
+        enabled={readAloudEnabled}
+        onToggle={handleSetReadAloudEnabled}
+        playbackSpeed={playbackSpeed}
+        onPlaybackSpeedSelect={handleSetPlaybackSpeed}
+      />
     </div>
   );
 };
