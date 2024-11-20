@@ -3,6 +3,9 @@
   color: rgb(110,109,95);
   text-align: center;
   padding: 10px;
+  &.isActive {
+    background-color: #fee9ff;
+  }
 
   h1 {
     font-size: 12px;
