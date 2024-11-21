@@ -1,4 +1,4 @@
-import React, { FormEvent, useRef, useState } from "react";
+import React, { FormEvent, forwardRef, useRef, useState } from "react";
 
 import "./chat-input.scss";
 
@@ -6,7 +6,7 @@ interface IProps {
   onSubmit: (messageText: string) => void;
 }
 
-export const ChatInputComponent = ({onSubmit}: IProps) => {
+export const ChatInputComponent = forwardRef<HTMLFormElement, IProps>(({onSubmit}, ref) => {
   const textAreaRef = useRef<HTMLTextAreaElement>(null);
   // const [browserSupportsDictation, setBrowserSupportsDictation] = useState(false);
   // const [dictationEnabled, setDictationEnabled] = useState(false);
@@ -79,7 +79,7 @@ export const ChatInputComponent = ({onSubmit}: IProps) => {
 
   return (
     <div className="chat-input" data-testid="chat-input">
-      <form onSubmit={handleSubmit}>
+      <form ref={ref} onSubmit={handleSubmit}>
         <fieldset>
           <label className="visually-hidden" data-testid="chat-input-label" htmlFor="chat-input">
             Chat Input
@@ -101,7 +101,7 @@ export const ChatInputComponent = ({onSubmit}: IProps) => {
             >
               Send
             </button>
-            {/* {browserSupportsDictation && 
+            {/* {browserSupportsDictation &&
               <button
                 aria-pressed={dictationEnabled}
                 className="dictate"
@@ -116,4 +116,6 @@ export const ChatInputComponent = ({onSubmit}: IProps) => {
       </form>
     </div>
   );
-};
+});
+
+ChatInputComponent.displayName = "ChatInputComponent";

@@ -1,4 +1,4 @@
-import React from "react";
+import React, { forwardRef } from "react";
 
 import "./readaloud-menu.scss";
 
@@ -9,7 +9,7 @@ interface IReadAloudMenuProps {
   onPlaybackSpeedSelect: (speed: number) => void;
 }
 
-export const ReadAloudMenu = (props: IReadAloudMenuProps) => {
+export const ReadAloudMenu = forwardRef<HTMLDivElement, IReadAloudMenuProps>((props, ref) => {
   const { enabled, onToggle, playbackSpeed, onPlaybackSpeedSelect } = props;
 
   const handleSelect = (event: React.ChangeEvent<HTMLSelectElement>) => {
@@ -17,7 +17,7 @@ export const ReadAloudMenu = (props: IReadAloudMenuProps) => {
   };
 
   return (
-    <div className="readaloud-controls" role="menu">
+    <div ref={ref} className="readaloud-controls" role="menu">
       <div role="menuitem" className="toggle">
         <label htmlFor="readaloud-toggle" data-testid="toggle-label">
           Tap text to listen
@@ -30,6 +30,12 @@ export const ReadAloudMenu = (props: IReadAloudMenuProps) => {
           checked={enabled}
           aria-checked={enabled}
           onChange={onToggle}
+          onKeyDown={(e) => {
+            if (e.key === "Enter" || e.key === " ") {
+              e.preventDefault();
+              onToggle();
+            }
+          }}
         />
       </div>
       <div role="menuitem">
@@ -43,15 +49,17 @@ export const ReadAloudMenu = (props: IReadAloudMenuProps) => {
         <select
           onChange={handleSelect}
           data-testid="readaloud-playback-speed"
-          defaultValue={playbackSpeed}
+          value={playbackSpeed}
           id="readaloud-playback-speed"
         >
-          <option data-testid="playback-speed-option-1" value={0.5}>.5x</option>
-          <option data-testid="playback-speed-option-2" value={1}>1x</option>
-          <option data-testid="playback-speed-option-3" value={1.5}>1.5x</option>
-          <option data-testid="playback-speed-option-4" value={2}>2x</option>
+          <option value="0.5" data-testid="playback-speed-option-1">0.5x</option>
+          <option value="1" data-testid="playback-speed-option-2">1x</option>
+          <option value="1.5" data-testid="playback-speed-option-3">1.5x</option>
+          <option value="2" data-testid="playback-speed-option-4">2x</option>
         </select>
       </div>
     </div>
   );
-};
+});
+
+ReadAloudMenu.displayName = "ReadAloudMenu";

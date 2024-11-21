@@ -1,5 +1,5 @@
 import React from "react";
-import { act, render, screen, within } from "@testing-library/react";
+import { act, fireEvent, render, screen } from "@testing-library/react";
 
 import { ReadAloudMenu } from "./readaloud-menu";
 
@@ -31,14 +31,7 @@ describe("test read aloud menu component", () => {
     expect(readAloudPlaybackSpeed).toBeInTheDocument();
     expect(readAloudPlaybackSpeed).toHaveAttribute("id", "readaloud-playback-speed");
     expect(readAloudPlaybackSpeed).toHaveValue("1");
-    act(() => {
-      readAloudPlaybackSpeed.click();
-      const option3 = screen.getByTestId("playback-speed-option-3") as HTMLOptionElement;
-      expect(option3).toHaveValue("1.5");
-      option3.selected = true;
-      readAloudPlaybackSpeed.dispatchEvent(new Event("change", { bubbles: true }));
-    });
-    expect(mockHandleSelect).toHaveBeenCalled();
-    expect(readAloudPlaybackSpeed).toHaveValue("1.5");
+    fireEvent.change(readAloudPlaybackSpeed, { target: { value: "1.5" } });
+    expect(mockHandleSelect).toHaveBeenCalledWith(1.5);
   });
 });

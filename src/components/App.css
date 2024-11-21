@@ -3,6 +3,7 @@
   color: rgb(110,109,95);
   text-align: center;
   padding: 10px;
+  height: 100%;
   &.isActive {
     background-color: #fee9ff;
   }
