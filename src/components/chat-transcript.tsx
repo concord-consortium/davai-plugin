@@ -25,9 +25,10 @@ export const ChatTranscriptComponent = ({chatTranscript}: IProps) => {
       </p>
       <div
         aria-label="DAVAI Chat Transcript"
+        aria-live="assertive"
         aria-describedby="chat-transcript-description"
         className="chat-transcript"
-        contentEditable="true"
+        // contentEditable="true"
         data-testid="chat-transcript"
         // eslint-disable-next-line jsx-a11y/no-noninteractive-tabindex
         tabIndex={0}
