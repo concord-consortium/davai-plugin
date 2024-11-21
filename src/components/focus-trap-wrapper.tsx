@@ -11,7 +11,7 @@ export const FocusTrapWrapper: React.FC = () => {
 
   const handleSetActiveTrap = (active: boolean) => {
     setActiveTrap(active);
-  }
+  };
 
   return (
     <FocusTrap

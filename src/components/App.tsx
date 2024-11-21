@@ -1,5 +1,4 @@
 import React, { useEffect, useState } from "react";
-import FocusTrap from "focus-trap-react";
 import { initializePlugin } from "@concord-consortium/codap-plugin-api";
 import { ReadAloudMenu } from "./readaloud-menu";
 import { ChatInputComponent } from "./chat-input";
