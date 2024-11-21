@@ -25,16 +25,19 @@ const mockAiResponse = (): ChatMessage => {
   return response;
 };
 
-export const App = () => {
+interface IAppProps {
+  activeTrap: boolean;
+  handleSetActiveTrap: (active: boolean) => void;
+}
+
+export const App = ({activeTrap, handleSetActiveTrap}: IAppProps) => {
   const greeting = "Hello! I'm DAVAI, your Data Analysis through Voice and Artificial Intelligence partner.";
   const [chatTranscript, setChatTranscript] = useState<ChatTranscript>({messages: [{speaker: "DAVAI", content: greeting, timestamp: timeStamp()}]});
   const [readAloudEnabled, setReadAloudEnabled] = useState(false);
   const [playbackSpeed, setPlaybackSpeed] = useState(1);
-  const [activeTrap, setActiveTrap] = useState(false);
 
   useEffect(() => {
     initializePlugin({pluginName: kPluginName, version: kVersion, dimensions: kInitialDimensions});
-    setActiveTrap(true);
   }, []);
 
   const handleSetReadAloudEnabled = () => {
@@ -58,33 +61,25 @@ export const App = () => {
   };
 
   return (
-    <FocusTrap
-      active={activeTrap}
-      focusTrapOptions={{
-        allowOutsideClick: true,
-        escapeDeactivates: true,
-        onDeactivate: () => setActiveTrap(false),
-        onActivate: () => setActiveTrap(true)
-      }}
+    <div
+      onFocus={() => handleSetActiveTrap(true)}
+      role="main"
+      className={`App ${activeTrap && "isActive"}`}
     >
-      <div
-        onFocus={() => setActiveTrap(true)}
-        role="main"
-        className={`App ${activeTrap && "isActive"}`}
-      >
-        <h1>
-          DAVAI
-          <span>(Data Analysis through Voice and Artificial Intelligence)</span>
-        </h1>
-        <ChatTranscriptComponent chatTranscript={chatTranscript} />
-        <ChatInputComponent onSubmit={handleChatInputSubmit} />
-        <ReadAloudMenu
-          enabled={readAloudEnabled}
-          onToggle={handleSetReadAloudEnabled}
-          playbackSpeed={playbackSpeed}
-          onPlaybackSpeedSelect={handleSetPlaybackSpeed}
-        />
-      </div>
-    </FocusTrap>
+      <h1>
+        DAVAI
+        <span>(Data Analysis through Voice and Artificial Intelligence)</span>
+      </h1>
+      <ChatTranscriptComponent chatTranscript={chatTranscript} />
+      <ChatInputComponent onSubmit={handleChatInputSubmit} />
+      <ReadAloudMenu
+        enabled={readAloudEnabled}
+        onToggle={handleSetReadAloudEnabled}
+        playbackSpeed={playbackSpeed}
+        onPlaybackSpeedSelect={handleSetPlaybackSpeed}
+      />
+      <button onClick={() => handleSetActiveTrap(true)}>activate focus trap</button>
+      <button onClick={() => handleSetActiveTrap(false)}>exit focus trap</button>
+    </div>
   );
 };
