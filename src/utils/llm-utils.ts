@@ -1,5 +1,4 @@
-import { openAiTools } from "./codap-utils";
-import { newOpenAI } from "./openai-utils";
+import { newOpenAI, openAiTools } from "./openai-utils";
 
 export const initLlmConnection = () => {
   return newOpenAI();
