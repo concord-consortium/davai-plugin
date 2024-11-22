@@ -17,8 +17,8 @@ export const ReadAloudMenu = (props: IReadAloudMenuProps) => {
   };
 
   return (
-    <div className="readaloud-controls" role="menu">
-      <div role="menuitem" className="toggle">
+    <div className="readaloud-controls">
+      <div className="toggle">
         <label htmlFor="readaloud-toggle" data-testid="toggle-label">
           Tap text to listen
         </label>
@@ -32,7 +32,7 @@ export const ReadAloudMenu = (props: IReadAloudMenuProps) => {
           onChange={onToggle}
         />
       </div>
-      <div role="menuitem">
+      <div className="select-playback-speed">
         <label
           data-testid="speed-label"
           className="visually-hidden"
