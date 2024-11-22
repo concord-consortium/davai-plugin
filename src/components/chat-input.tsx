@@ -1,25 +1,36 @@
-import React, { FormEvent, useRef, useState } from "react";
+import React, { FormEvent, useEffect, useRef, useState } from "react";
+
+import { isInputElement } from "../utils";
 
 import "./chat-input.scss";
 
 interface IProps {
+  onKeyboardShortcut: () => void;
   onSubmit: (messageText: string) => void;
 }
 
-export const ChatInputComponent = ({onSubmit}: IProps) => {
+export const ChatInputComponent = ({onKeyboardShortcut, onSubmit}: IProps) => {
   const textAreaRef = useRef<HTMLTextAreaElement>(null);
   // const [browserSupportsDictation, setBrowserSupportsDictation] = useState(false);
   // const [dictationEnabled, setDictationEnabled] = useState(false);
   const [inputValue, setInputValue] = useState("");
   const [showPlaceholder, setShowPlaceholder] = useState(true);
+  const [showError, setShowError] = useState(false);
 
   const handleSubmit = (event?: FormEvent) => {
     event?.preventDefault();
     // setDictationEnabled(false);
-    onSubmit(inputValue);
-    setInputValue("");
-    setShowPlaceholder(false);
-    textAreaRef.current?.focus();
+
+    if (!inputValue || inputValue.trim() === "") {
+      setShowError(true);
+      textAreaRef.current?.focus();
+    } else {
+      onSubmit(inputValue);
+      setInputValue("");
+      setShowPlaceholder(false);
+      textAreaRef.current?.focus();
+      setShowError(false);
+    }
   };
 
   const handleKeyUp = (event: React.KeyboardEvent<HTMLTextAreaElement>) => {
@@ -77,6 +88,46 @@ export const ChatInputComponent = ({onSubmit}: IProps) => {
   //   setDictationEnabled(!dictationEnabled);
   // };
 
+  useEffect(() => {
+    // Add a keyboard shortcut for placing focus on the chat input when the user's focus is outside the iframe.
+    const keys = {
+      d: false,
+      a: false
+    };
+  
+    if (window.parent !== window) {
+      window.parent.document.addEventListener("keydown", (event) => {
+        if (event.key === "d") keys.d = true;
+        if (event.key === "a") keys.a = true;
+
+        if (keys.d && keys.a) {
+
+          // Check if the focused element is an input, textarea, or content-editable
+          const activeElement = window.parent.document.activeElement;
+          if (isInputElement(activeElement)) {
+            keys.d = false;
+            keys.a = false;
+            return;
+          }
+
+          const iframe = window.frameElement;
+          if (iframe) {
+            if (textAreaRef.current) {
+              textAreaRef.current.focus();
+              onKeyboardShortcut();
+              // Reset key states after shortcut is triggered. Note: a complimentary `keyup` listener for
+              // handling this won't work reliably in this context.
+              keys.d = false;
+              keys.a = false;
+            } else {
+              console.warn("Target input not found inside the iframe.");
+            }
+          }
+        }
+      });
+    }
+  }, [onKeyboardShortcut]);
+
   return (
     <div className="chat-input" data-testid="chat-input">
       <form onSubmit={handleSubmit}>
@@ -85,6 +136,8 @@ export const ChatInputComponent = ({onSubmit}: IProps) => {
             Chat Input
           </label>
           <textarea
+            aria-describedby={showError ? "input-error" : undefined}
+            aria-invalid={showError}
             data-testid="chat-input-textarea"
             id="chat-input"
             placeholder={showPlaceholder ? "Ask DAVAI about the data" : ""}
@@ -93,6 +146,17 @@ export const ChatInputComponent = ({onSubmit}: IProps) => {
             onChange={(e) => setInputValue(e.target.value)}
             onKeyUp={handleKeyUp}
           />
+          {showError &&
+            <div
+              aria-live="assertive"
+              className="error"
+              data-testid="input-error"
+              id="input-error"
+              role="alert"
+            >
+              Please enter a message before sending.
+            </div>
+          }
           <div className="buttons-container">
             <button
               className="send"

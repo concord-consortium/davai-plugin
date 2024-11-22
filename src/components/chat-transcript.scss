@@ -1,6 +1,6 @@
 @use "vars" as *;
 
-.chat-transcript {
+.chat-transcript__messages {
   background: white;
   color: $dark-gray;
   list-style: none;
@@ -19,8 +19,8 @@
       background: $light-teal-2;
     }
 
-    h2, p {
-      font-size: 12px;
+    h3, p {
+      font-size: .75rem;
       line-height: 17px;
       margin: 0;
       padding: 0;

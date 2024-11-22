@@ -2,6 +2,7 @@
 
 .chat-input {
   margin-top: 10px;
+
   fieldset {
     border: none;
     display: flex;
@@ -16,6 +17,13 @@
     flex: 1 0 calc(100% - 22px); // full width of container minus 10px padding and 1px border on either side
     height: 75px;
     padding: 8px 10px;
+  }
+
+  .error {
+    color: #d00;
+    font-size: .75rem;
+    margin: 0;
+    padding: 0;
   }
 
   .buttons-container {
