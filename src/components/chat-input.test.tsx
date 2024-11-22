@@ -10,27 +10,30 @@ describe("test chat input component", () => {
     render(<ChatInputComponent onSubmit={mockHandleSubmit} onKeyboardShortcut={jest.fn()} />);
 
     const chatInput = screen.getByTestId("chat-input");
-    expect(chatInput).toBeInTheDocument();
     const chatInputLabel = within(chatInput).getByTestId("chat-input-label");
-    expect(chatInputLabel).toBeInTheDocument();
     expect(chatInputLabel).toHaveAttribute("for", "chat-input");
     expect(chatInputLabel).toHaveClass("visually-hidden");
     const chatInputTextarea = within(chatInput).getByTestId("chat-input-textarea");
-    expect(chatInputTextarea).toBeInTheDocument();
+    expect(chatInputTextarea).not.toHaveAttribute("aria-describedby");
+    expect(chatInputTextarea).toHaveAttribute("aria-invalid", "false");
+    expect(chatInputTextarea).toHaveAttribute("placeholder", "Ask DAVAI about the data");
     const chatInputSend = within(chatInput).getByTestId("chat-input-send");
-    expect(chatInputSend).toBeInTheDocument();
     // If no message is entered, an error message should appear.
     act(() => chatInputSend.click());
     const inputError = within(chatInput).getByTestId("input-error");
-    expect(inputError).toBeInTheDocument();
     expect(inputError).toHaveAttribute("aria-live", "assertive");
     expect(inputError).toHaveTextContent("Please enter a message before sending.");
+    expect(chatInputTextarea).toHaveAttribute("aria-describedby", "input-error");
+    expect(chatInputTextarea).toHaveAttribute("aria-invalid", "true");
     expect(mockHandleSubmit).not.toHaveBeenCalled();
     // If message is entered, no error should appear and the message should be submitted.
     chatInputTextarea.focus();
-    fireEvent.change(chatInputTextarea, {target: {value: "Hello!"}})
+    fireEvent.change(chatInputTextarea, {target: {value: "Hello!"}});
     act(() => chatInputSend.click());
     expect(inputError).not.toBeInTheDocument();
+    expect(chatInputTextarea).not.toHaveAttribute("aria-describedby");
+    expect(chatInputTextarea).toHaveAttribute("aria-invalid", "false");
+    expect(chatInputTextarea).not.toHaveAttribute("placeholder", "Ask DAVAI about the data");
     expect(mockHandleSubmit).toHaveBeenCalled();
   });
 });

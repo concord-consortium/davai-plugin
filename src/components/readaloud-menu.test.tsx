@@ -1,5 +1,5 @@
 import React from "react";
-import { act, render, screen, within } from "@testing-library/react";
+import { act, render, screen } from "@testing-library/react";
 
 import { ReadAloudMenu } from "./readaloud-menu";
 
@@ -28,7 +28,6 @@ describe("test read aloud menu component", () => {
     expect(mockHandleToggle).toHaveBeenCalledTimes(2);
 
     const readAloudPlaybackSpeed = screen.getByTestId("readaloud-playback-speed");
-    expect(readAloudPlaybackSpeed).toBeInTheDocument();
     expect(readAloudPlaybackSpeed).toHaveAttribute("id", "readaloud-playback-speed");
     expect(readAloudPlaybackSpeed).toHaveValue("1");
     act(() => {

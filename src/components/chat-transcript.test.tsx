@@ -23,9 +23,7 @@ describe("test chat transcript component", () => {
     render(<ChatTranscriptComponent chatTranscript={chatTranscript} />);
 
     const transcript = screen.getByTestId("chat-transcript");
-    expect(transcript).toBeInTheDocument();
     const messagesContainer = screen.getByTestId("chat-transcript__messages");
-    expect(messagesContainer).toBeInTheDocument();
     expect(messagesContainer).toHaveAttribute("aria-live", "assertive");
     const messages = within(transcript).getAllByTestId("chat-message");
     expect(messages).toHaveLength(2);
@@ -35,12 +33,10 @@ describe("test chat transcript component", () => {
       expect(message).toHaveAttribute("aria-label", labelContent);
 
       const speaker = within(message).getByTestId("chat-message-speaker");
-      expect(speaker).toBeInTheDocument();
       expect(speaker).toHaveAttribute("aria-label", "speaker");
       expect(speaker).toHaveTextContent(chatTranscript.messages[index].speaker);
 
       const content = within(message).getByTestId("chat-message-content");
-      expect(content).toBeInTheDocument();
       expect(content).toHaveAttribute("aria-label", "message");
       expect(content).toHaveTextContent(chatTranscript.messages[index].content);
     });
