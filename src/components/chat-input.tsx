@@ -90,39 +90,44 @@ export const ChatInputComponent = ({onKeyboardShortcut, onSubmit}: IProps) => {
 
   useEffect(() => {
     // Add a keyboard shortcut for placing focus on the chat input when the user's focus is outside the iframe.
-    const keys = {
-      d: false,
-      a: false
-    };
+
+    const isMac = navigator.platform.toUpperCase().indexOf("MAC") >= 0;
+    // const keys = {
+    //   d: false,
+    //   a: false
+    // };
   
     if (window.parent !== window) {
       window.parent.document.addEventListener("keydown", (event) => {
-        if (event.key === "d") keys.d = true;
-        if (event.key === "a") keys.a = true;
+        // if (event.key === "d") keys.d = true;
+        // if (event.key === "a") keys.a = true;
 
-        if (keys.d && keys.a) {
+        if ((isMac && event.metaKey && event.ctrlKey && event.key === "a") || // Command + Option + D on macOS
+            (!isMac && event.ctrlKey && event.altKey && event.key === "a")) {// Ctrl + Alt + D on Windows/Linux
+          //if (keys.d && keys.a) {
 
-          // Check if the focused element is an input, textarea, or content-editable
-          const activeElement = window.parent.document.activeElement;
-          if (isInputElement(activeElement)) {
-            keys.d = false;
-            keys.a = false;
-            return;
-          }
-
-          const iframe = window.frameElement;
-          if (iframe) {
-            if (textAreaRef.current) {
-              textAreaRef.current.focus();
-              onKeyboardShortcut();
-              // Reset key states after shortcut is triggered. Note: a complimentary `keyup` listener for
-              // handling this won't work reliably in this context.
-              keys.d = false;
-              keys.a = false;
-            } else {
-              console.warn("Target input not found inside the iframe.");
+            // Check if the focused element is an input, textarea, or content-editable
+            const activeElement = window.parent.document.activeElement;
+            if (isInputElement(activeElement)) {
+              // keys.d = false;
+              // keys.a = false;
+              return;
             }
-          }
+
+            const iframe = window.frameElement;
+            if (iframe) {
+              if (textAreaRef.current) {
+                textAreaRef.current.focus();
+                onKeyboardShortcut();
+                // Reset key states after shortcut is triggered. Note: a complimentary `keyup` listener for
+                // handling this won't work reliably in this context.
+                // keys.d = false;
+                // keys.a = false;
+              } else {
+                console.warn("Target input not found inside the iframe.");
+              }
+            }
+          //}
         }
       });
     }
