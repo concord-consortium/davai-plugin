@@ -1,4 +1,4 @@
-import React, { FormEvent, useEffect, useRef, useState } from "react";
+import React, { FormEvent, useCallback, useEffect, useRef, useState } from "react";
 
 import { isInputElement } from "../utils";
 
@@ -88,50 +88,54 @@ export const ChatInputComponent = ({onKeyboardShortcut, onSubmit}: IProps) => {
   //   setDictationEnabled(!dictationEnabled);
   // };
 
-  useEffect(() => {
-    // Add a keyboard shortcut for placing focus on the chat input when the user's focus is outside the iframe.
-
+  const addShortcutListener = useCallback((context: Window) => {
     const isMac = navigator.platform.toUpperCase().indexOf("MAC") >= 0;
-    // const keys = {
-    //   d: false,
-    //   a: false
-    // };
-  
-    if (window.parent !== window) {
-      window.parent.document.addEventListener("keydown", (event) => {
-        // if (event.key === "d") keys.d = true;
-        // if (event.key === "a") keys.a = true;
+    const handler = (event: KeyboardEvent) => {
+      if (
+        (isMac && event.metaKey && event.ctrlKey && event.key === "a") || // Ctrl + Cmd + a on macOS
+        (!isMac && event.ctrlKey && event.altKey && event.key === "a")   // Ctrl + Alt + a on Windows/Linux
+      ) {
+        const activeElement = context.document.activeElement;
+        if (isInputElement(activeElement)) return;
 
-        if ((isMac && event.metaKey && event.ctrlKey && event.key === "a") || // Command + Option + D on macOS
-            (!isMac && event.ctrlKey && event.altKey && event.key === "a")) {// Ctrl + Alt + D on Windows/Linux
-          //if (keys.d && keys.a) {
-
-            // Check if the focused element is an input, textarea, or content-editable
-            const activeElement = window.parent.document.activeElement;
-            if (isInputElement(activeElement)) {
-              // keys.d = false;
-              // keys.a = false;
-              return;
-            }
-
-            const iframe = window.frameElement;
-            if (iframe) {
-              if (textAreaRef.current) {
-                textAreaRef.current.focus();
-                onKeyboardShortcut();
-                // Reset key states after shortcut is triggered. Note: a complimentary `keyup` listener for
-                // handling this won't work reliably in this context.
-                // keys.d = false;
-                // keys.a = false;
-              } else {
-                console.warn("Target input not found inside the iframe.");
-              }
-            }
-          //}
+        if (window.frameElement) {
+          textAreaRef.current?.focus();
+          onKeyboardShortcut();
+        } else {
+          textAreaRef.current?.focus();
+          onKeyboardShortcut();
         }
-      });
-    }
+      }
+    };
+
+    context.document.addEventListener("keydown", handler);
+
+    // Return handler for cleanup
+    return () => {
+      context.document.removeEventListener("keydown", handler);
+    };
   }, [onKeyboardShortcut]);
+
+  useEffect(() => {
+    const keydownListeners: (() => void)[] = [];
+    // Add keyboard shortcut listener to the parent window if one exists.
+    if (window.parent && window.parent !== window) {
+      keydownListeners.push(addShortcutListener(window.parent));
+    }
+
+    // Add keyboard shortcut listener to the current window.
+    keydownListeners.push(addShortcutListener(window));
+
+    // Clean up the listeners when the component unmounts.
+    return () => {
+      keydownListeners.forEach((cleanup) => cleanup());
+    };
+  }, [addShortcutListener]);
+
+  useEffect(() => {
+    // Set focus on textarea when component first mounts.
+    textAreaRef.current?.focus();
+  }, []);
 
   return (
     <div className="chat-input" data-testid="chat-input">
