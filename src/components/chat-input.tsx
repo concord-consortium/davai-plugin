@@ -5,11 +5,12 @@ import { isInputElement } from "../utils";
 import "./chat-input.scss";
 
 interface IProps {
+  keyboardShortcutEnabled: boolean;
   onKeyboardShortcut: () => void;
   onSubmit: (messageText: string) => void;
 }
 
-export const ChatInputComponent = ({onKeyboardShortcut, onSubmit}: IProps) => {
+export const ChatInputComponent = ({keyboardShortcutEnabled, onKeyboardShortcut, onSubmit}: IProps) => {
   const textAreaRef = useRef<HTMLTextAreaElement>(null);
   // const [browserSupportsDictation, setBrowserSupportsDictation] = useState(false);
   // const [dictationEnabled, setDictationEnabled] = useState(false);
@@ -118,24 +119,22 @@ export const ChatInputComponent = ({onKeyboardShortcut, onSubmit}: IProps) => {
 
   useEffect(() => {
     const keydownListeners: (() => void)[] = [];
-    // Add keyboard shortcut listener to the parent window if one exists.
-    if (window.parent && window.parent !== window) {
-      keydownListeners.push(addShortcutListener(window.parent));
-    }
 
-    // Add keyboard shortcut listener to the current window.
-    keydownListeners.push(addShortcutListener(window));
+    if (keyboardShortcutEnabled) {
+      // Add keyboard shortcut listener to the parent window if one exists.
+      if (window.parent && window.parent !== window) {
+        keydownListeners.push(addShortcutListener(window.parent));
+      }
+
+      // Add keyboard shortcut listener to the current window.
+      keydownListeners.push(addShortcutListener(window));
+    }
 
     // Clean up the listeners when the component unmounts.
     return () => {
       keydownListeners.forEach((cleanup) => cleanup());
     };
-  }, [addShortcutListener]);
-
-  useEffect(() => {
-    // Set focus on textarea when component first mounts.
-    textAreaRef.current?.focus();
-  }, []);
+  }, [addShortcutListener, keyboardShortcutEnabled]);
 
   return (
     <div className="chat-input" data-testid="chat-input">
@@ -158,7 +157,7 @@ export const ChatInputComponent = ({onKeyboardShortcut, onSubmit}: IProps) => {
           {showError &&
             <div
               aria-live="assertive"
-              className="error"
+              className="error-message"
               data-testid="input-error"
               id="input-error"
               role="alert"

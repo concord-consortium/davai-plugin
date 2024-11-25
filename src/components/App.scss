@@ -1,3 +1,5 @@
+@import "./vars.scss";
+
 .App {
   background-color: white;
   color: rgb(110,109,95);
@@ -13,6 +15,17 @@
       display: block;
       font-size: .625rem;
     }
+  }
+  h2 {
+    font-size: .75rem;
+  }
+  h3 {
+    font-size: .75rem;
+  }
+  hr {
+    border-top: solid 1px $dark-gray;
+    height: 0;
+    margin: 20px 0 0;
   }
   .buttons {
     display: flex;
@@ -44,6 +57,13 @@
       white-space: pre-wrap;
       user-select: text;
     }
+  }
+
+  .error-message {
+    color: #d00;
+    font-size: .75rem;
+    margin: 0;
+    padding: 0;
   }
 
   .visually-hidden {

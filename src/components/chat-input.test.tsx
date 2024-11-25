@@ -7,7 +7,7 @@ describe("test chat input component", () => {
   const mockHandleSubmit = jest.fn();
 
   it("renders a textarea and submit button that lets user send chat messages", () => {
-    render(<ChatInputComponent onSubmit={mockHandleSubmit} onKeyboardShortcut={jest.fn()} />);
+    render(<ChatInputComponent keyboardShortcutEnabled={true} onSubmit={mockHandleSubmit} onKeyboardShortcut={jest.fn()} />);
 
     const chatInput = screen.getByTestId("chat-input");
     const chatInputLabel = within(chatInput).getByTestId("chat-input-label");

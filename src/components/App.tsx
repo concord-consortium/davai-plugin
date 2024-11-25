@@ -6,8 +6,9 @@ import { ChatTranscriptComponent } from "./chat-transcript";
 import { ChatTranscript, ChatMessage } from "../types";
 import { timeStamp } from "../utils";
 import { ReadAloudMenu } from "./readaloud-menu";
+import { KeyboardShortcutControls } from "./keyboard-shortcut-controls";
 
-import "./App.css";
+import "./App.scss";
 
 const kPluginName = "DAVAI";
 const kVersion = "0.0.1";
@@ -30,13 +31,25 @@ export const App = () => {
   const [chatTranscript, setChatTranscript] = useState<ChatTranscript>({messages: [{speaker: "DAVAI", content: greeting, timestamp: timeStamp()}]});
   const [readAloudEnabled, setReadAloudEnabled] = useState(false);
   const [playbackSpeed, setPlaybackSpeed] = useState(1);
+  const [keyboardShortcutEnabled, setKeyboardShortcutEnabled] = useState(true);
+  const [keyboardShortcutKeys, setKeyboardShortcutKeys] = useState("Ctrl+Command+A");
 
   useEffect(() => {
     initializePlugin({pluginName: kPluginName, version: kVersion, dimensions: kInitialDimensions});
+    selectSelf();
   }, []);
 
   const handleFocusShortcut = () => {
     selectSelf();
+  };
+
+  const handleToggleShortcut = () => {
+    setKeyboardShortcutEnabled(!keyboardShortcutEnabled);
+  };
+
+  const handleCustomizeShortcut = (shortcut: string) => {
+    console.log("2 Customizing shortcut to", shortcut);
+    setKeyboardShortcutKeys(shortcut);
   };
 
   const handleSetReadAloudEnabled = () => {
@@ -68,12 +81,24 @@ export const App = () => {
         </h1>
       </header>
       <ChatTranscriptComponent chatTranscript={chatTranscript} />
-      <ChatInputComponent onSubmit={handleChatInputSubmit} onKeyboardShortcut={handleFocusShortcut} />
+      <ChatInputComponent
+        keyboardShortcutEnabled={keyboardShortcutEnabled}
+        onSubmit={handleChatInputSubmit}
+        onKeyboardShortcut={handleFocusShortcut}
+      />
       <ReadAloudMenu
         enabled={readAloudEnabled}
         onToggle={handleSetReadAloudEnabled}
         playbackSpeed={playbackSpeed}
         onPlaybackSpeedSelect={handleSetPlaybackSpeed}
+      />
+      <hr />
+      <h2>Options</h2>
+      <KeyboardShortcutControls
+        shortcutEnabled={keyboardShortcutEnabled}
+        shortcutKeys={keyboardShortcutKeys}
+        onCustomizeShortcut={handleCustomizeShortcut}
+        onToggleShortcut={handleToggleShortcut}
       />
     </div>
   );

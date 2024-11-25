@@ -1,0 +1,63 @@
+@import "./vars.scss";
+
+.keyboard-shortcut-controls {
+  display: flex;
+  flex-direction: column;
+
+  button {
+    appearance: none;
+    background-color: $light-teal-3;
+    border: solid 1px rgb(118, 118, 118);
+    border-radius: 6px;
+    color: $dark-gray;
+    cursor: pointer;
+    font-family: 'Montserrat', sans-serif;
+    font-size: .75rem;
+    height: 32px;
+    text-align: center;
+    width: auto;
+  }
+
+  fieldset {
+    border: none;
+    flex-wrap: wrap;
+    margin: 0;
+    padding: 0;
+    text-align: left;
+
+    &[disabled] {
+      cursor: not-allowed;
+      opacity: 0.75;
+
+      button, input, label {
+        cursor: not-allowed;
+      }
+    }
+
+    button {
+      margin: 0 0 0 10px;
+    }
+    input[type="text"] {
+      border: solid 1px rgb(118, 118, 118);
+      border-radius: 6px;
+      height: 16px;
+      padding: 7px 10px;
+    }
+  }
+
+  h3 {
+    margin: 10px 0 0;
+    text-align: left;
+  }
+
+  label {
+    cursor: pointer;
+    display: block;
+    font-size: .75rem;
+    font-weight: bold;
+    line-height: 1.4;
+    margin: 0 0 5px;
+    user-select: none;
+    white-space: nowrap;
+  }
+}
