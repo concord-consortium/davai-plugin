@@ -90,12 +90,8 @@ export const ChatInputComponent = ({keyboardShortcutEnabled, onKeyboardShortcut,
   // };
 
   const addShortcutListener = useCallback((context: Window) => {
-    const isMac = navigator.platform.toUpperCase().indexOf("MAC") >= 0;
     const handler = (event: KeyboardEvent) => {
-      if (
-        (isMac && event.metaKey && event.ctrlKey && event.key === "a") || // Ctrl + Cmd + a on macOS
-        (!isMac && event.ctrlKey && event.altKey && event.key === "a")   // Ctrl + Alt + a on Windows/Linux
-      ) {
+      if (event.ctrlKey && event.shiftKey && event.key === "/") {
         const activeElement = context.document.activeElement;
         if (isInputElement(activeElement)) return;
 
@@ -135,6 +131,11 @@ export const ChatInputComponent = ({keyboardShortcutEnabled, onKeyboardShortcut,
       keydownListeners.forEach((cleanup) => cleanup());
     };
   }, [addShortcutListener, keyboardShortcutEnabled]);
+
+  // Place focus on the textarea when the component mounts.
+  useEffect(() => {
+    textAreaRef.current?.focus();
+  }, []);
 
   return (
     <div className="chat-input" data-testid="chat-input">
