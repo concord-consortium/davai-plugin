@@ -2,7 +2,7 @@
 
 .App .chat-transcript {
   margin: 0;
-}
+  overflow-y: auto;
 
 .chat-transcript {
   background: white;
@@ -16,8 +16,9 @@
 
   .chat-transcript__message {
     margin: 0;
-    padding: 8px 10px;
-    white-space: pre-line; // maintain line breaks
+    max-height: 450px;
+    padding: 0;
+    text-align: left;
 
     &:nth-child(odd) {
       background: $light-teal-2;
@@ -27,7 +28,34 @@
       font-size: .75rem;
       line-height: 17px;
       margin: 0;
-      padding: 0;
+      padding: 8px 10px;
+
+      &:nth-child(odd) {
+        background: $light-teal-2;
+      }
+
+      h3, li, p {
+        font-size: .75rem;
+        line-height: 17px;
+        margin: 0;
+        padding: 0;
+      }
+      p {
+        margin: 0 0 10px;
+      }
+      pre {
+        font-size: .75rem;
+      }
+      .chat-message-content {
+        &.chat-message-content--user {
+          white-space: pre-line; // maintain line breaks
+        }
+        &.chat-message-content--davai {
+          pre {
+            white-space: normal;
+          }
+        }
+      }
     }
   }
 }
