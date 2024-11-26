@@ -1,9 +1,9 @@
 import React, { useEffect, useRef, useState } from "react";
-import { initializePlugin, getAllItems, getAttributeList, getDataContext, IResult, selectSelf } from "@concord-consortium/codap-plugin-api";
+import { initializePlugin, getAttributeList, getDataContext, IResult, selectSelf, getListOfDataContexts } from "@concord-consortium/codap-plugin-api";
 import { TextContentBlock } from "openai/resources/beta/threads/messages";
 import { ChatInputComponent } from "./chat-input";
 import { ChatTranscriptComponent } from "./chat-transcript";
-import { ChatTranscript, ChatMessage } from "../types";
+import { ChatTranscript } from "../types";
 import { timeStamp } from "../utils/utils";
 import { getTools, initLlmConnection } from "../utils/llm-utils";
 import { createGraph } from "../utils/codap-utils";
@@ -19,20 +19,9 @@ const kInitialDimensions = {
   height: 680
 };
 
-// const mockAiResponse = (): ChatMessage => {
-//   const response = {
-//     content: "Sorry. I'm just a mock AI and don't really know how to respond.",
-//     speaker: "DAVAI",
-//     timestamp: timeStamp()
-//   };
-//   return response;
-// };
-
 export const App = () => {
   const greeting = "Hello! I'm DAVAI, your Data Analysis through Voice and Artificial Intelligence partner.";
   const thread = useRef<any>();
-  const attributeList = useRef<IResult>();
-  const dataContextRef = useRef<any>();
   const [assistant, setAssistant] = useState<any>(null);
   const [chatTranscript, setChatTranscript] = useState<ChatTranscript>({messages: [{speaker: "DAVAI", content: greeting, timestamp: timeStamp()}]});
   const [readAloudEnabled, setReadAloudEnabled] = useState(false);
@@ -51,12 +40,6 @@ export const App = () => {
 
   useEffect(() => {
     const initAssistant = async () => {
-      const dataContext = await getDataContext("Mammals");
-      dataContextRef.current = dataContext;
-      const rootCollection = dataContext.values.collections[0];
-      const allItems = await getAllItems(dataContext.values.name);
-      console.log("All items: ", allItems);
-      attributeList.current = await getAttributeList(dataContext.values.name, rootCollection.name);
       const assistantInstructions = "You are DAVAI, an Data Analysis through Voice and Artificial Intelligence partner. You are an intermediary for a user who is blind who wants to interact with data tables in a data analysis app named CODAP. ";
       const tools = getTools();
 
@@ -79,14 +62,6 @@ export const App = () => {
     return <div>Loading...</div>;
   }
 
-  // const handleChatInputSubmit = async (messageText: string) => {
-    // const chatGPTResponse = await openai.chat.completions.create({
-    //   model: "gpt-4o-mini",
-    //   messages: [{ role: "user", content: messageText }],
-    //   stream: false
-    // });
-
-    // Update the transcript with the user's message.
   const handleFocusShortcut = () => {
     selectSelf();
   };
@@ -126,21 +101,30 @@ export const App = () => {
 
     // Wait for the run to complete
     while (runState.status !== "completed" && runState.status !== "requires_action") {
-      await new Promise((resolve) => setTimeout(resolve, 2000));
       runState = await davai.beta.threads.runs.retrieve(thread.current.id, run.id);
     }
 
     // If an action is required, run it and send the result to the assistant
     if (runState.status === "requires_action") {
-      const toolOutputs = runState.required_action?.submit_tool_outputs.tool_calls.map((toolCall: any) => {
-        if (toolCall.function.name === "get_attributes") {
-          return { tool_call_id: toolCall.id, output: JSON.stringify(attributeList.current?.values) };
-        } else {
-          const { name, xAttribute, yAttribute } = JSON.parse(toolCall.function.arguments);
-          createGraph(dataContextRef.current, name, xAttribute, yAttribute);
-          return { tool_call_id: toolCall.id, output: "Graph created." };
-        }
-      });
+      const dataContextList = await getListOfDataContexts();
+      const dataContext = await getDataContext(dataContextList.values[0].name);
+      const rootCollection = dataContext.values.collections[0];
+      let attributeList: IResult = { values: [], success: false };
+      const toolOutputs = runState.required_action?.submit_tool_outputs.tool_calls
+        ? await Promise.all(
+            runState.required_action.submit_tool_outputs.tool_calls.map(async (toolCall: any) => {
+              if (toolCall.function.name === "get_attributes") {
+                attributeList = await getAttributeList(dataContext.values.name, rootCollection.name);
+                return { tool_call_id: toolCall.id, output: JSON.stringify(attributeList) };
+              } else {
+                const { name, xAttribute, yAttribute } = JSON.parse(toolCall.function.arguments);
+                createGraph(dataContext, name, xAttribute, yAttribute);
+                return { tool_call_id: toolCall.id, output: "Graph created." };
+              }
+            })
+          )
+        : [];
+
       if (toolOutputs) {
         davai.beta.threads.runs.submitToolOutputsStream(
           thread.current.id, run.id, { tool_outputs: toolOutputs }
@@ -155,8 +139,7 @@ export const App = () => {
         await davai.chat.completions.create({
           model: "gpt-4o-mini",
           messages: [
-            ...threadMessages,
-            { role: "assistant", content: `The attributes are ${attributeList.current?.values.map((attr: any) => attr.name).join(", ")}` },
+            ...threadMessages
           ],
         });
       }
@@ -168,17 +151,13 @@ export const App = () => {
       (msg) => msg.run_id === run.id && msg.role === "assistant"
     ).pop();
 
-    const davaiResponse = lastMessageForRun
+    const davaiResponse = lastMessageForRun?.content[0]
       ? (lastMessageForRun.content[0] as TextContentBlock).text.value
-      : `FAKE! The attributes are ${attributeList.current?.values.map((attr: any) => attr.name).join(", ")}`;
+      : "There was an error processing your request.";
 
-    // setTimeout(() => {
-      setChatTranscript(prevTranscript => ({
-        messages: [...prevTranscript.messages, { speaker: "DAVAI", content: davaiResponse, timestamp: timeStamp() }]
-        // messages: [...prevTranscript.messages, mockAiResponse()]
-        // messages: [...prevTranscript.messages, { speaker: "DAVAI", content: chatGPTResponse.choices[0]?.message?.content || "Error.", timestamp: timeStamp() }]
-      }));
-    // }, 1000);
+    setChatTranscript(prevTranscript => ({
+      messages: [...prevTranscript.messages, { speaker: "DAVAI", content: davaiResponse, timestamp: timeStamp() }]
+    }));
   };
 
   return (
