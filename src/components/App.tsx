@@ -49,7 +49,7 @@ export const App = () => {
       const allItems = await getAllItems(dataContext.values.name);
       console.log("All items: ", allItems);
       attributeList.current = await getAttributeList(dataContext.values.name, rootCollection.name);
-      const assistantInstructions = "You are an intermediary for a user who is blind who wants to interact with data tables in a data analysis app named CODAP. ";
+      const assistantInstructions = "You are DAVAI, an Data Analysis through Voice and Artificial Intelligence partner. You are an intermediary for a user who is blind who wants to interact with data tables in a data analysis app named CODAP. ";
       const tools = getTools();
 
       const newAssistant = await davai.beta.assistants.create({
