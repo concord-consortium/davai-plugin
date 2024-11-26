@@ -1,20 +1,31 @@
+@import "./vars.scss";
+
 .App {
   background-color: white;
   color: rgb(110,109,95);
   text-align: center;
+  padding: 10px;
 
-  div {
-    margin: 10px;
-  }
   h1 {
-    font-size: 12px;
+    font-size: .75rem;
     font-weight: bold;
     margin: 10px;
 
     span {
       display: block;
-      font-size: 10px;
+      font-size: .625rem;
     }
+  }
+  h2 {
+    font-size: .75rem;
+  }
+  h3 {
+    font-size: .75rem;
+  }
+  hr {
+    border-top: solid 1px $dark-gray;
+    height: 0;
+    margin: 20px 0 0;
   }
   .buttons {
     display: flex;
@@ -23,6 +34,28 @@
 
   button {
     margin: 10px;
+
+    &.dismiss {
+      appearance: none;
+      background: transparent;
+      border: solid 1px $confirmation-color;
+      border-radius: 50%;
+      color: $confirmation-color;
+      cursor: pointer;
+      font-size: .65rem;
+      height: 20px;
+      margin: 0 5px;
+      padding: 0;
+      text-align: center;
+      width: 20px;
+
+      &:hover {
+        background: $light-teal-2;
+      }
+      &:active {
+        background: $light-teal-3;
+      }
+    }
   }
   .response-area {
     display: flex;
@@ -45,6 +78,20 @@
       text-align: left;
       white-space: pre-wrap;
       user-select: text;
+    }
+  }
+
+  .confirmation-message, .error-message {
+    font-size: .75rem;
+    margin: 5px 0;
+    padding: 0;
+
+    &.confirmation-message {
+      color: $confirmation-color;
+    }
+
+    &.error-message {
+      color: $error-color;
     }
   }
 

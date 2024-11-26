@@ -1,15 +1,16 @@
 import React, { useEffect, useRef, useState } from "react";
-import { initializePlugin, getAllItems, getAttributeList, getDataContext, IResult } from "@concord-consortium/codap-plugin-api";
+import { initializePlugin, getAllItems, getAttributeList, getDataContext, IResult, selectSelf } from "@concord-consortium/codap-plugin-api";
 import { TextContentBlock } from "openai/resources/beta/threads/messages";
-
 import { ChatInputComponent } from "./chat-input";
 import { ChatTranscriptComponent } from "./chat-transcript";
-import { ChatTranscript } from "../types";
+import { ChatTranscript, ChatMessage } from "../types";
 import { timeStamp } from "../utils/utils";
 import { getTools, initLlmConnection } from "../utils/llm-utils";
 import { createGraph } from "../utils/codap-utils";
+import { ReadAloudMenu } from "./readaloud-menu";
+import { KeyboardShortcutControls } from "./keyboard-shortcut-controls";
 
-import "./App.css";
+import "./App.scss";
 
 const kPluginName = "DAVAI";
 const kVersion = "0.0.1";
@@ -34,11 +35,18 @@ export const App = () => {
   const dataContextRef = useRef<any>();
   const [assistant, setAssistant] = useState<any>(null);
   const [chatTranscript, setChatTranscript] = useState<ChatTranscript>({messages: [{speaker: "DAVAI", content: greeting, timestamp: timeStamp()}]});
+  const [readAloudEnabled, setReadAloudEnabled] = useState(false);
+  const [playbackSpeed, setPlaybackSpeed] = useState(1);
+  const isShortcutEnabled = JSON.parse(localStorage.getItem("keyboardShortcutEnabled") || "true");
+  const [keyboardShortcutEnabled, setKeyboardShortcutEnabled] = useState(isShortcutEnabled);
+  const shortcutKeys = localStorage.getItem("keyboardShortcutKeys") || "ctrl+?";
+  const [keyboardShortcutKeys, setKeyboardShortcutKeys] = useState(shortcutKeys);
 
   const davai = initLlmConnection();
 
   useEffect(() => {
     initializePlugin({pluginName: kPluginName, version: kVersion, dimensions: kInitialDimensions});
+    selectSelf();
   }, []);
 
   useEffect(() => {
@@ -71,7 +79,7 @@ export const App = () => {
     return <div>Loading...</div>;
   }
 
-  const handleChatInputSubmit = async (messageText: string) => {
+  // const handleChatInputSubmit = async (messageText: string) => {
     // const chatGPTResponse = await openai.chat.completions.create({
     //   model: "gpt-4o-mini",
     //   messages: [{ role: "user", content: messageText }],
@@ -79,6 +87,29 @@ export const App = () => {
     // });
 
     // Update the transcript with the user's message.
+  const handleFocusShortcut = () => {
+    selectSelf();
+  };
+
+  const handleToggleShortcut = () => {
+    localStorage.setItem("keyboardShortcutEnabled", JSON.stringify(!keyboardShortcutEnabled));
+    setKeyboardShortcutEnabled(!keyboardShortcutEnabled);
+  };
+
+  const handleCustomizeShortcut = (shortcut: string) => {
+    localStorage.setItem("keyboardShortcutKeys", shortcut);
+    setKeyboardShortcutKeys(shortcut);
+  };
+
+  const handleSetReadAloudEnabled = () => {
+    setReadAloudEnabled(!readAloudEnabled);
+  };
+
+  const handleSetPlaybackSpeed = (speed: number) => {
+    setPlaybackSpeed(speed);
+  };
+
+  const handleChatInputSubmit = async (messageText: string) => {
     setChatTranscript(prevTranscript => ({
       messages: [...prevTranscript.messages, { speaker: "User", content: messageText, timestamp: timeStamp() }]
     }));
@@ -152,12 +183,33 @@ export const App = () => {
 
   return (
     <div className="App">
-      <h1>
-        DAVAI
-        <span>(Data Analysis through Voice and Artificial Intelligence)</span>
-      </h1>
+      <header>
+        <h1>
+          <abbr title="Data Analysis through Voice and Artificial Intelligence">DAVAI</abbr>
+          <span>(Data Analysis through Voice and Artificial Intelligence)</span>
+        </h1>
+      </header>
       <ChatTranscriptComponent chatTranscript={chatTranscript} />
-      <ChatInputComponent onSubmit={handleChatInputSubmit} />
+      <ChatInputComponent
+        keyboardShortcutEnabled={keyboardShortcutEnabled}
+        shortcutKeys={keyboardShortcutKeys}
+        onSubmit={handleChatInputSubmit}
+        onKeyboardShortcut={handleFocusShortcut}
+      />
+      <ReadAloudMenu
+        enabled={readAloudEnabled}
+        onToggle={handleSetReadAloudEnabled}
+        playbackSpeed={playbackSpeed}
+        onPlaybackSpeedSelect={handleSetPlaybackSpeed}
+      />
+      <hr />
+      <h2>Options</h2>
+      <KeyboardShortcutControls
+        shortcutEnabled={keyboardShortcutEnabled}
+        shortcutKeys={keyboardShortcutKeys}
+        onCustomizeShortcut={handleCustomizeShortcut}
+        onToggleShortcut={handleToggleShortcut}
+      />
     </div>
   );
 };
