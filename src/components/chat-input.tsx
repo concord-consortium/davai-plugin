@@ -1,6 +1,6 @@
 import React, { FormEvent, useCallback, useEffect, useMemo, useRef, useState } from "react";
 
-import { isInputElement, isShortcutPressed } from "../utils";
+import { isInputElement, isShortcutPressed } from "../utils/utils";
 
 import "./chat-input.scss";
 
@@ -137,7 +137,6 @@ export const ChatInputComponent = ({keyboardShortcutEnabled, shortcutKeys, onKey
       keydownListeners.push(addShortcutListener(window));
     }
 
-    // Clean up the listeners when the component unmounts.
     return () => {
       keydownListeners.forEach((cleanup) => cleanup());
     };
