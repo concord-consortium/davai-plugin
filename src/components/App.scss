@@ -34,6 +34,28 @@
 
   button {
     margin: 10px;
+
+    &.dismiss {
+      appearance: none;
+      background: transparent;
+      border: solid 1px $confirmation-color;
+      border-radius: 50%;
+      color: $confirmation-color;
+      cursor: pointer;
+      font-size: .65rem;
+      height: 20px;
+      margin: 0 5px;
+      padding: 0;
+      text-align: center;
+      width: 20px;
+
+      &:hover {
+        background: $light-teal-2;
+      }
+      &:active {
+        background: $light-teal-3;
+      }
+    }
   }
   .response-area {
     display: flex;
@@ -59,11 +81,18 @@
     }
   }
 
-  .error-message {
-    color: #d00;
+  .confirmation-message, .error-message {
     font-size: .75rem;
-    margin: 0;
+    margin: 5px 0;
     padding: 0;
+
+    &.confirmation-message {
+      color: $confirmation-color;
+    }
+
+    &.error-message {
+      color: $error-color;
+    }
   }
 
   .visually-hidden {

@@ -31,8 +31,10 @@ export const App = () => {
   const [chatTranscript, setChatTranscript] = useState<ChatTranscript>({messages: [{speaker: "DAVAI", content: greeting, timestamp: timeStamp()}]});
   const [readAloudEnabled, setReadAloudEnabled] = useState(false);
   const [playbackSpeed, setPlaybackSpeed] = useState(1);
-  const [keyboardShortcutEnabled, setKeyboardShortcutEnabled] = useState(true);
-  const [keyboardShortcutKeys, setKeyboardShortcutKeys] = useState("Ctrl+Command+A");
+  const isShortcutEnabled = JSON.parse(localStorage.getItem("keyboardShortcutEnabled") || "true");
+  const [keyboardShortcutEnabled, setKeyboardShortcutEnabled] = useState(isShortcutEnabled);
+  const shortcutKeys = localStorage.getItem("keyboardShortcutKeys") || "ctrl+?";
+  const [keyboardShortcutKeys, setKeyboardShortcutKeys] = useState(shortcutKeys);
 
   useEffect(() => {
     initializePlugin({pluginName: kPluginName, version: kVersion, dimensions: kInitialDimensions});
@@ -44,11 +46,12 @@ export const App = () => {
   };
 
   const handleToggleShortcut = () => {
+    localStorage.setItem("keyboardShortcutEnabled", JSON.stringify(!keyboardShortcutEnabled));
     setKeyboardShortcutEnabled(!keyboardShortcutEnabled);
   };
 
   const handleCustomizeShortcut = (shortcut: string) => {
-    console.log("2 Customizing shortcut to", shortcut);
+    localStorage.setItem("keyboardShortcutKeys", shortcut);
     setKeyboardShortcutKeys(shortcut);
   };
 
@@ -83,6 +86,7 @@ export const App = () => {
       <ChatTranscriptComponent chatTranscript={chatTranscript} />
       <ChatInputComponent
         keyboardShortcutEnabled={keyboardShortcutEnabled}
+        shortcutKeys={keyboardShortcutKeys}
         onSubmit={handleChatInputSubmit}
         onKeyboardShortcut={handleFocusShortcut}
       />

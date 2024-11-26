@@ -1,16 +1,17 @@
 import React, { FormEvent, useCallback, useEffect, useRef, useState } from "react";
 
-import { isInputElement } from "../utils";
+import { isInputElement, isShortcutPressed } from "../utils";
 
 import "./chat-input.scss";
 
 interface IProps {
   keyboardShortcutEnabled: boolean;
+  shortcutKeys: string;
   onKeyboardShortcut: () => void;
   onSubmit: (messageText: string) => void;
 }
 
-export const ChatInputComponent = ({keyboardShortcutEnabled, onKeyboardShortcut, onSubmit}: IProps) => {
+export const ChatInputComponent = ({keyboardShortcutEnabled, shortcutKeys, onKeyboardShortcut, onSubmit}: IProps) => {
   const textAreaRef = useRef<HTMLTextAreaElement>(null);
   // const [browserSupportsDictation, setBrowserSupportsDictation] = useState(false);
   // const [dictationEnabled, setDictationEnabled] = useState(false);
@@ -90,8 +91,11 @@ export const ChatInputComponent = ({keyboardShortcutEnabled, onKeyboardShortcut,
   // };
 
   const addShortcutListener = useCallback((context: Window) => {
-    const handler = (event: KeyboardEvent) => {
-      if (event.ctrlKey && event.shiftKey && event.key === "/") {
+    const pressedKeys: Set<string> = new Set();
+
+    const keydownHandler = (event: KeyboardEvent) => {
+      pressedKeys.add(event.key.toLowerCase());
+      if (isShortcutPressed(event, shortcutKeys)) {
         const activeElement = context.document.activeElement;
         if (isInputElement(activeElement)) return;
 
@@ -105,13 +109,19 @@ export const ChatInputComponent = ({keyboardShortcutEnabled, onKeyboardShortcut,
       }
     };
 
-    context.document.addEventListener("keydown", handler);
+    const keyupHandler = (event: KeyboardEvent) => {
+      pressedKeys.delete(event.key.toLowerCase());
+    };
+
+    context.document.addEventListener("keydown", keydownHandler);
+    context.document.addEventListener("keyup", keyupHandler);
 
     // Return handler for cleanup
     return () => {
-      context.document.removeEventListener("keydown", handler);
+      context.document.removeEventListener("keydown", keydownHandler);
+      context.document.removeEventListener("keyup", keyupHandler);
     };
-  }, [onKeyboardShortcut]);
+  }, [onKeyboardShortcut, shortcutKeys]);
 
   useEffect(() => {
     const keydownListeners: (() => void)[] = [];

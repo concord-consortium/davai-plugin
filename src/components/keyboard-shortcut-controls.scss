@@ -18,6 +18,10 @@
     width: auto;
   }
 
+  form {
+    margin: 0 10px;
+  }
+
   fieldset {
     border: none;
     flex-wrap: wrap;
@@ -37,10 +41,21 @@
     button {
       margin: 0 0 0 10px;
     }
+    label {
+      cursor: pointer;
+      display: block;
+      font-size: .75rem;
+      font-weight: normal;
+      line-height: 1.4;
+      margin: 0 0 5px;
+      user-select: none;
+      white-space: nowrap;
+    }
     input[type="text"] {
       border: solid 1px rgb(118, 118, 118);
       border-radius: 6px;
       height: 16px;
+      margin: 0 0 0;
       padding: 7px 10px;
     }
   }
@@ -48,16 +63,5 @@
   h3 {
     margin: 10px 0 0;
     text-align: left;
-  }
-
-  label {
-    cursor: pointer;
-    display: block;
-    font-size: .75rem;
-    font-weight: bold;
-    line-height: 1.4;
-    margin: 0 0 5px;
-    user-select: none;
-    white-space: nowrap;
   }
 }
