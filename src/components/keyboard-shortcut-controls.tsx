@@ -1,43 +1,43 @@
-import React, { FormEvent, useState } from "react";
+import React from "react";
 
 import "./keyboard-shortcut-controls.scss";
 
 interface IProps {
   shortcutEnabled: boolean;
-  shortcutKeys: string;
+  shortcutKeys?: string;
   onCustomizeShortcut?: (shortcut: string) => void;
   onToggleShortcut: () => void;
 }
 
 export const KeyboardShortcutControls = (props: IProps) => {
-  const { shortcutEnabled, shortcutKeys, onCustomizeShortcut, onToggleShortcut } = props;
+  const { shortcutEnabled, onToggleShortcut } = props;
   const toggleButtonLabel = shortcutEnabled ? "Disable Shortcut" : "Enable Shortcut";
-  const [showError, setShowError] = useState(false);
-  const [showConfirmation, setShowConfirmation] = useState(false);
+  // const [showError, setShowError] = useState(false);
+  // const [showConfirmation, setShowConfirmation] = useState(false);
 
   const handleToggleShortcut = () => {
     onToggleShortcut();
   };
 
-  const handleCustomizeShortcut = (event: FormEvent) => {
-    event.preventDefault();
-    const form = event.target as HTMLInputElement;
-    const shortcut = form.querySelector("input")?.value;
-    if (shortcut) {
-      onCustomizeShortcut?.(shortcut);
-      setShowError(false);
-      setShowConfirmation(true);
-    } else {
-      setShowError(true);
-      setShowConfirmation(false);
-    }
-  };
+  // const handleCustomizeShortcut = (event: FormEvent) => {
+  //   event.preventDefault();
+  //   const form = event.target as HTMLInputElement;
+  //   const shortcut = form.querySelector("input")?.value;
+  //   if (shortcut) {
+  //     onCustomizeShortcut?.(shortcut);
+  //     setShowError(false);
+  //     setShowConfirmation(true);
+  //   } else {
+  //     setShowError(true);
+  //     setShowConfirmation(false);
+  //   }
+  // };
 
-  const customShortcutInputDescribedBy = showConfirmation
-    ? "custom-keyboard-shortcut-confirmation"
-    : showError
-      ? "custom-keyboard-shortcut-error"
-      : undefined;
+  // const customShortcutInputDescribedBy = showConfirmation
+  //   ? "custom-keyboard-shortcut-confirmation"
+  //   : showError
+  //     ? "custom-keyboard-shortcut-error"
+  //     : undefined;
 
   return (
     <div className="keyboard-shortcut-controls">
@@ -45,7 +45,7 @@ export const KeyboardShortcutControls = (props: IProps) => {
       <button onClick={handleToggleShortcut} data-testid="keyboard-shortcut-toggle">
         {toggleButtonLabel}
       </button>
-      <form data-testid="custom-keyboard-shortcut-form" onSubmit={handleCustomizeShortcut}>
+      {/* <form data-testid="custom-keyboard-shortcut-form" onSubmit={handleCustomizeShortcut}>
         <fieldset disabled={!shortcutEnabled}>
           <label htmlFor="custom-keyboard-shortcut">Customize Keystroke</label>
           <input
@@ -87,7 +87,7 @@ export const KeyboardShortcutControls = (props: IProps) => {
             </div>
           }
         </fieldset>
-      </form>
+      </form> */}
     </div>
   );
 };
