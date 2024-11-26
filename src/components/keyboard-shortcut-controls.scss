@@ -1,4 +1,4 @@
-@import "./vars.scss";
+@use "./vars.scss" as *;
 
 .keyboard-shortcut-controls {
   display: flex;
