@@ -1,4 +1,5 @@
-import React, { useEffect } from "react";
+import React, { useRef, useEffect } from "react";
+import Markdown from "react-markdown";
 
 import { ChatTranscript, ChatMessage } from "../types";
 
@@ -9,17 +10,18 @@ interface IProps {
 }
 
 export const ChatTranscriptComponent = ({chatTranscript}: IProps) => {
+  const chatTranscriptRef = useRef<HTMLElement>(null);
 
   useEffect(() => {
     // Always scroll to the bottom of the chat transcript.
-    const chatTranscriptContainer = document.querySelector(".chat-transcript");
+    const chatTranscriptContainer = chatTranscriptRef.current;
     if (chatTranscriptContainer) {
-      chatTranscriptContainer.scrollTop = chatTranscriptContainer.scrollHeight;
+      chatTranscriptContainer.scrollTo({top: chatTranscriptContainer.scrollHeight, behavior: "smooth"});
     }
-  });
+  }, [chatTranscript]);
 
   return (
-    <section id="chat-transcript" className="chat-transcript" data-testid="chat-transcript" role="group">
+    <section ref={chatTranscriptRef} id="chat-transcript" className="chat-transcript" data-testid="chat-transcript" role="group">
       <h2 className="visually-hidden">DAVAI Chat Transcript</h2>
       <section
         // For now we are using "assertive". This may change as we refine the experience.
@@ -29,6 +31,7 @@ export const ChatTranscriptComponent = ({chatTranscript}: IProps) => {
         role="list"
       >
         {chatTranscript.messages.map((message: ChatMessage) => {
+          const messageContentClass = message.speaker === "DAVAI" ? "chat-message-content--davai" : "chat-message-content--user";
           return (
             <section
               aria-label={`${message.speaker} at ${message.timestamp}`}
@@ -40,9 +43,9 @@ export const ChatTranscriptComponent = ({chatTranscript}: IProps) => {
               <h3 aria-label="speaker" data-testid="chat-message-speaker">
                 {message.speaker}
               </h3>
-              <p aria-label="message" data-testid="chat-message-content">
-                {message.content}
-              </p>
+              <div aria-label="message" className={`chat-message-content ${messageContentClass}`} data-testid="chat-message-content">
+                <Markdown>{message.content}</Markdown>
+              </div>
             </section>
           );
         })}
