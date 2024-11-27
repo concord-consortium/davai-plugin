@@ -3,6 +3,10 @@ export const timeStamp = (): string => {
   return now.toLocaleString();
 };
 
+export const formatMessage = (description: string, json: any) => {
+  return `**${description}:**\n\`\`\`json\n${JSON.stringify(json, null, 2)}\n\`\`\``;
+};
+
 const isHTMLElement = (element: Element | null): element is HTMLElement => {
   return element instanceof HTMLElement;
 };
@@ -11,7 +15,7 @@ export const isInputElement = (activeElement: Element | null) => {
   if (
     activeElement &&
     (activeElement.tagName === "INPUT" ||
-     activeElement.tagName === "TEXTAREA" || 
+     activeElement.tagName === "TEXTAREA" ||
      (isHTMLElement(activeElement) && activeElement.isContentEditable))
   ) {
     return true;
@@ -61,4 +65,11 @@ export const isShortcutPressed = (event: KeyboardEvent, shortcutKeys: string): b
       return event.key.toLowerCase() === normalizedKey && (!isShifted || event.shiftKey);
     }
   });
+};
+
+// get url parameters
+export const hasDebugParams = (): boolean => {
+  const url = new URL(window.location.href);
+  const params = new URLSearchParams(url.search);
+  return params.has("debug");
 };

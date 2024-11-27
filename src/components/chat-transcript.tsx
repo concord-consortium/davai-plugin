@@ -1,15 +1,16 @@
 import React, { useRef, useEffect } from "react";
+import { observer } from "mobx-react-lite";
 import Markdown from "react-markdown";
-
+import { DEBUG_SPEAKER } from "../constants";
 import { ChatTranscript, ChatMessage } from "../types";
 
 import "./chat-transcript.scss";
-
 interface IProps {
   chatTranscript: ChatTranscript;
+  showDebugLog: boolean;
 }
 
-export const ChatTranscriptComponent = ({chatTranscript}: IProps) => {
+export const ChatTranscriptComponent = observer(({chatTranscript, showDebugLog}: IProps) => {
   const chatTranscriptRef = useRef<HTMLElement>(null);
 
   useEffect(() => {
@@ -18,7 +19,7 @@ export const ChatTranscriptComponent = ({chatTranscript}: IProps) => {
     if (chatTranscriptContainer) {
       chatTranscriptContainer.scrollTo({top: chatTranscriptContainer.scrollHeight, behavior: "smooth"});
     }
-  }, [chatTranscript]);
+  }, [chatTranscript.messages]);
 
   return (
     <section ref={chatTranscriptRef} id="chat-transcript" className="chat-transcript" data-testid="chat-transcript" role="group">
@@ -31,20 +32,24 @@ export const ChatTranscriptComponent = ({chatTranscript}: IProps) => {
         role="list"
       >
         {chatTranscript.messages.map((message: ChatMessage) => {
-          const messageContentClass = message.speaker === "DAVAI" ? "chat-message-content--davai" : "chat-message-content--user";
+          const { speaker, content, timestamp } = message;
+          if (speaker === DEBUG_SPEAKER && !showDebugLog) {
+            return null;
+          }
+          const speakerClass = speaker === DEBUG_SPEAKER ? "debug" : speaker.toLowerCase();
           return (
             <section
-              aria-label={`${message.speaker} at ${message.timestamp}`}
-              className="chat-transcript__message"
+              aria-label={`${speaker} at ${timestamp}`}
+              className={`chat-transcript__message ${speakerClass}`}
               data-testid="chat-message"
-              key={message.timestamp}
+              key={`${timestamp}-${speaker}`}
               role="listitem"
             >
               <h3 aria-label="speaker" data-testid="chat-message-speaker">
-                {message.speaker}
+                {speaker}
               </h3>
-              <div aria-label="message" className={`chat-message-content ${messageContentClass}`} data-testid="chat-message-content">
-                <Markdown>{message.content}</Markdown>
+              <div aria-label="message" className={`chat-message-content ${speakerClass}`} data-testid="chat-message-content">
+                <Markdown>{content}</Markdown>
               </div>
             </section>
           );
@@ -52,4 +57,4 @@ export const ChatTranscriptComponent = ({chatTranscript}: IProps) => {
       </section>
     </section>
   );
-};
+});

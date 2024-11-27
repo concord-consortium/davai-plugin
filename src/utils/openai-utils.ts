@@ -41,6 +41,10 @@ export const openAiTools: AssistantTool[] = [
       parameters: {
         type: "object",
         properties: {
+          dataset: {
+            type: "string",
+            description: "The name of the dataset to which the attributes belong"
+          },
           name: {
             type: "string",
             description: "A name for the graph"
@@ -56,6 +60,7 @@ export const openAiTools: AssistantTool[] = [
         },
         additionalProperties: false,
         required: [
+          "dataset",
           "name",
           "xAttribute",
           "yAttribute"
