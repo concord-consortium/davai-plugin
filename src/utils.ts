@@ -52,11 +52,14 @@ export const charKeyMap: Record<string, string> = {
 
 export const isShortcutPressed = (event: KeyboardEvent, shortcutKeys: string): boolean => {
   const keystrokeElements = shortcutKeys.split("+");
+  const isMac = navigator.platform.toUpperCase().indexOf("MAC") >= 0;
   return keystrokeElements.every((keystroke) => {
     if (keystroke in specialKeyMap) {
       return event[specialKeyMap[keystroke as keyof typeof specialKeyMap] as keyof KeyboardEvent];
+    } else if (keystroke in charKeyMap && isMac) {
+      return event.key === charKeyMap[keystroke];
     } else {
-      const normalizedKey = charKeyMap[keystroke] || keystroke.toLowerCase();
+      const normalizedKey = keystroke.toLowerCase();
       const isShifted = keystroke !== keystroke.toLowerCase();
       return event.key.toLowerCase() === normalizedKey && (!isShifted || event.shiftKey);
     }

@@ -55,7 +55,7 @@ describe("test keyboard shortcut controls component", () => {
     expect(input).toHaveAttribute("aria-describedby", "custom-keyboard-shortcut-confirmation");
     expect(screen.getByTestId("custom-keyboard-shortcut-confirmation")).toBeInTheDocument();
     const confirmationMsg = screen.getByTestId("custom-keyboard-shortcut-confirmation").textContent;
-    expect(confirmationMsg).toContain(`Keyboard shortcut changed to ${customShortcut}.`);
+    expect(confirmationMsg).toContain(`Keyboard shortcut changed to ${customShortcut}`);
     const dismissButton = screen.getByTestId("custom-keyboard-shortcut-confirmation-dismiss");
     expect(dismissButton).toHaveTextContent("X");
   });
