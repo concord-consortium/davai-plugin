@@ -18,70 +18,82 @@ export const isInputElement = (activeElement: Element | null) => {
   }
 };
 
-export const specialKeyMap: Record<string, string> = {
-  "alt": "altKey",
-  "command": "metaKey",
-  "ctrl": "ctrlKey",
-  "control": "ctrlKey",
-  "option": "altKey",
-  "shift": "shiftKey",
-  "shft": "shiftKey",
+export const keyMap: Record<string, { shifted: string; unshifted: string }> = {
+  "ShiftLeft": { shifted: "Shift", unshifted: "Shift" },
+  "ShiftRight": { shifted: "Shift", unshifted: "Shift" },
+  "ControlLeft": { shifted: "Ctrl", unshifted: "Ctrl" },
+  "ControlRight": { shifted: "Ctrl", unshifted: "Ctrl" },
+  "AltLeft": { shifted: "Alt", unshifted: "Alt" },
+  "AltRight": { shifted: "Alt", unshifted: "Alt" },
+  "MetaLeft": { shifted: "Command", unshifted: "Command" },
+  "MetaRight": { shifted: "Command", unshifted: "Command" },
+  "KeyA": { shifted: "A", unshifted: "a" },
+  "KeyB": { shifted: "B", unshifted: "b" },
+  "KeyC": { shifted: "C", unshifted: "c" },
+  "KeyD": { shifted: "D", unshifted: "d" },
+  "KeyE": { shifted: "E", unshifted: "e" },
+  "KeyF": { shifted: "F", unshifted: "f" },
+  "KeyG": { shifted: "G", unshifted: "g" },
+  "KeyH": { shifted: "H", unshifted: "h" },
+  "KeyI": { shifted: "I", unshifted: "i" },
+  "KeyJ": { shifted: "J", unshifted: "j" },
+  "KeyK": { shifted: "K", unshifted: "k" },
+  "KeyL": { shifted: "L", unshifted: "l" },
+  "KeyM": { shifted: "M", unshifted: "m" },
+  "KeyN": { shifted: "N", unshifted: "n" },
+  "KeyO": { shifted: "O", unshifted: "o" },
+  "KeyP": { shifted: "P", unshifted: "p" },
+  "KeyQ": { shifted: "Q", unshifted: "q" },
+  "KeyR": { shifted: "R", unshifted: "r" },
+  "KeyS": { shifted: "S", unshifted: "s" },
+  "KeyT": { shifted: "T", unshifted: "t" },
+  "KeyU": { shifted: "U", unshifted: "u" },
+  "KeyV": { shifted: "V", unshifted: "v" },
+  "KeyW": { shifted: "W", unshifted: "w" },
+  "KeyX": { shifted: "X", unshifted: "x" },
+  "KeyY": { shifted: "Y", unshifted: "y" },
+  "KeyZ": { shifted: "Z", unshifted: "z" },
+  "Comma": { shifted: "<", unshifted: "," },
+  "Period": { shifted: ">", unshifted: "." },
+  "Slash": { shifted: "?", unshifted: "/" },
+  "Semicolon": { shifted: ":", unshifted: ";" },
+  "Quote": { shifted: "\"", unshifted: "'" },
+  "BracketLeft": { shifted: "{", unshifted: "[" },
+  "BracketRight": { shifted: "}", unshifted: "]" },
+  "Backslash": { shifted: "|", unshifted: "\\" },
+  "Backquote": { shifted: "~", unshifted: "`" },
+  "Minus": { shifted: "_", unshifted: "-" },
+  "Equal": { shifted: "+", unshifted: "=" }
 };
 
-export const charKeyMap: Record<string, string> = {
-  "?": "/",
-  "<": ",",
-  ">": ".",
-  "{": "[",
-  "}": "]",
-  ":": ";",
-  "|": "\\",
-  "!": "1",
-  "@": "2",
-  "#": "3",
-  "$": "4",
-  "%": "5",
-  "^": "6",
-  "&": "7",
-  "*": "8",
-  "(": "9",
-  ")": "0",
-  "_": "-",
-  "+": "=",
-};
+export const isShortcutPressed = (pressedKeys: Set<string>, shortcutKeys: string): boolean => {
+  const pressedKeyCodes = Array.from(pressedKeys);
+  const keystrokeElements = shortcutKeys.split("+").map((key) => key.toLowerCase());
 
-// export const isShortcutPressed = (event: KeyboardEvent, shortcutKeys: string): boolean => {
-//   const keystrokeElements = shortcutKeys.split("+");
-//   const isMac = navigator.platform.toUpperCase().indexOf("MAC") >= 0;
-//   return keystrokeElements.every((keystroke) => {
-//     if (keystroke in specialKeyMap) {
-//       return event[specialKeyMap[keystroke as keyof typeof specialKeyMap] as keyof KeyboardEvent];
-//     } else if (keystroke in charKeyMap && isMac) {
-//       const normalizedKey = keystroke.toLowerCase();
-//       return event.key === charKeyMap[normalizedKey];
-//     } else {
-//       const normalizedKey = keystroke.toLowerCase();
-//       const isShifted = keystroke !== keystroke.toLowerCase();
-//       return event.key.toLowerCase() === normalizedKey && (!isShifted || event.shiftKey);
-//     }
-//   });
-// };
-
-export const isShortcutPressed = (event: KeyboardEvent, shortcutKeys: string): boolean => {
-  const keystrokeElements = shortcutKeys.split("+");
-  const isMac = navigator.platform.toUpperCase().indexOf("MAC") >= 0;
-
-  return keystrokeElements.every((keystroke) => {
-    if (keystroke in specialKeyMap) {
-      return event[specialKeyMap[keystroke as keyof typeof specialKeyMap] as keyof KeyboardEvent];
-    } else {
-      const expectedKey = isMac && keystroke in charKeyMap ? charKeyMap[keystroke] : keystroke;
-      const normalizedEventKey = event.key.toLowerCase();
-      const isShifted = keystroke !== keystroke.toLowerCase();
-
-      return (
-        normalizedEventKey === expectedKey.toLowerCase() && (!isShifted || event.shiftKey)
-      );
+  return keystrokeElements.every((requiredKey) => {
+    if (requiredKey === "ctrl") {
+      return pressedKeyCodes.some((key) => keyMap[key]?.unshifted === "Ctrl");
     }
+    if (requiredKey === "shift") {
+      return pressedKeyCodes.some((key) => keyMap[key]?.unshifted === "Shift");
+    }
+    if (requiredKey === "alt") {
+      return pressedKeyCodes.some((key) => keyMap[key]?.unshifted === "Alt");
+    }
+    if (requiredKey === "command" || requiredKey === "meta") {
+      return pressedKeyCodes.some((key) => keyMap[key]?.unshifted === "Command");
+    }
+
+    return pressedKeyCodes.some((key) => {
+      const keyMapping = keyMap[key];
+      if (!keyMapping) return false;
+
+      const isShiftPressed = pressedKeyCodes.some((pressedKey) => keyMap[pressedKey]?.unshifted === "Shift");
+      if (isShiftPressed) {
+        return keyMapping.shifted.toLowerCase() === requiredKey;
+      } else {
+        return keyMapping.unshifted.toLowerCase() === requiredKey;
+      }
+    });
   });
 };
