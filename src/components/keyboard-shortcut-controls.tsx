@@ -71,7 +71,7 @@ export const KeyboardShortcutControls = (props: IProps) => {
                 className="dismiss"
                 data-testid="custom-keyboard-shortcut-confirmation-dismiss"
                 onClick={() => setShowConfirmation(false)}>
-                  X
+                  <span className="visually-hidden">dismiss</span>
               </button>
             </div>
           }

@@ -57,7 +57,7 @@ describe("test keyboard shortcut controls component", () => {
     const confirmationMsg = screen.getByTestId("custom-keyboard-shortcut-confirmation").textContent;
     expect(confirmationMsg).toContain(`Keyboard shortcut changed to ${customShortcut}`);
     const dismissButton = screen.getByTestId("custom-keyboard-shortcut-confirmation-dismiss");
-    expect(dismissButton).toHaveTextContent("X");
+    expect(dismissButton).toHaveTextContent("dismiss");
   });
 
   it("shows an error message if the custom keyboard shortcut input is empty", () => {
