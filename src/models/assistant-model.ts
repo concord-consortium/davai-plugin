@@ -18,7 +18,7 @@ const AssistantModel = types
       try {
         const tools = getTools();
         const assistantInstructions =
-          "You are DAVAI, a Data Analysis through Voice and Artificial Intelligence partner.";
+          "You are DAVAI, an Data Analysis through Voice and Artificial Intelligence partner. You are an intermediary for a user who is blind who wants to interact with data tables in a data analysis app named CODAP.";
         const newAssistant = yield davai.beta.assistants.create({
           instructions: assistantInstructions,
           model: "gpt-4o-mini",
