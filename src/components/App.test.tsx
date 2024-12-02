@@ -10,8 +10,8 @@ jest.mock("../models/assistant-model", () => ({
 }));
 
 describe("test load app", () => {
-  it("renders without crashing", async() => {
+  it("renders without crashing", () => {
     render(<App />);
-    expect(screen.getByText("Loading...")).toBeInTheDocument();
+    expect(screen.getByText("Loading...")).toBeDefined();
   });
 });
