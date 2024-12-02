@@ -17,8 +17,12 @@
       margin: 0;
       padding: 8px 10px;
 
-      &:nth-child(odd) {
+      &.davai {
         background: $light-teal-2;
+      }
+
+      &.debug {
+        background: lightyellow;
       }
 
       h3, li, p {
@@ -34,12 +38,79 @@
         font-size: .75rem;
       }
       .chat-message-content {
-        &.chat-message-content--user {
+        &.user {
           white-space: pre-line; // maintain line breaks
         }
-        &.chat-message-content--davai {
+        &.davai {
           pre {
             white-space: normal;
+          }
+        }
+        &.debug {
+          .debug-message-wrapper {
+            display: flex;
+            padding: 5px;
+            // align-items: center;
+            gap: 10px;
+
+            .header {
+              display: flex;
+              align-items: center;
+              word-break: none;
+              white-space: nowrap;
+              h4 {
+                font-size: .75rem;
+                margin: 0;
+                padding: 0;
+              }
+            }
+
+            &.expanded{
+              flex-direction: column;
+              align-items: flex-start;
+              gap: 0px;
+              pre {
+                white-space: pre-wrap;
+                word-break: break-word;
+              }
+            }
+
+            &.collapsed{
+              button {
+                &:before {
+                  transform: rotate(-90deg);
+                }
+              }
+              pre {
+                word-break: none;
+                overflow: hidden;
+                white-space: nowrap;
+                margin: 0;
+              }
+            }
+
+            button {
+              appearance: none;
+              background-color: transparent;
+              border: 0;
+              position: relative;
+              height: auto;
+              padding: 0;
+              margin: 0;
+              width: 20px;
+              span {
+                display: block;
+                text-indent: -99999px;
+              }
+              &:before {
+                display: block;
+                position: absolute;
+                content: "\25BC";
+                color: $dark-gray;
+                top: 0;
+                left: 0;
+              }
+            }
           }
         }
       }

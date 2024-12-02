@@ -109,4 +109,17 @@
     position: absolute;
     width: 1px;
   }
+
+  .show-debug-controls {
+    width: 100%;
+    display: flex;
+    align-items: center;
+    justify-content: flex-end;
+    gap: 5px;
+    font-size: .75em;
+    margin-top: 10px;
+    input:hover {
+      cursor: pointer;
+    }
+  }
 }
