@@ -16,7 +16,8 @@ export const ChatTranscriptComponent = ({chatTranscript}: IProps) => {
     // Always scroll to the bottom of the chat transcript.
     const chatTranscriptContainer = chatTranscriptRef.current;
     if (chatTranscriptContainer) {
-      chatTranscriptContainer.scrollTo({top: chatTranscriptContainer.scrollHeight, behavior: "smooth"});
+      const lastMessage = chatTranscriptContainer.querySelector(".chat-transcript__message:last-of-type");
+      lastMessage?.scrollIntoView({behavior: "smooth"});
     }
   }, [chatTranscript]);
 
@@ -31,7 +32,9 @@ export const ChatTranscriptComponent = ({chatTranscript}: IProps) => {
         role="list"
       >
         {chatTranscript.messages.map((message: ChatMessage) => {
-          const messageContentClass = message.speaker === "DAVAI" ? "chat-message-content--davai" : "chat-message-content--user";
+          const messageContentClass = message.speaker === "DAVAI"
+            ? "chat-message-content--davai"
+            : "chat-message-content--user";
           return (
             <section
               aria-label={`${message.speaker} at ${message.timestamp}`}
@@ -43,7 +46,11 @@ export const ChatTranscriptComponent = ({chatTranscript}: IProps) => {
               <h3 aria-label="speaker" data-testid="chat-message-speaker">
                 {message.speaker}
               </h3>
-              <div aria-label="message" className={`chat-message-content ${messageContentClass}`} data-testid="chat-message-content">
+              <div
+                aria-label="message"
+                className={`chat-message-content ${messageContentClass}`}
+                data-testid="chat-message-content"
+              >
                 <Markdown>{message.content}</Markdown>
               </div>
             </section>
