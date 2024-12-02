@@ -29,7 +29,6 @@ export const App = observer(() => {
   const hasDebugParams = params.has("debug");
   const [showDebugLog, setShowDebugLog] = useState(hasDebugParams);
 
-
   useEffect(() => {
     initializePlugin({pluginName: kPluginName, version: kVersion, dimensions: kInitialDimensions});
     selectSelf();

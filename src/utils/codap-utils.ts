@@ -17,6 +17,5 @@ export const createGraph = async (dataContextName: string, graphName: string, xA
       "yAttributeName": yAttribute
     }
   };
-
   return await codapInterface.sendRequest(graph);
 };

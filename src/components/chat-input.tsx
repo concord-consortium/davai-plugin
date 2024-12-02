@@ -1,4 +1,4 @@
-import React, { FormEvent, useCallback, useEffect, useRef, useState } from "react";
+import React, { FormEvent, useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 import { isInputElement, isShortcutPressed } from "../utils/utils";
 
@@ -90,12 +90,13 @@ export const ChatInputComponent = ({keyboardShortcutEnabled, shortcutKeys, onKey
   //   setDictationEnabled(!dictationEnabled);
   // };
 
-  const addShortcutListener = useCallback((context: Window) => {
-    const pressedKeys: Set<string> = new Set();
+  const pressedKeys: Set<string> = useMemo(() => new Set(), []);
 
+  const addShortcutListener = useCallback((context: Window) => {
     const keydownHandler = (event: KeyboardEvent) => {
-      pressedKeys.add(event.key.toLowerCase());
-      if (isShortcutPressed(event, shortcutKeys)) {
+      pressedKeys.add(event.code);
+      if (isShortcutPressed(pressedKeys, shortcutKeys)) {
+        event.preventDefault();
         const activeElement = context.document.activeElement;
         if (isInputElement(activeElement)) return;
 
@@ -110,7 +111,7 @@ export const ChatInputComponent = ({keyboardShortcutEnabled, shortcutKeys, onKey
     };
 
     const keyupHandler = (event: KeyboardEvent) => {
-      pressedKeys.delete(event.key.toLowerCase());
+      pressedKeys.delete(event.code);
     };
 
     context.document.addEventListener("keydown", keydownHandler);
@@ -121,7 +122,7 @@ export const ChatInputComponent = ({keyboardShortcutEnabled, shortcutKeys, onKey
       context.document.removeEventListener("keydown", keydownHandler);
       context.document.removeEventListener("keyup", keyupHandler);
     };
-  }, [onKeyboardShortcut, shortcutKeys]);
+  }, [onKeyboardShortcut, pressedKeys, shortcutKeys]);
 
   useEffect(() => {
     const keydownListeners: (() => void)[] = [];

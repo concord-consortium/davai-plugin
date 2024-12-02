@@ -17,12 +17,8 @@
       margin: 0;
       padding: 8px 10px;
 
-      &.davai {
+      &:nth-child(odd) {
         background: $light-teal-2;
-      }
-
-      &.debug {
-        background: lightyellow;
       }
 
       h3, li, p {
@@ -38,18 +34,12 @@
         font-size: .75rem;
       }
       .chat-message-content {
-        &.user {
+        &.chat-message-content--user {
           white-space: pre-line; // maintain line breaks
         }
-        &.davai {
+        &.chat-message-content--davai {
           pre {
             white-space: normal;
-          }
-        }
-        &.debug {
-          pre {
-            white-space: pre-wrap;
-            word-break: break-word;
           }
         }
       }

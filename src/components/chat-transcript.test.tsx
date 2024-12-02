@@ -4,6 +4,7 @@ import { render, screen, within } from "@testing-library/react";
 import { ChatTranscriptComponent } from "./chat-transcript";
 
 describe("test chat transcript component", () => {
+  window.HTMLElement.prototype.scrollIntoView = jest.fn();
   const chatTranscript = {
     messages: [
       {
