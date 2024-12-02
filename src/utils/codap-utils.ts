@@ -5,18 +5,18 @@ export const getCodapAttribute = async (dataContextName: string, collectionName:
   return attribute;
 };
 
-export const createGraph = async (dataContext: any, graphName: string, xAttribute: string, yAttribute: string) => {
+export const createGraph = async (dataContextName: string, graphName: string, xAttribute: string, yAttribute: string) => {
   const graph = {
     "action": "create",
     "resource": "component",
     "values": {
       "type": "graph",
       "name": graphName,
-      "dataContext": dataContext.values.name,
+      "dataContext": dataContextName,
       "xAttributeName": xAttribute,
       "yAttributeName": yAttribute
     }
   };
-  
+
   return await codapInterface.sendRequest(graph);
 };

@@ -1,6 +1,7 @@
 import React, { useRef, useEffect } from "react";
+import { observer } from "mobx-react-lite";
 import Markdown from "react-markdown";
-
+import { DAVAI_SPEAKER } from "../constants";
 import { ChatTranscript, ChatMessage } from "../types";
 
 import "./chat-transcript.scss";
@@ -9,7 +10,7 @@ interface IProps {
   chatTranscript: ChatTranscript;
 }
 
-export const ChatTranscriptComponent = ({chatTranscript}: IProps) => {
+export const ChatTranscriptComponent = observer(({chatTranscript}: IProps) => {
   const chatTranscriptRef = useRef<HTMLElement>(null);
 
   useEffect(() => {
@@ -32,7 +33,7 @@ export const ChatTranscriptComponent = ({chatTranscript}: IProps) => {
         role="list"
       >
         {chatTranscript.messages.map((message: ChatMessage) => {
-          const messageContentClass = message.speaker === "DAVAI"
+          const messageContentClass = message.speaker === DAVAI_SPEAKER
             ? "chat-message-content--davai"
             : "chat-message-content--user";
           return (
@@ -59,4 +60,4 @@ export const ChatTranscriptComponent = ({chatTranscript}: IProps) => {
       </section>
     </section>
   );
-};
+});
