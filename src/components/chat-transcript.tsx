@@ -7,10 +7,9 @@ import { ChatTranscript, ChatMessage } from "../types";
 import "./chat-transcript.scss";
 interface IProps {
   chatTranscript: ChatTranscript;
-  showDebugLog: boolean;
 }
 
-export const ChatTranscriptComponent = observer(({chatTranscript, showDebugLog}: IProps) => {
+export const ChatTranscriptComponent = observer(({chatTranscript}: IProps) => {
   const chatTranscriptRef = useRef<HTMLElement>(null);
 
   useEffect(() => {

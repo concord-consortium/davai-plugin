@@ -24,10 +24,6 @@ export const App = observer(() => {
   const [keyboardShortcutEnabled, setKeyboardShortcutEnabled] = useState(isShortcutEnabled);
   const shortcutKeys = localStorage.getItem("keyboardShortcutKeys") || "ctrl+?";
   const [keyboardShortcutKeys, setKeyboardShortcutKeys] = useState(shortcutKeys);
-  const url = new URL(window.location.href);
-  const params = new URLSearchParams(url.search);
-  const hasDebugParams = params.has("debug");
-  const [showDebugLog, setShowDebugLog] = useState(hasDebugParams);
 
   useEffect(() => {
     initializePlugin({pluginName: kPluginName, version: kVersion, dimensions: kInitialDimensions});
@@ -76,28 +72,7 @@ export const App = observer(() => {
       </header>
       <ChatTranscriptComponent
         chatTranscript={transcriptStore}
-        showDebugLog={showDebugLog}
       />
-      {hasDebugParams &&
-        <div className="show-debug-controls">
-          <label htmlFor="debug-log-toggle">
-            Show Debug Log:
-          </label>
-          <input
-            type="checkbox"
-            id="debug-log-toggle"
-            name="ShowDebugLog"
-            aria-checked={showDebugLog}
-            checked={showDebugLog}
-            onChange={() => setShowDebugLog(!showDebugLog)}
-            onKeyDown={(e) => {
-              if (e.key === "Enter") {
-                setShowDebugLog(!showDebugLog);
-              }
-            }}
-          />
-        </div>
-      }
       <ChatInputComponent
         keyboardShortcutEnabled={keyboardShortcutEnabled}
         shortcutKeys={keyboardShortcutKeys}

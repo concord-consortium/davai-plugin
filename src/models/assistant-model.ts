@@ -3,9 +3,8 @@ import { initLlmConnection, getTools } from "../utils/llm-utils";
 import { transcriptStore } from "./chat-transcript-model";
 import { Message } from "openai/resources/beta/threads/messages";
 import { getAttributeList, getDataContext } from "@concord-consortium/codap-plugin-api";
-import { DAVAI_SPEAKER, DEBUG_SPEAKER } from "../constants";
+import { DAVAI_SPEAKER } from "../constants";
 import { createGraph } from "../utils/codap-utils";
-import { formatMessage } from "../utils/utils";
 
 const AssistantModel = types
   .model("AssistantModel", {
@@ -28,27 +27,21 @@ const AssistantModel = types
 
         self.assistant = newAssistant;
         self.thread = yield davai.beta.threads.create();
-        transcriptStore.addMessage(DEBUG_SPEAKER, `${formatMessage("New assistant created", self.assistant)}\n${formatMessage("New thread created", self.thread)}`);
       } catch (err) {
         console.error("Failed to initialize assistant:", err);
-        transcriptStore.addMessage(DEBUG_SPEAKER, formatMessage("Failed to initialize assistan", err));
       }
     });
 
     const handleMessageSubmit = flow(function* (messageText) {
       try {
-        const messageSent = yield davai.beta.threads.messages.create(self.thread.id, {
+        yield davai.beta.threads.messages.create(self.thread.id, {
           role: "user",
           content: messageText,
         });
-
-        transcriptStore.addMessage(DEBUG_SPEAKER, formatMessage("Message sent to LLM", messageSent));
-
         yield startRun();
 
       } catch (err) {
         console.error("Failed to handle message submit:", err);
-        transcriptStore.addMessage(DEBUG_SPEAKER, formatMessage("Failed to handle message submit", err));
       }
     });
 
@@ -65,7 +58,6 @@ const AssistantModel = types
         }
 
         if (runState.status === "requires_action") {
-            transcriptStore.addMessage(DEBUG_SPEAKER, formatMessage("User request requires action", runState));
           yield handleRequiredAction(runState, run.id);
         }
 
@@ -81,7 +73,6 @@ const AssistantModel = types
         );
       } catch (err) {
         console.error("Failed to complete run:", err);
-        transcriptStore.addMessage(DEBUG_SPEAKER, formatMessage("Failed to complete run", err));
       }
     });
 
@@ -126,7 +117,6 @@ const AssistantModel = types
         }
       } catch (err) {
         console.error(err);
-        transcriptStore.addMessage(DEBUG_SPEAKER, formatMessage("Error taking required action", err));
       }
     });
 
