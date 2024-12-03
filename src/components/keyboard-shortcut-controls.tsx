@@ -22,7 +22,7 @@ export const KeyboardShortcutControls = (props: IProps) => {
   const handleCustomizeShortcut = (event: FormEvent) => {
     event.preventDefault();
     const form = event.target as HTMLInputElement;
-    const shortcut = form.querySelector("input")?.value;
+    const shortcut = form.querySelector("input")?.value.trim();
     if (shortcut) {
       onCustomizeShortcut?.(shortcut);
       setShowError(false);
