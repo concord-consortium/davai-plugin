@@ -1,7 +1,8 @@
 @use "vars" as *;
 
 .chat-input {
-  margin-top: 10px;
+  margin: 10px 0;
+  position: relative;
 
   fieldset {
     border: none;
@@ -23,10 +24,14 @@
     align-items: center;
     display: flex;
     flex-wrap: nowrap;
+    height: 32px;
     justify-content: space-between;
-    margin: 10px 0;
+    left: 8px;
+    margin: 0;
     padding: 0;
-    width: 100%;
+    position: absolute;
+    top: 55px;
+    width: calc(100% - 16px);
 
     button {
       display: block;
@@ -35,16 +40,19 @@
       width: auto;
 
       &.send {
-        background-color: $light-teal-3;
-        border: solid 1px rgb(118, 118, 118);
+        background: transparent url(../assets/send-icon.svg) 4px 4px no-repeat;
+        border: none;
         border-radius: 6px;
         color: $dark-gray;
         cursor: pointer;
         font-family: 'Montserrat', sans-serif;
         font-size: .75rem;
         height: 32px;
-        text-align: center;
+        margin-left: auto;
         order: 2;
+        overflow: hidden;
+        text-indent: -9999px;
+        width: 32px;
       }
       &.dictate {
         order: 1;
