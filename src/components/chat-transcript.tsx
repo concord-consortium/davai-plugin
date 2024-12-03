@@ -14,13 +14,13 @@ export const ChatTranscriptComponent = observer(({chatTranscript}: IProps) => {
   const chatTranscriptRef = useRef<HTMLElement>(null);
 
   useEffect(() => {
-    // Always scroll to the bottom of the chat transcript.
+    // Autoscroll to the top of the latest message in the transcript.
     const chatTranscriptContainer = chatTranscriptRef.current;
     if (chatTranscriptContainer) {
       const lastMessage = chatTranscriptContainer.querySelector(".chat-transcript__message:last-of-type");
       lastMessage?.scrollIntoView({behavior: "smooth"});
     }
-  }, [chatTranscript]);
+  }, [chatTranscript.messages.length]);
 
   return (
     <section ref={chatTranscriptRef} id="chat-transcript" className="chat-transcript" data-testid="chat-transcript" role="group">
@@ -44,7 +44,7 @@ export const ChatTranscriptComponent = observer(({chatTranscript}: IProps) => {
               key={message.timestamp}
               role="listitem"
             >
-              <h3 aria-label="speaker" data-testid="chat-message-speaker">
+              <h3 data-testid="chat-message-speaker">
                 {message.speaker}
               </h3>
               <div

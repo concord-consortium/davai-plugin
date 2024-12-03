@@ -34,7 +34,6 @@ describe("test chat transcript component", () => {
       expect(message).toHaveAttribute("aria-label", labelContent);
 
       const speaker = within(message).getByTestId("chat-message-speaker");
-      expect(speaker).toHaveAttribute("aria-label", "speaker");
       expect(speaker).toHaveTextContent(chatTranscript.messages[index].speaker);
 
       const content = within(message).getByTestId("chat-message-content");
