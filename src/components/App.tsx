@@ -60,7 +60,7 @@ export const App = observer(() => {
 
   const handleChatInputSubmit = async (messageText: string) => {
     transcriptStore.addMessage(USER_SPEAKER, messageText);
-    assistantStore.handleMessageSubmit(messageText);
+    await assistantStore.handleMessageSubmit(transcriptStore.messages);
   };
 
   return (

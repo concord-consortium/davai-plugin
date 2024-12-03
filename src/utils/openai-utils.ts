@@ -1,5 +1,5 @@
 import { OpenAI } from "openai";
-import { AssistantTool } from "openai/resources/beta/assistants";
+import { ChatCompletionTool } from "openai/resources";
 
 export const newOpenAI = () => {
   return new OpenAI({
@@ -10,7 +10,7 @@ export const newOpenAI = () => {
   });
 };
 
-export const openAiTools: AssistantTool[] = [
+export const openAiTools: ChatCompletionTool[] = [
   {
     type: "function",
     function: {
