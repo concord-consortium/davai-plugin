@@ -35,6 +35,15 @@
       width: auto;
 
       &.send {
+        background-color: $light-teal-3;
+        border: solid 1px rgb(118, 118, 118);
+        border-radius: 6px;
+        color: $dark-gray;
+        cursor: pointer;
+        font-family: 'Montserrat', sans-serif;
+        font-size: .75rem;
+        height: 32px;
+        text-align: center;
         order: 2;
       }
       &.dictate {

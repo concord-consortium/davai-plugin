@@ -16,7 +16,6 @@ export const ChatInputComponent = ({keyboardShortcutEnabled, shortcutKeys, onKey
   // const [browserSupportsDictation, setBrowserSupportsDictation] = useState(false);
   // const [dictationEnabled, setDictationEnabled] = useState(false);
   const [inputValue, setInputValue] = useState("");
-  const [showPlaceholder, setShowPlaceholder] = useState(true);
   const [showError, setShowError] = useState(false);
 
   const handleSubmit = (event?: FormEvent) => {
@@ -29,7 +28,6 @@ export const ChatInputComponent = ({keyboardShortcutEnabled, shortcutKeys, onKey
     } else {
       onSubmit(inputValue);
       setInputValue("");
-      setShowPlaceholder(false);
       textAreaRef.current?.focus();
       setShowError(false);
     }
@@ -160,7 +158,7 @@ export const ChatInputComponent = ({keyboardShortcutEnabled, shortcutKeys, onKey
             aria-invalid={showError}
             data-testid="chat-input-textarea"
             id="chat-input"
-            placeholder={showPlaceholder ? "Ask DAVAI about the data" : ""}
+            placeholder={"Ask DAVAI about the data"}
             ref={textAreaRef}
             value={inputValue}
             onChange={(e) => setInputValue(e.target.value)}

@@ -33,7 +33,6 @@ describe("test chat input component", () => {
     expect(inputError).not.toBeInTheDocument();
     expect(chatInputTextarea).not.toHaveAttribute("aria-describedby");
     expect(chatInputTextarea).toHaveAttribute("aria-invalid", "false");
-    expect(chatInputTextarea).not.toHaveAttribute("placeholder", "Ask DAVAI about the data");
     expect(mockHandleSubmit).toHaveBeenCalled();
   });
 });
