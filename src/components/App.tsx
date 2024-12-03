@@ -1,16 +1,14 @@
 import React, { useEffect, useState } from "react";
-import {
-  createDataContext,
-  createItems,
-  createNewCollection,
-  createTable,
-  getAllItems,
-  getDataContext,
-  initializePlugin,
-  addDataContextChangeListener,
-  ClientNotification,
-} from "@concord-consortium/codap-plugin-api";
-import "./App.css";
+import { initializePlugin, selectSelf } from "@concord-consortium/codap-plugin-api";
+// import { ReadAloudMenu } from "./readaloud-menu";
+import { ChatInputComponent } from "./chat-input";
+import { ChatTranscriptComponent } from "./chat-transcript";
+import { ChatTranscript, ChatMessage } from "../types";
+import { timeStamp } from "../utils";
+import { ReadAloudMenu } from "./readaloud-menu";
+import { KeyboardShortcutControls } from "./keyboard-shortcut-controls";
+
+import "./App.scss";
 
 const kPluginName = "DAVAI";
 const kVersion = "0.0.1";
@@ -18,92 +16,94 @@ const kInitialDimensions = {
   width: 380,
   height: 680
 };
-const kDataContextName = "DAVAIDataContext";
+
+const mockAiResponse = (): ChatMessage => {
+  const response = {
+    content: "Sorry. I'm just a mock AI and don't really know how to respond.",
+    speaker: "DAVAI",
+    timestamp: timeStamp()
+  };
+  return response;
+};
 
 export const App = () => {
-  const [codapResponse, setCodapResponse] = useState<any>(undefined);
-  const [listenerNotification, setListenerNotification] = useState<string>();
-  const [dataContext, setDataContext] = useState<any>(null);
+  const greeting = "Hello! I'm DAVAI, your Data Analysis through Voice and Artificial Intelligence partner.";
+  const [chatTranscript, setChatTranscript] = useState<ChatTranscript>({messages: [{speaker: "DAVAI", content: greeting, timestamp: timeStamp()}]});
+  const [readAloudEnabled, setReadAloudEnabled] = useState(false);
+  const [playbackSpeed, setPlaybackSpeed] = useState(1);
+  const isShortcutEnabled = JSON.parse(localStorage.getItem("keyboardShortcutEnabled") || "true");
+  const [keyboardShortcutEnabled, setKeyboardShortcutEnabled] = useState(isShortcutEnabled);
+  const shortcutKeys = localStorage.getItem("keyboardShortcutKeys") || "ctrl+?";
+  const [keyboardShortcutKeys, setKeyboardShortcutKeys] = useState(shortcutKeys);
 
   useEffect(() => {
     initializePlugin({pluginName: kPluginName, version: kVersion, dimensions: kInitialDimensions});
-
-    // this is an example of how to add a notification listener to a CODAP component
-    // for more information on listeners and notifications, see
-    // https://github.com/concord-consortium/codap/wiki/CODAP-Data-Interactive-Plugin-API#documentchangenotice
-    const casesUpdatedListener = (listenerRes: ClientNotification) => {
-      if (listenerRes.values.operation === "updateCases") {
-        setListenerNotification(JSON.stringify(listenerRes.values.result));
-      }
-    };
-    addDataContextChangeListener(kDataContextName, casesUpdatedListener);
+    selectSelf();
   }, []);
 
-  const handleOpenTable = async () => {
-    const res = await createTable(kDataContextName);
-    setCodapResponse(res);
+  const handleFocusShortcut = () => {
+    selectSelf();
   };
 
-  const handleCreateData = async() => {
-    const existingDataContext = await getDataContext(kDataContextName);
-    let createDC, createNC, createI;
-    if (!existingDataContext.success) {
-      createDC = await createDataContext(kDataContextName);
-      setDataContext(createDC.values);
-    }
-    if (existingDataContext?.success || createDC?.success) {
-      createNC = await createNewCollection(kDataContextName, "Pets", [
-        { name: "animal", type: "categorical" },
-        { name: "count", type: "numeric" }
-      ]);
-      createI = await createItems(kDataContextName, [
-        { animal: "dog", count: 5 },
-        { animal: "cat", count: 4 },
-        { animal: "fish", count: 20 },
-        { animal: "horse", count: 1 },
-        { animal: "bird", count: 2 },
-        { animal: "snake", count: 1 }
-      ]);
-    }
-
-    setCodapResponse(`
-      Data context created: ${JSON.stringify(createDC)}
-      New collection created: ${JSON.stringify(createNC)}
-      New items created: ${JSON.stringify(createI)}
-    `);
+  const handleToggleShortcut = () => {
+    localStorage.setItem("keyboardShortcutEnabled", JSON.stringify(!keyboardShortcutEnabled));
+    setKeyboardShortcutEnabled(!keyboardShortcutEnabled);
   };
 
-  const handleGetResponse = async () => {
-    const result = await getAllItems(kDataContextName);
-    setCodapResponse(result);
+  const handleCustomizeShortcut = (shortcut: string) => {
+    localStorage.setItem("keyboardShortcutKeys", shortcut);
+    setKeyboardShortcutKeys(shortcut);
+  };
+
+  const handleSetReadAloudEnabled = () => {
+    setReadAloudEnabled(!readAloudEnabled);
+  };
+
+  const handleSetPlaybackSpeed = (speed: number) => {
+    setPlaybackSpeed(speed);
+  };
+
+  const handleChatInputSubmit = (messageText: string) => {
+    setChatTranscript(prevTranscript => ({
+      messages: [...prevTranscript.messages, { speaker: "User", content: messageText, timestamp: timeStamp() }]
+    }));
+    // For now, just mock an AI response after a delay.
+    setTimeout(() => {
+      setChatTranscript(prevTranscript => ({
+        messages: [...prevTranscript.messages, mockAiResponse()]
+      }));
+    }, 1000);
   };
 
   return (
     <div className="App">
-      DAVAI (Data Analysis through Voice and Artificial Intelligence)
-      <div className="buttons">
-        <button onClick={handleCreateData}>
-          Create some data
-        </button>
-        <button onClick={handleOpenTable} disabled={!dataContext}>
-          Open Table
-        </button>
-        <button onClick={handleGetResponse}>
-          See getAllItems response
-        </button>
-        <div className="response-area">
-          <span>Response:</span>
-          <div className="response">
-            {codapResponse && `${JSON.stringify(codapResponse, null, "  ")}`}
-          </div>
-        </div>
-      </div>
-      <div className="response-area">
-          <span>Listener Notification:</span>
-          <div className="response">
-            {listenerNotification && listenerNotification}
-          </div>
-      </div>
+      <header>
+        <h1>
+          <abbr title="Data Analysis through Voice and Artificial Intelligence">DAVAI</abbr>
+          <span>(Data Analysis through Voice and Artificial Intelligence)</span>
+        </h1>
+      </header>
+      <ChatTranscriptComponent chatTranscript={chatTranscript} />
+      <ChatInputComponent
+        keyboardShortcutEnabled={keyboardShortcutEnabled}
+        shortcutKeys={keyboardShortcutKeys}
+        onSubmit={handleChatInputSubmit}
+        onKeyboardShortcut={handleFocusShortcut}
+      />
+      <ReadAloudMenu
+        enabled={readAloudEnabled}
+        onToggle={handleSetReadAloudEnabled}
+        playbackSpeed={playbackSpeed}
+        onPlaybackSpeedSelect={handleSetPlaybackSpeed}
+      />
+      <hr />
+      <h2>Options</h2>
+      <KeyboardShortcutControls
+        shortcutEnabled={keyboardShortcutEnabled}
+        shortcutKeys={keyboardShortcutKeys}
+        onCustomizeShortcut={handleCustomizeShortcut}
+        onToggleShortcut={handleToggleShortcut}
+      />
     </div>
   );
 };

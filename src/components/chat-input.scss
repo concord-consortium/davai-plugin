@@ -1,0 +1,62 @@
+@use "vars" as *;
+
+.chat-input {
+  margin: 10px 0;
+  position: relative;
+
+  fieldset {
+    border: none;
+    display: flex;
+    flex-wrap: wrap;
+    margin: 0;
+    padding: 0;
+  }
+
+  textarea {
+    border: solid 1px $medium-gray;
+    border-radius: 6px;
+    flex: 1 0 calc(100% - 22px); // full width of container minus 10px padding and 1px border on either side
+    height: 75px;
+    padding: 8px 10px;
+  }
+
+  .buttons-container {
+    align-items: center;
+    display: flex;
+    flex-wrap: nowrap;
+    height: 32px;
+    justify-content: space-between;
+    left: 8px;
+    margin: 0;
+    padding: 0;
+    position: absolute;
+    top: 55px;
+    width: calc(100% - 16px);
+
+    button {
+      display: block;
+      flex: 0 0 auto;
+      margin: 0;
+      width: auto;
+
+      &.send {
+        background: transparent url(../assets/send-icon.svg) 4px 4px no-repeat;
+        border: none;
+        border-radius: 6px;
+        color: $dark-gray;
+        cursor: pointer;
+        font-family: 'Montserrat', sans-serif;
+        font-size: .75rem;
+        height: 32px;
+        margin-left: auto;
+        order: 2;
+        overflow: hidden;
+        text-indent: -9999px;
+        width: 32px;
+      }
+      &.dictate {
+        order: 1;
+      }
+    }
+  }
+}

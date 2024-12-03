@@ -1,0 +1,103 @@
+@import "./vars.scss";
+
+.readaloud-controls {
+  display: flex;
+  align-items: center;
+  width: 100%;
+  gap: 10px;
+
+  .toggle {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    color: $dark-gray;
+
+    &.disabled {
+      color: rgba(121, 121, 121, 0.35);
+
+      input {
+        background-color: rgba(121, 121, 121, 0.35);
+
+        &:hover {
+          &::before {
+            box-shadow: 0 0px 8px 0 rgba(0, 0, 0, 0.35);
+          }
+        }
+      }
+    }
+
+    label {
+      cursor: pointer;
+      line-height: 1.4;
+      font-size: .75rem;
+      user-select: none;
+      font-weight: bold;
+      white-space: nowrap;
+    }
+
+    input {
+      appearance: none;
+      min-width: 42px;
+      min-height: 16px;
+      margin: 0;
+
+      position: relative;
+      background-color: $medium-gray;
+      border-radius: 12px;
+
+      cursor: pointer;
+      user-select: none;
+      transition: background-color 0.3s;
+
+      &:checked {
+        background-color: $dark-teal;
+
+        &::before {
+          background-color: white;
+          left: unset;
+          transform: translateX(calc(100% - 10px));
+        }
+      }
+
+      &::before {
+        content: '';
+        position: absolute;
+        height: 24px;
+        width: 24px;
+        top: -5px;
+        left: 0;
+        bottom: 0;
+        object-fit: contain;
+        box-shadow: 0 0px 8px 0 rgba(0, 0, 0, 0.35);
+        border: solid 1.5px #797979;
+        background-color: white;
+        transition: all 0.3s;
+        border-radius: 50%;
+        cursor: pointer;
+      }
+
+      &:hover {
+        &::before {
+          box-shadow: 0 0px 8px 2px $dark-teal;
+        }
+      }
+    }
+  }
+
+  select {
+    appearance: none;
+    background-color: $light-teal-3;
+    color: $dark-gray;
+    cursor: pointer;
+    height: 32px;
+    width: 32px;
+    border-radius: 6px;
+    text-align: center;
+    font-family: 'Montserrat', sans-serif;
+    font-size: .75rem;
+
+    option {
+      color: $dark-gray;
+    }
+  }
+}

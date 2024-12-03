@@ -1,0 +1,29 @@
+@use "vars" as *;
+
+.chat-transcript__messages {
+  background: white;
+  color: $dark-gray;
+  list-style: none;
+  margin: 0;
+  max-height: 450px;
+  padding: 0;
+  overflow-y: auto;
+  text-align: left;
+
+  .chat-transcript__message {
+    margin: 0;
+    padding: 8px 10px;
+    white-space: pre-line; // maintain line breaks
+
+    &:nth-child(odd) {
+      background: $light-teal-2;
+    }
+
+    h3, p {
+      font-size: .75rem;
+      line-height: 17px;
+      margin: 0;
+      padding: 0;
+    }
+  }
+}
