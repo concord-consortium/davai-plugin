@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from "react";
 import { observer } from "mobx-react-lite";
 import { initializePlugin, selectSelf } from "@concord-consortium/codap-plugin-api";
+import appConfigJson from "../app-config.json";
 import { assistantStore } from "../models/assistant-model";
 import { transcriptStore } from "../models/chat-transcript-model";
 import { ChatInputComponent } from "./chat-input";
@@ -11,11 +12,13 @@ import { USER_SPEAKER } from "../constants";
 
 import "./App.scss";
 
+const appConfig = appConfigJson.config;
+
 const kPluginName = "DAVAI";
 const kVersion = "0.0.1";
 const kInitialDimensions = {
-  width: 380,
-  height: 680
+  width: appConfig.dimensions.width,
+  height: appConfig.dimensions.height,
 };
 
 export const App = observer(() => {
@@ -23,7 +26,7 @@ export const App = observer(() => {
   const [playbackSpeed, setPlaybackSpeed] = useState(1);
   const isShortcutEnabled = JSON.parse(localStorage.getItem("keyboardShortcutEnabled") || "true");
   const [keyboardShortcutEnabled, setKeyboardShortcutEnabled] = useState(isShortcutEnabled);
-  const shortcutKeys = localStorage.getItem("keyboardShortcutKeys") || "ctrl+?";
+  const shortcutKeys = localStorage.getItem("keyboardShortcutKeys") || appConfig.accessibility.keyboard_shortcut;
   const [keyboardShortcutKeys, setKeyboardShortcutKeys] = useState(shortcutKeys);
 
   useEffect(() => {
