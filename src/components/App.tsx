@@ -1,44 +1,38 @@
 import React, { useEffect, useState } from "react";
+import { observer } from "mobx-react-lite";
 import { initializePlugin, selectSelf } from "@concord-consortium/codap-plugin-api";
-// import { ReadAloudMenu } from "./readaloud-menu";
+import appConfigJson from "../app-config.json";
+import { assistantStore } from "../models/assistant-model";
+import { transcriptStore } from "../models/chat-transcript-model";
 import { ChatInputComponent } from "./chat-input";
 import { ChatTranscriptComponent } from "./chat-transcript";
-import { ChatTranscript, ChatMessage } from "../types";
-import { timeStamp } from "../utils";
 import { ReadAloudMenu } from "./readaloud-menu";
 import { KeyboardShortcutControls } from "./keyboard-shortcut-controls";
+import { USER_SPEAKER } from "../constants";
 
 import "./App.scss";
+
+const appConfig = appConfigJson.config;
 
 const kPluginName = "DAVAI";
 const kVersion = "0.0.1";
 const kInitialDimensions = {
-  width: 380,
-  height: 680
+  width: appConfig.dimensions.width,
+  height: appConfig.dimensions.height,
 };
 
-const mockAiResponse = (): ChatMessage => {
-  const response = {
-    content: "Sorry. I'm just a mock AI and don't really know how to respond.",
-    speaker: "DAVAI",
-    timestamp: timeStamp()
-  };
-  return response;
-};
-
-export const App = () => {
-  const greeting = "Hello! I'm DAVAI, your Data Analysis through Voice and Artificial Intelligence partner.";
-  const [chatTranscript, setChatTranscript] = useState<ChatTranscript>({messages: [{speaker: "DAVAI", content: greeting, timestamp: timeStamp()}]});
+export const App = observer(() => {
   const [readAloudEnabled, setReadAloudEnabled] = useState(false);
   const [playbackSpeed, setPlaybackSpeed] = useState(1);
   const isShortcutEnabled = JSON.parse(localStorage.getItem("keyboardShortcutEnabled") || "true");
   const [keyboardShortcutEnabled, setKeyboardShortcutEnabled] = useState(isShortcutEnabled);
-  const shortcutKeys = localStorage.getItem("keyboardShortcutKeys") || "ctrl+?";
+  const shortcutKeys = localStorage.getItem("keyboardShortcutKeys") || appConfig.accessibility.keyboard_shortcut;
   const [keyboardShortcutKeys, setKeyboardShortcutKeys] = useState(shortcutKeys);
 
   useEffect(() => {
     initializePlugin({pluginName: kPluginName, version: kVersion, dimensions: kInitialDimensions});
     selectSelf();
+    assistantStore.initialize();
   }, []);
 
   const handleFocusShortcut = () => {
@@ -63,16 +57,13 @@ export const App = () => {
     setPlaybackSpeed(speed);
   };
 
-  const handleChatInputSubmit = (messageText: string) => {
-    setChatTranscript(prevTranscript => ({
-      messages: [...prevTranscript.messages, { speaker: "User", content: messageText, timestamp: timeStamp() }]
-    }));
-    // For now, just mock an AI response after a delay.
-    setTimeout(() => {
-      setChatTranscript(prevTranscript => ({
-        messages: [...prevTranscript.messages, mockAiResponse()]
-      }));
-    }, 1000);
+  if (!assistantStore.assistant) {
+    return <div>Loading...</div>;
+  }
+
+  const handleChatInputSubmit = async (messageText: string) => {
+    transcriptStore.addMessage(USER_SPEAKER, messageText);
+    assistantStore.handleMessageSubmit(messageText);
   };
 
   return (
@@ -83,7 +74,7 @@ export const App = () => {
           <span>(Data Analysis through Voice and Artificial Intelligence)</span>
         </h1>
       </header>
-      <ChatTranscriptComponent chatTranscript={chatTranscript} />
+      <ChatTranscriptComponent chatTranscript={transcriptStore} />
       <ChatInputComponent
         keyboardShortcutEnabled={keyboardShortcutEnabled}
         shortcutKeys={keyboardShortcutKeys}
@@ -106,4 +97,4 @@ export const App = () => {
       />
     </div>
   );
-};
+});
