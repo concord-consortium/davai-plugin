@@ -70,7 +70,7 @@ jobs:
     runs-on: ubuntu-latest
     environment:
       name: ${{ github.ref_type == 'branch' && 'branches' || 'versions' }}
-      url: https://models-resources.concord.org/davai-plugin/${{ steps.s3-deploy.outputs.deployPath }}/index.html
+      url: https://codap3.concord.org/branch/main/index.html?sample=mammals&di=https://models-resources.concord.org/davai-plugin/${{ steps.s3-deploy.outputs.deployPath }}/
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
