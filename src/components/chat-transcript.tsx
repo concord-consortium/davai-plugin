@@ -37,10 +37,10 @@ export const ChatTranscriptComponent = ({chatTranscript}: IProps) => {
               key={message.timestamp}
               role="listitem"
             >
-              <h3 aria-label="speaker" data-testid="chat-message-speaker">
+              <h3 data-testid="chat-message-speaker">
                 {message.speaker}
               </h3>
-              <p aria-label="message" data-testid="chat-message-content">
+              <p data-testid="chat-message-content">
                 {message.content}
               </p>
             </section>
