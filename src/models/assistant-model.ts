@@ -1,11 +1,10 @@
-import { types, flow } from "mobx-state-tree";
+import { types, flow, Instance } from "mobx-state-tree";
 import { getTools, initLlmConnection } from "../utils/llm-utils";
-import { ChatTranscriptModel, transcriptStore } from "./chat-transcript-model";
+import { ChatTranscriptModel } from "./chat-transcript-model";
 import { Message } from "openai/resources/beta/threads/messages";
 import { getAttributeList, getDataContext } from "@concord-consortium/codap-plugin-api";
 import { DAVAI_SPEAKER } from "../constants";
 import { createGraph } from "../utils/codap-utils";
-import appConfigJson from "../app-config.json";
 
 export const AssistantModel = types
   .model("AssistantModel", {
@@ -15,8 +14,19 @@ export const AssistantModel = types
     model: types.string,
     thread: types.maybe(types.frozen()),
     transcriptStore: ChatTranscriptModel,
-    useExistingAssistant: true
+    useExisting: true,
   })
+  .actions((self) => ({
+    handleMessageSubmitMockAssistant() {
+      // Use a brief delay to prevent duplicate timestamp-based keys.
+      setTimeout(() => {
+        self.transcriptStore.addMessage(
+          DAVAI_SPEAKER,
+          "I'm just a mock assistant and can't process that request."
+        );
+      }, 1000);
+    }
+  }))
   .actions((self) => {
     const davai = initLlmConnection();
 
@@ -24,11 +34,11 @@ export const AssistantModel = types
       try {
         const tools = getTools();
 
-        const davaiAssistant = self.useExistingAssistant && self.assistantId
+        const davaiAssistant = self.useExisting && self.assistantId
           ? yield davai.beta.assistants.retrieve(self.assistantId)
           : yield davai.beta.assistants.create({instructions: self.instructions, model: self.model, tools });
 
-        if (!self.useExistingAssistant) {
+        if (!self.useExisting) {
           self.assistantId = davaiAssistant.id;
         }
         self.assistant = davaiAssistant;
@@ -126,14 +136,43 @@ export const AssistantModel = types
       }
     });
 
-    return { initialize, handleMessageSubmit };
+    const createThread = flow(function* () {
+      try {
+        const newThread = yield davai.beta.threads.create();
+        self.thread = newThread;
+      } catch (err) {
+        console.error("Error creating thread:", err);
+      }
+    });
+
+    const deleteThread = flow(function* () {
+      try {
+        if (!self.thread) {
+          console.warn("No thread to delete.");
+          return;
+        }
+
+        const threadId = self.thread.id;
+        const response = yield fetch(`${process.env.REACT_APP_OPENAI_BASE_URL}threads/${threadId}`, {
+          method: "DELETE",
+          headers: {
+            Authorization: `Bearer ${process.env.REACT_APP_OPENAI_API_KEY}`,
+            "OpenAI-Beta": "assistants=v2",
+            "Content-Type": "application/json",
+          },
+        });
+    
+        if (response.ok) {
+          self.thread = undefined;
+        } else {
+          console.warn("Failed to delete thread, unexpected response:", response.status);
+        }
+      } catch (err) {
+        console.error("Error deleting thread:", err);
+      }
+    });
+
+    return { createThread, deleteThread, initialize, handleMessageSubmit };
   });
 
-const assistant = appConfigJson.config.assistant;
-export const assistantStore = AssistantModel.create({
-  assistantId: assistant.existing_assistant_id,
-  model: assistant.model,
-  instructions: assistant.instructions,
-  transcriptStore,
-  useExistingAssistant: assistant.use_existing
-});
+export interface AssistantModelType extends Instance<typeof AssistantModel> {}

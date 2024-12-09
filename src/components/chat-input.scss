@@ -18,6 +18,11 @@
     flex: 1 0 calc(100% - 22px); // full width of container minus 10px padding and 1px border on either side
     height: 75px;
     padding: 8px 10px;
+
+    &:disabled {
+      cursor: not-allowed;
+      opacity: .5;
+    }
   }
 
   .buttons-container {
@@ -56,6 +61,10 @@
       }
       &.dictate {
         order: 1;
+      }
+      &:disabled {
+        cursor: not-allowed;
+        opacity: .5;
       }
     }
   }
