@@ -2,9 +2,10 @@ import { types, flow } from "mobx-state-tree";
 import { getTools, initLlmConnection } from "../utils/llm-utils";
 import { ChatTranscriptModel, transcriptStore } from "./chat-transcript-model";
 import { Message } from "openai/resources/beta/threads/messages";
-import { getAttributeList, getDataContext } from "@concord-consortium/codap-plugin-api";
-import { DAVAI_SPEAKER } from "../constants";
+import { getAttributeList, getDataContext, getListOfDataContexts } from "../utils/codap-api-helpers";
+import { DAVAI_SPEAKER, DEBUG_SPEAKER } from "../constants";
 import { createGraph } from "../utils/codap-utils";
+import { formatMessage } from "../utils/utils";
 import appConfigJson from "../app-config.json";
 
 export const AssistantModel = types
@@ -33,21 +34,36 @@ export const AssistantModel = types
         }
         self.assistant = davaiAssistant;
         self.thread = yield davai.beta.threads.create();
+        transcriptStore.addMessage(DEBUG_SPEAKER, {
+          description: "You are chatting with assistant",
+          content: formatMessage(self.assistant)
+        });
+        transcriptStore.addMessage(DEBUG_SPEAKER, {
+          description: "New thread created",
+          content: formatMessage(self.thread)
+        });
       } catch (err) {
         console.error("Failed to initialize assistant:", err);
+        transcriptStore.addMessage(DEBUG_SPEAKER, {
+          description: "Failed to initialize assistant",
+          content: formatMessage(err)
+        });
       }
     });
 
     const handleMessageSubmit = flow(function* (messageText) {
       try {
-        yield davai.beta.threads.messages.create(self.thread.id, {
+        const messageSent = yield davai.beta.threads.messages.create(self.thread.id, {
           role: "user",
           content: messageText,
         });
+
+        transcriptStore.addMessage(DEBUG_SPEAKER, {description: "Message sent to LLM", content: formatMessage(messageSent)});
         yield startRun();
 
       } catch (err) {
         console.error("Failed to handle message submit:", err);
+        transcriptStore.addMessage(DEBUG_SPEAKER, {description: "Failed to handle message submit", content: formatMessage(err)});
       }
     });
 
@@ -64,21 +80,29 @@ export const AssistantModel = types
         }
 
         if (runState.status === "requires_action") {
+          transcriptStore.addMessage(DEBUG_SPEAKER, {description: "User request requires action", content: formatMessage(runState)});
           yield handleRequiredAction(runState, run.id);
         }
 
         // Get the last assistant message from the messages array
         const messages = yield davai.beta.threads.messages.list(self.thread.id);
+        transcriptStore.addMessage(DEBUG_SPEAKER, {description: "Updated thread messages list", content: formatMessage(messages)});
+
         const lastMessageForRun = messages.data.filter(
           (msg: Message) => msg.run_id === run.id && msg.role === "assistant"
         ).pop();
 
-        self.transcriptStore.addMessage(
-          DAVAI_SPEAKER,
-          lastMessageForRun?.content[0]?.text?.value || "Error processing request."
-        );
+        const lastMessageContent = lastMessageForRun?.content[0]?.text?.value;
+        if (lastMessageContent) {
+          transcriptStore.addMessage(DAVAI_SPEAKER, {content: lastMessageContent});
+        } else {
+          transcriptStore.addMessage(DAVAI_SPEAKER, {content: "I'm sorry, I don't have a response for that."});
+          transcriptStore.addMessage(DEBUG_SPEAKER, {description: "No content in last message", content: formatMessage(lastMessageForRun)});
+        }
+
       } catch (err) {
         console.error("Failed to complete run:", err);
+        transcriptStore.addMessage(DEBUG_SPEAKER, {description: "Failed to complete run", content: formatMessage(err)});
       }
     });
 
@@ -92,11 +116,16 @@ export const AssistantModel = types
                 // getting the root collection won't always work. what if a user wants the attributes
                 // in the Mammals dataset but there is a hierarchy?
                 const rootCollection = (await getDataContext(dataset)).values.collections[0];
-                const attributeList = await getAttributeList(dataset, rootCollection.name);
-                return { tool_call_id: toolCall.id, output: JSON.stringify(attributeList) };
+                const attributeListRes = await getAttributeList(dataset, rootCollection.name);
+                const { requestMessage, ...codapResponse } = attributeListRes;
+                transcriptStore.addMessage(DEBUG_SPEAKER, { description: "Request sent to CODAP", content: formatMessage(requestMessage) });
+                transcriptStore.addMessage(DEBUG_SPEAKER, { description: "Response from CODAP", content: formatMessage(codapResponse) });
+                return { tool_call_id: toolCall.id, output: JSON.stringify(attributeListRes) };
               } else {
                 const { dataset, name, xAttribute, yAttribute } = JSON.parse(toolCall.function.arguments);
-                createGraph(dataset, name, xAttribute, yAttribute);
+                const { requestMessage, ...codapResponse} = await createGraph(dataset, name, xAttribute, yAttribute);
+                transcriptStore.addMessage(DEBUG_SPEAKER, { description: "Request sent to CODAP", content: formatMessage(requestMessage) });
+                transcriptStore.addMessage(DEBUG_SPEAKER, { description: "Response from CODAP", content: formatMessage(codapResponse) });
                 return { tool_call_id: toolCall.id, output: "Graph created." };
               }
             })
@@ -123,6 +152,7 @@ export const AssistantModel = types
         }
       } catch (err) {
         console.error(err);
+        transcriptStore.addMessage(DEBUG_SPEAKER, {description: "Error taking required action", content: formatMessage(err)});
       }
     });
 
