@@ -1,4 +1,4 @@
-import { types } from "mobx-state-tree";
+import { Instance, types } from "mobx-state-tree";
 import { timeStamp } from "../utils/utils";
 import { DAVAI_SPEAKER } from "../constants";
 import { MessageContent } from "../types";
@@ -26,6 +26,7 @@ export const ChatTranscriptModel = types
     },
   }));
 
+export interface ChatTranscriptModelType extends Instance<typeof ChatTranscriptModel> {}
 export const transcriptStore = ChatTranscriptModel.create({
   messages: [
     {

@@ -1,16 +1,22 @@
 import { types, flow } from "mobx-state-tree";
-import { initLlmConnection, getTools } from "../utils/llm-utils";
-import { transcriptStore } from "./chat-transcript-model";
+import { getTools, initLlmConnection } from "../utils/llm-utils";
+import { ChatTranscriptModel, transcriptStore } from "./chat-transcript-model";
 import { Message } from "openai/resources/beta/threads/messages";
 import { getAttributeList, getDataContext } from "../utils/codap-api-helpers";
 import { DAVAI_SPEAKER, DEBUG_SPEAKER } from "../constants";
 import { createGraph } from "../utils/codap-utils";
 import { formatMessage } from "../utils/utils";
+import appConfigJson from "../app-config.json";
 
-const AssistantModel = types
+export const AssistantModel = types
   .model("AssistantModel", {
     assistant: types.maybe(types.frozen()),
+    assistantId: types.string,
+    instructions: types.string,
+    model: types.string,
     thread: types.maybe(types.frozen()),
+    transcriptStore: ChatTranscriptModel,
+    useExistingAssistant: true
   })
   .actions((self) => {
     const davai = initLlmConnection();
@@ -18,21 +24,20 @@ const AssistantModel = types
     const initialize = flow(function* () {
       try {
         const tools = getTools();
-        const assistantInstructions =
-          "You are DAVAI, an Data Analysis through Voice and Artificial Intelligence partner. You are an intermediary for a user who is blind who wants to interact with data tables in a data analysis app named CODAP.";
-        const newAssistant = yield davai.beta.assistants.create({
-          instructions: assistantInstructions,
-          model: "gpt-4o-mini",
-          tools,
-        });
 
-        self.assistant = newAssistant;
+        const davaiAssistant = self.useExistingAssistant && self.assistantId
+          ? yield davai.beta.assistants.retrieve(self.assistantId)
+          : yield davai.beta.assistants.create({instructions: self.instructions, model: self.model, tools });
+
+        if (!self.useExistingAssistant) {
+          self.assistantId = davaiAssistant.id;
+        }
+        self.assistant = davaiAssistant;
+        self.thread = yield davai.beta.threads.create();
         transcriptStore.addMessage(DEBUG_SPEAKER, {
-          description: "New assistant created",
+          description: "You are chatting with assistant",
           content: formatMessage(self.assistant)
         });
-
-        self.thread = yield davai.beta.threads.create();
         transcriptStore.addMessage(DEBUG_SPEAKER, {
           description: "New thread created",
           content: formatMessage(self.thread)
@@ -85,7 +90,7 @@ const AssistantModel = types
           (msg: Message) => msg.run_id === run.id && msg.role === "assistant"
         ).pop();
 
-        transcriptStore.addMessage(
+        self.transcriptStore.addMessage(
           DAVAI_SPEAKER,
           {content: lastMessageForRun?.content[0]?.text?.value || "Error processing request."}
         );
@@ -148,4 +153,11 @@ const AssistantModel = types
     return { initialize, handleMessageSubmit };
   });
 
-export const assistantStore = AssistantModel.create();
+const assistant = appConfigJson.config.assistant;
+export const assistantStore = AssistantModel.create({
+  assistantId: assistant.existing_assistant_id,
+  model: assistant.model,
+  instructions: assistant.instructions,
+  transcriptStore,
+  useExistingAssistant: assistant.use_existing
+});

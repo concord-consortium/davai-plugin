@@ -2,6 +2,7 @@
 
 .chat-transcript {
   margin: 0;
+  max-height: 250px;
   overflow-y: auto;
 
   .chat-transcript__messages {
