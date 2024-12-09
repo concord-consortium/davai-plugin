@@ -58,7 +58,7 @@ const AssistantModel = types
 
       } catch (err) {
         console.error("Failed to handle message submit:", err);
-        transcriptStore.addMessage(DEBUG_SPEAKER, {description: "Error processing request", content: formatMessage(err)});
+        transcriptStore.addMessage(DEBUG_SPEAKER, {description: "Failed to handle message submit", content: formatMessage(err)});
       }
     });
 
@@ -91,7 +91,7 @@ const AssistantModel = types
         );
       } catch (err) {
         console.error("Failed to complete run:", err);
-        transcriptStore.addMessage(DEBUG_SPEAKER, {description: "Error processing request", content: formatMessage(err)});
+        transcriptStore.addMessage(DEBUG_SPEAKER, {description: "Failed to complete run", content: formatMessage(err)});
       }
     });
 
