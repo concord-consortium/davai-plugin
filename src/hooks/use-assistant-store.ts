@@ -6,16 +6,16 @@ import { useChatTranscriptStore } from "./use-chat-transcript-store";
 export const useAssistantStore = () => {
   const appConfig = useAppConfigContext();
   const transcriptStore = useChatTranscriptStore();
-  const { assistantId, instructions, model, useExisting } = appConfig.assistant;
+  const { assistantId, instructions, modelName, useExisting } = appConfig.assistant;
   const assistantStore = useMemo(() => {
     return AssistantModel.create({
       assistantId,
-      model,
+      modelName,
       instructions,
       transcriptStore,
       useExisting,
     });
-  }, [assistantId, instructions, model, transcriptStore, useExisting]);
+  }, [assistantId, instructions, modelName, transcriptStore, useExisting]);
 
   return assistantStore;
 };

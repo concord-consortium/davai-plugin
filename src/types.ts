@@ -11,7 +11,7 @@ export type AppConfig = {
   assistant: {
     assistantId: string;
     instructions: string;
-    model: string;
+    modelName: string;
     useExisting: boolean;
   };
   dimensions: {

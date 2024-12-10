@@ -4,8 +4,8 @@
   },
   "assistant": {
     "assistantId": "asst_Af8jrKYOFP4MxA9nse61yFBq",
-    "instructions": "You are DAVAI, an Data Analysis through Voice and Artificial Intelligence partner. You are an intermediary for a user who is blind who wants to interact with data tables in a data analysis app named CODAP.",
-    "model": "gpt-4o-mini",
+    "instructions": "You are DAVAI, a Data Analysis through Voice and Artificial Intelligence partner. You are an intermediary for a user who is blind who wants to interact with data tables in a data analysis app named CODAP.",
+    "modelName": "gpt-4o-mini",
     "useExisting": true
   },
   "dimensions": {

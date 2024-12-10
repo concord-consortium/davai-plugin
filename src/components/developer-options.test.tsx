@@ -22,7 +22,7 @@ const mockAssistantStore = AssistantModel.create({
   assistant: {},
   assistantId: "asst_abc123",
   instructions: "This is just a test",
-  model: "model-1",
+  modelName: "test-model",
   thread: {},
   transcriptStore: mockTranscriptStore,
   useExistingAssistant: true,
