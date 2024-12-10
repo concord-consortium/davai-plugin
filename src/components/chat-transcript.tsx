@@ -48,7 +48,6 @@ export const ChatTranscriptComponent = observer(({chatTranscript}: IProps) => {
                 {message.speaker}
               </h3>
               <div
-                aria-label="message"
                 className={`chat-message-content ${messageContentClass}`}
                 data-testid="chat-message-content"
               >
