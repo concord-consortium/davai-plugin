@@ -15,58 +15,31 @@ export const openAiTools: AssistantTool[] = [
   {
     type: "function",
     function: {
-      name: "get_attributes",
-      description: "Get a list of all attributes in a dataset",
-      strict: true,
+      name: "create_request",
+      description: "Create a request to get data from CODAP",
+      strict: false,
       parameters: {
         type: "object",
         properties: {
-          dataset: {
+          action: {
             type: "string",
-            description: "The specified dataset containing attributes"
+            description: "The action to perform"
+          },
+          resource: {
+            type: "string",
+            description: "The resource to act upon"
+          },
+          values: {
+            type: "object",
+            description: "The values to pass to the action"
           }
         },
         additionalProperties: false,
         required: [
-          "dataset"
+          "action",
+          "resource"
         ]
       }
     }
   },
-  {
-    type: "function",
-    function: {
-      name: "create_graph",
-      description: "Create a graph tile in CODAP",
-      strict: true,
-      parameters: {
-        type: "object",
-        properties: {
-          dataset: {
-            type: "string",
-            description: "The name of the dataset to which the attributes belong"
-          },
-          name: {
-            type: "string",
-            description: "A name for the graph"
-          },
-          xAttribute: {
-            type: "string",
-            description: "The x-axis attribute"
-          },
-          yAttribute: {
-            type: "string",
-            description: "The y-axis attribute"
-          },
-        },
-        additionalProperties: false,
-        required: [
-          "dataset",
-          "name",
-          "xAttribute",
-          "yAttribute"
-        ]
-      }
-    }
-  }
 ];
