@@ -1,6 +1,7 @@
 import React from "react";
 import { createRoot } from "react-dom/client";
 import { App } from "./components/App";
+import { AppConfigProvider } from "./app-config-provider";
 
 import "./index.scss";
 
@@ -12,5 +13,9 @@ if (container) {
     window.focus();
   });
 
-  root.render(<App />);
+  root.render(
+    <AppConfigProvider>
+      <App />
+    </AppConfigProvider>
+  );
 }
