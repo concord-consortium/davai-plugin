@@ -18,7 +18,7 @@ const mockTranscriptStore = ChatTranscriptModel.create({
   ],
 });
 
-const assistantStore = AssistantModel.create({
+const mockAssistantStore = AssistantModel.create({
   assistant: {},
   assistantId: "asst_abc123",
   instructions: "This is just a test",
@@ -44,7 +44,7 @@ describe("test developer options component", () => {
     return (
       <MockAppConfigProvider>
         <DeveloperOptionsComponent
-          assistantStore={assistantStore}
+          assistantStore={mockAssistantStore}
           onCreateThread={onCreateThread}
           onDeleteThread={onDeleteThread}
           onMockAssistant={onMockAssistant}

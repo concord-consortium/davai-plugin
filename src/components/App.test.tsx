@@ -1,9 +1,8 @@
 import React from "react";
 import { render, screen } from "@testing-library/react";
 import { App } from "./App";
-import { AppConfigContext } from "../app-config-context";
-import { AppConfigModel } from "../models/app-config-model";
 import { mockAppConfig } from "../test-utils/mock-app-config";
+import { MockAppConfigProvider } from "../test-utils/app-config-provider";
 
 jest.mock("../hooks/use-assistant-store", () => ({
   useAssistantStore: jest.fn(() => ({
@@ -22,14 +21,6 @@ jest.mock("../models/app-config-model", () => ({
   }
 }));
 
-const MockAppConfigProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
-  const mockAppConfigValue = AppConfigModel.create(mockAppConfig);
-  return (
-    <AppConfigContext.Provider value={mockAppConfigValue}>
-      {children}
-    </AppConfigContext.Provider>
-  );
-};
 
 describe("test load app", () => {
   it("renders without crashing", () => {
