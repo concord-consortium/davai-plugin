@@ -103,7 +103,6 @@
     "webpack-dev-server": "^4.15.0"
   },
   "dependencies": {
-    "@anthropic-ai/sdk": "^0.32.1",
     "@types/dom-speech-recognition": "^0.0.4",
     "dotenv": "^16.4.5",
     "mobx-react-lite": "^4.0.7",
