@@ -2,11 +2,10 @@ import { types, flow } from "mobx-state-tree";
 import { getTools, initLlmConnection } from "../utils/llm-utils";
 import { ChatTranscriptModel, transcriptStore } from "./chat-transcript-model";
 import { Message } from "openai/resources/beta/threads/messages";
-import { getAttributeList, getDataContext, getListOfDataContexts } from "../utils/codap-api-helpers";
 import { DAVAI_SPEAKER, DEBUG_SPEAKER } from "../constants";
-import { createGraph } from "../utils/codap-utils";
 import { formatMessage } from "../utils/utils";
 import appConfigJson from "../app-config.json";
+import { codapInterface } from "@concord-consortium/codap-plugin-api";
 
 export const AssistantModel = types
   .model("AssistantModel", {
@@ -90,16 +89,28 @@ export const AssistantModel = types
     const pollRunState: (currentRunId: string) => Promise<any> = flow(function* (currentRunId) {
        let runState = yield davai.beta.threads.runs.retrieve(self.thread.id, currentRunId);
        transcriptStore.addMessage(DEBUG_SPEAKER, {
-         description: "Polling run state",
-         content: formatMessage(runState),
+         description: "Run state status",
+         content: formatMessage(runState.status),
        });
 
-      while (runState.status !== "completed" && runState.status !== "requires_action") {
+      const errorStates = ["failed", "cancelled", "incomplete"];
+
+      while (runState.status !== "completed" && runState.status !== "requires_action" && !errorStates.includes(runState.status)) {
         yield new Promise((resolve) => setTimeout(resolve, 2000));
         runState = yield davai.beta.threads.runs.retrieve(self.thread.id, currentRunId);
         transcriptStore.addMessage(DEBUG_SPEAKER, {
-          description: "Polling run state",
+          description: "Run state status",
+          content: formatMessage(runState.status),
+        });
+      }
+
+      if (errorStates.includes(runState.status)) {
+        transcriptStore.addMessage(DEBUG_SPEAKER, {
+          description: "Run failed",
           content: formatMessage(runState),
+        });
+        transcriptStore.addMessage(DAVAI_SPEAKER, {
+          content: "I'm sorry, I encountered an error. Please try again.",
         });
       }
 
@@ -139,34 +150,19 @@ export const AssistantModel = types
       try {
         const toolOutputs = runState.required_action?.submit_tool_outputs.tool_calls
           ? yield Promise.all(
-            runState.required_action.submit_tool_outputs.tool_calls.map(async (toolCall: any) => {
-              if (toolCall.function.name === "get_data_contexts") {
-                const dataContextList = await getListOfDataContexts();
-                const { requestMessage, ...codapResponse } = dataContextList;
-                transcriptStore.addMessage(DEBUG_SPEAKER, { description: "Request sent to CODAP", content: formatMessage(requestMessage) });
-                transcriptStore.addMessage(DEBUG_SPEAKER, { description: "Response from CODAP", content: formatMessage(codapResponse) });
-                return { tool_call_id: toolCall.id, output: JSON.stringify(dataContextList) };
-              } else if (toolCall.function.name === "get_attributes") {
-                const { dataset } = JSON.parse(toolCall.function.arguments);
-                // getting the root collection won't always work. what if a user wants the attributes
-                // in the Mammals dataset but there is a hierarchy?
-                const rootCollection = (await getDataContext(dataset)).values.collections[0];
-                const attributeListRes = await getAttributeList(dataset, rootCollection.name);
-                const { requestMessage, ...codapResponse } = attributeListRes;
-                transcriptStore.addMessage(DEBUG_SPEAKER, { description: "Request sent to CODAP", content: formatMessage(requestMessage) });
-                transcriptStore.addMessage(DEBUG_SPEAKER, { description: "Response from CODAP", content: formatMessage(codapResponse) });
-                return { tool_call_id: toolCall.id, output: JSON.stringify(attributeListRes) };
-              } else if (toolCall.function.name === "create_graph") {
-                const { dataset, name, xAttribute, yAttribute } = JSON.parse(toolCall.function.arguments);
-                const { requestMessage, ...codapResponse} = await createGraph(dataset, name, xAttribute, yAttribute);
-                transcriptStore.addMessage(DEBUG_SPEAKER, { description: "Request sent to CODAP", content: formatMessage(requestMessage) });
-                transcriptStore.addMessage(DEBUG_SPEAKER, { description: "Response from CODAP", content: formatMessage(codapResponse) });
-                return { tool_call_id: toolCall.id, output: "Graph created." };
+            runState.required_action.submit_tool_outputs.tool_calls.map(flow(function* (toolCall: any) {
+              if (toolCall.function.name === "create_request") {
+                const { action, resource, values } = JSON.parse(toolCall.function.arguments);
+                const request = { action, resource, values };
+                transcriptStore.addMessage(DEBUG_SPEAKER, { description: "Request sent to CODAP", content: formatMessage(request) });
+                const res = yield codapInterface.sendRequest(request);
+                transcriptStore.addMessage(DEBUG_SPEAKER, { description: "Response from CODAP", content: formatMessage(res) });
+                return { tool_call_id: toolCall.id, output: JSON.stringify(res) };
               } else {
                 return { tool_call_id: toolCall.id, output: "Tool call not recognized." };
               }
             })
-          )
+          ))
           : [];
 
         if (toolOutputs) {
