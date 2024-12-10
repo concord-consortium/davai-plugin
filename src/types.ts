@@ -1,5 +1,6 @@
-export type Mode = "development" | "production" | "test";
-export const isMode = (value: unknown): value is Mode => {
+export const AppModeValues = ["development", "production", "test"] as const;
+export type AppMode = typeof AppModeValues[number];
+export const isAppMode = (value: unknown): value is AppMode => {
   return value === "development" || value === "production" || value === "test";
 };
 
@@ -18,7 +19,7 @@ export type AppConfig = {
     width: number;
   };
   mockAssistant?: boolean;
-  mode: Mode;
+  mode: AppMode;
 };
 
 export type ChatMessage = {

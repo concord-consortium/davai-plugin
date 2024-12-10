@@ -1,5 +1,5 @@
 import { types, Instance, SnapshotIn } from "mobx-state-tree";
-import { Mode } from "../types";
+import { AppMode, AppModeValues } from "../types";
 
 export const AppConfigModel = types.model("AppConfigModel", {
   accessibility: types.model({
@@ -16,7 +16,7 @@ export const AppConfigModel = types.model("AppConfigModel", {
     height: types.number,
   }),
   mockAssistant: types.maybe(types.boolean),
-  mode: types.enumeration<Mode>("Mode", ["development", "production", "test"]),
+  mode: types.enumeration<AppMode>("Mode", AppModeValues),
 })
 .volatile((self) => ({
   isAssistantMocked: self.mode === "development" && self.mockAssistant,

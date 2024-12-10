@@ -68,7 +68,7 @@ export const App = observer(() => {
   };
 
   const handleCreateThread = async () => {
-    const confirmCreate = window.confirm("Are you sure you want to create a new thread? If you do, you will not be able to continue this chat and will lose its history.");
+    const confirmCreate = window.confirm("Are you sure you want to create a new thread? If you do, you will lose any existing chat history.");
     if (!confirmCreate) return;
 
     transcriptStore.clearTranscript();

@@ -1,4 +1,4 @@
-import { Mode } from "../types";
+import { AppMode } from "../types";
 
 export const mockAppConfig = {
   accessibility: {
@@ -15,5 +15,5 @@ export const mockAppConfig = {
     width: 380
   },
   mockAssistant: false,
-  mode: "test" as Mode,
+  mode: "test" as AppMode,
 };

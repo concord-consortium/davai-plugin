@@ -1,7 +1,7 @@
 import { useMemo } from "react";
 import { ChatTranscriptModel } from "../models/chat-transcript-model";
 import { timeStamp } from "../utils/utils";
-import { DAVAI_SPEAKER } from "../constants";
+import { DAVAI_SPEAKER, GREETING } from "../constants";
 
 export const useChatTranscriptStore = () => {
   const chatTranscriptStore = useMemo(() => {
@@ -9,7 +9,7 @@ export const useChatTranscriptStore = () => {
       messages: [
         {
           speaker: DAVAI_SPEAKER,
-          content: "Hello! I'm DAVAI, your Data Analysis through Voice and Artificial Intelligence partner.",
+          content: GREETING,
           timestamp: timeStamp(),
         },
       ],

@@ -1,5 +1,5 @@
 import React from "react";
-import { AppConfig, isMode } from "./types";
+import { AppConfig, isAppMode } from "./types";
 import appConfigJson from "./app-config.json";
 import { AppConfigModel, AppConfigModelSnapshot } from "./models/app-config-model";
 import { getUrlParam } from "./utils/utils";
@@ -9,7 +9,7 @@ export const loadAppConfig = (): AppConfig => {
   const defaultConfig = appConfigJson as AppConfig;
   const urlParamMode = getUrlParam("mode");
   const configOverrides: Partial<AppConfig> = {
-    mode: isMode(urlParamMode) ? urlParamMode : defaultConfig.mode
+    mode: isAppMode(urlParamMode) ? urlParamMode : defaultConfig.mode
   };
 
   return {
