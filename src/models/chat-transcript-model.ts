@@ -4,7 +4,7 @@ import { MessageContent } from "../types";
 
 const MessageModel = types.model("MessageModel", {
   speaker: types.string,
-  messageContent: types.frozen(),
+  messageContent: types.frozen<MessageContent>(),
   timestamp: types.string,
 });
 

@@ -9,7 +9,7 @@ export const useChatTranscriptStore = () => {
       messages: [
         {
           speaker: DAVAI_SPEAKER,
-          content: GREETING,
+          messageContent: {content: GREETING},
           timestamp: timeStamp(),
         },
       ],
