@@ -41,7 +41,7 @@ describe("test keyboard shortcut controls component", () => {
     expect(button).toHaveTextContent("Disable Shortcut");
   });
 
-  it.skip("renders a form for customizing the keyboard shortcut", async () => {
+  it("renders a form for customizing the keyboard shortcut", async () => {
     render(<WrapperComponent />);
     const form = screen.getByTestId("custom-keyboard-shortcut-form");
     const input = within(form).getByTestId("custom-keyboard-shortcut");
@@ -60,7 +60,7 @@ describe("test keyboard shortcut controls component", () => {
     expect(dismissButton).toHaveTextContent("dismiss");
   });
 
-  it.skip("shows an error message if the custom keyboard shortcut input is empty", () => {
+  it("shows an error message if the custom keyboard shortcut input is empty", () => {
     render(<WrapperComponent />);
     const form = screen.getByTestId("custom-keyboard-shortcut-form");
     const input = within(form).getByTestId("custom-keyboard-shortcut");

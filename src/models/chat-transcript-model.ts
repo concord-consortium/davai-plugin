@@ -1,6 +1,5 @@
 import { Instance, types } from "mobx-state-tree";
 import { timeStamp } from "../utils/utils";
-import { DAVAI_SPEAKER } from "../constants";
 import { MessageContent } from "../types";
 
 const MessageModel = types.model("MessageModel", {
@@ -9,6 +8,13 @@ const MessageModel = types.model("MessageModel", {
   timestamp: types.string,
 });
 
+/**
+ * ChatTranscriptModel encapsulates the transcript of a chat between an AI assistant and the user.
+ * It includes properties for adding messages and clearing the transcript.
+ *
+ * @property {Array<MessageModel>} messages - An array of messages in the chat transcript.
+ * Each message includes details about the speaker, content, and timestamp.
+ */
 export const ChatTranscriptModel = types
   .model("ChatTranscriptModel", {
     messages: types.array(MessageModel),
@@ -27,14 +33,3 @@ export const ChatTranscriptModel = types
   }));
 
 export interface ChatTranscriptModelType extends Instance<typeof ChatTranscriptModel> {}
-export const transcriptStore = ChatTranscriptModel.create({
-  messages: [
-    {
-      speaker: DAVAI_SPEAKER,
-      messageContent: {
-        content: "Hello! I'm DAVAI, your Data Analysis through Voice and Artificial Intelligence partner."
-      },
-      timestamp: timeStamp()
-    }
-  ]
-});

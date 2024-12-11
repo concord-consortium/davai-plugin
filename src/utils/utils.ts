@@ -22,6 +22,11 @@ export const isInputElement = (activeElement: Element | null) => {
   }
 };
 
+export const getUrlParam = (paramName: string) => {
+  const urlParams = new URLSearchParams(window.location.search);
+  return urlParams.get(paramName);
+};
+
 export const keyMap: Record<string, { shifted: string; unshifted: string }> = {
   "ShiftLeft": { shifted: "Shift", unshifted: "Shift" },
   "ShiftRight": { shifted: "Shift", unshifted: "Shift" },

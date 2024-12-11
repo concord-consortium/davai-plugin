@@ -1,17 +1,34 @@
 import React from "react";
 import { render, screen } from "@testing-library/react";
 import { App } from "./App";
+import { mockAppConfig } from "../test-utils/mock-app-config";
+import { MockAppConfigProvider } from "../test-utils/app-config-provider";
 
-jest.mock("../models/assistant-model", () => ({
-  assistantStore: {
-    assistant: null,
+jest.mock("../hooks/use-assistant-store", () => ({
+  useAssistantStore: jest.fn(() => ({
     initialize: jest.fn(),
-  },
+    transcriptStore: {
+      messages: [],
+      addMessage: jest.fn(),
+    },
+  })),
 }));
+
+jest.mock("../models/app-config-model", () => ({
+  AppConfigModel: {
+    create: jest.fn(() => (mockAppConfig)),
+    initialize: jest.fn(),
+  }
+}));
+
 
 describe("test load app", () => {
   it("renders without crashing", () => {
-    render(<App />);
+    render(
+      <MockAppConfigProvider>
+        <App />
+      </MockAppConfigProvider>
+    );
     expect(screen.getByText("Loading...")).toBeDefined();
   });
 });

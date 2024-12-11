@@ -1,50 +1,79 @@
-import { types, flow } from "mobx-state-tree";
-import { getTools, initLlmConnection } from "../utils/llm-utils";
-import { ChatTranscriptModel, transcriptStore } from "./chat-transcript-model";
+import { types, flow, Instance } from "mobx-state-tree";
 import { Message } from "openai/resources/beta/threads/messages";
-import { getAttributeList, getDataContext, getListOfDataContexts } from "../utils/codap-api-helpers";
+import { getAttributeList, getDataContext } from "../utils/codap-api-helpers";
 import { DAVAI_SPEAKER, DEBUG_SPEAKER } from "../constants";
 import { createGraph } from "../utils/codap-utils";
 import { formatMessage } from "../utils/utils";
-import appConfigJson from "../app-config.json";
+import { getTools, initLlmConnection } from "../utils/llm-utils";
+import { ChatTranscriptModel } from "./chat-transcript-model";
+import { requestThreadDeletion } from "../utils/openai-utils";
 
+/**
+ * AssistantModel encapsulates the AI assistant and its interactions with the user.
+ * It includes properties and methods for configuring the assistant, handling chat interactions, and maintaining the assistant's
+ * thread and transcript.
+ *
+ * @property {Object|null} assistant - The assistant object, or `null` if not initialized.
+ * @property {string} assistantId - The unique ID of the assistant being used.
+ * @property {string} instructions - Instructions provided when creating or configuring a new assistant.
+ * @property {string} modelName - The identifier for the assistant's model (e.g., "gpt-4o-mini").
+ * @property {Object|null} apiConnection - The API connection object for interacting with the assistant, or `null` if not connected.
+ * @property {Object|null} thread - The assistant's thread used for the current chat, or `null` if no thread is active.
+ * @property {ChatTranscriptModel} transcriptStore - The assistant's chat transcript store for recording and managing chat messages.
+ * @property {boolean} useExisting - A flag indicating whether to use an existing assistant (`true`) or create a new one (`false`).
+ */
 export const AssistantModel = types
   .model("AssistantModel", {
     assistant: types.maybe(types.frozen()),
     assistantId: types.string,
     instructions: types.string,
-    model: types.string,
+    modelName: types.string,
+    apiConnection: types.maybe(types.frozen()),
     thread: types.maybe(types.frozen()),
     transcriptStore: ChatTranscriptModel,
-    useExistingAssistant: true
+    useExisting: true,
   })
+  .actions((self) => ({
+    handleMessageSubmitMockAssistant() {
+      // Use a brief delay to prevent duplicate timestamp-based keys.
+      setTimeout(() => {
+        self.transcriptStore.addMessage(
+          DAVAI_SPEAKER,
+          { content: "I'm just a mock assistant and can't process that request." }
+        );
+      }, 1000);
+    }
+  }))
+  .actions((self) => ({
+    afterCreate(){
+      self.apiConnection = initLlmConnection();
+    }
+  }))
   .actions((self) => {
-    const davai = initLlmConnection();
-
     const initialize = flow(function* () {
       try {
         const tools = getTools();
 
-        const davaiAssistant = self.useExistingAssistant && self.assistantId
-          ? yield davai.beta.assistants.retrieve(self.assistantId)
-          : yield davai.beta.assistants.create({instructions: self.instructions, model: self.model, tools });
+        const davaiAssistant = self.useExisting && self.assistantId
+          ? yield self.apiConnection.beta.assistants.retrieve(self.assistantId)
+          : yield self.apiConnection.beta.assistants.create({instructions: self.instructions, model: self.modelName, tools });
 
-        if (!self.useExistingAssistant) {
+        if (!self.useExisting) {
           self.assistantId = davaiAssistant.id;
         }
         self.assistant = davaiAssistant;
-        self.thread = yield davai.beta.threads.create();
-        transcriptStore.addMessage(DEBUG_SPEAKER, {
+        self.thread = yield self.apiConnection.beta.threads.create();
+        self.transcriptStore.addMessage(DEBUG_SPEAKER, {
           description: "You are chatting with assistant",
           content: formatMessage(self.assistant)
         });
-        transcriptStore.addMessage(DEBUG_SPEAKER, {
+        self.transcriptStore.addMessage(DEBUG_SPEAKER, {
           description: "New thread created",
           content: formatMessage(self.thread)
         });
       } catch (err) {
         console.error("Failed to initialize assistant:", err);
-        transcriptStore.addMessage(DEBUG_SPEAKER, {
+        self.transcriptStore.addMessage(DEBUG_SPEAKER, {
           description: "Failed to initialize assistant",
           content: formatMessage(err)
         });
@@ -53,40 +82,39 @@ export const AssistantModel = types
 
     const handleMessageSubmit = flow(function* (messageText) {
       try {
-        const messageSent = yield davai.beta.threads.messages.create(self.thread.id, {
+        const messageSent = yield self.apiConnection.beta.threads.messages.create(self.thread.id, {
           role: "user",
           content: messageText,
         });
 
-        transcriptStore.addMessage(DEBUG_SPEAKER, {description: "Message sent to LLM", content: formatMessage(messageSent)});
+        self.transcriptStore.addMessage(DEBUG_SPEAKER, {description: "Message sent to LLM", content: formatMessage(messageSent)});
         yield startRun();
 
       } catch (err) {
         console.error("Failed to handle message submit:", err);
-        transcriptStore.addMessage(DEBUG_SPEAKER, {description: "Failed to handle message submit", content: formatMessage(err)});
+        self.transcriptStore.addMessage(DEBUG_SPEAKER, {description: "Failed to handle message submit", content: formatMessage(err)});
       }
     });
 
     const startRun = flow(function* () {
       try {
-        const run = yield davai.beta.threads.runs.create(self.thread.id, {
+        const run = yield self.apiConnection.beta.threads.runs.create(self.thread.id, {
           assistant_id: self.assistant.id,
         });
 
         // Wait for run completion and handle responses
-        let runState = yield davai.beta.threads.runs.retrieve(self.thread.id, run.id);
+        let runState = yield self.apiConnection.beta.threads.runs.retrieve(self.thread.id, run.id);
         while (runState.status !== "completed" && runState.status !== "requires_action") {
-          runState = yield davai.beta.threads.runs.retrieve(self.thread.id, run.id);
+          runState = yield self.apiConnection.beta.threads.runs.retrieve(self.thread.id, run.id);
         }
 
         if (runState.status === "requires_action") {
-          transcriptStore.addMessage(DEBUG_SPEAKER, {description: "User request requires action", content: formatMessage(runState)});
+          self.transcriptStore.addMessage(DEBUG_SPEAKER, {description: "User request requires action", content: formatMessage(runState)});
           yield handleRequiredAction(runState, run.id);
         }
 
-        // Get the last assistant message from the messages array
-        const messages = yield davai.beta.threads.messages.list(self.thread.id);
-        transcriptStore.addMessage(DEBUG_SPEAKER, {description: "Updated thread messages list", content: formatMessage(messages)});
+        const messages = yield self.apiConnection.beta.threads.messages.list(self.thread.id);
+        self.transcriptStore.addMessage(DEBUG_SPEAKER, {description: "Updated thread messages list", content: formatMessage(messages)});
 
         const lastMessageForRun = messages.data.filter(
           (msg: Message) => msg.run_id === run.id && msg.role === "assistant"
@@ -94,15 +122,15 @@ export const AssistantModel = types
 
         const lastMessageContent = lastMessageForRun?.content[0]?.text?.value;
         if (lastMessageContent) {
-          transcriptStore.addMessage(DAVAI_SPEAKER, {content: lastMessageContent});
+          self.transcriptStore.addMessage(DAVAI_SPEAKER, {content: lastMessageContent});
         } else {
-          transcriptStore.addMessage(DAVAI_SPEAKER, {content: "I'm sorry, I don't have a response for that."});
-          transcriptStore.addMessage(DEBUG_SPEAKER, {description: "No content in last message", content: formatMessage(lastMessageForRun)});
+          self.transcriptStore.addMessage(DAVAI_SPEAKER, {content: "I'm sorry, I don't have a response for that."});
+          self.transcriptStore.addMessage(DEBUG_SPEAKER, {description: "No content in last message", content: formatMessage(lastMessageForRun)});
         }
 
       } catch (err) {
         console.error("Failed to complete run:", err);
-        transcriptStore.addMessage(DEBUG_SPEAKER, {description: "Failed to complete run", content: formatMessage(err)});
+        self.transcriptStore.addMessage(DEBUG_SPEAKER, {description: "Failed to complete run", content: formatMessage(err)});
       }
     });
 
@@ -110,60 +138,68 @@ export const AssistantModel = types
       try {
         const toolOutputs = runState.required_action?.submit_tool_outputs.tool_calls
           ? yield Promise.all(
-            runState.required_action.submit_tool_outputs.tool_calls.map(async (toolCall: any) => {
+            runState.required_action.submit_tool_outputs.tool_calls.map(flow(function* (toolCall: any) {
               if (toolCall.function.name === "get_attributes") {
                 const { dataset } = JSON.parse(toolCall.function.arguments);
-                // getting the root collection won't always work. what if a user wants the attributes
-                // in the Mammals dataset but there is a hierarchy?
-                const rootCollection = (await getDataContext(dataset)).values.collections[0];
-                const attributeListRes = await getAttributeList(dataset, rootCollection.name);
+                const rootCollection = (yield getDataContext(dataset)).values.collections[0];
+                const attributeListRes = yield getAttributeList(dataset, rootCollection.name);
                 const { requestMessage, ...codapResponse } = attributeListRes;
-                transcriptStore.addMessage(DEBUG_SPEAKER, { description: "Request sent to CODAP", content: formatMessage(requestMessage) });
-                transcriptStore.addMessage(DEBUG_SPEAKER, { description: "Response from CODAP", content: formatMessage(codapResponse) });
+                self.transcriptStore.addMessage(DEBUG_SPEAKER, { description: "Request sent to CODAP", content: formatMessage(requestMessage) });
+                self.transcriptStore.addMessage(DEBUG_SPEAKER, { description: "Response from CODAP", content: formatMessage(codapResponse) });
                 return { tool_call_id: toolCall.id, output: JSON.stringify(attributeListRes) };
               } else {
                 const { dataset, name, xAttribute, yAttribute } = JSON.parse(toolCall.function.arguments);
-                const { requestMessage, ...codapResponse} = await createGraph(dataset, name, xAttribute, yAttribute);
-                transcriptStore.addMessage(DEBUG_SPEAKER, { description: "Request sent to CODAP", content: formatMessage(requestMessage) });
-                transcriptStore.addMessage(DEBUG_SPEAKER, { description: "Response from CODAP", content: formatMessage(codapResponse) });
+                const { requestMessage, ...codapResponse} = yield createGraph(dataset, name, xAttribute, yAttribute);
+                self.transcriptStore.addMessage(DEBUG_SPEAKER, { description: "Request sent to CODAP", content: formatMessage(requestMessage) });
+                self.transcriptStore.addMessage(DEBUG_SPEAKER, { description: "Response from CODAP", content: formatMessage(codapResponse) });
                 return { tool_call_id: toolCall.id, output: "Graph created." };
               }
             })
-          )
+          ))
           : [];
 
         if (toolOutputs) {
-          davai.beta.threads.runs.submitToolOutputsStream(
+          yield self.apiConnection.beta.threads.runs.submitToolOutputs(
             self.thread.id, runId, { tool_outputs: toolOutputs }
           );
 
-          const threadMessageList = yield davai.beta.threads.messages.list(self.thread.id);
-          const threadMessages = threadMessageList.data.map((msg: any) => ({
-            role: msg.role,
-            content: msg.content[0].text.value,
-          }));
-
-          yield davai.chat.completions.create({
-            model: "gpt-4o-mini",
-            messages: [
-              ...threadMessages
-            ],
-          });
         }
       } catch (err) {
         console.error(err);
-        transcriptStore.addMessage(DEBUG_SPEAKER, {description: "Error taking required action", content: formatMessage(err)});
+        self.transcriptStore.addMessage(DEBUG_SPEAKER, {description: "Error taking required action", content: formatMessage(err)});
       }
     });
 
-    return { initialize, handleMessageSubmit };
+    const createThread = flow(function* () {
+      try {
+        const newThread = yield self.apiConnection.beta.threads.create();
+        self.thread = newThread;
+      } catch (err) {
+        console.error("Error creating thread:", err);
+      }
+    });
+
+    const deleteThread = flow(function* () {
+      try {
+        if (!self.thread) {
+          console.warn("No thread to delete.");
+          return;
+        }
+
+        const threadId = self.thread.id;
+        const response = yield requestThreadDeletion(threadId);
+
+        if (response.ok) {
+          self.thread = undefined;
+        } else {
+          console.warn("Failed to delete thread, unexpected response:", response.status);
+        }
+      } catch (err) {
+        console.error("Error deleting thread:", err);
+      }
+    });
+
+    return { createThread, deleteThread, initialize, handleMessageSubmit };
   });
 
-const assistant = appConfigJson.config.assistant;
-export const assistantStore = AssistantModel.create({
-  assistantId: assistant.existing_assistant_id,
-  model: assistant.model,
-  instructions: assistant.instructions,
-  transcriptStore,
-  useExistingAssistant: assistant.use_existing
-});
+export interface AssistantModelType extends Instance<typeof AssistantModel> {}

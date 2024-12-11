@@ -10,9 +10,9 @@
 
 ## Testing the plugin in CODAP
 
-Currently there is no trivial way to load a plugin running on a local server with `http` into the online CODAP, which forces `https`. One simple solution is to download the latest `build_[...].zip` file from https://codap.concord.org/releases/zips/, extract it to a folder and run it locally. If CODAP is running on port 8080, and this project is running by default on 3000, you can go to
+Currently there is no trivial way to load a plugin running on a local server with `http` into the online CODAP, which forces `https`. One simple solution is to download the latest `build_[...].zip` file from https://codap.concord.org/releases/zips/, extract it to a folder and run it locally. If CODAP is running on port 8080, and this project is running by default on 8081, you can go to
 
-http://127.0.0.1:8080/static/dg/en/cert/index.html?di=http://localhost:3000
+http://127.0.0.1:8080/static/dg/en/cert/index.html?di=http://localhost:8081
 
 to see the plugin running in CODAP.
 
@@ -56,6 +56,47 @@ If you aren’t satisfied with the build tool and configuration choices, you can
 Instead, it will copy all the configuration files and the transitive dependencies (Webpack, Babel, ESLint, etc) right into your project so you have full control over them. All of the commands except `eject` will still work, but they will point to the copied scripts so you can tweak them. At this point you’re on your own.
 
 You don’t have to ever use `eject`. The curated feature set is suitable for small and middle deployments, and you shouldn’t feel obligated to use this feature. However we understand that this tool wouldn’t be useful if you couldn’t customize it when you are ready for it.
+
+## Configuration Settings
+
+Configuration settings control various aspects of the application's behavior and appearance. Access to the configuration settings is provided by `AppConfigContext` via the `useAppConfigContext` hook.
+
+Default configuration setting values are defined in the `app-config.json` file. Currently, only the `mode` setting can be overridden by URL parameter (e.g. `?mode=development`). Support for overriding some of the other settings with URL parameters may be added in the future. 
+
+### Accessibility
+
+- **`accessibility`** (Object)  
+  Settings related to accessibility in the UI:
+  - **`keyboardShortcut`** (string): Custom keystroke for placing focus in the main text input field (e.g., `ctrl+?`).
+
+### Assistant
+
+- **`assistant`** (Object)  
+  Settings to configure the AI assistant:
+  - **`assistantId`** (string): The unique ID of an existing assistant to use.
+  - **`instructions`** (string): Instructions to use when creating new assistants (e.g., `You are helpful data analysis partner.`).
+  - **`modelName`** (string): The name of the model the assistant should use (e.g., `gpt-4o-mini`).
+  - **`useExisting`** (boolean): Whether to use an existing assistant.
+
+### Dimensions
+
+- **`dimensions`** (Object)  
+  Dimensions of the application's component within CODAP:
+  - **`width`** (number): The width of the application (in pixels).
+  - **`height`** (number): The height of the application (in pixels).
+
+### Mock Assistant
+
+- **`mockAssistant`** (boolean)  
+  A flag indicating whether to mock AI interactions.
+
+### Mode
+
+- **`mode`** (string)  
+  The mode in which the application runs. Possible values:
+  - `"development"`: Enables additional UI for debugging and artifact maintenance.
+  - `"production"`: Standard runtime mode for end users.
+  - `"test"`: Specialized mode for automated testing.
 
 ## Learn More
 

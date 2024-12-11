@@ -1,32 +1,30 @@
 import React, { useEffect, useState } from "react";
 import { observer } from "mobx-react-lite";
 import { initializePlugin, selectSelf } from "@concord-consortium/codap-plugin-api";
-import appConfigJson from "../app-config.json";
-import { assistantStore } from "../models/assistant-model";
-import { transcriptStore } from "../models/chat-transcript-model";
+import { useAppConfigContext } from "../hooks/use-app-config-context";
+import { useAssistantStore } from "../hooks/use-assistant-store";
 import { ChatInputComponent } from "./chat-input";
 import { ChatTranscriptComponent } from "./chat-transcript";
 import { ReadAloudMenu } from "./readaloud-menu";
 import { KeyboardShortcutControls } from "./keyboard-shortcut-controls";
-import { USER_SPEAKER } from "../constants";
+import { DAVAI_SPEAKER, GREETING, USER_SPEAKER } from "../constants";
+import { DeveloperOptionsComponent } from "./developer-options";
 
 import "./App.scss";
 
-const appConfig = appConfigJson.config;
-
 const kPluginName = "DAVAI";
 const kVersion = "0.0.1";
-const kInitialDimensions = {
-  width: appConfig.dimensions.width,
-  height: appConfig.dimensions.height,
-};
 
 export const App = observer(() => {
+  const appConfig = useAppConfigContext();
+  const assistantStore = useAssistantStore();
+  const transcriptStore = assistantStore.transcriptStore;
+  const dimensions = { width: appConfig.dimensions.width, height: appConfig.dimensions.height };
   const [readAloudEnabled, setReadAloudEnabled] = useState(false);
   const [playbackSpeed, setPlaybackSpeed] = useState(1);
   const isShortcutEnabled = JSON.parse(localStorage.getItem("keyboardShortcutEnabled") || "true");
   const [keyboardShortcutEnabled, setKeyboardShortcutEnabled] = useState(isShortcutEnabled);
-  const shortcutKeys = localStorage.getItem("keyboardShortcutKeys") || appConfig.accessibility.keyboard_shortcut;
+  const shortcutKeys = localStorage.getItem("keyboardShortcutKeys") || appConfig.accessibility.keyboardShortcut;
   const [keyboardShortcutKeys, setKeyboardShortcutKeys] = useState(shortcutKeys);
   const url = new URL(window.location.href);
   const params = new URLSearchParams(url.search);
@@ -34,9 +32,10 @@ export const App = observer(() => {
   const [showDebugLog, setShowDebugLog] = useState(hasDebugParams);
 
   useEffect(() => {
-    initializePlugin({pluginName: kPluginName, version: kVersion, dimensions: kInitialDimensions});
+    initializePlugin({pluginName: kPluginName, version: kVersion, dimensions});
     selectSelf();
     assistantStore.initialize();
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   const handleFocusShortcut = () => {
@@ -61,14 +60,53 @@ export const App = observer(() => {
     setPlaybackSpeed(speed);
   };
 
+  const handleChatInputSubmit = async (messageText: string) => {
+    transcriptStore.addMessage(USER_SPEAKER, {content: messageText});
+
+    if (appConfig.isAssistantMocked) {
+      assistantStore.handleMessageSubmitMockAssistant();
+    } else {
+      assistantStore.handleMessageSubmit(messageText);
+    }
+
+  };
+
+  const handleCreateThread = async () => {
+    const confirmCreate = window.confirm("Are you sure you want to create a new thread? If you do, you will lose any existing chat history.");
+    if (!confirmCreate) return;
+
+    transcriptStore.clearTranscript();
+    transcriptStore.addMessage(DAVAI_SPEAKER, {content: GREETING});
+
+    await assistantStore.createThread();
+  };
+
+  const handleDeleteThread = async () => {
+    const confirmDelete = window.confirm("Are you sure you want to delete the current thread? If you do, you will not be able to continue this chat.");
+    if (!confirmDelete) return false;
+
+    await assistantStore.deleteThread();
+    return true;
+  };
+
+  const handleMockAssistant = async () => {
+    if (!appConfig.isAssistantMocked) {
+      // If we switch to a mocked assistant, we delete the current thread and clear the transcript.
+      // First make sure the user is OK with that.
+      const threadDeleted = await handleDeleteThread();
+      if (!threadDeleted) return;
+
+      transcriptStore.clearTranscript();
+      transcriptStore.addMessage(DAVAI_SPEAKER, {content: GREETING});
+      appConfig.toggleMockAssistant();
+    } else {
+      appConfig.toggleMockAssistant();
+    }
+  };
+
   if (!assistantStore.assistant) {
     return <div>Loading...</div>;
   }
-
-  const handleChatInputSubmit = async (messageText: string) => {
-    transcriptStore.addMessage(USER_SPEAKER, {content: messageText});
-    assistantStore.handleMessageSubmit(messageText);
-  };
 
   return (
     <div className="App">
@@ -103,6 +141,7 @@ export const App = observer(() => {
         </div>
       }
       <ChatInputComponent
+        disabled={!assistantStore.thread && !appConfig.isAssistantMocked}
         keyboardShortcutEnabled={keyboardShortcutEnabled}
         shortcutKeys={keyboardShortcutKeys}
         onSubmit={handleChatInputSubmit}
@@ -122,6 +161,18 @@ export const App = observer(() => {
         onCustomizeShortcut={handleCustomizeShortcut}
         onToggleShortcut={handleToggleShortcut}
       />
+      {appConfig.mode === "development" &&
+        <>
+          <hr />
+          <h2>Developer Options</h2>
+          <DeveloperOptionsComponent
+            assistantStore={assistantStore}
+            onCreateThread={handleCreateThread}
+            onDeleteThread={handleDeleteThread}
+            onMockAssistant={handleMockAssistant}
+          />
+        </>
+      }
     </div>
   );
 });
