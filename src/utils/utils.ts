@@ -3,18 +3,6 @@ export const timeStamp = (): string => {
   return now.toLocaleString();
 };
 
-const idChars = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789";
-export const createMessageId = (): string => {
-  const result: string[] = [];
-
-  while (result.length < 10) {
-    const randomIndex = Math.floor(Math.random() * idChars.length);
-    result.push(idChars.charAt(randomIndex));
-  }
-
-  return result.join("");
-};
-
 export const formatJsonMessage = (json: any) => {
   return JSON.stringify(json, null, 2);
 };
