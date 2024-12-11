@@ -9,6 +9,7 @@ import { ReadAloudMenu } from "./readaloud-menu";
 import { KeyboardShortcutControls } from "./keyboard-shortcut-controls";
 import { DAVAI_SPEAKER, GREETING, USER_SPEAKER } from "../constants";
 import { DeveloperOptionsComponent } from "./developer-options";
+import { getUrlParam } from "../utils/utils";
 
 import "./App.scss";
 
@@ -26,10 +27,8 @@ export const App = observer(() => {
   const [keyboardShortcutEnabled, setKeyboardShortcutEnabled] = useState(isShortcutEnabled);
   const shortcutKeys = localStorage.getItem("keyboardShortcutKeys") || appConfig.accessibility.keyboardShortcut;
   const [keyboardShortcutKeys, setKeyboardShortcutKeys] = useState(shortcutKeys);
-  const url = new URL(window.location.href);
-  const params = new URLSearchParams(url.search);
-  const hasDebugParams = params.has("debug");
-  const [showDebugLog, setShowDebugLog] = useState(hasDebugParams);
+  const isDevMode = getUrlParam("dev") || appConfig.mode === "development";
+  const [showDebugLog, setShowDebugLog] = useState(isDevMode);
 
   useEffect(() => {
     initializePlugin({pluginName: kPluginName, version: kVersion, dimensions});
@@ -120,7 +119,7 @@ export const App = observer(() => {
         chatTranscript={transcriptStore}
         showDebugLog={showDebugLog}
       />
-      {hasDebugParams &&
+      {isDevMode &&
         <div className="show-debug-controls">
           <label htmlFor="debug-log-toggle">
             Show Debug Log:
@@ -161,7 +160,7 @@ export const App = observer(() => {
         onCustomizeShortcut={handleCustomizeShortcut}
         onToggleShortcut={handleToggleShortcut}
       />
-      {appConfig.mode === "development" &&
+      {isDevMode &&
         <>
           <hr />
           <h2>Developer Options</h2>
