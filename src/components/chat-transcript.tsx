@@ -35,7 +35,7 @@ export const ChatTranscriptComponent = observer(({chatTranscript, showDebugLog}:
         {chatTranscript.messages.map((message: ChatMessage) => {
           return (
             <ChatTranscriptMessage
-              key={`${message.timestamp}-${message.speaker}`}
+              key={`${message.id}`}
               message={message}
               showDebugLog={showDebugLog}
             />

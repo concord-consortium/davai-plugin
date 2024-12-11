@@ -11,6 +11,7 @@ export const useChatTranscriptStore = () => {
           speaker: DAVAI_SPEAKER,
           messageContent: {content: GREETING},
           timestamp: timeStamp(),
+          id: "initial-message",
         },
       ],
     });

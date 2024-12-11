@@ -10,12 +10,14 @@ describe("test chat transcript component", () => {
       {
         messageContent: {content: "Hello. How can I help you today?"},
         speaker: "DAVAI",
-        timestamp: "2021-07-01T12:00:00Z"
+        timestamp: "2021-07-01T12:00:00Z",
+        id: "1"
       },
       {
         messageContent: {content: "Tell me about the data!"},
         speaker: "User",
-        timestamp: "2021-07-01T12:00:05Z"
+        timestamp: "2021-07-01T12:00:05Z",
+        id: "2"
       }
     ]
   };
