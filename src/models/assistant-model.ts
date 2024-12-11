@@ -2,7 +2,7 @@ import { types, flow, Instance } from "mobx-state-tree";
 import { Message } from "openai/resources/beta/threads/messages";
 import { codapInterface } from "@concord-consortium/codap-plugin-api";
 import { DAVAI_SPEAKER, DEBUG_SPEAKER } from "../constants";
-import { formatMessage } from "../utils/utils";
+import { formatJsonMessage } from "../utils/utils";
 import { getTools, initLlmConnection } from "../utils/llm-utils";
 import { ChatTranscriptModel } from "./chat-transcript-model";
 import { requestThreadDeletion } from "../utils/openai-utils";
@@ -64,17 +64,17 @@ export const AssistantModel = types
         self.thread = yield self.apiConnection.beta.threads.create();
         self.transcriptStore.addMessage(DEBUG_SPEAKER, {
           description: "You are chatting with assistant",
-          content: formatMessage(self.assistant)
+          content: formatJsonMessage(self.assistant)
         });
         self.transcriptStore.addMessage(DEBUG_SPEAKER, {
           description: "New thread created",
-          content: formatMessage(self.thread)
+          content: formatJsonMessage(self.thread)
         });
       } catch (err) {
         console.error("Failed to initialize assistant:", err);
         self.transcriptStore.addMessage(DEBUG_SPEAKER, {
           description: "Failed to initialize assistant",
-          content: formatMessage(err)
+          content: formatJsonMessage(err)
         });
       }
     });
@@ -86,12 +86,12 @@ export const AssistantModel = types
           content: messageText,
         });
 
-        self.transcriptStore.addMessage(DEBUG_SPEAKER, {description: "Message sent to LLM", content: formatMessage(messageSent)});
+        self.transcriptStore.addMessage(DEBUG_SPEAKER, {description: "Message sent to LLM", content: formatJsonMessage(messageSent)});
         yield startRun();
 
       } catch (err) {
         console.error("Failed to handle message submit:", err);
-        self.transcriptStore.addMessage(DEBUG_SPEAKER, {description: "Failed to handle message submit", content: formatMessage(err)});
+        self.transcriptStore.addMessage(DEBUG_SPEAKER, {description: "Failed to handle message submit", content: formatJsonMessage(err)});
       }
     });
 
@@ -106,7 +106,7 @@ export const AssistantModel = types
         console.error("Failed to complete run:", err);
         self.transcriptStore.addMessage(DEBUG_SPEAKER, {
           description: "Failed to complete run",
-          content: formatMessage(err),
+          content: formatJsonMessage(err),
         });
       }
     });
@@ -115,7 +115,7 @@ export const AssistantModel = types
       let runState = yield self.apiConnection.beta.threads.runs.retrieve(self.thread.id, currentRunId);
       self.transcriptStore.addMessage(DEBUG_SPEAKER, {
         description: "Run state status",
-        content: formatMessage(runState.status),
+        content: formatJsonMessage(runState.status),
       });
 
      const errorStates = ["failed", "cancelled", "incomplete"];
@@ -125,14 +125,14 @@ export const AssistantModel = types
        runState = yield self.apiConnection.beta.threads.runs.retrieve(self.thread.id, currentRunId);
        self.transcriptStore.addMessage(DEBUG_SPEAKER, {
          description: "Run state status",
-         content: formatMessage(runState.status),
+         content: formatJsonMessage(runState.status),
        });
      }
 
      if (errorStates.includes(runState.status)) {
       self.transcriptStore.addMessage(DEBUG_SPEAKER, {
          description: "Run failed",
-         content: formatMessage(runState),
+         content: formatJsonMessage(runState),
        });
        self.transcriptStore.addMessage(DAVAI_SPEAKER, {
          content: "I'm sorry, I encountered an error. Please try again.",
@@ -142,7 +142,7 @@ export const AssistantModel = types
      if (runState.status === "requires_action") {
       self.transcriptStore.addMessage(DEBUG_SPEAKER, {
          description: "Run requires action",
-         content: formatMessage(runState),
+         content: formatJsonMessage(runState),
        });
        yield handleRequiredAction(runState, currentRunId);
        yield pollRunState(currentRunId);
@@ -157,7 +157,7 @@ export const AssistantModel = types
 
          self.transcriptStore.addMessage(DEBUG_SPEAKER, {
          description: "Run completed, assistant response",
-         content: formatMessage(lastMessageForRun),
+         content: formatJsonMessage(lastMessageForRun),
        });
 
        const lastMessageContent = lastMessageForRun?.content[0]?.text?.value;
@@ -179,9 +179,9 @@ export const AssistantModel = types
               if (toolCall.function.name === "create_request") {
                 const { action, resource, values } = JSON.parse(toolCall.function.arguments);
                 const request = { action, resource, values };
-                self.transcriptStore.addMessage(DEBUG_SPEAKER, { description: "Request sent to CODAP", content: formatMessage(request) });
+                self.transcriptStore.addMessage(DEBUG_SPEAKER, { description: "Request sent to CODAP", content: formatJsonMessage(request) });
                 const res = yield codapInterface.sendRequest(request);
-                self.transcriptStore.addMessage(DEBUG_SPEAKER, { description: "Response from CODAP", content: formatMessage(res) });
+                self.transcriptStore.addMessage(DEBUG_SPEAKER, { description: "Response from CODAP", content: formatJsonMessage(res) });
                 return { tool_call_id: toolCall.id, output: JSON.stringify(res) };
               } else {
                 return { tool_call_id: toolCall.id, output: "Tool call not recognized." };
@@ -190,7 +190,7 @@ export const AssistantModel = types
           ))
           : [];
 
-        self.transcriptStore.addMessage(DEBUG_SPEAKER, {description: "Tool outputs", content: formatMessage(toolOutputs)});
+        self.transcriptStore.addMessage(DEBUG_SPEAKER, {description: "Tool outputs", content: formatJsonMessage(toolOutputs)});
         if (toolOutputs) {
           yield self.apiConnection.beta.threads.runs.submitToolOutputs(
             self.thread.id, runId, { tool_outputs: toolOutputs }
@@ -198,7 +198,7 @@ export const AssistantModel = types
         }
       } catch (err) {
         console.error(err);
-        self.transcriptStore.addMessage(DEBUG_SPEAKER, {description: "Error taking required action", content: formatMessage(err)});
+        self.transcriptStore.addMessage(DEBUG_SPEAKER, {description: "Error taking required action", content: formatJsonMessage(err)});
       }
     });
 
