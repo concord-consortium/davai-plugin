@@ -5,6 +5,7 @@ import { getTools, initLlmConnection } from "../utils/llm-utils";
 import { ChatTranscriptModel } from "./chat-transcript-model";
 import { DAVAI_SPEAKER } from "../constants";
 import { createGraph } from "../utils/codap-utils";
+import { requestThreadDeletion } from "../utils/openai-utils";
 
 /**
  * AssistantModel encapsulates the AI assistant and its interactions with the user.
@@ -159,14 +160,7 @@ export const AssistantModel = types
         }
 
         const threadId = self.thread.id;
-        const response = yield fetch(`${process.env.REACT_APP_OPENAI_BASE_URL}threads/${threadId}`, {
-          method: "DELETE",
-          headers: {
-            Authorization: `Bearer ${process.env.REACT_APP_OPENAI_API_KEY}`,
-            "OpenAI-Beta": "assistants=v2",
-            "Content-Type": "application/json",
-          },
-        });
+        const response = yield requestThreadDeletion(threadId);
     
         if (response.ok) {
           self.thread = undefined;
