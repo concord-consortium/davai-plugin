@@ -1,17 +1,18 @@
 import React, { FormEvent, useCallback, useEffect, useMemo, useRef, useState } from "react";
 
-import { isInputElement, isShortcutPressed } from "../utils";
+import { isInputElement, isShortcutPressed } from "../utils/utils";
 
 import "./chat-input.scss";
 
 interface IProps {
+  disabled?: boolean;
   keyboardShortcutEnabled: boolean;
   shortcutKeys: string;
   onKeyboardShortcut: () => void;
   onSubmit: (messageText: string) => void;
 }
 
-export const ChatInputComponent = ({keyboardShortcutEnabled, shortcutKeys, onKeyboardShortcut, onSubmit}: IProps) => {
+export const ChatInputComponent = ({disabled, keyboardShortcutEnabled, shortcutKeys, onKeyboardShortcut, onSubmit}: IProps) => {
   const textAreaRef = useRef<HTMLTextAreaElement>(null);
   // const [browserSupportsDictation, setBrowserSupportsDictation] = useState(false);
   // const [dictationEnabled, setDictationEnabled] = useState(false);
@@ -135,7 +136,6 @@ export const ChatInputComponent = ({keyboardShortcutEnabled, shortcutKeys, onKey
       keydownListeners.push(addShortcutListener(window));
     }
 
-    // Clean up the listeners when the component unmounts.
     return () => {
       keydownListeners.forEach((cleanup) => cleanup());
     };
@@ -157,6 +157,7 @@ export const ChatInputComponent = ({keyboardShortcutEnabled, shortcutKeys, onKey
             aria-describedby={showError ? "input-error" : undefined}
             aria-invalid={showError}
             data-testid="chat-input-textarea"
+            disabled={disabled}
             id="chat-input"
             placeholder={"Ask DAVAI about the data"}
             ref={textAreaRef}
@@ -179,6 +180,7 @@ export const ChatInputComponent = ({keyboardShortcutEnabled, shortcutKeys, onKey
             <button
               className="send"
               data-testid="chat-input-send"
+              disabled={disabled}
               type="submit"
             >
               Send
