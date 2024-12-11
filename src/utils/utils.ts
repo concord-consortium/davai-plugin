@@ -36,7 +36,7 @@ export const isInputElement = (activeElement: Element | null) => {
 
 export const getUrlParam = (paramName: string) => {
   const urlParams = new URLSearchParams(window.location.search);
-  return urlParams.has(paramName);
+  return urlParams.get(paramName);
 };
 
 export const keyMap: Record<string, { shifted: string; unshifted: string }> = {
