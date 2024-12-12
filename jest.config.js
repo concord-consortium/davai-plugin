@@ -13,6 +13,7 @@ const transpileModules = [
   "mdast-util-to-string",
   "mdast-util-to-hast",
   "micromark",
+  "nanoid",
   "property-information",
   "remark-parse",
   "remark-rehype",

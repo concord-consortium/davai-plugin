@@ -1,16 +1,18 @@
 import React, { useRef, useEffect } from "react";
 import { observer } from "mobx-react-lite";
-import Markdown from "react-markdown";
-import { DAVAI_SPEAKER } from "../constants";
+import { ChatTranscriptMessage } from "./chat-transcript-message";
 import { ChatTranscript, ChatMessage } from "../types";
+import { LoadingMessage } from "./loading-message";
 
 import "./chat-transcript.scss";
 
 interface IProps {
   chatTranscript: ChatTranscript;
+  showDebugLog: boolean;
+  isLoading?: boolean;
 }
 
-export const ChatTranscriptComponent = observer(({chatTranscript}: IProps) => {
+export const ChatTranscriptComponent = observer(({chatTranscript, showDebugLog, isLoading}: IProps) => {
   const chatTranscriptRef = useRef<HTMLElement>(null);
 
   useEffect(() => {
@@ -33,29 +35,15 @@ export const ChatTranscriptComponent = observer(({chatTranscript}: IProps) => {
         role="list"
       >
         {chatTranscript.messages.map((message: ChatMessage) => {
-          const messageContentClass = message.speaker === DAVAI_SPEAKER
-            ? "chat-message-content--davai"
-            : "chat-message-content--user";
           return (
-            <section
-              aria-label={`${message.speaker} at ${message.timestamp}`}
-              className="chat-transcript__message"
-              data-testid="chat-message"
-              key={message.timestamp}
-              role="listitem"
-            >
-              <h3 data-testid="chat-message-speaker">
-                {message.speaker}
-              </h3>
-              <div
-                className={`chat-message-content ${messageContentClass}`}
-                data-testid="chat-message-content"
-              >
-                <Markdown>{message.content}</Markdown>
-              </div>
-            </section>
+            <ChatTranscriptMessage
+              key={`${message.id}`}
+              message={message}
+              showDebugLog={showDebugLog}
+            />
           );
         })}
+        {isLoading && <LoadingMessage />}
       </section>
     </section>
   );

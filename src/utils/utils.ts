@@ -3,6 +3,10 @@ export const timeStamp = (): string => {
   return now.toLocaleString();
 };
 
+export const formatJsonMessage = (json: any) => {
+  return JSON.stringify(json, null, 2);
+};
+
 const isHTMLElement = (element: Element | null): element is HTMLElement => {
   return element instanceof HTMLElement;
 };
@@ -11,7 +15,7 @@ export const isInputElement = (activeElement: Element | null) => {
   if (
     activeElement &&
     (activeElement.tagName === "INPUT" ||
-     activeElement.tagName === "TEXTAREA" || 
+     activeElement.tagName === "TEXTAREA" ||
      (isHTMLElement(activeElement) && activeElement.isContentEditable))
   ) {
     return true;

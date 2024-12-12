@@ -1,10 +1,10 @@
 import { types, flow, Instance } from "mobx-state-tree";
 import { Message } from "openai/resources/beta/threads/messages";
-import { getAttributeList, getDataContext } from "@concord-consortium/codap-plugin-api";
+import { codapInterface } from "@concord-consortium/codap-plugin-api";
+import { DAVAI_SPEAKER, DEBUG_SPEAKER } from "../constants";
+import { formatJsonMessage } from "../utils/utils";
 import { getTools, initLlmConnection } from "../utils/llm-utils";
 import { ChatTranscriptModel } from "./chat-transcript-model";
-import { DAVAI_SPEAKER } from "../constants";
-import { createGraph } from "../utils/codap-utils";
 import { requestThreadDeletion } from "../utils/openai-utils";
 
 /**
@@ -32,13 +32,16 @@ export const AssistantModel = types
     transcriptStore: ChatTranscriptModel,
     useExisting: true,
   })
+  .volatile(() => ({
+    isLoadingResponse: false,
+  }))
   .actions((self) => ({
     handleMessageSubmitMockAssistant() {
       // Use a brief delay to prevent duplicate timestamp-based keys.
       setTimeout(() => {
         self.transcriptStore.addMessage(
           DAVAI_SPEAKER,
-          "I'm just a mock assistant and can't process that request."
+          { content: "I'm just a mock assistant and can't process that request." }
         );
       }, 1000);
     }
@@ -62,21 +65,36 @@ export const AssistantModel = types
         }
         self.assistant = davaiAssistant;
         self.thread = yield self.apiConnection.beta.threads.create();
+        self.transcriptStore.addMessage(DEBUG_SPEAKER, {
+          description: "You are chatting with assistant",
+          content: formatJsonMessage(self.assistant)
+        });
+        self.transcriptStore.addMessage(DEBUG_SPEAKER, {
+          description: "New thread created",
+          content: formatJsonMessage(self.thread)
+        });
       } catch (err) {
         console.error("Failed to initialize assistant:", err);
+        self.transcriptStore.addMessage(DEBUG_SPEAKER, {
+          description: "Failed to initialize assistant",
+          content: formatJsonMessage(err)
+        });
       }
     });
 
     const handleMessageSubmit = flow(function* (messageText) {
       try {
-        yield self.apiConnection.beta.threads.messages.create(self.thread.id, {
+        const messageSent = yield self.apiConnection.beta.threads.messages.create(self.thread.id, {
           role: "user",
           content: messageText,
         });
+        self.isLoadingResponse = true;
+        self.transcriptStore.addMessage(DEBUG_SPEAKER, {description: "Message sent to LLM", content: formatJsonMessage(messageSent)});
         yield startRun();
 
       } catch (err) {
         console.error("Failed to handle message submit:", err);
+        self.transcriptStore.addMessage(DEBUG_SPEAKER, {description: "Failed to handle message submit", content: formatJsonMessage(err)});
       }
     });
 
@@ -85,61 +103,106 @@ export const AssistantModel = types
         const run = yield self.apiConnection.beta.threads.runs.create(self.thread.id, {
           assistant_id: self.assistant.id,
         });
-
-        // Wait for run completion and handle responses
-        let runState = yield self.apiConnection.beta.threads.runs.retrieve(self.thread.id, run.id);
-        while (runState.status !== "completed" && runState.status !== "requires_action") {
-          runState = yield self.apiConnection.beta.threads.runs.retrieve(self.thread.id, run.id);
-        }
-
-        if (runState.status === "requires_action") {
-          yield handleRequiredAction(runState, run.id);
-        }
-
-        // Get the last assistant message from the messages array
-        const messages = yield self.apiConnection.beta.threads.messages.list(self.thread.id);
-        const lastMessageForRun = messages.data.filter(
-          (msg: Message) => msg.run_id === run.id && msg.role === "assistant"
-        ).pop();
-
-        self.transcriptStore.addMessage(
-          DAVAI_SPEAKER,
-          lastMessageForRun?.content[0]?.text?.value || "Error processing request."
-        );
+        yield pollRunState(run.id);
       } catch (err) {
         console.error("Failed to complete run:", err);
+        self.transcriptStore.addMessage(DEBUG_SPEAKER, {
+          description: "Failed to complete run",
+          content: formatJsonMessage(err),
+        });
       }
     });
+
+    const pollRunState: (currentRunId: string) => Promise<any> = flow(function* (currentRunId) {
+      let runState = yield self.apiConnection.beta.threads.runs.retrieve(self.thread.id, currentRunId);
+      self.transcriptStore.addMessage(DEBUG_SPEAKER, {
+        description: "Run state status",
+        content: formatJsonMessage(runState.status),
+      });
+
+     const errorStates = ["failed", "cancelled", "incomplete"];
+
+     while (runState.status !== "completed" && runState.status !== "requires_action" && !errorStates.includes(runState.status)) {
+       yield new Promise((resolve) => setTimeout(resolve, 2000));
+       runState = yield self.apiConnection.beta.threads.runs.retrieve(self.thread.id, currentRunId);
+       self.transcriptStore.addMessage(DEBUG_SPEAKER, {
+         description: "Run state status",
+         content: formatJsonMessage(runState.status),
+       });
+     }
+
+     if (runState.status === "requires_action") {
+      self.transcriptStore.addMessage(DEBUG_SPEAKER, {
+         description: "Run requires action",
+         content: formatJsonMessage(runState),
+       });
+       yield handleRequiredAction(runState, currentRunId);
+       yield pollRunState(currentRunId);
+     }
+
+     if (runState.status === "completed") {
+       const messages = yield self.apiConnection.beta.threads.messages.list(self.thread.id);
+
+       const lastMessageForRun = messages.data
+         .filter((msg: Message) => msg.run_id === currentRunId && msg.role === "assistant")
+         .pop();
+
+         self.transcriptStore.addMessage(DEBUG_SPEAKER, {
+         description: "Run completed, assistant response",
+         content: formatJsonMessage(lastMessageForRun),
+       });
+
+       const lastMessageContent = lastMessageForRun?.content[0]?.text?.value;
+       if (lastMessageContent) {
+        self.transcriptStore.addMessage(DAVAI_SPEAKER, { content: lastMessageContent });
+       } else {
+        self.transcriptStore.addMessage(DAVAI_SPEAKER, {
+           content: "I'm sorry, I don't have a response for that.",
+         });
+       }
+       self.isLoadingResponse = false;
+     }
+
+     if (errorStates.includes(runState.status)) {
+      self.transcriptStore.addMessage(DEBUG_SPEAKER, {
+         description: "Run failed",
+         content: formatJsonMessage(runState),
+       });
+       self.transcriptStore.addMessage(DAVAI_SPEAKER, {
+         content: "I'm sorry, I encountered an error. Please try again.",
+       });
+       self.isLoadingResponse = false;
+     }
+   });
 
     const handleRequiredAction = flow(function* (runState, runId) {
       try {
         const toolOutputs = runState.required_action?.submit_tool_outputs.tool_calls
           ? yield Promise.all(
             runState.required_action.submit_tool_outputs.tool_calls.map(flow(function* (toolCall: any) {
-              if (toolCall.function.name === "get_attributes") {
-                const { dataset } = JSON.parse(toolCall.function.arguments);
-                // getting the root collection won't always work. what if a user wants the attributes
-                // in the Mammals dataset but there is a hierarchy?
-                const rootCollection = (yield getDataContext(dataset)).values.collections[0];
-                const attributeList = yield getAttributeList(dataset, rootCollection.name);
-                return { tool_call_id: toolCall.id, output: JSON.stringify(attributeList) };
+              if (toolCall.function.name === "create_request") {
+                const { action, resource, values } = JSON.parse(toolCall.function.arguments);
+                const request = { action, resource, values };
+                self.transcriptStore.addMessage(DEBUG_SPEAKER, { description: "Request sent to CODAP", content: formatJsonMessage(request) });
+                const res = yield codapInterface.sendRequest(request);
+                self.transcriptStore.addMessage(DEBUG_SPEAKER, { description: "Response from CODAP", content: formatJsonMessage(res) });
+                return { tool_call_id: toolCall.id, output: JSON.stringify(res) };
               } else {
-                const { dataset, name, xAttribute, yAttribute } = JSON.parse(toolCall.function.arguments);
-                createGraph(dataset, name, xAttribute, yAttribute);
-                return { tool_call_id: toolCall.id, output: "Graph created." };
+                return { tool_call_id: toolCall.id, output: "Tool call not recognized." };
               }
             })
           ))
           : [];
 
+        self.transcriptStore.addMessage(DEBUG_SPEAKER, {description: "Tool outputs", content: formatJsonMessage(toolOutputs)});
         if (toolOutputs) {
           yield self.apiConnection.beta.threads.runs.submitToolOutputs(
             self.thread.id, runId, { tool_outputs: toolOutputs }
           );
-
         }
       } catch (err) {
         console.error(err);
+        self.transcriptStore.addMessage(DEBUG_SPEAKER, {description: "Error taking required action", content: formatJsonMessage(err)});
       }
     });
 
@@ -161,7 +224,7 @@ export const AssistantModel = types
 
         const threadId = self.thread.id;
         const response = yield requestThreadDeletion(threadId);
-    
+
         if (response.ok) {
           self.thread = undefined;
         } else {

@@ -14,6 +14,7 @@ const mockTranscriptStore = ChatTranscriptModel.create({
       speaker: "DAVAI",
       content: "Hello. How can I help you today?",
       timestamp: "2021-07-01T12:00:00Z",
+      id: "msg_1",
     },
   ],
 });

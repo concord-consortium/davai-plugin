@@ -9,6 +9,7 @@ import { ReadAloudMenu } from "./readaloud-menu";
 import { KeyboardShortcutControls } from "./keyboard-shortcut-controls";
 import { DAVAI_SPEAKER, GREETING, USER_SPEAKER } from "../constants";
 import { DeveloperOptionsComponent } from "./developer-options";
+import { getUrlParam } from "../utils/utils";
 
 import "./App.scss";
 
@@ -26,6 +27,9 @@ export const App = observer(() => {
   const [keyboardShortcutEnabled, setKeyboardShortcutEnabled] = useState(isShortcutEnabled);
   const shortcutKeys = localStorage.getItem("keyboardShortcutKeys") || appConfig.accessibility.keyboardShortcut;
   const [keyboardShortcutKeys, setKeyboardShortcutKeys] = useState(shortcutKeys);
+  const modeUrlParam = getUrlParam("mode") || "";
+  const isDevMode = modeUrlParam === "development" || appConfig.mode === "development";
+  const [showDebugLog, setShowDebugLog] = useState(isDevMode);
 
   useEffect(() => {
     initializePlugin({pluginName: kPluginName, version: kVersion, dimensions});
@@ -57,7 +61,7 @@ export const App = observer(() => {
   };
 
   const handleChatInputSubmit = async (messageText: string) => {
-    transcriptStore.addMessage(USER_SPEAKER, messageText);
+    transcriptStore.addMessage(USER_SPEAKER, {content: messageText});
 
     if (appConfig.isAssistantMocked) {
       assistantStore.handleMessageSubmitMockAssistant();
@@ -72,7 +76,7 @@ export const App = observer(() => {
     if (!confirmCreate) return;
 
     transcriptStore.clearTranscript();
-    transcriptStore.addMessage(DAVAI_SPEAKER, GREETING);
+    transcriptStore.addMessage(DAVAI_SPEAKER, {content: GREETING});
 
     await assistantStore.createThread();
   };
@@ -93,7 +97,7 @@ export const App = observer(() => {
       if (!threadDeleted) return;
 
       transcriptStore.clearTranscript();
-      transcriptStore.addMessage(DAVAI_SPEAKER, GREETING);
+      transcriptStore.addMessage(DAVAI_SPEAKER, {content: GREETING});
       appConfig.toggleMockAssistant();
     } else {
       appConfig.toggleMockAssistant();
@@ -112,7 +116,31 @@ export const App = observer(() => {
           <span>(Data Analysis through Voice and Artificial Intelligence)</span>
         </h1>
       </header>
-      <ChatTranscriptComponent chatTranscript={transcriptStore} />
+      <ChatTranscriptComponent
+        chatTranscript={transcriptStore}
+        showDebugLog={showDebugLog}
+        isLoading={assistantStore.isLoadingResponse}
+      />
+      {isDevMode &&
+        <div className="show-debug-controls">
+          <label htmlFor="debug-log-toggle">
+            Show Debug Log:
+          </label>
+          <input
+            type="checkbox"
+            id="debug-log-toggle"
+            name="ShowDebugLog"
+            aria-checked={showDebugLog}
+            checked={showDebugLog}
+            onChange={() => setShowDebugLog(!showDebugLog)}
+            onKeyDown={(e) => {
+              if (e.key === "Enter") {
+                setShowDebugLog(!showDebugLog);
+              }
+            }}
+          />
+        </div>
+      }
       <ChatInputComponent
         disabled={!assistantStore.thread && !appConfig.isAssistantMocked}
         keyboardShortcutEnabled={keyboardShortcutEnabled}
@@ -134,7 +162,7 @@ export const App = observer(() => {
         onCustomizeShortcut={handleCustomizeShortcut}
         onToggleShortcut={handleToggleShortcut}
       />
-      {appConfig.mode === "development" &&
+      {isDevMode &&
         <>
           <hr />
           <h2>Developer Options</h2>
