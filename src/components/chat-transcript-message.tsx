@@ -40,7 +40,7 @@ export const ChatTranscriptMessage = ({message, showDebugLog}: IProps) => {
   const speakerClass = speaker === DEBUG_SPEAKER ? "debug" : speaker.toLowerCase();
 
   return (
-    <section
+    <div
       aria-label={`${speaker} at ${timestamp}`}
       className={`chat-transcript__message ${speakerClass}`}
       data-testid="chat-message"
@@ -59,6 +59,6 @@ export const ChatTranscriptMessage = ({message, showDebugLog}: IProps) => {
           <Markdown>{messageContent.content}</Markdown>
         }
       </div>
-    </section>
+    </div>
   );
 };

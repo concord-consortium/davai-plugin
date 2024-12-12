@@ -13,7 +13,7 @@ interface IProps {
 }
 
 export const ChatTranscriptComponent = observer(({chatTranscript, showDebugLog, isLoading}: IProps) => {
-  const chatTranscriptRef = useRef<HTMLElement>(null);
+  const chatTranscriptRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     // Autoscroll to the top of the latest message in the transcript.
@@ -25,9 +25,9 @@ export const ChatTranscriptComponent = observer(({chatTranscript, showDebugLog, 
   }, [chatTranscript.messages.length]);
 
   return (
-    <section ref={chatTranscriptRef} id="chat-transcript" className="chat-transcript" data-testid="chat-transcript" role="group">
+    <div ref={chatTranscriptRef} id="chat-transcript" className="chat-transcript" data-testid="chat-transcript" role="group">
       <h2 className="visually-hidden">DAVAI Chat Transcript</h2>
-      <section
+      <div
         // For now we are using "assertive". This may change as we refine the experience.
         aria-live="assertive"
         className="chat-transcript__messages"
@@ -44,7 +44,7 @@ export const ChatTranscriptComponent = observer(({chatTranscript, showDebugLog, 
           );
         })}
         {isLoading && <LoadingMessage />}
-      </section>
-    </section>
+      </div>
+    </div>
   );
 });
