@@ -27,7 +27,8 @@ export const App = observer(() => {
   const [keyboardShortcutEnabled, setKeyboardShortcutEnabled] = useState(isShortcutEnabled);
   const shortcutKeys = localStorage.getItem("keyboardShortcutKeys") || appConfig.accessibility.keyboardShortcut;
   const [keyboardShortcutKeys, setKeyboardShortcutKeys] = useState(shortcutKeys);
-  const isDevMode = getUrlParam("dev") || appConfig.mode === "development";
+  const modeUrlParam = getUrlParam("mode") || "";
+  const isDevMode = modeUrlParam === "development" || appConfig.mode === "development";
   const [showDebugLog, setShowDebugLog] = useState(isDevMode);
 
   useEffect(() => {
@@ -118,6 +119,7 @@ export const App = observer(() => {
       <ChatTranscriptComponent
         chatTranscript={transcriptStore}
         showDebugLog={showDebugLog}
+        isLoading={assistantStore.isLoadingResponse}
       />
       {isDevMode &&
         <div className="show-debug-controls">

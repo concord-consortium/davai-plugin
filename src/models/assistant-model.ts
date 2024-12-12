@@ -32,6 +32,9 @@ export const AssistantModel = types
     transcriptStore: ChatTranscriptModel,
     useExisting: true,
   })
+  .volatile(() => ({
+    isLoadingResponse: false,
+  }))
   .actions((self) => ({
     handleMessageSubmitMockAssistant() {
       // Use a brief delay to prevent duplicate timestamp-based keys.
@@ -85,7 +88,7 @@ export const AssistantModel = types
           role: "user",
           content: messageText,
         });
-
+        self.isLoadingResponse = true;
         self.transcriptStore.addMessage(DEBUG_SPEAKER, {description: "Message sent to LLM", content: formatJsonMessage(messageSent)});
         yield startRun();
 
@@ -100,7 +103,6 @@ export const AssistantModel = types
         const run = yield self.apiConnection.beta.threads.runs.create(self.thread.id, {
           assistant_id: self.assistant.id,
         });
-
         yield pollRunState(run.id);
       } catch (err) {
         console.error("Failed to complete run:", err);
@@ -126,16 +128,6 @@ export const AssistantModel = types
        self.transcriptStore.addMessage(DEBUG_SPEAKER, {
          description: "Run state status",
          content: formatJsonMessage(runState.status),
-       });
-     }
-
-     if (errorStates.includes(runState.status)) {
-      self.transcriptStore.addMessage(DEBUG_SPEAKER, {
-         description: "Run failed",
-         content: formatJsonMessage(runState),
-       });
-       self.transcriptStore.addMessage(DAVAI_SPEAKER, {
-         content: "I'm sorry, I encountered an error. Please try again.",
        });
      }
 
@@ -168,6 +160,18 @@ export const AssistantModel = types
            content: "I'm sorry, I don't have a response for that.",
          });
        }
+       self.isLoadingResponse = false;
+     }
+
+     if (errorStates.includes(runState.status)) {
+      self.transcriptStore.addMessage(DEBUG_SPEAKER, {
+         description: "Run failed",
+         content: formatJsonMessage(runState),
+       });
+       self.transcriptStore.addMessage(DAVAI_SPEAKER, {
+         content: "I'm sorry, I encountered an error. Please try again.",
+       });
+       self.isLoadingResponse = false;
      }
    });
 

@@ -1,5 +1,6 @@
 import { Instance, types } from "mobx-state-tree";
-import { createMessageId, timeStamp } from "../utils/utils";
+import { nanoid } from "nanoid";
+import { timeStamp } from "../utils/utils";
 import { MessageContent } from "../types";
 
 const MessageModel = types.model("MessageModel", {
@@ -26,7 +27,7 @@ export const ChatTranscriptModel = types
         speaker,
         messageContent,
         timestamp: timeStamp(),
-        id: createMessageId(),
+        id: nanoid(),
       });
     },
     clearTranscript() {
