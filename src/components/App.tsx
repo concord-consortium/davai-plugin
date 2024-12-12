@@ -119,6 +119,7 @@ export const App = observer(() => {
       <ChatTranscriptComponent
         chatTranscript={transcriptStore}
         showDebugLog={showDebugLog}
+        isLoading={assistantStore.isLoadingResponse}
       />
       {isDevMode &&
         <div className="show-debug-controls">
