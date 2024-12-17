@@ -12,6 +12,6 @@
     "height": 680,
     "width": 380
   },
-  "mockAssistant": false,
+  "mockAssistant": true,
   "mode": "production"
 }
