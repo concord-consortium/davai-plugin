@@ -235,14 +235,17 @@ export const AssistantModel = types
                 const request = { action, resource, values };
                 self.transcriptStore.addMessage(DEBUG_SPEAKER, { description: "Request sent to CODAP", content: formatJsonMessage(request) });
                 let res = yield codapInterface.sendRequest(request);
-                // note: we will implement a new endpoint in the CODAP api to get the exportDataUri value,
-                // so that it can be retrieved separately from a general get component request
-                if (res.values.exportDataUri) {
+                // Prepare for uploading of image file after run if the request is to get dataDisplay
+                const isImageSnapshotRequest = action === "get" && resource.match(/^dataDisplay/);
+                if (isImageSnapshotRequest) {
                   self.uploadFileAfterRun = true;
                   self.dataUri = res.values.exportDataUri;
-                  res = { ...res, values: { ...res.values, exportDataUri: undefined } };
                 }
                 self.transcriptStore.addMessage(DEBUG_SPEAKER, { description: "Response from CODAP", content: formatJsonMessage(res) });
+                // remove any exportDataUri value that exists since it can be large and we don't need to send it to the assistant
+                res = isImageSnapshotRequest
+                  ? { ...res, values: { ...res.values, exportDataUri: undefined } }
+                  : res;
                 return { tool_call_id: toolCall.id, output: JSON.stringify(res) };
               } else {
                 return { tool_call_id: toolCall.id, output: "Tool call not recognized." };
