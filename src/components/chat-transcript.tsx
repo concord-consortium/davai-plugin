@@ -20,9 +20,9 @@ export const ChatTranscriptComponent = observer(({chatTranscript, showDebugLog, 
     const chatTranscriptContainer = chatTranscriptRef.current;
     if (chatTranscriptContainer) {
       const lastMessage = chatTranscriptContainer.querySelector(".chat-transcript__message:last-of-type");
-      lastMessage?.scrollIntoView({behavior: "smooth"});
+      lastMessage?.scrollIntoView({behavior: "smooth", block: "nearest"});
     }
-  }, [chatTranscript.messages.length]);
+  }, [chatTranscript.messages.length, isLoading]);
 
   return (
     <div ref={chatTranscriptRef} id="chat-transcript" className="chat-transcript" data-testid="chat-transcript" role="group">
