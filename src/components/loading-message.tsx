@@ -4,17 +4,16 @@ import { timeStamp } from "../utils/utils";
 
 export const LoadingMessage = () => {
   return (
-    <section
+    <div
       aria-label={`${DAVAI_SPEAKER} at ${timeStamp()}`}
       className={`chat-transcript__message ${DAVAI_SPEAKER.toLowerCase()}`}
       data-testid="chat-message"
       role="listitem"
     >
-      <h3 aria-label="speaker" data-testid="chat-message-speaker">
+      <h3 data-testid="chat-message-speaker">
         {DAVAI_SPEAKER}
       </h3>
       <div
-        aria-label="message"
         className={`chat-message-content ${DAVAI_SPEAKER.toLowerCase()}`}
         data-testid="chat-message-content"
       >
@@ -25,6 +24,6 @@ export const LoadingMessage = () => {
         >
         </div>
       </div>
-    </section>
+    </div>
   );
 };
