@@ -34,11 +34,10 @@ export const DeveloperOptionsComponent = observer(function DeveloperOptions({ass
 
     const reqGetGraph = {
       action: "get",
-      resource: `component[${graphId}]`,
+      resource: `dataDisplay[${graphId}]`,
       values: {}
     };
     const resGetGraph = await codapInterface.sendRequest(reqGetGraph) as any;
-    console.log("Graph Data:", resGetGraph.values);
 
     const devOptionsContainer = document.querySelector(".developer-options");
     if (devOptionsContainer) {
