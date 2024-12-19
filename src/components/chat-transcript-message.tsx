@@ -46,11 +46,10 @@ export const ChatTranscriptMessage = ({message, showDebugLog}: IProps) => {
       data-testid="chat-message"
       role="listitem"
     >
-      <h3 aria-label="speaker" data-testid="chat-message-speaker">
+      <h3 data-testid="chat-message-speaker">
         {speaker}
       </h3>
       <div
-        aria-label="message"
         className={`chat-message-content ${speakerClass}`}
         data-testid="chat-message-content"
       >
