@@ -3,11 +3,12 @@ import { observer } from "mobx-react-lite";
 import { initializePlugin, selectSelf } from "@concord-consortium/codap-plugin-api";
 import { useAppConfigContext } from "../hooks/use-app-config-context";
 import { useAssistantStore } from "../hooks/use-assistant-store";
+import { useOpenAIContext } from "../hooks/use-open-ai-context";
 import { ChatInputComponent } from "./chat-input";
 import { ChatTranscriptComponent } from "./chat-transcript";
 import { ReadAloudMenu } from "./readaloud-menu";
 import { KeyboardShortcutControls } from "./keyboard-shortcut-controls";
-import { DAVAI_SPEAKER, GREETING, USER_SPEAKER } from "../constants";
+import { DAVAI_SPEAKER, defaultAssistantId, GREETING, USER_SPEAKER } from "../constants";
 import { DeveloperOptionsComponent } from "./developer-options";
 import { getUrlParam } from "../utils/utils";
 
@@ -34,7 +35,9 @@ export const App = observer(() => {
   useEffect(() => {
     initializePlugin({pluginName: kPluginName, version: kVersion, dimensions});
     selectSelf();
-    assistantStore.initialize();
+    if (!isDevMode) {
+      assistantStore.initializeAssistant(defaultAssistantId);
+    }
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
@@ -104,10 +107,6 @@ export const App = observer(() => {
     }
   };
 
-  if (!assistantStore.assistant) {
-    return <div>Loading...</div>;
-  }
-
   return (
     <div className="App">
       <header>
@@ -142,7 +141,7 @@ export const App = observer(() => {
         </div>
       }
       <ChatInputComponent
-        disabled={!assistantStore.thread && !appConfig.isAssistantMocked}
+        disabled={!assistantStore.assistant || !appConfig.isAssistantMocked}
         keyboardShortcutEnabled={keyboardShortcutEnabled}
         shortcutKeys={keyboardShortcutKeys}
         onSubmit={handleChatInputSubmit}

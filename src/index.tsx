@@ -1,7 +1,8 @@
 import React from "react";
 import { createRoot } from "react-dom/client";
 import { App } from "./components/App";
-import { AppConfigProvider } from "./app-config-provider";
+import { AppConfigProvider } from "./contexts/app-config-provider";
+import { OpenAIConnectionProvider } from "./contexts/open-ai-connection-provider";
 
 import "./index.scss";
 
@@ -15,7 +16,9 @@ if (container) {
 
   root.render(
     <AppConfigProvider>
-      <App />
+      <OpenAIConnectionProvider>
+        <App />
+      </OpenAIConnectionProvider>
     </AppConfigProvider>
   );
 }
