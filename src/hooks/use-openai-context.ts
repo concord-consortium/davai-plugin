@@ -1,6 +1,6 @@
 import { useContext } from "react";
 import { OpenAI } from "openai";
-import { OpenAIConnectionContext } from "../contexts/open-ai-connection-provider";
+import { OpenAIConnectionContext } from "../contexts/openai-connection-provider";
 
 export const useOpenAIContext = (): OpenAI => {
   const context = useContext(OpenAIConnectionContext);

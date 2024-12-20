@@ -3,12 +3,11 @@ import { observer } from "mobx-react-lite";
 import { initializePlugin, selectSelf } from "@concord-consortium/codap-plugin-api";
 import { useAppConfigContext } from "../hooks/use-app-config-context";
 import { useAssistantStore } from "../hooks/use-assistant-store";
-import { useOpenAIContext } from "../hooks/use-open-ai-context";
 import { ChatInputComponent } from "./chat-input";
 import { ChatTranscriptComponent } from "./chat-transcript";
 import { ReadAloudMenu } from "./readaloud-menu";
 import { KeyboardShortcutControls } from "./keyboard-shortcut-controls";
-import { DAVAI_SPEAKER, defaultAssistantId, GREETING, USER_SPEAKER } from "../constants";
+import { DAVAI_SPEAKER, GREETING, USER_SPEAKER } from "../constants";
 import { DeveloperOptionsComponent } from "./developer-options";
 import { getUrlParam } from "../utils/utils";
 
@@ -35,11 +34,12 @@ export const App = observer(() => {
   useEffect(() => {
     initializePlugin({pluginName: kPluginName, version: kVersion, dimensions});
     selectSelf();
-    if (!isDevMode) {
-      assistantStore.initializeAssistant(defaultAssistantId);
-    }
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  useEffect(() => {
+    assistantStore.initializeAssistant();
+  }, [assistantStore, appConfig.assistantId]);
 
   const handleFocusShortcut = () => {
     selectSelf();
@@ -92,19 +92,22 @@ export const App = observer(() => {
     return true;
   };
 
-  const handleMockAssistant = async () => {
-    if (!appConfig.isAssistantMocked) {
-      // If we switch to a mocked assistant, we delete the current thread and clear the transcript.
-      // First make sure the user is OK with that.
-      const threadDeleted = await handleDeleteThread();
-      if (!threadDeleted) return;
+  const handleSelectAssistant = async (id: string) => {
+    // If we switch assistants, we delete the current thread and clear the transcript.
+    // First make sure the user is OK with that.
+    const threadDeleted = await handleDeleteThread();
+    if (!threadDeleted) return;
 
+    if (id === "mock") {
       transcriptStore.clearTranscript();
       transcriptStore.addMessage(DAVAI_SPEAKER, {content: GREETING});
-      appConfig.toggleMockAssistant();
-    } else {
-      appConfig.toggleMockAssistant();
+      appConfig.setMockAssistant(true);
+      appConfig.setAssistantId(id);
+      return;
     }
+
+    appConfig.setMockAssistant(false);
+    appConfig.setAssistantId(id);
   };
 
   return (
@@ -141,7 +144,7 @@ export const App = observer(() => {
         </div>
       }
       <ChatInputComponent
-        disabled={!assistantStore.assistant || !appConfig.isAssistantMocked}
+        disabled={!assistantStore.thread && !appConfig.isAssistantMocked}
         keyboardShortcutEnabled={keyboardShortcutEnabled}
         shortcutKeys={keyboardShortcutKeys}
         onSubmit={handleChatInputSubmit}
@@ -169,7 +172,7 @@ export const App = observer(() => {
             assistantStore={assistantStore}
             onCreateThread={handleCreateThread}
             onDeleteThread={handleDeleteThread}
-            onMockAssistant={handleMockAssistant}
+            onSelectAssistant={handleSelectAssistant}
           />
         </>
       }

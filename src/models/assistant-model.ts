@@ -10,7 +10,10 @@ import { OpenAI } from "openai";
 const OpenAIType = types.custom({
   name: "OpenAIType",
   fromSnapshot(snapshot: OpenAI) {
-    return new OpenAI({ apiKey: snapshot.apiKey });
+    return new OpenAI({
+      apiKey: snapshot.apiKey,
+      dangerouslyAllowBrowser: true,
+    });
   },
   toSnapshot() {
     return undefined; // OpenAI instance is non-serializable
@@ -38,7 +41,7 @@ export const AssistantModel = types
   .model("AssistantModel", {
     apiConnection: OpenAIType,
     assistant: types.maybe(types.frozen()),
-    assistantId: types.maybe(types.string),
+    assistantId: types.string,
     thread: types.maybe(types.frozen()),
     transcriptStore: ChatTranscriptModel,
   })
@@ -54,14 +57,18 @@ export const AssistantModel = types
           { content: "I'm just a mock assistant and can't process that request." }
         );
       }, 1000);
+    },
+    setTranscriptStore(transcriptStore: any) {
+      self.transcriptStore = transcriptStore;
     }
   }))
   .actions((self) => {
-    const initializeAssistant = flow(function* (id: string) {
+    const initializeAssistant = flow(function* () {
+      if (self.assistantId === "mock") return;
+
       try {
         if (!self.apiConnection) throw new Error("API connection is not initialized");
-        self.assistantId = id;
-        self.assistant  = yield self.apiConnection.beta.assistants.retrieve(id);
+        self.assistant  = yield self.apiConnection.beta.assistants.retrieve(self.assistantId);
         self.thread = yield self.apiConnection.beta.threads.create();
         self.transcriptStore.addMessage(DEBUG_SPEAKER, {
           description: "You are chatting with assistant",

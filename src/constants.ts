@@ -4,4 +4,3 @@ export const USER_SPEAKER = "User";
 
 export const GREETING = `Hello! I'm DAVAI, your Data Analysis through Voice and Artificial Intelligence partner.`;
 
-export const defaultAssistantId = "asst_xmAX5oxByssXrkBymMbcsVEm";

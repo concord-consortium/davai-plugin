@@ -1,3 +1,4 @@
+import "openai/shims/node";
 import React from "react";
 import { render, screen } from "@testing-library/react";
 import { App } from "./App";
@@ -6,7 +7,7 @@ import { MockAppConfigProvider } from "../test-utils/app-config-provider";
 
 jest.mock("../hooks/use-assistant-store", () => ({
   useAssistantStore: jest.fn(() => ({
-    initialize: jest.fn(),
+    initializeAssistant: jest.fn(),
     transcriptStore: {
       messages: [],
       addMessage: jest.fn(),
@@ -29,6 +30,8 @@ describe("test load app", () => {
         <App />
       </MockAppConfigProvider>
     );
-    expect(screen.getByText("Loading...")).toBeDefined();
+    expect(screen.getByText("DAVAI")).toBeDefined();
+    expect(screen.getByTestId("chat-transcript")).toBeDefined();
+    expect(screen.getByTestId("chat-input")).toBeDefined();
   });
 });

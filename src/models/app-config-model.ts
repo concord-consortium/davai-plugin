@@ -21,6 +21,7 @@ export const AppConfigModel = types.model("AppConfigModel", {
   accessibility: types.model({
     keyboardShortcut: types.string,
   }),
+  assistantId: types.string,
   dimensions: types.model({
     width: types.number,
     height: types.number,
@@ -32,10 +33,13 @@ export const AppConfigModel = types.model("AppConfigModel", {
   isAssistantMocked: self.mode === "development" && self.mockAssistant,
 }))
 .actions((self) => ({
-  toggleMockAssistant() {
-    self.mockAssistant = !self.mockAssistant;
-    self.isAssistantMocked = self.mode === "development" && self.mockAssistant;
+  setAssistantId(assistantId: string) {
+    self.assistantId = assistantId;
   },
+  setMockAssistant(mockAssistant: boolean) {
+    self.mockAssistant = mockAssistant;
+    self.isAssistantMocked = self.mode === "development" && mockAssistant;
+  }
 }));
 
 export interface AppConfigModelSnapshot extends SnapshotIn<typeof AppConfigModel> {}

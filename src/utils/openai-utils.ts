@@ -45,4 +45,3 @@ export const requestThreadDeletion = async (threadId: string): Promise<Response>
 
   return response;
 };
-

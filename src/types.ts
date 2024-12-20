@@ -8,6 +8,7 @@ export type AppConfig = {
   accessibility: {
     keyboardShortcut: string;
   };
+  assistantId: string;
   dimensions: {
     height: number;
     width: number;

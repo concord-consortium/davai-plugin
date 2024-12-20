@@ -2,7 +2,7 @@ import React from "react";
 import { createRoot } from "react-dom/client";
 import { App } from "./components/App";
 import { AppConfigProvider } from "./contexts/app-config-provider";
-import { OpenAIConnectionProvider } from "./contexts/open-ai-connection-provider";
+import { OpenAIConnectionProvider } from "./contexts/openai-connection-provider";
 
 import "./index.scss";
 

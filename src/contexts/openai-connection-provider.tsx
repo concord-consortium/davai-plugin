@@ -19,5 +19,5 @@ export const OpenAIConnectionProvider = ({ children }: {children: React.ReactNod
     <OpenAIConnectionContext.Provider value={apiConnection}>
       {children}
     </OpenAIConnectionContext.Provider>
-  )
-}
+  );
+};
