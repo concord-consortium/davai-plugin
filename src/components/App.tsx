@@ -34,9 +34,12 @@ export const App = observer(() => {
   useEffect(() => {
     initializePlugin({pluginName: kPluginName, version: kVersion, dimensions});
     selectSelf();
-    assistantStore.initialize();
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  useEffect(() => {
+    assistantStore.initializeAssistant();
+  }, [assistantStore, appConfig.assistantId]);
 
   const handleFocusShortcut = () => {
     selectSelf();
@@ -89,24 +92,23 @@ export const App = observer(() => {
     return true;
   };
 
-  const handleMockAssistant = async () => {
-    if (!appConfig.isAssistantMocked) {
-      // If we switch to a mocked assistant, we delete the current thread and clear the transcript.
-      // First make sure the user is OK with that.
-      const threadDeleted = await handleDeleteThread();
-      if (!threadDeleted) return;
+  const handleSelectAssistant = async (id: string) => {
+    // If we switch assistants, we delete the current thread and clear the transcript.
+    // First make sure the user is OK with that.
+    const threadDeleted = await handleDeleteThread();
+    if (!threadDeleted) return;
 
+    if (id === "mock") {
       transcriptStore.clearTranscript();
       transcriptStore.addMessage(DAVAI_SPEAKER, {content: GREETING});
-      appConfig.toggleMockAssistant();
-    } else {
-      appConfig.toggleMockAssistant();
+      appConfig.setMockAssistant(true);
+      appConfig.setAssistantId(id);
+      return;
     }
-  };
 
-  if (!assistantStore.assistant) {
-    return <div>Loading...</div>;
-  }
+    appConfig.setMockAssistant(false);
+    appConfig.setAssistantId(id);
+  };
 
   return (
     <div className="App">
@@ -170,7 +172,7 @@ export const App = observer(() => {
             assistantStore={assistantStore}
             onCreateThread={handleCreateThread}
             onDeleteThread={handleDeleteThread}
-            onMockAssistant={handleMockAssistant}
+            onSelectAssistant={handleSelectAssistant}
           />
         </>
       }

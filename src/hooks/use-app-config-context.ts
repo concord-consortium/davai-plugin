@@ -1,6 +1,6 @@
 import { useContext } from "react";
 import { AppConfigModelType } from "../models/app-config-model";
-import { AppConfigContext } from "../app-config-context";
+import { AppConfigContext } from "../contexts/app-config-context";
 
 export const useAppConfigContext = (): AppConfigModelType => {
   const context = useContext(AppConfigContext);

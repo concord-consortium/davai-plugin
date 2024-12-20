@@ -1,21 +1,33 @@
 import { useMemo } from "react";
-import { useAppConfigContext } from "./use-app-config-context";
 import { AssistantModel } from "../models/assistant-model";
-import { useChatTranscriptStore } from "./use-chat-transcript-store";
+import { useOpenAIContext } from "./use-openai-context";
+import { useAppConfigContext } from "./use-app-config-context";
+import { ChatTranscriptModel } from "../models/chat-transcript-model";
+import { DAVAI_SPEAKER, GREETING } from "../constants";
+import { timeStamp } from "../utils/utils";
 
 export const useAssistantStore = () => {
+  const apiConnection = useOpenAIContext();
   const appConfig = useAppConfigContext();
-  const transcriptStore = useChatTranscriptStore();
-  const { assistantId, instructions, modelName, useExisting } = appConfig.assistant;
+  const assistantId = appConfig.assistantId;
   const assistantStore = useMemo(() => {
-    return AssistantModel.create({
-      assistantId,
-      modelName,
-      instructions,
-      transcriptStore,
-      useExisting,
+    const newTranscriptStore = ChatTranscriptModel.create({
+      messages: [
+        {
+          speaker: DAVAI_SPEAKER,
+          messageContent: { content: GREETING },
+          timestamp: timeStamp(),
+          id: "initial-message",
+        },
+      ],
     });
-  }, [assistantId, instructions, modelName, transcriptStore, useExisting]);
+
+    return AssistantModel.create({
+      apiConnection,
+      assistantId,
+      transcriptStore: newTranscriptStore
+    });
+  }, [apiConnection, assistantId]);
 
   return assistantStore;
 };

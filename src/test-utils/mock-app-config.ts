@@ -4,12 +4,7 @@ export const mockAppConfig = {
   accessibility: {
     keyboardShortcut: "ctrl+?"
   },
-  assistant: {
-    assistantId: "asst_abc123",
-    instructions: "You are just a test AI. Don't do anything fancy.",
-    model: "test-model",
-    useExisting: true
-  },
+  assistantId: "asst_abc123",
   dimensions: {
     height: 680,
     width: 380

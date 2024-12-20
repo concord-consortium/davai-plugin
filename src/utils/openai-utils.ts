@@ -1,15 +1,4 @@
-import { OpenAI } from "openai";
 import { AssistantTool } from "openai/resources/beta/assistants";
-
-export const newOpenAI = () => {
-  return new OpenAI({
-    apiKey: process.env.REACT_APP_OPENAI_API_KEY || "fake-key",
-    baseURL: process.env.REACT_APP_OPENAI_BASE_URL,
-    dangerouslyAllowBrowser: true,
-    organization: "org-jbU1egKECzYlQI73HMMi7EOZ",
-    project: "proj_VsykADfoZHvqcOJUHyVAYoDG",
-  });
-};
 
 export const openAiTools: AssistantTool[] = [
   {
