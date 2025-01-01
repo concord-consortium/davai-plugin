@@ -69,14 +69,10 @@ Default configuration setting values are defined in the `app-config.json` file. 
   Settings related to accessibility in the UI:
   - **`keyboardShortcut`** (string): Custom keystroke for placing focus in the main text input field (e.g., `ctrl+?`).
 
-### Assistant
+### AssistantId
 
-- **`assistant`** (Object)  
-  Settings to configure the AI assistant:
-  - **`assistantId`** (string): The unique ID of an existing assistant to use.
-  - **`instructions`** (string): Instructions to use when creating new assistants (e.g., `You are helpful data analysis partner.`).
-  - **`modelName`** (string): The name of the model the assistant should use (e.g., `gpt-4o-mini`).
-  - **`useExisting`** (boolean): Whether to use an existing assistant.
+- **`assistantId`** (string)  
+  The unique ID of an existing assistant to use, or "mock" for a mocked assistant.
 
 ### Dimensions
 
