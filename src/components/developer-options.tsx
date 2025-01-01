@@ -38,7 +38,7 @@ export const DeveloperOptionsComponent = observer(function DeveloperOptions({ass
     fetchAssistants();
   }, [apiConnection.beta.assistants]);
 
-  const handleSetSelectedAssistant = (e: React.ChangeEvent<HTMLSelectElement>) => {
+  const handleSelectAssistant = (e: React.ChangeEvent<HTMLSelectElement>) => {
     const id = e.target.value;
     onSelectAssistant(id);
   };
@@ -52,7 +52,7 @@ export const DeveloperOptionsComponent = observer(function DeveloperOptions({ass
         id="assistant-select"
         data-testid="assistant-select"
         value={selectedAssistant}
-        onChange={handleSetSelectedAssistant}
+        onChange={handleSelectAssistant}
       >
         <option value="mock">Mock Assistant</option>
         {Array.from(assistantOptions?.entries() || []).map(([assistantId, assistantName]) => (

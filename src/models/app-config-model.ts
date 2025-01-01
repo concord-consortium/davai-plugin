@@ -25,18 +25,16 @@ export const AppConfigModel = types.model("AppConfigModel", {
     width: types.number,
     height: types.number,
   }),
-  mockAssistant: types.maybe(types.boolean),
   mode: types.enumeration<AppMode>("Mode", AppModeValues),
 })
 .volatile((self) => ({
-  isAssistantMocked: self.mode === "development" && self.mockAssistant,
+  isAssistantMocked: self.assistantId === "mock",
 }))
 .actions((self) => ({
   setAssistantId(assistantId: string) {
     self.assistantId = assistantId;
   },
   setMockAssistant(mockAssistant: boolean) {
-    self.mockAssistant = mockAssistant;
     self.isAssistantMocked = self.mode === "development" && mockAssistant;
   }
 }));
