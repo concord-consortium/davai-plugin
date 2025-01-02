@@ -3,7 +3,7 @@
     "keyboardShortcut": "ctrl+?"
   },
   "assistant": {
-    "assistantId": "asst_xmAX5oxByssXrkBymMbcsVEm",
+    "assistantId": "asst_v9QCHtVvhFqI5lmLjIZnSQUG",
     "instructions": "You are DAVAI, a Data Analysis through Voice and Artificial Intelligence partner. You are an intermediary for a user who is blind who wants to interact with data tables in a data analysis app named CODAP.",
     "modelName": "gpt-4o-mini",
     "useExisting": true
@@ -12,6 +12,6 @@
     "height": 680,
     "width": 380
   },
-  "mockAssistant": true,
+  "mockAssistant": false,
   "mode": "production"
 }
