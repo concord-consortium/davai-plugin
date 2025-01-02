@@ -1,5 +1,5 @@
 import React from "react";
-import { AppConfigContext } from "../app-config-context";
+import { AppConfigContext } from "../contexts/app-config-context";
 import { AppConfigModel } from "../models/app-config-model";
 import { mockAppConfig } from "./mock-app-config";
 

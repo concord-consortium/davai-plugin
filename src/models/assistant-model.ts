@@ -3,9 +3,28 @@ import { Message } from "openai/resources/beta/threads/messages";
 import { codapInterface } from "@concord-consortium/codap-plugin-api";
 import { DAVAI_SPEAKER, DEBUG_SPEAKER } from "../constants";
 import { formatJsonMessage } from "../utils/utils";
-import { getTools, initLlmConnection } from "../utils/llm-utils";
-import { ChatTranscriptModel } from "./chat-transcript-model";
 import { requestThreadDeletion } from "../utils/openai-utils";
+import { ChatTranscriptModel } from "./chat-transcript-model";
+import { OpenAI } from "openai";
+
+const OpenAIType = types.custom({
+  name: "OpenAIType",
+  fromSnapshot(snapshot: OpenAI) {
+    return new OpenAI({
+      apiKey: snapshot.apiKey,
+      dangerouslyAllowBrowser: true,
+    });
+  },
+  toSnapshot() {
+    return undefined; // OpenAI instance is non-serializable
+  },
+  isTargetType(value) {
+    return value instanceof OpenAI;
+  },
+  getValidationMessage() {
+    return "";
+  },
+});
 
 /**
  * AssistantModel encapsulates the AI assistant and its interactions with the user.
@@ -13,24 +32,18 @@ import { requestThreadDeletion } from "../utils/openai-utils";
  * thread and transcript.
  *
  * @property {Object|null} assistant - The assistant object, or `null` if not initialized.
- * @property {string} assistantId - The unique ID of the assistant being used.
- * @property {string} instructions - Instructions provided when creating or configuring a new assistant.
- * @property {string} modelName - The identifier for the assistant's model (e.g., "gpt-4o-mini").
- * @property {Object|null} apiConnection - The API connection object for interacting with the assistant, or `null` if not connected.
+ * @property {string} assistantId - The unique ID of the assistant being used, or `null` if not initialized.
+ * @property {Object} apiConnection - The API connection object for interacting with the assistant
  * @property {Object|null} thread - The assistant's thread used for the current chat, or `null` if no thread is active.
  * @property {ChatTranscriptModel} transcriptStore - The assistant's chat transcript store for recording and managing chat messages.
- * @property {boolean} useExisting - A flag indicating whether to use an existing assistant (`true`) or create a new one (`false`).
  */
 export const AssistantModel = types
   .model("AssistantModel", {
+    apiConnection: OpenAIType,
     assistant: types.maybe(types.frozen()),
     assistantId: types.string,
-    instructions: types.string,
-    modelName: types.string,
-    apiConnection: types.maybe(types.frozen()),
     thread: types.maybe(types.frozen()),
     transcriptStore: ChatTranscriptModel,
-    useExisting: true,
   })
   .volatile(() => ({
     isLoadingResponse: false,
@@ -44,26 +57,18 @@ export const AssistantModel = types
           { content: "I'm just a mock assistant and can't process that request." }
         );
       }, 1000);
-    }
-  }))
-  .actions((self) => ({
-    afterCreate(){
-      self.apiConnection = initLlmConnection();
+    },
+    setTranscriptStore(transcriptStore: any) {
+      self.transcriptStore = transcriptStore;
     }
   }))
   .actions((self) => {
-    const initialize = flow(function* () {
+    const initializeAssistant = flow(function* () {
+      if (self.assistantId === "mock") return;
+
       try {
-        const tools = getTools();
-
-        const davaiAssistant = self.useExisting && self.assistantId
-          ? yield self.apiConnection.beta.assistants.retrieve(self.assistantId)
-          : yield self.apiConnection.beta.assistants.create({instructions: self.instructions, model: self.modelName, tools });
-
-        if (!self.useExisting) {
-          self.assistantId = davaiAssistant.id;
-        }
-        self.assistant = davaiAssistant;
+        if (!self.apiConnection) throw new Error("API connection is not initialized");
+        self.assistant  = yield self.apiConnection.beta.assistants.retrieve(self.assistantId);
         self.thread = yield self.apiConnection.beta.threads.create();
         self.transcriptStore.addMessage(DEBUG_SPEAKER, {
           description: "You are chatting with assistant",
@@ -235,7 +240,7 @@ export const AssistantModel = types
       }
     });
 
-    return { createThread, deleteThread, initialize, handleMessageSubmit };
+    return { createThread, deleteThread, initializeAssistant, handleMessageSubmit };
   });
 
 export interface AssistantModelType extends Instance<typeof AssistantModel> {}

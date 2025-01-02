@@ -1,12 +1,13 @@
 import "openai/shims/node";
 import React from "react";
-import { fireEvent, render, screen } from "@testing-library/react";
+import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 
 import { DeveloperOptionsComponent } from "./developer-options";
 import { AssistantModel } from "../models/assistant-model";
 import { ChatTranscriptModel } from "../models/chat-transcript-model";
 import { MockAppConfigProvider } from "../test-utils/app-config-provider";
 import { mockAppConfig } from "../test-utils/mock-app-config";
+import { MockOpenAiConnectionProvider } from "../test-utils/openai-connection-provider";
 
 const mockTranscriptStore = ChatTranscriptModel.create({
   messages: [
@@ -20,13 +21,14 @@ const mockTranscriptStore = ChatTranscriptModel.create({
 });
 
 const mockAssistantStore = AssistantModel.create({
+  apiConnection: {
+    apiKey: "abc123",
+    dangerouslyAllowBrowser: true
+  },
   assistant: {},
   assistantId: "asst_abc123",
-  instructions: "This is just a test",
-  modelName: "test-model",
   thread: {},
   transcriptStore: mockTranscriptStore,
-  useExistingAssistant: true,
 });
 
 jest.mock("../models/app-config-model", () => ({
@@ -39,35 +41,41 @@ jest.mock("../models/app-config-model", () => ({
 describe("test developer options component", () => {
   const onCreateThread = jest.fn();
   const onDeleteThread = jest.fn();
-  const onMockAssistant = jest.fn();
+  const onSelectAssistant = jest.fn();
 
   const WrapperComponent = () => {
     return (
       <MockAppConfigProvider>
-        <DeveloperOptionsComponent
-          assistantStore={mockAssistantStore}
-          onCreateThread={onCreateThread}
-          onDeleteThread={onDeleteThread}
-          onMockAssistant={onMockAssistant}
-        />
+        <MockOpenAiConnectionProvider>
+          <DeveloperOptionsComponent
+            assistantStore={mockAssistantStore}
+            onCreateThread={onCreateThread}
+            onDeleteThread={onDeleteThread}
+            onSelectAssistant={onSelectAssistant}
+          />
+        </MockOpenAiConnectionProvider>
       </MockAppConfigProvider>
     );
   };
 
-  it("renders a developer options component with mock assistant checkbox and thread buttons", () => {
+  it("renders a developer options component with mock assistant checkbox and thread buttons", async () => {
     render(<WrapperComponent />);
 
     const developerOptions = screen.getByTestId("developer-options");
     expect(developerOptions).toBeInTheDocument();
 
-    const mockAssistantCheckbox = screen.getByTestId("mock-assistant-checkbox");
-    expect(mockAssistantCheckbox).toBeInTheDocument();
-    expect(mockAssistantCheckbox).toHaveAttribute("type", "checkbox");
-    expect(mockAssistantCheckbox).toHaveProperty("checked", false);
-    const mockAssistantCheckboxLabel = screen.getByTestId("mock-assistant-checkbox-label");
-    expect(mockAssistantCheckboxLabel).toHaveTextContent("Use Mock Assistant");
-    fireEvent.click(mockAssistantCheckbox);
-    expect(onMockAssistant).toHaveBeenCalledTimes(1);
+    const selectAssistantOptionLabel = screen.getByTestId("assistant-select-label");
+    expect(selectAssistantOptionLabel).toHaveTextContent("Select an Assistant");
+    const selectAssistantOption = screen.getByTestId("assistant-select");
+    expect(selectAssistantOption).toBeInTheDocument();
+    await waitFor(() => {
+      expect(selectAssistantOption).toHaveValue("asst_abc123");
+    });
+    await waitFor(() => {
+      expect(selectAssistantOption).toHaveTextContent("Jest Mock Assistant");
+    });
+    fireEvent.change(selectAssistantOption, { target: { value: "mock" } });
+    expect(onSelectAssistant).toHaveBeenCalledTimes(1);
 
     const deleteThreadButton = screen.getByTestId("delete-thread-button");
     expect(deleteThreadButton).toBeInTheDocument();
