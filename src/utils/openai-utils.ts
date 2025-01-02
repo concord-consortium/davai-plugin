@@ -1,35 +1,4 @@
-import { OpenAI } from "openai";
 import { AssistantTool } from "openai/resources/beta/assistants";
-
-export const newOpenAI = () => {
-  return new OpenAI({
-    apiKey: process.env.REACT_APP_OPENAI_API_KEY || "fake-key",
-    baseURL: process.env.REACT_APP_OPENAI_BASE_URL,
-    dangerouslyAllowBrowser: true,
-    organization: "org-jbU1egKECzYlQI73HMMi7EOZ",
-    project: "proj_VsykADfoZHvqcOJUHyVAYoDG",
-  });
-};
-
-export async function convertBase64ToImage(base64Data: string, filename = "image.png") {
-  try {
-    const mimeType = base64Data.match(/data:(.*?);base64/)?.[1] || "image/png";
-    const base64 = base64Data.split(",")[1];
-    const binary = atob(base64);
-    const binaryLength = binary.length;
-    const arrayBuffer = new Uint8Array(binaryLength);
-    for (let i = 0; i < binaryLength; i++) {
-      arrayBuffer[i] = binary.charCodeAt(i);
-    }
-
-    const blob = new Blob([arrayBuffer], { type: mimeType });
-    const file = new File([blob], filename, { type: mimeType });
-    return file;
-  } catch (error) {
-    console.error("Error converting base64 to image:", error);
-    throw error;
-  }
-}
 
 export const openAiTools: AssistantTool[] = [
   {
@@ -101,3 +70,23 @@ export const requestThreadDeletion = async (threadId: string): Promise<Response>
 
   return response;
 };
+
+export async function convertBase64ToImage(base64Data: string, filename = "image.png") {
+  try {
+    const mimeType = base64Data.match(/data:(.*?);base64/)?.[1] || "image/png";
+    const base64 = base64Data.split(",")[1];
+    const binary = atob(base64);
+    const binaryLength = binary.length;
+    const arrayBuffer = new Uint8Array(binaryLength);
+    for (let i = 0; i < binaryLength; i++) {
+      arrayBuffer[i] = binary.charCodeAt(i);
+    }
+
+    const blob = new Blob([arrayBuffer], { type: mimeType });
+    const file = new File([blob], filename, { type: mimeType });
+    return file;
+  } catch (error) {
+    console.error("Error converting base64 to image:", error);
+    throw error;
+  }
+}
