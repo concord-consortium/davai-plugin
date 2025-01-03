@@ -15,8 +15,12 @@ import fs from "fs";
 import process from "node:process";
 import path from "path";
 import dotenv from "dotenv";
+import { fileURLToPath } from "url";
 
-dotenv.config({ path: "../../.env" });
+// Polyfill for __dirname in ESM
+const __dirname = path.dirname(fileURLToPath(import.meta.url));
+
+dotenv.config({ path: path.resolve(__dirname, "../../.env") });
 
 const requiredEnvVars = ["REACT_APP_OPENAI_API_KEY", "REACT_APP_OPENAI_BASE_URL"];
 const missingEnvVars = requiredEnvVars.filter((key) => !process.env[key]);
@@ -45,7 +49,7 @@ const getAssistants = async () => {
 };
 
 const writeAssistantFiles = (assistant: any) => {
-  const assistantDir = path.resolve("../assistants", assistant.id);
+  const assistantDir = path.resolve(__dirname, "../assistants", assistant.id);
 
   fs.mkdirSync(assistantDir, { recursive: true });
   fs.writeFileSync(path.join(assistantDir, "instructions.txt"), assistant.instructions);
@@ -62,7 +66,7 @@ const writeAssistantFiles = (assistant: any) => {
 
 const syncSettings = async () => {
   const assistants = await getAssistants();
-  const assistantsDir = path.resolve("../assistants");
+  const assistantsDir = path.resolve(__dirname, "../assistants");
 
   fs.rmSync(assistantsDir, { recursive: true, force: true });
   fs.mkdirSync(assistantsDir);

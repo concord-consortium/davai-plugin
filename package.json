@@ -27,7 +27,8 @@
     "test:cypress:open": "cypress open",
     "test:coverage:cypress:open": "cypress open --env coverage=true",
     "test:full": "npm-run-all test test:cypress",
-    "strings:pull": "node bin/pull-strings.js --prefix=DG.plugin --out=./src/strings.json"
+    "strings:pull": "node bin/pull-strings.js --prefix=DG.plugin --out=./src/strings.json",
+    "sync:assistant-settings": "node --loader ts-node/esm \"./ai-assistant-settings/scripts/sync-settings.mts\""
   },
   "repository": {
     "type": "git",
