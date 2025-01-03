@@ -31,6 +31,31 @@ export const openAiTools: AssistantTool[] = [
       }
     }
   },
+  {
+    type: "function",
+    function: {
+      name: "convert_base64_to_image",
+      description: "Convert a base64 image to a file object",
+      strict: false,
+      parameters: {
+        type: "object",
+        properties: {
+          base64Data: {
+            type: "string",
+            description: "The base64 image data"
+          },
+          filename: {
+            type: "string",
+            description: "The filename to use for the image"
+          }
+        },
+        additionalProperties: false,
+        required: [
+          "base64Data"
+        ]
+      }
+    }
+  }
 ];
 
 export const requestThreadDeletion = async (threadId: string): Promise<Response> => {
@@ -45,3 +70,23 @@ export const requestThreadDeletion = async (threadId: string): Promise<Response>
 
   return response;
 };
+
+export async function convertBase64ToImage(base64Data: string, filename = "image.png") {
+  try {
+    const mimeType = base64Data.match(/data:(.*?);base64/)?.[1] || "image/png";
+    const base64 = base64Data.split(",")[1];
+    const binary = atob(base64);
+    const binaryLength = binary.length;
+    const arrayBuffer = new Uint8Array(binaryLength);
+    for (let i = 0; i < binaryLength; i++) {
+      arrayBuffer[i] = binary.charCodeAt(i);
+    }
+
+    const blob = new Blob([arrayBuffer], { type: mimeType });
+    const file = new File([blob], filename, { type: mimeType });
+    return file;
+  } catch (error) {
+    console.error("Error converting base64 to image:", error);
+    throw error;
+  }
+}
