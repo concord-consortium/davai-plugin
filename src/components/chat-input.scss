@@ -39,27 +39,28 @@
     width: calc(100% - 16px);
 
     button {
+      border: none;
+      border-radius: 6px;
+      color: $dark-gray;
+      cursor: pointer;
       display: block;
       flex: 0 0 auto;
+      font-family: 'Montserrat', sans-serif;
+      font-size: .75rem;
+      height: 32px;
       margin: 0;
-      width: auto;
+      overflow: hidden;
+      text-indent: -9999px;
+      width: 32px;
 
       &.send {
         background: transparent url(../assets/send-icon.svg) 4px 4px no-repeat;
-        border: none;
-        border-radius: 6px;
-        color: $dark-gray;
-        cursor: pointer;
-        font-family: 'Montserrat', sans-serif;
-        font-size: .75rem;
-        height: 32px;
         margin-left: auto;
         order: 2;
-        overflow: hidden;
-        text-indent: -9999px;
-        width: 32px;
       }
       &.dictate {
+        background: transparent url(../assets/voice-typing-icon.svg) 0 0 no-repeat;
+        margin-right: auto;
         order: 1;
       }
       &:disabled {
