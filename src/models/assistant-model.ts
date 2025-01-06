@@ -3,8 +3,8 @@ import { OpenAI } from "openai";
 import { Message } from "openai/resources/beta/threads/messages";
 import { codapInterface } from "@concord-consortium/codap-plugin-api";
 import { DAVAI_SPEAKER, DEBUG_SPEAKER } from "../constants";
-import { formatJsonMessage } from "../utils/utils";
-import { convertBase64ToImage, requestThreadDeletion } from "../utils/openai-utils";
+import { convertBase64ToImage, formatJsonMessage } from "../utils/utils";
+import { requestThreadDeletion } from "../utils/openai-utils";
 import { ChatTranscriptModel } from "./chat-transcript-model";
 
 const OpenAIType = types.custom({
