@@ -78,7 +78,7 @@ export const AssistantModel = types
           description: "New thread created",
           content: formatJsonMessage(self.thread)
         });
-        sendCODAPDataContexts();
+        fetchAndSendDataContexts();
       } catch (err) {
         console.error("Failed to initialize assistant:", err);
         self.transcriptStore.addMessage(DEBUG_SPEAKER, {
@@ -88,7 +88,7 @@ export const AssistantModel = types
       }
     });
 
-    const sendCODAPDataContexts = flow(function* () {
+    const fetchAndSendDataContexts = flow(function* () {
       try {
         const contexts = yield getListOfDataContexts();
         const contextsDetails: Record<string, any> = {};
@@ -274,7 +274,7 @@ export const AssistantModel = types
       }
     });
 
-    return { createThread, deleteThread, initializeAssistant, handleMessageSubmit, sendCODAPDataContexts, sendCODAPDocumentInfo };
+    return { createThread, deleteThread, initializeAssistant, handleMessageSubmit, fetchAndSendDataContexts, sendCODAPDocumentInfo };
   });
 
 export interface AssistantModelType extends Instance<typeof AssistantModel> {}

@@ -37,7 +37,7 @@ export const App = observer(() => {
     // along with another notification that provides the actual details of the change
     if (notification.values.operation === "dataContextCountChanged") return;
     assistantStoreRef.current.transcriptStore.addMessage(DEBUG_SPEAKER, {description: "Document change notice", content: formatJsonMessage(notification)});
-    await assistantStoreRef.current.sendCODAPDataContexts();
+    await assistantStoreRef.current.fetchAndSendDataContexts();
   }, []);
 
   const handleDataContextChangeNotice = useCallback(async (notification: ClientNotification) => {
