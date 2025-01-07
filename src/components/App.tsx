@@ -1,15 +1,15 @@
-import React, { useEffect, useState } from "react";
+import React, { useCallback, useEffect, useRef, useState } from "react";
 import { observer } from "mobx-react-lite";
-import { initializePlugin, selectSelf } from "@concord-consortium/codap-plugin-api";
+import { addDataContextChangeListener, addDataContextsListListener, ClientNotification, getDataContext, getListOfDataContexts, initializePlugin, selectSelf } from "@concord-consortium/codap-plugin-api";
 import { useAppConfigContext } from "../hooks/use-app-config-context";
 import { useAssistantStore } from "../hooks/use-assistant-store";
 import { ChatInputComponent } from "./chat-input";
 import { ChatTranscriptComponent } from "./chat-transcript";
 import { ReadAloudMenu } from "./readaloud-menu";
 import { KeyboardShortcutControls } from "./keyboard-shortcut-controls";
-import { DAVAI_SPEAKER, GREETING, USER_SPEAKER } from "../constants";
+import { DAVAI_SPEAKER, DEBUG_SPEAKER, GREETING, USER_SPEAKER } from "../constants";
 import { DeveloperOptionsComponent } from "./developer-options";
-import { getUrlParam } from "../utils/utils";
+import { formatJsonMessage, getUrlParam } from "../utils/utils";
 
 import "./App.scss";
 
@@ -30,15 +30,40 @@ export const App = observer(() => {
   const modeUrlParam = getUrlParam("mode") || "";
   const isDevMode = modeUrlParam === "development" || appConfig.mode === "development";
   const [showDebugLog, setShowDebugLog] = useState(isDevMode);
+  const assistantStoreRef = useRef(assistantStore);
+
+  const handleDocumentChangeNotice = useCallback(async (notification: ClientNotification) => {
+    // ignore the dataContextCountChanged notification; it's sent when a data context is added or removed,
+    // along with another notification that provides the actual details of the change
+    if (notification.values.operation === "dataContextCountChanged") return;
+    assistantStoreRef.current.transcriptStore.addMessage(DEBUG_SPEAKER, {description: "Document change notice", content: formatJsonMessage(notification)});
+    await assistantStoreRef.current.sendCODAPDataContexts();
+  }, []);
+
+  const handleDataContextChangeNotice = useCallback(async (notification: ClientNotification) => {
+    assistantStoreRef.current.transcriptStore.addMessage(DEBUG_SPEAKER, {description: "Data context change notice", content: formatJsonMessage(notification)});
+    // resource is in the form of "dataContextChangeNotice[<dataContextName>]";
+    // unfortunately the dataContext name isn't otherwise available in the notification object
+    const dataCtxName = notification.resource.replace("dataContextChangeNotice[", "").replace("]", "");
+    const updatedDataContext = await getDataContext(dataCtxName);
+    await assistantStoreRef.current.sendCODAPDocumentInfo(`Data context ${dataCtxName} has been updated: ${JSON.stringify(updatedDataContext.values)}`);
+  }, []);
 
   useEffect(() => {
-    initializePlugin({pluginName: kPluginName, version: kVersion, dimensions});
+    const init = async () => {
+      await initializePlugin({pluginName: kPluginName, version: kVersion, dimensions});
+      addDataContextsListListener(handleDocumentChangeNotice);
+      const dataContexts = await getListOfDataContexts();
+      dataContexts.values.forEach((ctx: Record<string, any>) => addDataContextChangeListener(ctx.name, handleDataContextChangeNotice));
+    };
+    init();
     selectSelf();
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   useEffect(() => {
     assistantStore.initializeAssistant();
+    assistantStoreRef.current = assistantStore;
   }, [assistantStore, appConfig.assistantId]);
 
   const handleFocusShortcut = () => {
