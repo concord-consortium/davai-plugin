@@ -106,3 +106,12 @@ export const isShortcutPressed = (pressedKeys: Set<string>, shortcutKeys: string
     });
   });
 };
+
+export const transcribeAudioFile = async (blob: Blob, fileName: string, apiConnection: any) => {
+  const file = new File([blob], fileName, { type: blob.type || "audio/webm" });
+  const transcription = await apiConnection.audio.transcriptions.create({
+    model: "whisper-1",
+    file
+  });
+  return transcription;
+};
