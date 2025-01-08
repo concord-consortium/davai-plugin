@@ -107,3 +107,15 @@ export const isShortcutPressed = (pressedKeys: Set<string>, shortcutKeys: string
   });
 };
 
+// This isn't currently implemented anywhere but may be useful in the future for providing audio feedback.
+export const alertSound = () => {
+  if (!window.AudioContext) return;
+
+  const context = new window.AudioContext();
+  const oscillator = context.createOscillator();
+  oscillator.type = "triangle";
+  oscillator.frequency.setValueAtTime(440, context.currentTime);
+  oscillator.connect(context.destination);
+  oscillator.start();
+  oscillator.stop(context.currentTime + 0.05);
+};
