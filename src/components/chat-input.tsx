@@ -1,6 +1,5 @@
 import React, { FormEvent, useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { useAssistantStore } from "../hooks/use-assistant-store";
-import { isInputElement, isShortcutPressed, transcribeAudioFile } from "../utils/utils";
+import { isInputElement, isShortcutPressed } from "../utils/utils";
 
 import "./chat-input.scss";
 
@@ -14,18 +13,10 @@ interface IProps {
 
 export const ChatInputComponent = ({disabled, keyboardShortcutEnabled, shortcutKeys, onKeyboardShortcut, onSubmit}: IProps) => {
   const textAreaRef = useRef<HTMLTextAreaElement>(null);
-  const [browserSupportsDictation, setBrowserSupportsDictation] = useState(false);
   const [dictationEnabled, setDictationEnabled] = useState(false);
   const [inputValue, setInputValue] = useState("");
   const [showError, setShowError] = useState(false);
-  const assistantModel = useAssistantStore();
-  const isRecordingSupported = !!navigator.mediaDevices && !!navigator.mediaDevices.getUserMedia;
-  let recordedBlobs: Blob[] = [];
-  const [recordingActive, setRecordingActive] = useState(false);
-  const [recordingDisabled, setRecordingDisabled] = useState(false);
-  const [recordingFailed, setRecordingFailed] = useState(false);
-  const [recordingSaved, setRecordingSaved] = useState(false);
-  const mediaRecorderRef = useRef<MediaRecorder>();
+  const [browserSupportsDictation, setBrowserSupportsDictation] = useState(false);
 
   const handleSubmit = (event?: FormEvent) => {
     event?.preventDefault();
@@ -91,9 +82,6 @@ export const ChatInputComponent = ({disabled, keyboardShortcutEnabled, shortcutK
   }, [browserSupportsDictation, dictationEnabled]);
 
   const handleDictateToggle = () => {
-    if (dictationEnabled) {
-      handleSubmit();
-    }
     setDictationEnabled(!dictationEnabled);
   };
 
@@ -154,76 +142,6 @@ export const ChatInputComponent = ({disabled, keyboardShortcutEnabled, shortcutK
     textAreaRef.current?.focus();
   }, []);
 
-  // eslint-disable-next-line @typescript-eslint/no-unused-vars
-  const handleAudioRecord = () => {
-    if (isRecordingSupported) {
-      if (recordingActive) {
-        handleAudioRecordStop();
-        return;
-      }
-
-      setRecordingFailed(false);
-      console.log("Recording audio...");
-      const startTime = Date.now();
-      navigator.mediaDevices
-               .getUserMedia ({ audio: true })
-               .then((stream: any) => {
-                 mediaRecorderRef.current = new MediaRecorder(stream);
-                 mediaRecorderRef.current.addEventListener("dataavailable", (event: BlobEvent) => {
-                   recordedBlobs.push(event.data);
-                 });
-                 mediaRecorderRef.current.addEventListener("stop", () => {
-                   clearTimeout(recordingTimer);
-                   const timeElapsed = Math.round((Date.now() - startTime)/1000);
-                   const audioBlobData: Blob | MediaSource = new Blob(recordedBlobs, {type: "audio/mpeg"});
-                   handleAudioSave(audioBlobData, timeElapsed);
-                 });
-                 mediaRecorderRef.current.start();
-                 setRecordingActive(true);
-                 console.log("recording active: ", recordingActive);
-                 setRecordingSaved(false);
-                 const recordingTimer = setTimeout(handleAudioRecordStop, 10000);
-               })
-               .catch((error: string) => {
-                 handleRecordingFailure(`${error}`);
-               });
-    }
-  };
-
-  const handleAudioRecordStop = () => {
-    mediaRecorderRef.current?.stop();
-    setRecordingActive(false);
-  };
-
-  const generateFileName = () => {
-    const timestamp = Date.now();
-    return  "audio" + timestamp + ".mp3";
-  };
-
-  const handleAudioSave = async (fileData: Blob, timeElapsed: number) => {
-    handleAudioRecordStop();
-    setRecordingDisabled(true);
-    console.log("recording disabled: ", recordingDisabled);
-    if (fileData) {
-      const fileName = generateFileName();
-      const transcription = await transcribeAudioFile(fileData, fileName, assistantModel.apiConnection);
-      setRecordingSaved(true);
-      console.log("recording saved: ", recordingSaved);
-      setInputValue(transcription.text);
-      
-    } else {
-      handleRecordingFailure("No file data.");
-      setRecordingDisabled(false);
-    }
-  };
-
-  const handleRecordingFailure = (error: string) => {
-    setRecordingFailed(true);
-    console.log("recording failed: ", recordingFailed);
-    setRecordingDisabled(false);
-    console.error(`Error: ${error}`);
-  };
-
   return (
     <div className="chat-input" data-testid="chat-input">
       <form onSubmit={handleSubmit}>
@@ -270,8 +188,7 @@ export const ChatInputComponent = ({disabled, keyboardShortcutEnabled, shortcutK
                 data-testid="chat-input-dictate"
                 disabled={disabled}
                 type="button"
-                // onClick={handleDictateToggle}
-                onClick={handleAudioRecord}
+                onClick={handleDictateToggle}
               >
                 Dictate
               </button>
