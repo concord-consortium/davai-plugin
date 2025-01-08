@@ -1,4 +1,4 @@
-import { types, flow, Instance } from "mobx-state-tree";
+import { types, flow, Instance, onSnapshot } from "mobx-state-tree";
 import { Message } from "openai/resources/beta/threads/messages";
 import { codapInterface, getDataContext, getListOfDataContexts } from "@concord-consortium/codap-plugin-api";
 import { DAVAI_SPEAKER, DEBUG_SPEAKER } from "../constants";
@@ -36,6 +36,8 @@ const OpenAIType = types.custom({
  * @property {Object} apiConnection - The API connection object for interacting with the assistant
  * @property {Object|null} thread - The assistant's thread used for the current chat, or `null` if no thread is active.
  * @property {ChatTranscriptModel} transcriptStore - The assistant's chat transcript store for recording and managing chat messages.
+ * @property {boolean} isLoadingResponse - Flag indicating whether the assistant is currently processing a response.
+ * @property {string[]} messageQueue - Queue of messages to be sent to the assistant. Used if CODAP generates notifications while assistant is processing a response.
  */
 export const AssistantModel = types
   .model("AssistantModel", {
@@ -44,10 +46,9 @@ export const AssistantModel = types
     assistantId: types.string,
     thread: types.maybe(types.frozen()),
     transcriptStore: ChatTranscriptModel,
-  })
-  .volatile(() => ({
     isLoadingResponse: false,
-  }))
+    messageQueue: types.array(types.string)
+  })
   .actions((self) => ({
     handleMessageSubmitMockAssistant() {
       // Use a brief delay to prevent duplicate timestamp-based keys.
@@ -102,6 +103,19 @@ export const AssistantModel = types
       } catch (err) {
         console.error("Failed to get data contexts:", err);
         self.transcriptStore.addMessage(DEBUG_SPEAKER, {description: "Failed to get data contexts", content: formatJsonMessage(err)});
+      }
+    });
+
+    const sendDataCtxChangeInfo = flow(function* (msg: string) {
+      try {
+        if (self.isLoadingResponse) {
+          console.log("Adding message to queue:", msg);
+          self.messageQueue.push(msg);
+        } else {
+          yield sendCODAPDocumentInfo(msg);
+        }
+      } catch (err) {
+        console.error("Failed to update data context:", err);
       }
     });
 
@@ -274,7 +288,18 @@ export const AssistantModel = types
       }
     });
 
-    return { createThread, deleteThread, initializeAssistant, handleMessageSubmit, fetchAndSendDataContexts, sendCODAPDocumentInfo };
-  });
+    return { createThread, deleteThread, initializeAssistant, handleMessageSubmit, sendDataCtxChangeInfo, sendCODAPDocumentInfo };
+  })
+  .actions((self) => ({
+    afterCreate() {
+      onSnapshot(self, async () => {
+        if (!self.isLoadingResponse && self.messageQueue.length > 0) {
+          const allMsgs = self.messageQueue.join("\n");
+          self.messageQueue.clear();
+          await self.sendCODAPDocumentInfo(allMsgs);
+        }
+      });
+    }
+  }));
 
 export interface AssistantModelType extends Instance<typeof AssistantModel> {}
