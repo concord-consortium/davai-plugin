@@ -109,13 +109,13 @@ export const AssistantModel = types
     const sendDataCtxChangeInfo = flow(function* (msg: string) {
       try {
         if (self.isLoadingResponse) {
-          console.log("Adding message to queue:", msg);
           self.messageQueue.push(msg);
         } else {
           yield sendCODAPDocumentInfo(msg);
         }
       } catch (err) {
-        console.error("Failed to update data context:", err);
+        console.error("Failed to send data context info to LLM:", err);
+        self.transcriptStore.addMessage(DEBUG_SPEAKER, {description: "Failed to send data context info to d LLM", content: formatJsonMessage(err)});
       }
     });
 
