@@ -144,7 +144,7 @@ export const App = observer(() => {
         </div>
       }
       <ChatInputComponent
-        disabled={!assistantStore.thread && !appConfig.isAssistantMocked}
+        disabled={(!assistantStore.thread && !appConfig.isAssistantMocked) || assistantStore.isLoadingResponse}
         keyboardShortcutEnabled={keyboardShortcutEnabled}
         shortcutKeys={keyboardShortcutKeys}
         onSubmit={handleChatInputSubmit}

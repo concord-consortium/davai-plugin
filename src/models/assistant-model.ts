@@ -42,21 +42,26 @@ export const AssistantModel = types
     apiConnection: OpenAIType,
     assistant: types.maybe(types.frozen()),
     assistantId: types.string,
+    isLoadingResponse: types.optional(types.boolean, false),
     thread: types.maybe(types.frozen()),
     transcriptStore: ChatTranscriptModel,
   })
-  .volatile(() => ({
-    isLoadingResponse: false,
+  .actions((self) => ({
+    setIsLoadingResponse(isLoading: boolean) {
+      self.isLoadingResponse = isLoading;
+    }
   }))
   .actions((self) => ({
     handleMessageSubmitMockAssistant() {
+      self.setIsLoadingResponse(true);
       // Use a brief delay to prevent duplicate timestamp-based keys.
       setTimeout(() => {
         self.transcriptStore.addMessage(
           DAVAI_SPEAKER,
           { content: "I'm just a mock assistant and can't process that request." }
         );
-      }, 1000);
+        self.setIsLoadingResponse(false);
+      }, 2000);
     },
     setTranscriptStore(transcriptStore: any) {
       self.transcriptStore = transcriptStore;
@@ -93,7 +98,7 @@ export const AssistantModel = types
           role: "user",
           content: messageText,
         });
-        self.isLoadingResponse = true;
+        self.setIsLoadingResponse(true);
         self.transcriptStore.addMessage(DEBUG_SPEAKER, {description: "Message sent to LLM", content: formatJsonMessage(messageSent)});
         yield startRun();
 
@@ -165,7 +170,7 @@ export const AssistantModel = types
            content: "I'm sorry, I don't have a response for that.",
          });
        }
-       self.isLoadingResponse = false;
+       self.setIsLoadingResponse(false);
      }
 
      if (errorStates.includes(runState.status)) {
@@ -176,7 +181,7 @@ export const AssistantModel = types
        self.transcriptStore.addMessage(DAVAI_SPEAKER, {
          content: "I'm sorry, I encountered an error. Please try again.",
        });
-       self.isLoadingResponse = false;
+       self.setIsLoadingResponse(false);
      }
    });
 
