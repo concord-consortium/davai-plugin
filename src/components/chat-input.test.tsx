@@ -1,33 +1,38 @@
 import React from "react";
-import { act, fireEvent, render, screen, within } from "@testing-library/react";
+import { fireEvent, render, screen, within } from "@testing-library/react";
 
 import { ChatInputComponent } from "./chat-input";
 
-const mockSpeechRecognition = jest.fn().mockImplementation(() => {
-  return {
-    start: jest.fn(),
-    stop: jest.fn(),
-    onresult: jest.fn(),
-    continuous: true,
-    grammars: {},
-    interimResults: false,
-    lang: "",
-    onaudiostart: null,
-    onaudioend: null,
-    onend: null,
-    onerror: null,
-    onnomatch: null,
-    onsoundstart: null,
-    onspeechend: null,
-    onspeechstart: null,
-    onstart: null
-  };
-});
-
-global.SpeechRecognition = jest.fn().mockImplementation(() => new mockSpeechRecognition());
+const originalSpeechRecognition = global.SpeechRecognition;
+const mockSpeechRecognition = jest.fn().mockImplementation(() => ({
+  start: jest.fn(),
+  stop: jest.fn(),
+  onresult: jest.fn(),
+  continuous: true,
+  grammars: {},
+  interimResults: false,
+  lang: "",
+  onaudiostart: null,
+  onaudioend: null,
+  onend: null,
+  onerror: null,
+  onnomatch: null,
+  onsoundstart: null,
+  onspeechend: null,
+  onspeechstart: null,
+  onstart: null
+}));
 
 beforeAll(() => {
   global.SpeechRecognition = mockSpeechRecognition;
+});
+
+afterAll(() => {
+  global.SpeechRecognition = originalSpeechRecognition;
+});
+
+beforeEach(() => {
+  jest.clearAllMocks();
 });
 
 describe("test chat input component", () => {
@@ -46,7 +51,7 @@ describe("test chat input component", () => {
     expect(chatInputTextarea).toHaveAttribute("placeholder", "Ask DAVAI about the data");
     const chatInputSend = within(chatInput).getByTestId("chat-input-send");
     // If no message is entered, an error message should appear.
-    act(() => chatInputSend.click());
+    fireEvent.click(chatInputSend);
     const inputError = within(chatInput).getByTestId("input-error");
     expect(inputError).toHaveAttribute("aria-live", "assertive");
     expect(inputError).toHaveTextContent("Please enter a message before sending.");
@@ -56,7 +61,7 @@ describe("test chat input component", () => {
     // If message is entered, no error should appear and the message should be submitted.
     chatInputTextarea.focus();
     fireEvent.change(chatInputTextarea, {target: {value: "Hello!"}});
-    act(() => chatInputSend.click());
+    fireEvent.click(chatInputSend);
     expect(inputError).not.toBeInTheDocument();
     expect(chatInputTextarea).not.toHaveAttribute("aria-describedby");
     expect(chatInputTextarea).toHaveAttribute("aria-invalid", "false");
@@ -69,9 +74,23 @@ describe("test chat input component", () => {
     const chatInput = screen.getByTestId("chat-input");
     const chatInputDictate = within(chatInput).getByTestId("chat-input-dictate");
     expect(chatInputDictate).toHaveAttribute("aria-pressed", "false");
-    act(() => chatInputDictate.click());
+    expect(chatInputDictate).toHaveAttribute("aria-label", "Start Dictation");
+    expect(chatInputDictate).not.toHaveClass("active");
+    expect(chatInputDictate).toHaveTextContent("Dictate");
+    fireEvent.click(chatInputDictate);
     expect(chatInputDictate).toHaveAttribute("aria-pressed", "true");
-    act(() => chatInputDictate.click());
+    expect(chatInputDictate).toHaveAttribute("aria-label", "Stop Dictation");
+    expect(chatInputDictate).toHaveClass("active");
+    expect(chatInputDictate).toHaveTextContent("Listening...");
+    expect(global.SpeechRecognition).toHaveBeenCalled();
+    const srInstance1 = mockSpeechRecognition.mock.results[0].value;
+    expect(srInstance1.start).toHaveBeenCalled();
+    fireEvent.click(chatInputDictate);
     expect(chatInputDictate).toHaveAttribute("aria-pressed", "false");
+    expect(chatInputDictate).toHaveAttribute("aria-label", "Start Dictation");
+    expect(chatInputDictate).not.toHaveClass("active");
+    expect(chatInputDictate).toHaveTextContent("Dictate");
+    const srInstance2 = mockSpeechRecognition.mock.results[0].value;
+    expect(srInstance2.stop).toHaveBeenCalled();
   });
 });
