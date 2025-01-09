@@ -107,14 +107,14 @@ export const isShortcutPressed = (pressedKeys: Set<string>, shortcutKeys: string
   });
 };
 
-// This isn't currently implemented anywhere but may be useful in the future for providing audio feedback.
-export const alertSound = () => {
+export const alertSound = (mode?: string) => {
   if (!window.AudioContext) return;
 
+  const frequency = mode === "stop" ? 293.665 : 587.33; // the musical note D (for DAVAI)
   const context = new window.AudioContext();
   const oscillator = context.createOscillator();
-  oscillator.type = "triangle";
-  oscillator.frequency.setValueAtTime(440, context.currentTime);
+  oscillator.type = "sine";
+  oscillator.frequency.setValueAtTime(frequency, context.currentTime);
   oscillator.connect(context.destination);
   oscillator.start();
   oscillator.stop(context.currentTime + 0.05);

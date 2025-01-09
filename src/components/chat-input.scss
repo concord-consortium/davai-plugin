@@ -62,6 +62,11 @@
         background: transparent url(../assets/voice-typing-icon.svg) 0 0 no-repeat;
         margin-right: auto;
         order: 1;
+
+        &.active {
+          // darken the color of the icon when active
+          filter: brightness(0) saturate(100%) invert(32%) sepia(0%) saturate(2419%) hue-rotate(165deg) brightness(101%) contrast(66%);
+        }
       }
       &:disabled {
         cursor: not-allowed;

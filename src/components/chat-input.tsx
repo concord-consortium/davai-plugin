@@ -1,5 +1,5 @@
 import React, { FormEvent, useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { isInputElement, isShortcutPressed } from "../utils/utils";
+import { alertSound, isInputElement, isShortcutPressed } from "../utils/utils";
 
 import "./chat-input.scss";
 
@@ -17,6 +17,7 @@ export const ChatInputComponent = ({disabled, keyboardShortcutEnabled, shortcutK
   const [inputValue, setInputValue] = useState("");
   const [showError, setShowError] = useState(false);
   const [browserSupportsDictation, setBrowserSupportsDictation] = useState(false);
+  const speechRecognitionRef = useRef<SpeechRecognition | null>(null);
 
   const handleSubmit = (event?: FormEvent) => {
     event?.preventDefault();
@@ -41,48 +42,54 @@ export const ChatInputComponent = ({disabled, keyboardShortcutEnabled, shortcutK
     }
   };
 
-  // Speech recognition/Dictation
   useEffect(() => {
     if (!window.SpeechRecognition && !window.webkitSpeechRecognition) return;
 
     const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
-    if (SpeechRecognition) {
-      setBrowserSupportsDictation(true);
+    setBrowserSupportsDictation(true);
+
+    if (!speechRecognitionRef.current) {
+      speechRecognitionRef.current = new SpeechRecognition();
+      speechRecognitionRef.current.continuous = true;
+      speechRecognitionRef.current.interimResults = false;
+
+      speechRecognitionRef.current.onresult = (event: SpeechRecognitionEvent) => {
+        // const speechToText = Array.from(event.results).map(result => result[0].transcript).join("");
+        const latestResult = event.results[event.results.length - 1];
+        const speechToText = latestResult[0].transcript;
+        setInputValue(prevValue => (`${prevValue} ${speechToText}`).trim());
+      };
+
+      speechRecognitionRef.current.onerror = (event) => {
+        console.error("Speech recognition error detected:", event.error);
+      };
     }
+  }, []);
 
-    const recognition = new SpeechRecognition();
-    recognition.continuous = true;
-    recognition.interimResults = false;
-
-    recognition.onresult = (event: SpeechRecognitionEvent) => {
-      const speechToText = Array.from(event.results).map(result => result[0].transcript).join("");
-      setInputValue(speechToText);
-    };
-
-    recognition.onerror = (event) => {
-      console.error("Speech recognition error detected:", event.error);
-    };
-
-    recognition.onaudiostart = () => {
-      // We may want the UI to respond somehow when audio capture begins.
-      console.log("Microphone capturing audio.");
-    };
+  useEffect(() => {
+    if (!speechRecognitionRef.current) return;
 
     if (dictationEnabled) {
       try {
-        recognition.start();
+        speechRecognitionRef.current.start();
       } catch (error) {
         console.error("Error starting recognition:", error);
       }
     } else {
-      recognition.stop();
+      speechRecognitionRef.current.stop();
     }
 
-    return () => recognition.stop();
-  }, [browserSupportsDictation, dictationEnabled]);
+    return () => speechRecognitionRef.current?.stop();
+  }, [dictationEnabled]);
 
   const handleDictateToggle = () => {
     setDictationEnabled(!dictationEnabled);
+
+    if (dictationEnabled) {
+      alertSound("stop");
+    } else {
+      alertSound("start");
+    }
   };
 
   const pressedKeys: Set<string> = useMemo(() => new Set(), []);
@@ -183,14 +190,15 @@ export const ChatInputComponent = ({disabled, keyboardShortcutEnabled, shortcutK
             </button>
             {browserSupportsDictation && 
               <button
+                aria-label={dictationEnabled ? "Stop Dictation" : "Start Dictation"}
                 aria-pressed={dictationEnabled}
-                className="dictate"
+                className={dictationEnabled ? "dictate active" : "dictate"}
                 data-testid="chat-input-dictate"
                 disabled={disabled}
                 type="button"
                 onClick={handleDictateToggle}
               >
-                Dictate
+                {dictationEnabled ? "Listening..." : "Dictate"}
               </button>
             }
           </div>
