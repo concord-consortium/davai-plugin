@@ -106,3 +106,23 @@ export const isShortcutPressed = (pressedKeys: Set<string>, shortcutKeys: string
     });
   });
 };
+
+export const convertBase64ToImage = async (base64Data: string, filename = "image.png") => {
+  try {
+    const mimeType = base64Data.match(/data:(.*?);base64/)?.[1] || "image/png";
+    const base64 = base64Data.split(",")[1];
+    const binary = atob(base64);
+    const binaryLength = binary.length;
+    const arrayBuffer = new Uint8Array(binaryLength);
+    for (let i = 0; i < binaryLength; i++) {
+      arrayBuffer[i] = binary.charCodeAt(i);
+    }
+
+    const blob = new Blob([arrayBuffer], { type: mimeType });
+    const file = new File([blob], filename, { type: mimeType });
+    return file;
+  } catch (error) {
+    console.error("Error converting base64 to image:", error);
+    throw error;
+  }
+};
