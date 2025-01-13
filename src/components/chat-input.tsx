@@ -54,7 +54,6 @@ export const ChatInputComponent = ({disabled, keyboardShortcutEnabled, shortcutK
       speechRecognitionRef.current.interimResults = false;
 
       speechRecognitionRef.current.onresult = (event: SpeechRecognitionEvent) => {
-        // const speechToText = Array.from(event.results).map(result => result[0].transcript).join("");
         const latestResult = event.results[event.results.length - 1];
         const speechToText = latestResult[0].transcript;
         setInputValue(prevValue => (`${prevValue} ${speechToText}`).trim());
@@ -62,6 +61,8 @@ export const ChatInputComponent = ({disabled, keyboardShortcutEnabled, shortcutK
 
       speechRecognitionRef.current.onerror = (event) => {
         console.error("Speech recognition error detected:", event.error);
+        setDictationEnabled(false);
+        alertSound("stop");
       };
     }
   }, []);
@@ -72,6 +73,10 @@ export const ChatInputComponent = ({disabled, keyboardShortcutEnabled, shortcutK
     if (dictationEnabled) {
       try {
         speechRecognitionRef.current.start();
+        // automatically stop after 60 seconds
+        setTimeout(() => {
+          speechRecognitionRef.current?.stop();
+        }, 60000);
       } catch (error) {
         console.error("Error starting recognition:", error);
       }
