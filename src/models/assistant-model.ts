@@ -38,28 +38,37 @@ const OpenAIType = types.custom({
  * @property {ChatTranscriptModel} transcriptStore - The assistant's chat transcript store for recording and managing chat messages.
  * @property {boolean} isLoadingResponse - Flag indicating whether the assistant is currently processing a response.
  * @property {string[]} messageQueue - Queue of messages to be sent to the assistant. Used if CODAP generates notifications while assistant is processing a response.
+ * @property {boolean} uploadFileAfterRun - Flag indicating whether to upload a file after the assistant completes a run.
+ * @property {string} dataUri - The data URI of the file to be uploaded.
  */
 export const AssistantModel = types
   .model("AssistantModel", {
     apiConnection: OpenAIType,
     assistant: types.maybe(types.frozen()),
     assistantId: types.string,
+    isLoadingResponse: types.optional(types.boolean, false),
     thread: types.maybe(types.frozen()),
     transcriptStore: ChatTranscriptModel,
-    isLoadingResponse: false,
     messageQueue: types.array(types.string),
     uploadFileAfterRun: false,
     dataUri: "",
   })
   .actions((self) => ({
+    setIsLoadingResponse(isLoading: boolean) {
+      self.isLoadingResponse = isLoading;
+    }
+  }))
+  .actions((self) => ({
     handleMessageSubmitMockAssistant() {
+      self.setIsLoadingResponse(true);
       // Use a brief delay to prevent duplicate timestamp-based keys.
       setTimeout(() => {
         self.transcriptStore.addMessage(
           DAVAI_SPEAKER,
           { content: "I'm just a mock assistant and can't process that request." }
         );
-      }, 1000);
+        self.setIsLoadingResponse(false);
+      }, 2000);
     },
     setTranscriptStore(transcriptStore: any) {
       self.transcriptStore = transcriptStore;
@@ -142,14 +151,14 @@ export const AssistantModel = types
           role: "user",
           content: messageText,
         });
-        self.isLoadingResponse = true;
+        self.setIsLoadingResponse(true);
         self.transcriptStore.addMessage(DEBUG_SPEAKER, {description: "Message received by LLM", content: formatJsonMessage(messageSent)});
         yield startRun();
 
       } catch (err) {
         console.error("Failed to handle message submit:", err);
         self.transcriptStore.addMessage(DEBUG_SPEAKER, {description: "Failed to handle message submit", content: formatJsonMessage(err)});
-        self.isLoadingResponse = false;
+        self.setIsLoadingResponse(false);
       }
     });
 
@@ -222,7 +231,7 @@ export const AssistantModel = types
               content: "I'm sorry, I don't have a response for that.",
             });
           }
-          self.isLoadingResponse = false;
+          self.setIsLoadingResponse(false);
         }
       }
 
@@ -234,7 +243,7 @@ export const AssistantModel = types
         self.transcriptStore.addMessage(DAVAI_SPEAKER, {
           content: "I'm sorry, I encountered an error. Please try again.",
         });
-        self.isLoadingResponse = false;
+        self.setIsLoadingResponse(false);
       }
     });
 
@@ -316,7 +325,7 @@ export const AssistantModel = types
       } catch (err) {
         console.error(err);
         self.transcriptStore.addMessage(DEBUG_SPEAKER, {description: "Error taking required action", content: formatJsonMessage(err)});
-        self.isLoadingResponse = false;
+        self.setIsLoadingResponse(false);
       }
     });
 

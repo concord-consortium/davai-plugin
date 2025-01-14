@@ -1,6 +1,5 @@
 import React, { FormEvent, useCallback, useEffect, useMemo, useRef, useState } from "react";
-
-import { isInputElement, isShortcutPressed } from "../utils/utils";
+import { alertSound, isInputElement, isShortcutPressed } from "../utils/utils";
 
 import "./chat-input.scss";
 
@@ -13,15 +12,41 @@ interface IProps {
 }
 
 export const ChatInputComponent = ({disabled, keyboardShortcutEnabled, shortcutKeys, onKeyboardShortcut, onSubmit}: IProps) => {
-  const textAreaRef = useRef<HTMLTextAreaElement>(null);
-  // const [browserSupportsDictation, setBrowserSupportsDictation] = useState(false);
-  // const [dictationEnabled, setDictationEnabled] = useState(false);
+  const [dictationEnabled, setDictationEnabled] = useState(false);
   const [inputValue, setInputValue] = useState("");
+  const kDefaultHeight = 47;
+  const [textareaHasFocus, setTextareaHasFocus] = useState(false);
   const [showError, setShowError] = useState(false);
+  const [browserSupportsDictation, setBrowserSupportsDictation] = useState(false);
+  const textAreaRef = useRef<HTMLTextAreaElement>(null);
+  const fieldsetRef = useRef<HTMLFieldSetElement>(null);
+  const speechRecognitionRef = useRef<SpeechRecognition | null>(null);
+  const finalSpeechTranscript = useRef<string>("");
+  const timeoutRef = useRef<NodeJS.Timeout | null>(null);
+  // We will use this ref in places where asynchronous state updates make directly using the state variable
+  // dictationEnabled problematic.
+  const dictationEnabledRef = useRef(false);
+
+  const fitTextInputToContent = () => {
+    if (textAreaRef.current && fieldsetRef.current) {
+      // Temporarily reset the height to recalculate the correct scrollHeight,
+      // then set the height as needed to show all text.
+      textAreaRef.current.style.height = `${kDefaultHeight}px`;
+      fieldsetRef.current.style.height = `${kDefaultHeight}px`;
+      const newHeight = Math.max(textAreaRef.current.scrollHeight, kDefaultHeight);
+      textAreaRef.current.style.height = `${newHeight}px`;
+      fieldsetRef.current.style.height = `${newHeight}px`;
+    }
+  };
+
+  const handleTextInputChange = (event: React.ChangeEvent<HTMLTextAreaElement>) => {
+    setInputValue(event.target.value);
+  };
 
   const handleSubmit = (event?: FormEvent) => {
     event?.preventDefault();
-    // setDictationEnabled(false);
+    setDictationEnabled(false);
+    speechRecognitionRef.current?.stop();
 
     if (!inputValue || inputValue.trim() === "") {
       setShowError(true);
@@ -29,6 +54,7 @@ export const ChatInputComponent = ({disabled, keyboardShortcutEnabled, shortcutK
     } else {
       onSubmit(inputValue);
       setInputValue("");
+      finalSpeechTranscript.current = "";
       textAreaRef.current?.focus();
       setShowError(false);
     }
@@ -42,52 +68,98 @@ export const ChatInputComponent = ({disabled, keyboardShortcutEnabled, shortcutK
     }
   };
 
-  // The code in this useEffect is all related to the dictation feature which isn't implemented yet.
-  // useEffect(() => {
-  //   if (!window.SpeechRecognition && !window.webkitSpeechRecognition) return;
+  useEffect(() => {
+    if (!window.SpeechRecognition && !window.webkitSpeechRecognition) return;
 
-  //   const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
-  //   if (SpeechRecognition) {
-  //     setBrowserSupportsDictation(true);
-  //   }
+    const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+    setBrowserSupportsDictation(true);
 
-  //   const recognition = new SpeechRecognition();
-  //   recognition.continuous = true;
-  //   recognition.interimResults = false;
+    if (!speechRecognitionRef.current) {
+      speechRecognitionRef.current = new SpeechRecognition();
+      speechRecognitionRef.current.continuous = true;
+      speechRecognitionRef.current.interimResults = true;
 
-  //   recognition.onresult = (event: SpeechRecognitionEvent) => {
-  //     const speechToText = Array.from(event.results).map(result => result[0].transcript).join("");
-  //     setInputValue(speechToText);
-  //   };
+      speechRecognitionRef.current.onresult = (event: SpeechRecognitionEvent) => {
+        // Using the state variable dictationEnabled here can lead to incorrect behavior.
+        if (!dictationEnabledRef.current) return;
 
-  //   recognition.onerror = (event) => {
-  //     console.error("Speech recognition error detected:", event.error);
-  //   };
+        const capitalize = (s: string) => {
+          const firstChar = /\S/;
+          return s.replace(firstChar, function(m) { return m.toUpperCase(); });
+        };
 
-  //   recognition.onaudiostart = () => {
-  //     // We may want the UI respond somehow when audio capture begins.
-  //     console.log("Microphone capturing audio.");
-  //   };
+        let interimTranscript = "";
+        for (let i = event.resultIndex; i < event.results.length; ++i) {
+          if (event.results[i].isFinal) {
+            finalSpeechTranscript.current += event.results[i][0].transcript;
+          } else {
+            interimTranscript += event.results[i][0].transcript;
+          }
+        }
+        finalSpeechTranscript.current = capitalize(finalSpeechTranscript.current);
 
-  //   if (dictationEnabled) {
-  //     try {
-  //       recognition.start();
-  //     } catch (error) {
-  //       console.error("Error starting recognition:", error);
-  //     }
-  //   } else {
-  //     recognition.stop();
-  //   }
+        const output = `${finalSpeechTranscript.current} ${interimTranscript}`;
+        setInputValue(output);
+      };
 
-  //   return () => recognition.stop();
-  // }, [browserSupportsDictation, dictationEnabled]);
+      speechRecognitionRef.current.onerror = (event) => {
+        console.error("Speech recognition error detected:", event.error);
+        setDictationEnabled(false);
+        alertSound("stop");
+      };
+    }
+  }, []);
 
-  // const handleDictateToggle = () => {
-  //   if (dictationEnabled) {
-  //     handleSubmit();
-  //   }
-  //   setDictationEnabled(!dictationEnabled);
-  // };
+  useEffect(() => {
+    fitTextInputToContent();
+  }, [inputValue]);
+
+  useEffect(() => {
+    dictationEnabledRef.current = dictationEnabled;
+  }, [dictationEnabled]);
+
+  useEffect(() => {
+    if (!speechRecognitionRef.current) return;
+
+    if (dictationEnabled) {
+      try {
+        speechRecognitionRef.current.start();
+        // automatically stop after 60 seconds
+        timeoutRef.current = setTimeout(() => {
+          if (dictationEnabled && speechRecognitionRef.current) {
+            setDictationEnabled(false);
+            speechRecognitionRef.current.stop();
+            alertSound("stop");
+          }
+        }, 60000);
+      } catch (error) {
+        console.error("Error starting recognition:", error);
+      }
+    } else {
+      speechRecognitionRef.current.stop();
+      if (timeoutRef.current) {
+        clearTimeout(timeoutRef.current);
+        timeoutRef.current = null;
+      }
+    }
+
+    return () => {
+      if (timeoutRef.current) {
+        clearTimeout(timeoutRef.current);
+      }
+      speechRecognitionRef.current?.stop();
+    };
+  }, [dictationEnabled]);
+
+  const handleDictateToggle = () => {
+    setDictationEnabled(!dictationEnabled);
+
+    if (dictationEnabled) {
+      alertSound("stop");
+    } else {
+      alertSound("start");
+    }
+  };
 
   const pressedKeys: Set<string> = useMemo(() => new Set(), []);
 
@@ -149,33 +221,30 @@ export const ChatInputComponent = ({disabled, keyboardShortcutEnabled, shortcutK
   return (
     <div className="chat-input" data-testid="chat-input">
       <form onSubmit={handleSubmit}>
-        <fieldset>
+        <fieldset
+          className={textareaHasFocus ? "has-focus" : ""}
+          data-testid="chat-input-fieldset"
+          ref={fieldsetRef}
+        >
           <label className="visually-hidden" data-testid="chat-input-label" htmlFor="chat-input">
             Chat Input
           </label>
-          <textarea
-            aria-describedby={showError ? "input-error" : undefined}
-            aria-invalid={showError}
-            data-testid="chat-input-textarea"
-            disabled={disabled}
-            id="chat-input"
-            placeholder={"Ask DAVAI about the data"}
-            ref={textAreaRef}
-            value={inputValue}
-            onChange={(e) => setInputValue(e.target.value)}
-            onKeyUp={handleKeyUp}
-          />
-          {showError &&
-            <div
-              aria-live="assertive"
-              className="error-message"
-              data-testid="input-error"
-              id="input-error"
-              role="alert"
-            >
-              Please enter a message before sending.
-            </div>
-          }
+          <div className="textarea-container">
+            <textarea
+              aria-describedby={showError ? "input-error" : undefined}
+              aria-invalid={showError}
+              data-testid="chat-input-textarea"
+              disabled={disabled}
+              id="chat-input"
+              placeholder={"Ask DAVAI about the data"}
+              ref={textAreaRef}
+              value={inputValue}
+              onBlur={() => setTextareaHasFocus(false)}
+              onChange={handleTextInputChange}
+              onFocus={() => setTextareaHasFocus(true)}
+              onKeyUp={handleKeyUp}
+            />
+          </div>
           <div className="buttons-container">
             <button
               className="send"
@@ -185,18 +254,32 @@ export const ChatInputComponent = ({disabled, keyboardShortcutEnabled, shortcutK
             >
               Send
             </button>
-            {/* {browserSupportsDictation && 
+            {browserSupportsDictation && 
               <button
                 aria-pressed={dictationEnabled}
-                className="dictate"
+                className={dictationEnabled ? "dictate active" : "dictate"}
+                data-testid="chat-input-dictate"
+                disabled={disabled}
+                title={dictationEnabled ? "Stop Dictation" : "Start Dictation"}
                 type="button"
                 onClick={handleDictateToggle}
               >
-                Dictate
+                {dictationEnabled ? "Listening..." : "Dictate"}
               </button>
-            } */}
+            }
           </div>
         </fieldset>
+        {showError &&
+          <div
+            aria-live="assertive"
+            className="error-message"
+            data-testid="input-error"
+            id="input-error"
+            role="alert"
+          >
+            Please enter a message before sending.
+          </div>
+        }
       </form>
     </div>
   );
