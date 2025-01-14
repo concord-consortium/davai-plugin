@@ -1,15 +1,15 @@
-import React, { useEffect, useState } from "react";
+import React, { useCallback, useEffect, useRef, useState } from "react";
 import { observer } from "mobx-react-lite";
-import { initializePlugin, selectSelf } from "@concord-consortium/codap-plugin-api";
+import { addDataContextChangeListener, addDataContextsListListener, ClientNotification, getDataContext, getListOfDataContexts, initializePlugin, selectSelf } from "@concord-consortium/codap-plugin-api";
 import { useAppConfigContext } from "../hooks/use-app-config-context";
 import { useAssistantStore } from "../hooks/use-assistant-store";
 import { ChatInputComponent } from "./chat-input";
 import { ChatTranscriptComponent } from "./chat-transcript";
 import { ReadAloudMenu } from "./readaloud-menu";
 import { KeyboardShortcutControls } from "./keyboard-shortcut-controls";
-import { DAVAI_SPEAKER, GREETING, USER_SPEAKER } from "../constants";
+import { DAVAI_SPEAKER, DEBUG_SPEAKER, GREETING, USER_SPEAKER, notificationsToIgnore } from "../constants";
 import { DeveloperOptionsComponent } from "./developer-options";
-import { getUrlParam } from "../utils/utils";
+import { formatJsonMessage, getUrlParam } from "../utils/utils";
 
 import "./App.scss";
 
@@ -30,15 +30,68 @@ export const App = observer(() => {
   const modeUrlParam = getUrlParam("mode") || "";
   const isDevMode = modeUrlParam === "development" || appConfig.mode === "development";
   const [showDebugLog, setShowDebugLog] = useState(isDevMode);
+  const assistantStoreRef = useRef(assistantStore);
+  const subscribedDataCtxsRef = useRef<string[]>([]);
+
+  const handleDataContextChangeNotice = useCallback(async (notification: ClientNotification) => {
+    if (notificationsToIgnore.includes(notification.values.operation)) return;
+
+    assistantStoreRef.current.transcriptStore.addMessage(DEBUG_SPEAKER, {
+      description: "Data context change notice",
+      content: formatJsonMessage(notification)
+    });
+
+    // resource is in the form of "dataContextChangeNotice[<dataContextName>]";
+    // the dataContext name isn't otherwise available in the notification object
+    const dataCtxName = notification.resource.replace("dataContextChangeNotice[", "").replace("]", "");
+    const updatedCtxInfo = await getDataContext(dataCtxName);
+    const msg = `Data context ${dataCtxName} has been updated: ${JSON.stringify(updatedCtxInfo.values)}`;
+    assistantStoreRef.current.sendDataCtxChangeInfo(msg);
+  }, []);
+
+  // documentation of the documentChangeNotice object here:
+  // https://github.com/concord-consortium/codap/wiki/CODAP-Data-Interactive-Plugin-API#documentchangenotice
+  const handleDocumentChangeNotice = useCallback(async (notification: ClientNotification) => {
+    if (notification.values.operation === "dataContextCountChanged") { // ignore the other notifications -- they are not useful for our purposes
+      assistantStoreRef.current.transcriptStore.addMessage(DEBUG_SPEAKER, {
+        description: "Document change notice", content: formatJsonMessage(notification)
+      });
+      const ctxNames = (await getListOfDataContexts()).values.map((ctx: Record<string, any>) => ctx.name);
+      const wasNewCtxCreated = ctxNames.length > subscribedDataCtxsRef.current.length;
+      if (wasNewCtxCreated) {
+        // if we have a new data context, we need to add a listener for it
+        const newCtxName = ctxNames.filter((ctx: string) => !subscribedDataCtxsRef.current.includes(ctx))[0];
+        addDataContextChangeListener(newCtxName, handleDataContextChangeNotice);
+        const newCtxInfo = await getDataContext(newCtxName);
+        const msg = `New data context ${newCtxName} created: ${JSON.stringify(newCtxInfo)}`;
+        assistantStoreRef.current.sendDataCtxChangeInfo(msg);
+      } else {
+        const removedCtx = subscribedDataCtxsRef.current.filter((ctx: string) => !ctxNames.includes(ctx))[0];
+        const msg = `Data context ${removedCtx} has been removed`;
+        assistantStoreRef.current.sendDataCtxChangeInfo(msg);
+      }
+      subscribedDataCtxsRef.current = ctxNames;
+    }
+  }, [handleDataContextChangeNotice]);
 
   useEffect(() => {
-    initializePlugin({pluginName: kPluginName, version: kVersion, dimensions});
+    const init = async () => {
+      await initializePlugin({pluginName: kPluginName, version: kVersion, dimensions});
+      addDataContextsListListener(handleDocumentChangeNotice);
+      const dataContexts = await getListOfDataContexts();
+      dataContexts.values.forEach((ctx: Record<string, any>) => {
+        subscribedDataCtxsRef.current.push(ctx.name);
+        addDataContextChangeListener(ctx.name, handleDataContextChangeNotice);
+      });
+    };
+    init();
     selectSelf();
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   useEffect(() => {
     assistantStore.initializeAssistant();
+    assistantStoreRef.current = assistantStore;
   }, [assistantStore, appConfig.assistantId]);
 
   const handleFocusShortcut = () => {
