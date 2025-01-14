@@ -7,9 +7,9 @@ import { ChatInputComponent } from "./chat-input";
 import { ChatTranscriptComponent } from "./chat-transcript";
 import { ReadAloudMenu } from "./readaloud-menu";
 import { KeyboardShortcutControls } from "./keyboard-shortcut-controls";
-import { DAVAI_SPEAKER, DEBUG_SPEAKER, GREETING, USER_SPEAKER } from "../constants";
+import { DAVAI_SPEAKER, DEBUG_SPEAKER, GREETING, USER_SPEAKER, notificationsToIgnore } from "../constants";
 import { DeveloperOptionsComponent } from "./developer-options";
-import { formatJsonMessage, getUrlParam, notificationsToIgnore } from "../utils/utils";
+import { formatJsonMessage, getUrlParam } from "../utils/utils";
 
 import "./App.scss";
 

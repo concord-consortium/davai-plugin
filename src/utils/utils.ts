@@ -106,13 +106,3 @@ export const isShortcutPressed = (pressedKeys: Set<string>, shortcutKeys: string
     });
   });
 };
-
-// we don't send case-level information, only info about dataContexts, collections + attributes
-// documentation about CODAP Data Interactive API notifications: https://github.com/concord-consortium/codap/wiki/CODAP-Data-Interactive-Plugin-API#codap-initiated-actions
-export const notificationsToIgnore = [
-  "selectCases",
-  "moveCases",
-  "createCases",
-  "createItems",
-  "updateCases"
-];
