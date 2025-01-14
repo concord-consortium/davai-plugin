@@ -1,7 +1,7 @@
-import { types, flow, Instance } from "mobx-state-tree";
+import { types, flow, Instance, onSnapshot } from "mobx-state-tree";
 import { OpenAI } from "openai";
 import { Message } from "openai/resources/beta/threads/messages";
-import { codapInterface } from "@concord-consortium/codap-plugin-api";
+import { codapInterface, getDataContext, getListOfDataContexts } from "@concord-consortium/codap-plugin-api";
 import { DAVAI_SPEAKER, DEBUG_SPEAKER } from "../constants";
 import { convertBase64ToImage, formatJsonMessage } from "../utils/utils";
 import { requestThreadDeletion } from "../utils/openai-utils";
@@ -36,6 +36,10 @@ const OpenAIType = types.custom({
  * @property {Object} apiConnection - The API connection object for interacting with the assistant
  * @property {Object|null} thread - The assistant's thread used for the current chat, or `null` if no thread is active.
  * @property {ChatTranscriptModel} transcriptStore - The assistant's chat transcript store for recording and managing chat messages.
+ * @property {boolean} isLoadingResponse - Flag indicating whether the assistant is currently processing a response.
+ * @property {string[]} messageQueue - Queue of messages to be sent to the assistant. Used if CODAP generates notifications while assistant is processing a response.
+ * @property {boolean} uploadFileAfterRun - Flag indicating whether to upload a file after the assistant completes a run.
+ * @property {string} dataUri - The data URI of the file to be uploaded.
  */
 export const AssistantModel = types
   .model("AssistantModel", {
@@ -45,11 +49,10 @@ export const AssistantModel = types
     isLoadingResponse: types.optional(types.boolean, false),
     thread: types.maybe(types.frozen()),
     transcriptStore: ChatTranscriptModel,
-  })
-  .volatile(() => ({
+    messageQueue: types.array(types.string),
     uploadFileAfterRun: false,
     dataUri: "",
-  }))
+  })
   .actions((self) => ({
     setIsLoadingResponse(isLoading: boolean) {
       self.isLoadingResponse = isLoading;
@@ -87,12 +90,58 @@ export const AssistantModel = types
           description: "New thread created",
           content: formatJsonMessage(self.thread)
         });
+        fetchAndSendDataContexts();
       } catch (err) {
         console.error("Failed to initialize assistant:", err);
         self.transcriptStore.addMessage(DEBUG_SPEAKER, {
           description: "Failed to initialize assistant",
           content: formatJsonMessage(err)
         });
+      }
+    });
+
+    const fetchAndSendDataContexts = flow(function* () {
+      try {
+        const contexts = yield getListOfDataContexts();
+        const contextsDetails: Record<string, any> = {};
+        for (const ctx of contexts.values) {
+          const { name } = ctx;
+          const ctxDetails = yield getDataContext(name);
+          contextsDetails[name] = ctxDetails.values;
+        }
+        self.transcriptStore.addMessage(DEBUG_SPEAKER, {description: "Data contexts information", content: formatJsonMessage(contextsDetails)});
+        sendCODAPDocumentInfo(`Data contexts: ${JSON.stringify(contextsDetails)}`);
+      } catch (err) {
+        console.error("Failed to get data contexts:", err);
+        self.transcriptStore.addMessage(DEBUG_SPEAKER, {description: "Failed to get data contexts", content: formatJsonMessage(err)});
+      }
+    });
+
+    const sendDataCtxChangeInfo = flow(function* (msg: string) {
+      try {
+        if (self.isLoadingResponse) {
+          self.messageQueue.push(msg);
+        } else {
+          yield sendCODAPDocumentInfo(msg);
+        }
+      } catch (err) {
+        console.error("Failed to send data context info to LLM:", err);
+        self.transcriptStore.addMessage(DEBUG_SPEAKER, {description: "Failed to send data context info to d LLM", content: formatJsonMessage(err)});
+      }
+    });
+
+    const sendCODAPDocumentInfo = flow(function* (message) {
+      try {
+        self.transcriptStore.addMessage(DEBUG_SPEAKER, {description: "Sending CODAP document information to LLM", content: message});
+        const messageSent = yield self.apiConnection.beta.threads.messages.create(self.thread.id, {
+          role: "user",
+          content: `This is a system message containing information about the CODAP document. ${message}`,
+        });
+        self.transcriptStore.addMessage(DEBUG_SPEAKER, {description: "CODAP document information received by LLM", content: formatJsonMessage(messageSent)});
+      }
+      catch (err) {
+        console.error("Failed to send system message:", err);
+        self.transcriptStore.addMessage(DEBUG_SPEAKER, {description: "Failed to send CODAP document information to LLM", content: formatJsonMessage(err)});
       }
     });
 
@@ -103,7 +152,7 @@ export const AssistantModel = types
           content: messageText,
         });
         self.setIsLoadingResponse(true);
-        self.transcriptStore.addMessage(DEBUG_SPEAKER, {description: "Message sent to LLM", content: formatJsonMessage(messageSent)});
+        self.transcriptStore.addMessage(DEBUG_SPEAKER, {description: "Message received by LLM", content: formatJsonMessage(messageSent)});
         yield startRun();
 
       } catch (err) {
@@ -266,11 +315,12 @@ export const AssistantModel = types
           ))
           : [];
 
-        self.transcriptStore.addMessage(DEBUG_SPEAKER, {description: "Tool outputs", content: formatJsonMessage(toolOutputs)});
+        self.transcriptStore.addMessage(DEBUG_SPEAKER, {description: "Tool outputs being submitted", content: formatJsonMessage(toolOutputs)});
         if (toolOutputs) {
-          yield self.apiConnection.beta.threads.runs.submitToolOutputs(
+          const submittedToolOutputsRes = yield self.apiConnection.beta.threads.runs.submitToolOutputs(
             self.thread.id, runId, { tool_outputs: toolOutputs }
           );
+          self.transcriptStore.addMessage(DEBUG_SPEAKER, {description: "Tool outputs received", content: formatJsonMessage(submittedToolOutputsRes)});
         }
       } catch (err) {
         console.error(err);
@@ -308,7 +358,18 @@ export const AssistantModel = types
       }
     });
 
-    return { createThread, deleteThread, initializeAssistant, handleMessageSubmit };
-  });
+    return { createThread, deleteThread, initializeAssistant, handleMessageSubmit, sendDataCtxChangeInfo, sendCODAPDocumentInfo };
+  })
+  .actions((self) => ({
+    afterCreate() {
+      onSnapshot(self, async () => {
+        if (!self.isLoadingResponse && self.messageQueue.length > 0) {
+          const allMsgs = self.messageQueue.join("\n");
+          self.messageQueue.clear();
+          await self.sendCODAPDocumentInfo(allMsgs);
+        }
+      });
+    }
+  }));
 
 export interface AssistantModelType extends Instance<typeof AssistantModel> {}
