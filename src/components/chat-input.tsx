@@ -21,7 +21,11 @@ export const ChatInputComponent = ({disabled, keyboardShortcutEnabled, shortcutK
   const textAreaRef = useRef<HTMLTextAreaElement>(null);
   const fieldsetRef = useRef<HTMLFieldSetElement>(null);
   const speechRecognitionRef = useRef<SpeechRecognition | null>(null);
+  const finalSpeechTranscript = useRef<string>("");
   const timeoutRef = useRef<NodeJS.Timeout | null>(null);
+  // We will use this ref in places where asynchronous state updates make directly using the state variable
+  // dictationEnabled problematic.
+  const dictationEnabledRef = useRef(false);
 
   const fitTextInputToContent = () => {
     if (textAreaRef.current && fieldsetRef.current) {
@@ -42,6 +46,7 @@ export const ChatInputComponent = ({disabled, keyboardShortcutEnabled, shortcutK
   const handleSubmit = (event?: FormEvent) => {
     event?.preventDefault();
     setDictationEnabled(false);
+    speechRecognitionRef.current?.stop();
 
     if (!inputValue || inputValue.trim() === "") {
       setShowError(true);
@@ -49,6 +54,7 @@ export const ChatInputComponent = ({disabled, keyboardShortcutEnabled, shortcutK
     } else {
       onSubmit(inputValue);
       setInputValue("");
+      finalSpeechTranscript.current = "";
       textAreaRef.current?.focus();
       setShowError(false);
     }
@@ -74,12 +80,26 @@ export const ChatInputComponent = ({disabled, keyboardShortcutEnabled, shortcutK
       speechRecognitionRef.current.interimResults = true;
 
       speechRecognitionRef.current.onresult = (event: SpeechRecognitionEvent) => {
-        // Update inputValue as the user speaks.
-        const transcript = Array.from(event.results)
-          .map((result) => result[0])
-          .map((result,) => result.transcript)
-          .join("");
-        setInputValue(transcript);
+        // Using the state variable dictationEnabled here can lead to incorrect behavior.
+        if (!dictationEnabledRef.current) return;
+
+        const capitalize = (s: string) => {
+          const firstChar = /\S/;
+          return s.replace(firstChar, function(m) { return m.toUpperCase(); });
+        };
+
+        let interimTranscript = "";
+        for (let i = event.resultIndex; i < event.results.length; ++i) {
+          if (event.results[i].isFinal) {
+            finalSpeechTranscript.current += event.results[i][0].transcript;
+          } else {
+            interimTranscript += event.results[i][0].transcript;
+          }
+        }
+        finalSpeechTranscript.current = capitalize(finalSpeechTranscript.current);
+
+        const output = `${finalSpeechTranscript.current} ${interimTranscript}`;
+        setInputValue(output);
       };
 
       speechRecognitionRef.current.onerror = (event) => {
@@ -93,6 +113,10 @@ export const ChatInputComponent = ({disabled, keyboardShortcutEnabled, shortcutK
   useEffect(() => {
     fitTextInputToContent();
   }, [inputValue]);
+
+  useEffect(() => {
+    dictationEnabledRef.current = dictationEnabled;
+  }, [dictationEnabled]);
 
   useEffect(() => {
     if (!speechRecognitionRef.current) return;
