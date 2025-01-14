@@ -1,5 +1,4 @@
 import { types, flow, Instance, onSnapshot } from "mobx-state-tree";
-import { types, flow, Instance } from "mobx-state-tree";
 import { OpenAI } from "openai";
 import { Message } from "openai/resources/beta/threads/messages";
 import { codapInterface, getDataContext, getListOfDataContexts } from "@concord-consortium/codap-plugin-api";
@@ -48,7 +47,7 @@ export const AssistantModel = types
     thread: types.maybe(types.frozen()),
     transcriptStore: ChatTranscriptModel,
     isLoadingResponse: false,
-    messageQueue: types.array(types.string)
+    messageQueue: types.array(types.string),
     uploadFileAfterRun: false,
     dataUri: "",
   })
