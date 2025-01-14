@@ -1,11 +1,12 @@
 import { types, flow, Instance, onSnapshot } from "mobx-state-tree";
+import { types, flow, Instance } from "mobx-state-tree";
+import { OpenAI } from "openai";
 import { Message } from "openai/resources/beta/threads/messages";
 import { codapInterface, getDataContext, getListOfDataContexts } from "@concord-consortium/codap-plugin-api";
 import { DAVAI_SPEAKER, DEBUG_SPEAKER } from "../constants";
-import { formatJsonMessage } from "../utils/utils";
+import { convertBase64ToImage, formatJsonMessage } from "../utils/utils";
 import { requestThreadDeletion } from "../utils/openai-utils";
 import { ChatTranscriptModel } from "./chat-transcript-model";
-import { OpenAI } from "openai";
 
 const OpenAIType = types.custom({
   name: "OpenAIType",
@@ -48,6 +49,8 @@ export const AssistantModel = types
     transcriptStore: ChatTranscriptModel,
     isLoadingResponse: false,
     messageQueue: types.array(types.string)
+    uploadFileAfterRun: false,
+    dataUri: "",
   })
   .actions((self) => ({
     handleMessageSubmitMockAssistant() {
@@ -147,6 +150,7 @@ export const AssistantModel = types
       } catch (err) {
         console.error("Failed to handle message submit:", err);
         self.transcriptStore.addMessage(DEBUG_SPEAKER, {description: "Failed to handle message submit", content: formatJsonMessage(err)});
+        self.isLoadingResponse = false;
       }
     });
 
@@ -172,60 +176,107 @@ export const AssistantModel = types
         content: formatJsonMessage(runState.status),
       });
 
-     const errorStates = ["failed", "cancelled", "incomplete"];
+      const errorStates = ["failed", "cancelled", "incomplete"];
 
-     while (runState.status !== "completed" && runState.status !== "requires_action" && !errorStates.includes(runState.status)) {
-       yield new Promise((resolve) => setTimeout(resolve, 2000));
-       runState = yield self.apiConnection.beta.threads.runs.retrieve(self.thread.id, currentRunId);
-       self.transcriptStore.addMessage(DEBUG_SPEAKER, {
-         description: "Run state status",
-         content: formatJsonMessage(runState.status),
-       });
-     }
+      while (runState.status !== "completed" && runState.status !== "requires_action" && !errorStates.includes(runState.status)) {
+        yield new Promise((resolve) => setTimeout(resolve, 2000));
+        runState = yield self.apiConnection.beta.threads.runs.retrieve(self.thread.id, currentRunId);
+        self.transcriptStore.addMessage(DEBUG_SPEAKER, {
+          description: "Run state status",
+          content: formatJsonMessage(runState.status),
+        });
+      }
 
-     if (runState.status === "requires_action") {
-      self.transcriptStore.addMessage(DEBUG_SPEAKER, {
-         description: "Run requires action",
-         content: formatJsonMessage(runState),
-       });
-       yield handleRequiredAction(runState, currentRunId);
-       yield pollRunState(currentRunId);
-     }
+      if (runState.status === "requires_action") {
+        self.transcriptStore.addMessage(DEBUG_SPEAKER, {
+          description: "Run requires action",
+          content: formatJsonMessage(runState),
+        });
+        yield handleRequiredAction(runState, currentRunId);
+        yield pollRunState(currentRunId);
+      }
 
-     if (runState.status === "completed") {
-       const messages = yield self.apiConnection.beta.threads.messages.list(self.thread.id);
+      if (runState.status === "completed") {
+        if (self.uploadFileAfterRun && self.dataUri) {
+          const fileId = yield uploadFile();
+          yield sendFileMessage(fileId);
+          self.uploadFileAfterRun = false;
+          self.dataUri = "";
+          startRun();
+        } else {
+          const messages = yield self.apiConnection.beta.threads.messages.list(self.thread.id);
 
-       const lastMessageForRun = messages.data
-         .filter((msg: Message) => msg.run_id === currentRunId && msg.role === "assistant")
-         .pop();
+          const lastMessageForRun = messages.data
+            .filter((msg: Message) => msg.run_id === currentRunId && msg.role === "assistant")
+            .pop();
 
-         self.transcriptStore.addMessage(DEBUG_SPEAKER, {
-         description: "Run completed, assistant response",
-         content: formatJsonMessage(lastMessageForRun),
-       });
+          self.transcriptStore.addMessage(DEBUG_SPEAKER, {
+            description: "Run completed, assistant response",
+            content: formatJsonMessage(lastMessageForRun),
+          });
 
-       const lastMessageContent = lastMessageForRun?.content[0]?.text?.value;
-       if (lastMessageContent) {
-        self.transcriptStore.addMessage(DAVAI_SPEAKER, { content: lastMessageContent });
-       } else {
+          const lastMessageContent = lastMessageForRun?.content[0]?.text?.value;
+          if (lastMessageContent) {
+            self.transcriptStore.addMessage(DAVAI_SPEAKER, { content: lastMessageContent });
+          } else {
+            self.transcriptStore.addMessage(DAVAI_SPEAKER, {
+              content: "I'm sorry, I don't have a response for that.",
+            });
+          }
+          self.isLoadingResponse = false;
+        }
+      }
+
+      if (errorStates.includes(runState.status)) {
+        self.transcriptStore.addMessage(DEBUG_SPEAKER, {
+          description: "Run failed",
+          content: formatJsonMessage(runState),
+        });
         self.transcriptStore.addMessage(DAVAI_SPEAKER, {
-           content: "I'm sorry, I don't have a response for that.",
-         });
-       }
-       self.isLoadingResponse = false;
-     }
+          content: "I'm sorry, I encountered an error. Please try again.",
+        });
+        self.isLoadingResponse = false;
+      }
+    });
 
-     if (errorStates.includes(runState.status)) {
-      self.transcriptStore.addMessage(DEBUG_SPEAKER, {
-         description: "Run failed",
-         content: formatJsonMessage(runState),
-       });
-       self.transcriptStore.addMessage(DAVAI_SPEAKER, {
-         content: "I'm sorry, I encountered an error. Please try again.",
-       });
-       self.isLoadingResponse = false;
-     }
-   });
+    const uploadFile = flow(function* () {
+      try {
+        const fileFromDataUri = yield convertBase64ToImage(self.dataUri);
+        const uploadedFile = yield self.apiConnection?.files.create({
+          file: fileFromDataUri,
+          purpose: "vision"
+        });
+        return uploadedFile.id;
+      }
+      catch (err) {
+        console.error("Failed to upload image:", err);
+        self.transcriptStore.addMessage(DEBUG_SPEAKER, {description: "Failed to upload image", content: formatJsonMessage(err)});
+      }
+    });
+
+    const sendFileMessage = flow(function* (fileId) {
+      try {
+        const res = yield self.apiConnection.beta.threads.messages.create(self.thread.id, {
+          role: "user",
+          content: [
+            {
+              type: "text",
+              text: "This is an image of a graph. Describe it for the user."
+            },
+            {
+              type: "image_file",
+              image_file: {
+                file_id: fileId
+              }
+            }
+          ]
+        });
+        self.transcriptStore.addMessage(DEBUG_SPEAKER, {description: "Image uploaded", content: formatJsonMessage(res)});
+      } catch (err) {
+        console.error("Failed to send file message:", err);
+        self.transcriptStore.addMessage(DEBUG_SPEAKER, {description: "Failed to send file message", content: formatJsonMessage(err)});
+      }
+    });
 
     const handleRequiredAction = flow(function* (runState, runId) {
       try {
@@ -236,8 +287,18 @@ export const AssistantModel = types
                 const { action, resource, values } = JSON.parse(toolCall.function.arguments);
                 const request = { action, resource, values };
                 self.transcriptStore.addMessage(DEBUG_SPEAKER, { description: "Request sent to CODAP", content: formatJsonMessage(request) });
-                const res = yield codapInterface.sendRequest(request);
+                let res = yield codapInterface.sendRequest(request);
+                // Prepare for uploading of image file after run if the request is to get dataDisplay
+                const isImageSnapshotRequest = action === "get" && resource.match(/^dataDisplay/);
+                if (isImageSnapshotRequest) {
+                  self.uploadFileAfterRun = true;
+                  self.dataUri = res.values.exportDataUri;
+                }
                 self.transcriptStore.addMessage(DEBUG_SPEAKER, { description: "Response from CODAP", content: formatJsonMessage(res) });
+                // remove any exportDataUri value that exists since it can be large and we don't need to send it to the assistant
+                res = isImageSnapshotRequest
+                  ? { ...res, values: { ...res.values, exportDataUri: undefined } }
+                  : res;
                 return { tool_call_id: toolCall.id, output: JSON.stringify(res) };
               } else {
                 return { tool_call_id: toolCall.id, output: "Tool call not recognized." };
@@ -256,6 +317,7 @@ export const AssistantModel = types
       } catch (err) {
         console.error(err);
         self.transcriptStore.addMessage(DEBUG_SPEAKER, {description: "Error taking required action", content: formatJsonMessage(err)});
+        self.isLoadingResponse = false;
       }
     });
 
