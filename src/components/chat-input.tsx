@@ -21,6 +21,7 @@ export const ChatInputComponent = ({disabled, keyboardShortcutEnabled, shortcutK
   const textAreaRef = useRef<HTMLTextAreaElement>(null);
   const fieldsetRef = useRef<HTMLFieldSetElement>(null);
   const speechRecognitionRef = useRef<SpeechRecognition | null>(null);
+  const timeoutRef = useRef<NodeJS.Timeout | null>(null);
 
   const fitTextInputToContent = () => {
     if (textAreaRef.current && fieldsetRef.current) {
@@ -70,12 +71,15 @@ export const ChatInputComponent = ({disabled, keyboardShortcutEnabled, shortcutK
     if (!speechRecognitionRef.current) {
       speechRecognitionRef.current = new SpeechRecognition();
       speechRecognitionRef.current.continuous = true;
-      speechRecognitionRef.current.interimResults = false;
+      speechRecognitionRef.current.interimResults = true;
 
       speechRecognitionRef.current.onresult = (event: SpeechRecognitionEvent) => {
-        const latestResult = event.results[event.results.length - 1];
-        const speechToText = latestResult[0].transcript;
-        setInputValue(prevValue => (`${prevValue} ${speechToText}`).trim());
+        // Update inputValue as the user speaks.
+        const transcript = Array.from(event.results)
+          .map((result) => result[0])
+          .map((result,) => result.transcript)
+          .join("");
+        setInputValue(transcript);
       };
 
       speechRecognitionRef.current.onerror = (event) => {
@@ -97,18 +101,30 @@ export const ChatInputComponent = ({disabled, keyboardShortcutEnabled, shortcutK
       try {
         speechRecognitionRef.current.start();
         // automatically stop after 60 seconds
-        setTimeout(() => {
-          speechRecognitionRef.current?.stop();
-          alertSound("stop");
+        timeoutRef.current = setTimeout(() => {
+          if (dictationEnabled && speechRecognitionRef.current) {
+            setDictationEnabled(false);
+            speechRecognitionRef.current.stop();
+            alertSound("stop");
+          }
         }, 60000);
       } catch (error) {
         console.error("Error starting recognition:", error);
       }
     } else {
       speechRecognitionRef.current.stop();
+      if (timeoutRef.current) {
+        clearTimeout(timeoutRef.current);
+        timeoutRef.current = null;
+      }
     }
 
-    return () => speechRecognitionRef.current?.stop();
+    return () => {
+      if (timeoutRef.current) {
+        clearTimeout(timeoutRef.current);
+      }
+      speechRecognitionRef.current?.stop();
+    };
   }, [dictationEnabled]);
 
   const handleDictateToggle = () => {
