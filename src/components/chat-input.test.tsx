@@ -42,6 +42,8 @@ describe("test chat input component", () => {
     render(<ChatInputComponent keyboardShortcutEnabled={true} shortcutKeys="ctrl+?" onSubmit={mockHandleSubmit} onKeyboardShortcut={jest.fn()} />);
 
     const chatInput = screen.getByTestId("chat-input");
+    const chatInputFieldset = within(chatInput).getByTestId("chat-input-fieldset");
+    expect(chatInputFieldset).toHaveClass("has-focus");
     const chatInputLabel = within(chatInput).getByTestId("chat-input-label");
     expect(chatInputLabel).toHaveAttribute("for", "chat-input");
     expect(chatInputLabel).toHaveClass("visually-hidden");
@@ -74,12 +76,12 @@ describe("test chat input component", () => {
     const chatInput = screen.getByTestId("chat-input");
     const chatInputDictate = within(chatInput).getByTestId("chat-input-dictate");
     expect(chatInputDictate).toHaveAttribute("aria-pressed", "false");
-    expect(chatInputDictate).toHaveAttribute("aria-label", "Start Dictation");
+    expect(chatInputDictate).toHaveAttribute("title", "Start Dictation");
     expect(chatInputDictate).not.toHaveClass("active");
     expect(chatInputDictate).toHaveTextContent("Dictate");
     fireEvent.click(chatInputDictate);
     expect(chatInputDictate).toHaveAttribute("aria-pressed", "true");
-    expect(chatInputDictate).toHaveAttribute("aria-label", "Stop Dictation");
+    expect(chatInputDictate).toHaveAttribute("title", "Stop Dictation");
     expect(chatInputDictate).toHaveClass("active");
     expect(chatInputDictate).toHaveTextContent("Listening...");
     expect(global.SpeechRecognition).toHaveBeenCalled();
@@ -87,7 +89,7 @@ describe("test chat input component", () => {
     expect(srInstance1.start).toHaveBeenCalled();
     fireEvent.click(chatInputDictate);
     expect(chatInputDictate).toHaveAttribute("aria-pressed", "false");
-    expect(chatInputDictate).toHaveAttribute("aria-label", "Start Dictation");
+    expect(chatInputDictate).toHaveAttribute("title", "Start Dictation");
     expect(chatInputDictate).not.toHaveClass("active");
     expect(chatInputDictate).toHaveTextContent("Dictate");
     const srInstance2 = mockSpeechRecognition.mock.results[0].value;

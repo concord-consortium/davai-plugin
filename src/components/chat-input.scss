@@ -5,20 +5,33 @@
   position: relative;
 
   fieldset {
-    border: none;
-    display: flex;
-    flex-wrap: wrap;
-    margin: 0;
-    padding: 0;
-  }
-
-  textarea {
     border: solid 1px $medium-gray;
     border-radius: 6px;
-    flex: 1 0 calc(100% - 22px); // full width of container minus 10px padding and 1px border on either side
-    height: 75px;
-    padding: 8px 10px;
+    margin: 0;
+    min-height: 47px;
+    outline: none;
+    padding: 0 0 40px 0;
+    position: relative;
 
+    &.has-focus {
+      outline: solid 2px $light-teal;
+    }
+  }
+
+  .textarea-container {
+    position: relative;
+    width: 100%;
+  }
+  
+  .textarea-container textarea {
+    border: none;
+    border-radius: 6px;
+    box-sizing: border-box;
+    outline: none;
+    padding: 8px 10px;
+    resize: none;
+    width: 100%;
+  
     &:disabled {
       cursor: not-allowed;
       opacity: .5;
@@ -27,16 +40,17 @@
 
   .buttons-container {
     align-items: center;
+    bottom: 4px;
     display: flex;
     flex-wrap: nowrap;
     height: 32px;
     justify-content: space-between;
-    left: 8px;
+    left: 4px;
     margin: 0;
     padding: 0;
+    pointer-events: none;
     position: absolute;
-    top: 55px;
-    width: calc(100% - 16px);
+    width: calc(100% - 8px);
 
     button {
       border: none;
@@ -50,6 +64,7 @@
       height: 32px;
       margin: 0;
       overflow: hidden;
+      pointer-events: auto;
       text-indent: -9999px;
       width: 32px;
 

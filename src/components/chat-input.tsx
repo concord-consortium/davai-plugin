@@ -12,12 +12,31 @@ interface IProps {
 }
 
 export const ChatInputComponent = ({disabled, keyboardShortcutEnabled, shortcutKeys, onKeyboardShortcut, onSubmit}: IProps) => {
-  const textAreaRef = useRef<HTMLTextAreaElement>(null);
   const [dictationEnabled, setDictationEnabled] = useState(false);
   const [inputValue, setInputValue] = useState("");
+  const kDefaultHeight = 47;
+  const [textareaHasFocus, setTextareaHasFocus] = useState(false);
   const [showError, setShowError] = useState(false);
   const [browserSupportsDictation, setBrowserSupportsDictation] = useState(false);
+  const textAreaRef = useRef<HTMLTextAreaElement>(null);
+  const fieldsetRef = useRef<HTMLFieldSetElement>(null);
   const speechRecognitionRef = useRef<SpeechRecognition | null>(null);
+
+  const fitTextInputToContent = () => {
+    if (textAreaRef.current && fieldsetRef.current) {
+      // Temporarily reset the height to recalculate the correct scrollHeight,
+      // then set the height as needed to show all text.
+      textAreaRef.current.style.height = `${kDefaultHeight}px`;
+      fieldsetRef.current.style.height = `${kDefaultHeight}px`;
+      const newHeight = Math.max(textAreaRef.current.scrollHeight, kDefaultHeight);
+      textAreaRef.current.style.height = `${newHeight}px`;
+      fieldsetRef.current.style.height = `${newHeight}px`;
+    }
+  };
+
+  const handleTextInputChange = (event: React.ChangeEvent<HTMLTextAreaElement>) => {
+    setInputValue(event.target.value);
+  };
 
   const handleSubmit = (event?: FormEvent) => {
     event?.preventDefault();
@@ -68,6 +87,10 @@ export const ChatInputComponent = ({disabled, keyboardShortcutEnabled, shortcutK
   }, []);
 
   useEffect(() => {
+    fitTextInputToContent();
+  }, [inputValue]);
+
+  useEffect(() => {
     if (!speechRecognitionRef.current) return;
 
     if (dictationEnabled) {
@@ -76,6 +99,7 @@ export const ChatInputComponent = ({disabled, keyboardShortcutEnabled, shortcutK
         // automatically stop after 60 seconds
         setTimeout(() => {
           speechRecognitionRef.current?.stop();
+          alertSound("stop");
         }, 60000);
       } catch (error) {
         console.error("Error starting recognition:", error);
@@ -157,33 +181,30 @@ export const ChatInputComponent = ({disabled, keyboardShortcutEnabled, shortcutK
   return (
     <div className="chat-input" data-testid="chat-input">
       <form onSubmit={handleSubmit}>
-        <fieldset>
+        <fieldset
+          className={textareaHasFocus ? "has-focus" : ""}
+          data-testid="chat-input-fieldset"
+          ref={fieldsetRef}
+        >
           <label className="visually-hidden" data-testid="chat-input-label" htmlFor="chat-input">
             Chat Input
           </label>
-          <textarea
-            aria-describedby={showError ? "input-error" : undefined}
-            aria-invalid={showError}
-            data-testid="chat-input-textarea"
-            disabled={disabled}
-            id="chat-input"
-            placeholder={"Ask DAVAI about the data"}
-            ref={textAreaRef}
-            value={inputValue}
-            onChange={(e) => setInputValue(e.target.value)}
-            onKeyUp={handleKeyUp}
-          />
-          {showError &&
-            <div
-              aria-live="assertive"
-              className="error-message"
-              data-testid="input-error"
-              id="input-error"
-              role="alert"
-            >
-              Please enter a message before sending.
-            </div>
-          }
+          <div className="textarea-container">
+            <textarea
+              aria-describedby={showError ? "input-error" : undefined}
+              aria-invalid={showError}
+              data-testid="chat-input-textarea"
+              disabled={disabled}
+              id="chat-input"
+              placeholder={"Ask DAVAI about the data"}
+              ref={textAreaRef}
+              value={inputValue}
+              onBlur={() => setTextareaHasFocus(false)}
+              onChange={handleTextInputChange}
+              onFocus={() => setTextareaHasFocus(true)}
+              onKeyUp={handleKeyUp}
+            />
+          </div>
           <div className="buttons-container">
             <button
               className="send"
@@ -195,11 +216,11 @@ export const ChatInputComponent = ({disabled, keyboardShortcutEnabled, shortcutK
             </button>
             {browserSupportsDictation && 
               <button
-                aria-label={dictationEnabled ? "Stop Dictation" : "Start Dictation"}
                 aria-pressed={dictationEnabled}
                 className={dictationEnabled ? "dictate active" : "dictate"}
                 data-testid="chat-input-dictate"
                 disabled={disabled}
+                title={dictationEnabled ? "Stop Dictation" : "Start Dictation"}
                 type="button"
                 onClick={handleDictateToggle}
               >
@@ -208,6 +229,17 @@ export const ChatInputComponent = ({disabled, keyboardShortcutEnabled, shortcutK
             }
           </div>
         </fieldset>
+        {showError &&
+          <div
+            aria-live="assertive"
+            className="error-message"
+            data-testid="input-error"
+            id="input-error"
+            role="alert"
+          >
+            Please enter a message before sending.
+          </div>
+        }
       </form>
     </div>
   );
