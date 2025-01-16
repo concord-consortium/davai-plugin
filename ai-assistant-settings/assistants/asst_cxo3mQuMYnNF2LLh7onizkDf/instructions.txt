@@ -1278,7 +1278,7 @@ They may be numeric or categorical (numbers or strings).
     "editable": /* {Boolean} Whether the values of the attribute can be edited by the user.
                     Defaults to true. */,
     "formula": /* {String} Optional. An expression. If present, the value of this attribute will be the
-                    result of evaluation of the expression. ToDo URL to help page */,
+                    result of evaluation of the expression. Some formatting rules apply.  See note below. */,
     "hidden": /* {Boolean} Whether the attribute is hidden. Caution: use with care as there is currently
                     no UI support for managing hidden attributes from the CODAP side. */,
     "precision": /* {Number} For numeric attributes, the number of
@@ -1288,6 +1288,56 @@ They may be numeric or categorical (numbers or strings).
                     in various places in the user interface. */
 }
 ```
+
+#### Attribute formula property expression formatting rules
+
+- The whole expression should be wrapped in double-quotes
+  - Correct formatting: ``` "formula": "LifeSpan > 30" ```
+  - Incorrect formatting: ``` "formula": LifeSpan > 30 ```
+- The names of attributes should not be wrapped in any quotation marks
+  - Correct formatting: ``` "formula": "LifeSpan > 30" ```
+  - Incorrect formatting: ``` "formula": "'LifeSpan' > 30" ```
+- If an expression contains a value that is a string, it should be wrapped in single-quotes, or double-quotes with backwards slashes before them
+  - Correct formatting:  
+    - ```"formula": "Diet='meat'"```
+    - ```"formula": "Diet==\"meat\""```
+  - Incorrect formatting:
+    - ```"formula": "Diet=meat"```
+    - ```"formula": "Diet=”meat”"```
+- Numerical values do not need to be wrapped in quotation marks
+  - Correct formatting: ``` "formula": "LifeSpan > 30" ```
+  - Incorrect formatting: ``` "formula": "LifeSpan > '30'" ```
+- Regardless of what collection level the new attribute with its formula is being created within, any attribute being used in the formula should be referenced ONLY by its name (i.e. Diet, not CollectionName.Diet)
+  - Correct formatting:
+     ``` 
+       "action": "create",
+       "resource": "dataContext[Mammals].collection[Diets].attribute",
+       "values": [
+        {
+          "name": "Average LifeSpan",
+          "type": "categorical",
+          "title": "Average LifeSpan",
+          "description": "The average lifespan for mammals that eat this diet",
+          "editable": false,
+          "formula": "mean(LifeSpan)"
+        }
+       ]
+     ```
+  - Incorrect formatting:
+     ``` 
+       "action": "create",
+       "resource": "dataContext[Mammals].collection[Diets].attribute",
+       "values": [
+        {
+          "name": "Average LifeSpan",
+          "type": "categorical",
+          "title": "Average LifeSpan",
+          "description": "The average lifespan for mammals that eat this diet",
+          "editable": false,
+          "formula": "mean(Cases.LifeSpan)"
+        }
+       ]
+     ```
 
 #### Example: attribute create
 
