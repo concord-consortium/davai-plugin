@@ -74,7 +74,7 @@ User Request: "Describe the graph Speed by Month."
 To satisfy this request using CODAP's Data Interactive API, multiple steps are required. You should determine and construct the necessary API calls to complete the task, even if the user does not explicitly mention them. Here are the steps that would fulfill this request:
 
 - Get basic information about the specified graph component by using create_request to construct the arguments for an API call to get information about the graph component
-- Get an exported image snapshot of the rendered graph by using create_request to construct the arguments for an API call that returns a data URI representing an image snapshot of the graph. The structure of such an API call is `{"action": "get", "resource": "dataDisplay[graphId]"}` where `graphId` is the ID of the specified graph component. The API call will result in an image file being uploaded via message attachment for you to analyze. 
+- Get an exported image snapshot of the rendered graph by using create_request to construct the arguments for an API call that returns a data URI representing an image snapshot of the graph. The structure of such an API call is `{"action": "get", "resource": "dataDisplay[graphId]"}` where `graphId` is the ID of the specified graph component. The API call will result in an image file being uploaded via message attachment for you to analyze.
 - Analyze the uploaded image of the rendered graph and prepare a response that describes what the graph looks like, keeping in mind that the user is blind. Use any relevant information from the first API request for basic information about the graph to augment your description if it seems appropriate.
 - Respond to the user with your description of the graph.
 
@@ -723,7 +723,7 @@ the first line contains the names of the attributes.
 
 * _dataContext_ (for create action or to refer to Data Interactive's default
   data context for update, get, and delete actions)
-* _dataContext[name]_ (update, get, delete, notify)
+* _dataContext[dataContextId]_ (update, get, delete, notify)
 * _dataContextList_ (get list)
   * _dataContextByURL_ (create)
 
@@ -825,7 +825,7 @@ Send:
 ```json
 {
   "action": "update",
-  "resource": "dataContext[DataSet]",
+  "resource": "dataContext[123]",
   "values": {
     "title": "A new title for the data set"
   }
@@ -849,7 +849,7 @@ Send:
 ```json
 {
   "action": "update",
-  "resource": "dataContext[DataSet]",
+  "resource": "dataContext[123]",
   "values": {
     "rerandomize": true
   }
@@ -874,7 +874,7 @@ Send:
 ```json
 {
   "action": "delete",
-  "resource": "dataContext[DataSet]"
+  "resource": "dataContext[123]"
 }
 ```
 
@@ -897,7 +897,7 @@ Send:
 ```json
 {
   "action": "get",
-  "resource": "dataContext[DataContext1]"
+  "resource": "dataContext[123]"
 }
 ```
 Receive:
@@ -962,7 +962,7 @@ Send:
 ```json
 {
   "action": "notify",
-  "resource": "dataContext[Mammals]",
+  "resource": "dataContext[123]",
   "values": {
     "request": "setAside",
     "caseIDs": [
@@ -988,7 +988,7 @@ Send:
 ```json
 {
   "action": "notify",
-  "resource": "dataContext[Mammals]",
+  "resource": "dataContext[123]",
   "values": {
     "request": "restoreSetasides"
   }
@@ -1013,7 +1013,7 @@ Send:
 ```json
 {
   "action": "update",
-  "resource": "dataContext[Mammals]",
+  "resource": "dataContext[123]",
   "values": {
     "sort": {
       "attr": "Order",
@@ -1046,9 +1046,9 @@ child collection.
   * _'collection'_ (create)<sup>1</sup>
   * _'collection[name]'_ (update, get, delete)<sup>1</sup>
   * _'collectionList'_ (get list)<sup>1</sup>
-  * _'dataContext[name].collection'_ (create)
-  * _'dataContext[name].collection[name]'_ (update, get, delete)
-  * _'dataContext[name].collectionList'_ (get list)
+  * _'dataContext[dataContextId].collection'_ (create)
+  * _'dataContext[dataContextId].collection[name]'_ (update, get, delete)
+  * _'dataContext[dataContextId].collectionList'_ (get list)
 
 <sup>1</sup> Pattern applies to default data context
 
@@ -1156,7 +1156,7 @@ Send:
 ```json
 {
   "action": "update",
-  "resource": "dataContext[DataCard2].collection[People]",
+  "resource": "dataContext[123].collection[People]",
   "values": {
     "title": "Students",
     "labels": {
@@ -1180,7 +1180,7 @@ Send:
 ```json
 {
   "action": "get",
-  "resource": "dataContext[DataCard2].collection[People]"
+  "resource": "dataContext[123].collection[People]"
 }
 ```
 
@@ -1208,7 +1208,7 @@ Send:
 ```json
 {
   "action": "delete",
-  "resource": "dataContext[DataCard].collection[People]"
+  "resource": "dataContext[123].collection[People]"
 }
 ```
 
@@ -1225,7 +1225,7 @@ Send:
 ```json
 {
   "action": "get",
-  "resource": "dataContext[DataCard2].collectionList"
+  "resource": "dataContext[123].collectionList"
 }
 ```
 
@@ -1259,10 +1259,10 @@ They may be numeric or categorical (numbers or strings).
   * _'collection[name].attribute'_ (create)<sup>1</sup>
   * _'collection[name].attribute[name]'_ (update, get, delete)<sup>1</sup>
   * _'collection[name].attributeList'_ (get list)<sup>1</sup>
-  * _'dataContext[name].collection[name].attribute'_ (create)
-  * _'dataContext[name].collection[name].attribute[name]'_ (update, get,
+  * _'dataContext[dataContextId].collection[name].attribute'_ (create)
+  * _'dataContext[dataContextId].collection[name].attribute[name]'_ (update, get,
   delete)
-  * _'dataContext[name].collection[name].attributeList'_ (get list)
+  * _'dataContext[dataContextId].collection[name].attributeList'_ (get list)
 
 <sup>1</sup> Pattern applies to default data context
 
@@ -1310,7 +1310,7 @@ They may be numeric or categorical (numbers or strings).
   - Correct formatting: ` "formula": "LifeSpan > 30" `
   - Incorrect formatting: ` "formula": "'LifeSpan' > 30" `
 - If an expression contains a value that is a string, it should be wrapped in single-quotes, or double-quotes with backwards slashes before them
-  - Correct formatting:  
+  - Correct formatting:
     - `"formula": "Diet='meat'"`
     - `"formula": "Diet==\"meat\""`
   - Incorrect formatting:
@@ -1321,9 +1321,9 @@ They may be numeric or categorical (numbers or strings).
   - Incorrect formatting: ` "formula": "LifeSpan > '30'" `
 - Regardless of what collection level the new attribute with its formula is being created within, any attribute being used in the formula should be referenced ONLY by its name (i.e. Diet, not CollectionName.Diet)
   - Correct formatting:
-     ``` 
+     ```
        "action": "create",
-       "resource": "dataContext[Mammals].collection[Diets].attribute",
+       "resource": "dataContext[123].collection[Diets].attribute",
        "values": [
         {
           "name": "Average LifeSpan",
@@ -1336,9 +1336,9 @@ They may be numeric or categorical (numbers or strings).
        ]
      ```
   - Incorrect formatting:
-     ``` 
+     ```
        "action": "create",
-       "resource": "dataContext[Mammals].collection[Diets].attribute",
+       "resource": "dataContext[123].collection[Diets].attribute",
        "values": [
         {
           "name": "Average LifeSpan",
@@ -1361,7 +1361,7 @@ Send:
 ```json
 {
   "action": "create",
-  "resource": "dataContext[DataCard2].collection[Measurements].attribute",
+  "resource": "dataContext[123].collection[Measurements].attribute",
   "values": [
     {
       "name": "sampleDate",
@@ -1416,7 +1416,7 @@ Send:
 ```json
 {
   "action": "update",
-  "resource": "dataContext[DataCard2].collection[People].attribute[Height]",
+  "resource": "dataContext[123].collection[People].attribute[Height]",
   "values": {
       "precision": 2
     }
@@ -1443,7 +1443,7 @@ Send:
 ```json
 {
   "action": "get",
-  "resource": "dataContext[DataCard2].collection[People].attribute[Height]"
+  "resource": "dataContext[123].collection[People].attribute[Height]"
 }
 ```
 
@@ -1468,7 +1468,7 @@ Send:
 ```json
 {
   "action": "delete",
-  "resource": "dataContext[DataCard].collection[Measurements].attribute[Flavor]"
+  "resource": "dataContext[123].collection[Measurements].attribute[Flavor]"
 }
 ```
 
@@ -1486,7 +1486,7 @@ Send:
 ```json
 {
   "action": "get",
-  "resource": "dataContext[DataCard2].collection[Measurements].attributeList"
+  "resource": "dataContext[123].collection[Measurements].attributeList"
 }
 ```
 
@@ -1529,8 +1529,8 @@ an attribute from one location to another within the data set.
 
 **Resource Selector Patterns**:
   * _'collection[name].attributeLocation'_ (update)
-  * _'dataContext[name].collection[name].attributeLocation'_ (update)
-  * _'dataContext[name].attributeLocation'_ (update)
+  * _'dataContext[dataContextId].collection[name].attributeLocation'_ (update)
+  * _'dataContext[dataContextId].attributeLocation'_ (update)
 
 #### The attributeLocation object
 
@@ -1554,14 +1554,14 @@ an individual member of a larger aggregate.
 
 **Resource Selector Patterns**:
 
-  * _'dataContext[name].collection[name].case'_ (create, update)
-  * _'dataContext[name].collection[name].allCases'_ (delete)
-  * _'dataContext[name].collection[name].caseByID[id]'_ (get, update, delete)
-  * _'dataContext[name].collection[name].caseByIndex[index]'_ (get, update, delete)
-  * _'dataContext[name].collection[name].caseCount_ (get)
-  * _'dataContext[name].collection[name].caseSearch[search-expression]'_ (get)<sup>1</sup>
-  * _'dataContext[name].collection[name].caseFormulaSearch[search-expression]'_ (get)
-  * _'dataContext[name].caseByID[id]'_ (get, update, delete)
+  * _'dataContext[dataContextId].collection[name].case'_ (create, update)
+  * _'dataContext[dataContextId].collection[name].allCases'_ (delete)
+  * _'dataContext[dataContextId].collection[name].caseByID[id]'_ (get, update, delete)
+  * _'dataContext[dataContextId].collection[name].caseByIndex[index]'_ (get, update, delete)
+  * _'dataContext[dataContextId].collection[name].caseCount_ (get)
+  * _'dataContext[dataContextId].collection[name].caseSearch[search-expression]'_ (get)<sup>1</sup>
+  * _'dataContext[dataContextId].collection[name].caseFormulaSearch[search-expression]'_ (get)
+  * _'dataContext[dataContextId].caseByID[id]'_ (get, update, delete)
 
 <sup>1</sup> Deprecated: use caseFormulaSearch.
 
@@ -1918,12 +1918,12 @@ refers to them (resource clause: 'caseID'), or they can be accessed by search
 **Supported Actions**: create, update, delete, get
 
 **Resource Selection Patterns**:
-  * _'dataContext[name].item'_ (create, update)
-  * _'dataContext[name].item[index]'_ (get, update, delete)
-  * _'dataContext[name].itemByID[id]'_ (get, update, delete)
-  * _'dataContext[name].itemByCaseID[id]'_ (get, update, delete)
-  * _'dataContext[name].itemSearch[expr]'_ (get, delete)
-  * _'dataContext[name].itemCount'_ (get)
+  * _'dataContext[dataContextId].item'_ (create, update)
+  * _'dataContext[dataContextId].item[index]'_ (get, update, delete)
+  * _'dataContext[dataContextId].itemByID[id]'_ (get, update, delete)
+  * _'dataContext[dataContextId].itemByCaseID[id]'_ (get, update, delete)
+  * _'dataContext[dataContextId].itemSearch[expr]'_ (get, delete)
+  * _'dataContext[dataContextId].itemCount'_ (get)
 
 #### The item object
 
@@ -2314,7 +2314,7 @@ This API is for managing selection of cases in CODAP.
 **Supported Actions**: create, update, get
 
 **Resource Selection Patterns**:
-  * _'dataContext[name].selectionList'_ (create, update, get)
+  * _'dataContext[dataContextId].selectionList'_ (create, update, get)
   * _'selectionList'_ (create, update, get for default data context)
 
 #### The selectionList object
@@ -2337,7 +2337,7 @@ Send:
 ```json
 {
   "action": "create",
-  "resource": "dataContext[name].selectionList",
+  "resource": "dataContext[dataContextId].selectionList",
   "values": [
       25,
       29,
@@ -2362,7 +2362,7 @@ Send:
 ```json
 {
   "action": "update",
-  "resource": "dataContext[name].selectionList",
+  "resource": "dataContext[dataContextId].selectionList",
   "values": [
       25,
       29,
@@ -2384,7 +2384,7 @@ Send:
 ```json
 {
   "action": "get",
-  "resource": "dataContext[name].selectionList"
+  "resource": "dataContext[dataContextId].selectionList"
 }
 ```
 
@@ -3673,7 +3673,7 @@ Notifications may or may not provide some information about the event.
 
 **Resource Selector Patterns**:
 
-  * _'dataContext[dataContextName].collection'_ (notify)
+  * _'dataContext[dataContextId].collection'_ (notify)
 
 #### The collection change object
 
@@ -3723,7 +3723,7 @@ Notifications may or may not provide some information about the event.
 
 **Resource Selector Patterns**:
 
-  * _'dataContext[dataContextName].attribute'_ (notify)
+  * _'dataContext[dataContextId].attribute'_ (notify)
 
 #### The Attribute change notification object
 
@@ -3773,7 +3773,7 @@ Notifications may or may not provide some information about the event.
 
 **Resource Selector Patterns**:
 
-  * _'dataContext[dataContextName].case'_ (notify)
+  * _'dataContext[dataContextId].case'_ (notify)
 
 #### The case change notification object
 
@@ -3828,7 +3828,7 @@ a notice.
 
 **Resource Selector Patterns**:
 
-  * _'dataContext[dataContextName].selectionList'_ (notify)
+  * _'dataContext[dataContextId].selectionList'_ (notify)
 
 #### The Selection list change notification object
 
