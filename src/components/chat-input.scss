@@ -22,7 +22,7 @@
     position: relative;
     width: 100%;
   }
-  
+
   .textarea-container textarea {
     border: none;
     border-radius: 6px;
@@ -31,7 +31,7 @@
     padding: 8px 10px;
     resize: none;
     width: 100%;
-  
+
     &:disabled {
       cursor: not-allowed;
       opacity: .5;
@@ -73,6 +73,13 @@
         margin-left: auto;
         order: 2;
       }
+
+      &.cancel {
+        background: red 4px 4px;
+        margin-left: auto;
+        order: 2;
+      }
+
       &.dictate {
         background: transparent url(../assets/voice-typing-icon.svg) 0 0 no-repeat;
         margin-right: auto;

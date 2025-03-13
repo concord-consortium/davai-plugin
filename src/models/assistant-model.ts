@@ -4,7 +4,6 @@ import { Message } from "openai/resources/beta/threads/messages";
 import { codapInterface, getDataContext, getListOfDataContexts } from "@concord-consortium/codap-plugin-api";
 import { DAVAI_SPEAKER, DEBUG_SPEAKER } from "../constants";
 import { convertBase64ToImage, formatJsonMessage } from "../utils/utils";
-import { requestThreadDeletion } from "../utils/openai-utils";
 import { ChatTranscriptModel } from "./chat-transcript-model";
 
 const OpenAIType = types.custom({
@@ -35,9 +34,10 @@ const OpenAIType = types.custom({
  * @property {string} assistantId - The unique ID of the assistant being used, or `null` if not initialized.
  * @property {Object} apiConnection - The API connection object for interacting with the assistant
  * @property {Object|null} thread - The assistant's thread used for the current chat, or `null` if no thread is active.
+ * @property {string|null} run - The current/last run, or `undefined` if no run is active.
  * @property {ChatTranscriptModel} transcriptStore - The assistant's chat transcript store for recording and managing chat messages.
  * @property {boolean} isLoadingResponse - Flag indicating whether the assistant is currently processing a response.
- * @property {string[]} messageQueue - Queue of messages to be sent to the assistant. Used if CODAP generates notifications while assistant is processing a response.
+ * @property {string[]} codapNotificationQueue - Queue of notifications to be sent to the assistant. Used if CODAP generates notifications while assistant is processing a response.
  * @property {boolean} uploadFileAfterRun - Flag indicating whether to upload a file after the assistant completes a run.
  * @property {string} dataUri - The data URI of the file to be uploaded.
  */
@@ -46,10 +46,12 @@ export const AssistantModel = types
     apiConnection: OpenAIType,
     assistant: types.maybe(types.frozen()),
     assistantId: types.string,
+    cancellingRunId: types.maybe(types.string),
     isLoadingResponse: types.optional(types.boolean, false),
     thread: types.maybe(types.frozen()),
+    run: types.maybe(types.frozen()),
     transcriptStore: ChatTranscriptModel,
-    messageQueue: types.array(types.string),
+    codapNotificationQueue: types.array(types.string),
     uploadFileAfterRun: false,
     dataUri: "",
   })
@@ -120,7 +122,7 @@ export const AssistantModel = types
     const sendDataCtxChangeInfo = flow(function* (msg: string) {
       try {
         if (self.isLoadingResponse) {
-          self.messageQueue.push(msg);
+          self.codapNotificationQueue.push(msg);
         } else {
           yield sendCODAPDocumentInfo(msg);
         }
@@ -167,7 +169,8 @@ export const AssistantModel = types
         const run = yield self.apiConnection.beta.threads.runs.create(self.thread.id, {
           assistant_id: self.assistant.id,
         });
-        yield pollRunState(run.id);
+        self.run = run;
+        yield pollRunState();
       } catch (err) {
         console.error("Failed to complete run:", err);
         self.transcriptStore.addMessage(DEBUG_SPEAKER, {
@@ -177,22 +180,135 @@ export const AssistantModel = types
       }
     });
 
-    const pollRunState: (currentRunId: string) => Promise<any> = flow(function* (currentRunId) {
-      let runState = yield self.apiConnection.beta.threads.runs.retrieve(self.thread.id, currentRunId);
+    const cancelRun = flow(function* () {
+      try {
+        self.setIsLoadingResponse(false);
+
+        if (!self.run) {
+          // wait until run is defined to go through with cancellation
+          yield new Promise((resolve) => setTimeout(resolve, 2000));
+        }
+
+        const cancelRunId = self.run.id;
+        let runState = yield self.apiConnection.beta.threads.runs.retrieve(self.thread.id, cancelRunId);
+
+        if (["cancelled", "completed", "failed"].includes(runState.status)) {
+          self.run = undefined;
+          return;
+        }
+
+        if (runState.status === "cancelling") {
+          self.run = undefined;
+          backgroundPollCancel(cancelRunId);
+        } else {
+          const cancelResponse = yield self.apiConnection.beta.threads.runs.cancel(self.thread.id, cancelRunId);
+          self.transcriptStore.addMessage(DEBUG_SPEAKER, {
+            description: "User cancelled run",
+            content: formatJsonMessage(cancelResponse),
+          });
+          self.run = undefined;
+          backgroundPollCancel(cancelResponse.id);
+        }
+      } catch (err: any) {
+        // If the error message is "Cannot cancel run with status 'cancelled'",
+        // treat it as a no-op success instead of a real failure
+        if (err.message === "Cannot cancel run with status 'cancelled'.") {
+          console.log("Run was already canceled on server; ignoring 400 error.");
+          // Do the same local cleanup
+          self.run = undefined;
+          self.isLoadingResponse = false;
+        } else {
+          console.error("Failed to cancel the run:", err);
+          self.transcriptStore.addMessage(DEBUG_SPEAKER, {
+            description: "Failed to cancel run",
+            content: formatJsonMessage(err),
+          });
+        }
+      }
+    });
+
+    const backgroundPollCancel = flow(function* (runId: string) {
+      try {
+        const startTime = Date.now();
+        let runState = yield self.apiConnection.beta.threads.runs.retrieve(self.thread.id, runId);
+        const MAX_WAIT_TIME = 30_000; // 30 seconds
+
+        while (runState.status === "cancelling") {
+          const elapsed = Date.now() - startTime;
+          if (elapsed >= MAX_WAIT_TIME) {
+            self.transcriptStore.addMessage(DEBUG_SPEAKER, {
+              description: "Run stuck in 'cancelling'",
+              content: formatJsonMessage(runState),
+            });
+            yield clearThreadAndPreserveHistory();
+            self.transcriptStore.addMessage(DAVAI_SPEAKER, {
+              content: "I'm having trouble cancelling your request. Please wait while I begin a new conversation while preserving our chat history...",
+            });
+            break;
+          }
+          yield new Promise(resolve => setTimeout(resolve, 2000));
+          runState = yield self.apiConnection.beta.threads.runs.retrieve(self.thread.id, runId);
+        }
+
+        self.transcriptStore.addMessage(DEBUG_SPEAKER, {
+          description: `Background polling for run ${runId} ended`,
+          content: `Final status: ${runState.status}`
+        });
+      }
+      catch (err) {
+        // If there's an API error, just log it
+        console.error("Background poll cancel error:", err);
+      }
+    });
+
+    const clearThreadAndPreserveHistory = flow(function* () {
+      try {
+        const chatHistory = self.transcriptStore.messages;
+        yield deleteThread();
+        yield createThread();
+        const messageSent = yield self.apiConnection.beta.threads.messages.create(self.thread.id, {
+          role: "user",
+          content: `This is a system message. A previous thread was deleted because it took to long to cancel a run.
+          Here is the preserved chat history: ${chatHistory}`,
+        });
+        self.transcriptStore.addMessage(DEBUG_SPEAKER, {description: "Thread cleared and history preserved", content: formatJsonMessage(messageSent)});
+      }
+      catch (err) {
+        console.error("Failed to clear thread and preserve history:", err);
+        self.transcriptStore.addMessage(DEBUG_SPEAKER, {description: "Failed to clear thread and preserve history", content: formatJsonMessage(err)});
+      }
+    });
+
+    const pollRunState: () => Promise<any> = flow(function* () {
+      if (!self.run) return; // just in case we canceled already
+
+      const runId = self.run.id;
+      let runState = yield self.apiConnection.beta.threads.runs.retrieve(self.thread.id, runId);
+
       self.transcriptStore.addMessage(DEBUG_SPEAKER, {
         description: "Run state status",
         content: formatJsonMessage(runState.status),
       });
 
-      const errorStates = ["failed", "cancelled", "incomplete"];
+      const stopPollingStates = ["completed", "requires_action", "cancelled", "cancelling"];
+      const errorStates = ["failed", "incomplete"];
 
-      while (runState.status !== "completed" && runState.status !== "requires_action" && !errorStates.includes(runState.status)) {
+      while (!stopPollingStates.includes(runState.status) && !errorStates.includes(runState.status)) {
         yield new Promise((resolve) => setTimeout(resolve, 2000));
-        runState = yield self.apiConnection.beta.threads.runs.retrieve(self.thread.id, currentRunId);
+        runState = yield self.apiConnection.beta.threads.runs.retrieve(self.thread.id, runId);
+
         self.transcriptStore.addMessage(DEBUG_SPEAKER, {
-          description: "Run state status",
+          description: "Run state status (from pollRunState)",
           content: formatJsonMessage(runState.status),
         });
+      }
+
+      if (runState.status === "cancelled") {
+        self.transcriptStore.addMessage(DEBUG_SPEAKER, {
+          description: "Run cancelled (from pollRunState)",
+          content: formatJsonMessage(runState),
+        });
+        self.setIsLoadingResponse(false);
       }
 
       if (runState.status === "requires_action") {
@@ -200,8 +316,8 @@ export const AssistantModel = types
           description: "Run requires action",
           content: formatJsonMessage(runState),
         });
-        yield handleRequiredAction(runState, currentRunId);
-        yield pollRunState(currentRunId);
+        yield handleRequiredAction(runState);
+        yield pollRunState();
       }
 
       if (runState.status === "completed") {
@@ -215,7 +331,7 @@ export const AssistantModel = types
           const messages = yield self.apiConnection.beta.threads.messages.list(self.thread.id);
 
           const lastMessageForRun = messages.data
-            .filter((msg: Message) => msg.run_id === currentRunId && msg.role === "assistant")
+            .filter((msg: Message) => msg.run_id === runId && msg.role === "assistant")
             .pop();
 
           self.transcriptStore.addMessage(DEBUG_SPEAKER, {
@@ -231,6 +347,7 @@ export const AssistantModel = types
               content: "I'm sorry, I don't have a response for that.",
             });
           }
+          self.run = undefined;
           self.setIsLoadingResponse(false);
         }
       }
@@ -243,6 +360,7 @@ export const AssistantModel = types
         self.transcriptStore.addMessage(DAVAI_SPEAKER, {
           content: "I'm sorry, I encountered an error. Please try again.",
         });
+        self.run = undefined;
         self.setIsLoadingResponse(false);
       }
     });
@@ -286,7 +404,7 @@ export const AssistantModel = types
       }
     });
 
-    const handleRequiredAction = flow(function* (runState, runId) {
+    const handleRequiredAction = flow(function* (runState) {
       try {
         const toolOutputs = runState.required_action?.submit_tool_outputs.tool_calls
           ? yield Promise.all(
@@ -318,13 +436,14 @@ export const AssistantModel = types
         self.transcriptStore.addMessage(DEBUG_SPEAKER, {description: "Tool outputs being submitted", content: formatJsonMessage(toolOutputs)});
         if (toolOutputs) {
           const submittedToolOutputsRes = yield self.apiConnection.beta.threads.runs.submitToolOutputs(
-            self.thread.id, runId, { tool_outputs: toolOutputs }
+            self.thread.id, self.run.id, { tool_outputs: toolOutputs }
           );
           self.transcriptStore.addMessage(DEBUG_SPEAKER, {description: "Tool outputs received", content: formatJsonMessage(submittedToolOutputsRes)});
         }
       } catch (err) {
         console.error(err);
         self.transcriptStore.addMessage(DEBUG_SPEAKER, {description: "Error taking required action", content: formatJsonMessage(err)});
+        self.run = undefined;
         self.setIsLoadingResponse(false);
       }
     });
@@ -333,6 +452,8 @@ export const AssistantModel = types
       try {
         const newThread = yield self.apiConnection.beta.threads.create();
         self.thread = newThread;
+        self.run = undefined;
+        self.isLoadingResponse = false;
       } catch (err) {
         console.error("Error creating thread:", err);
       }
@@ -346,26 +467,23 @@ export const AssistantModel = types
         }
 
         const threadId = self.thread.id;
-        const response = yield requestThreadDeletion(threadId);
-
-        if (response.ok) {
-          self.thread = undefined;
-        } else {
-          console.warn("Failed to delete thread, unexpected response:", response.status);
-        }
+        yield self.apiConnection.beta.threads.del(threadId);
+        self.thread = undefined;
+        self.run = undefined;
+        self.isLoadingResponse = false;
       } catch (err) {
         console.error("Error deleting thread:", err);
       }
     });
 
-    return { createThread, deleteThread, initializeAssistant, handleMessageSubmit, sendDataCtxChangeInfo, sendCODAPDocumentInfo };
+    return { createThread, deleteThread, initializeAssistant, handleMessageSubmit, sendDataCtxChangeInfo, sendCODAPDocumentInfo, cancelRun };
   })
   .actions((self) => ({
     afterCreate() {
       onSnapshot(self, async () => {
-        if (!self.isLoadingResponse && self.messageQueue.length > 0) {
-          const allMsgs = self.messageQueue.join("\n");
-          self.messageQueue.clear();
+        if (!self.isLoadingResponse && self.codapNotificationQueue.length > 0) {
+          const allMsgs = self.codapNotificationQueue.join("\n");
+          self.codapNotificationQueue.clear();
           await self.sendCODAPDocumentInfo(allMsgs);
         }
       });

@@ -37,9 +37,10 @@ beforeEach(() => {
 
 describe("test chat input component", () => {
   const mockHandleSubmit = jest.fn();
+  const mockHandleCancel = jest.fn();
 
   it("renders a textarea and submit button that lets user send chat messages", () => {
-    render(<ChatInputComponent keyboardShortcutEnabled={true} shortcutKeys="ctrl+?" onSubmit={mockHandleSubmit} onKeyboardShortcut={jest.fn()} />);
+    render(<ChatInputComponent keyboardShortcutEnabled={true} isLoadingResponse={false} shortcutKeys="ctrl+?" onSubmit={mockHandleSubmit} onCancel={mockHandleCancel} onKeyboardShortcut={jest.fn()} />);
 
     const chatInput = screen.getByTestId("chat-input");
     const chatInputFieldset = within(chatInput).getByTestId("chat-input-fieldset");
@@ -71,7 +72,7 @@ describe("test chat input component", () => {
   });
 
   it ("renders a dictate button that lets user dictate chat messages", () => {
-    render(<ChatInputComponent keyboardShortcutEnabled={true} shortcutKeys="ctrl+?" onSubmit={mockHandleSubmit} onKeyboardShortcut={jest.fn()} />);
+    render(<ChatInputComponent keyboardShortcutEnabled={true} isLoadingResponse={false} shortcutKeys="ctrl+?" onSubmit={mockHandleSubmit} onCancel={mockHandleCancel} onKeyboardShortcut={jest.fn()} />);
 
     const chatInput = screen.getByTestId("chat-input");
     const chatInputDictate = within(chatInput).getByTestId("chat-input-dictate");

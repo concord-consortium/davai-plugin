@@ -127,6 +127,10 @@ export const App = observer(() => {
 
   };
 
+  const handleCancelRun = async () => {
+    assistantStore.cancelRun();
+  };
+
   const handleCreateThread = async () => {
     const confirmCreate = window.confirm("Are you sure you want to create a new thread? If you do, you will lose any existing chat history.");
     if (!confirmCreate) return;
@@ -198,9 +202,11 @@ export const App = observer(() => {
       }
       <ChatInputComponent
         disabled={(!assistantStore.thread && !appConfig.isAssistantMocked) || assistantStore.isLoadingResponse}
+        isLoadingResponse={assistantStore.isLoadingResponse && !appConfig.isAssistantMocked}
         keyboardShortcutEnabled={keyboardShortcutEnabled}
         shortcutKeys={keyboardShortcutKeys}
         onSubmit={handleChatInputSubmit}
+        onCancel={handleCancelRun}
         onKeyboardShortcut={handleFocusShortcut}
       />
       <ReadAloudMenu

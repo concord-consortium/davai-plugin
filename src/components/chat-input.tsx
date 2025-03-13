@@ -5,13 +5,16 @@ import "./chat-input.scss";
 
 interface IProps {
   disabled?: boolean;
+  isLoadingResponse?: boolean;
   keyboardShortcutEnabled: boolean;
   shortcutKeys: string;
+  onCancel: () => void;
   onKeyboardShortcut: () => void;
   onSubmit: (messageText: string) => void;
 }
 
-export const ChatInputComponent = ({disabled, keyboardShortcutEnabled, shortcutKeys, onKeyboardShortcut, onSubmit}: IProps) => {
+export const ChatInputComponent = ({disabled, isLoadingResponse, keyboardShortcutEnabled,
+    shortcutKeys, onCancel, onKeyboardShortcut, onSubmit}: IProps) => {
   const [dictationEnabled, setDictationEnabled] = useState(false);
   const [inputValue, setInputValue] = useState("");
   const kDefaultHeight = 47;
@@ -246,15 +249,28 @@ export const ChatInputComponent = ({disabled, keyboardShortcutEnabled, shortcutK
             />
           </div>
           <div className="buttons-container">
-            <button
-              className="send"
-              data-testid="chat-input-send"
-              disabled={disabled}
-              type="submit"
-            >
-              Send
-            </button>
-            {browserSupportsDictation && 
+            { isLoadingResponse ?
+              <button
+                className="cancel"
+                data-testid="chat-input-cancel"
+                type="button"
+                aria-label="Cancel streaming"
+                onClick={onCancel}
+              >
+                Cancel Streaming
+              </button>
+              :
+              <button
+                className="send"
+                data-testid="chat-input-send"
+                disabled={disabled}
+                type="submit"
+                aria-label="Send message"
+              >
+                Send
+              </button>
+            }
+            {browserSupportsDictation &&
               <button
                 aria-pressed={dictationEnabled}
                 className={dictationEnabled ? "dictate active" : "dictate"}
