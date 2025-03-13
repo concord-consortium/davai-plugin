@@ -183,38 +183,17 @@ export const AssistantModel = types
     const cancelRun = flow(function* () {
       try {
         self.setIsLoadingResponse(false);
-
-        if (!self.run) {
-          // wait until run is defined to go through with cancellation
-          yield new Promise((resolve) => setTimeout(resolve, 2000));
-        }
-
-        const cancelRunId = self.run.id;
-        let runState = yield self.apiConnection.beta.threads.runs.retrieve(self.thread.id, cancelRunId);
-
-        if (["cancelled", "completed", "failed"].includes(runState.status)) {
-          self.run = undefined;
-          return;
-        }
-
-        if (runState.status === "cancelling") {
-          self.run = undefined;
-          backgroundPollCancel(cancelRunId);
-        } else {
-          const cancelResponse = yield self.apiConnection.beta.threads.runs.cancel(self.thread.id, cancelRunId);
-          self.transcriptStore.addMessage(DEBUG_SPEAKER, {
-            description: "User cancelled run",
-            content: formatJsonMessage(cancelResponse),
-          });
-          self.run = undefined;
-          backgroundPollCancel(cancelResponse.id);
-        }
+        self.transcriptStore.addMessage(DAVAI_SPEAKER, {
+          content: "I am cancelling your request, one moment..."
+        });
+        const cancelResponse = yield self.apiConnection.beta.threads.runs.cancel(self.thread.id, self.run.id);
+        self.transcriptStore.addMessage(DEBUG_SPEAKER, {
+          description: "User cancelled run",
+          content: formatJsonMessage(cancelResponse),
+        });
       } catch (err: any) {
-        // If the error message is "Cannot cancel run with status 'cancelled'",
-        // treat it as a no-op success instead of a real failure
-        if (err.message === "Cannot cancel run with status 'cancelled'.") {
+        if (err === "BadRequestError: 400 Cannot cancel run with status 'cancelled'.") {
           console.log("Run was already canceled on server; ignoring 400 error.");
-          // Do the same local cleanup
           self.run = undefined;
           self.isLoadingResponse = false;
         } else {
@@ -241,19 +220,25 @@ export const AssistantModel = types
               content: formatJsonMessage(runState),
             });
             yield clearThreadAndPreserveHistory();
-            self.transcriptStore.addMessage(DAVAI_SPEAKER, {
-              content: "I'm having trouble cancelling your request. Please wait while I begin a new conversation while preserving our chat history...",
-            });
             break;
           }
+
           yield new Promise(resolve => setTimeout(resolve, 2000));
           runState = yield self.apiConnection.beta.threads.runs.retrieve(self.thread.id, runId);
+          self.transcriptStore.addMessage(DEBUG_SPEAKER, {
+            content: "Still waiting for run to cancel",
+          });
         }
 
         self.transcriptStore.addMessage(DEBUG_SPEAKER, {
-          description: `Background polling for run ${runId} ended`,
+          description: `Polling of run ${runId} ended`,
           content: `Final status: ${runState.status}`
         });
+
+        self.transcriptStore.addMessage(DAVAI_SPEAKER, {
+          content: "Your request was cancelled."
+        });
+        self.run.id = undefined;
       }
       catch (err) {
         // If there's an API error, just log it
@@ -263,15 +248,26 @@ export const AssistantModel = types
 
     const clearThreadAndPreserveHistory = flow(function* () {
       try {
-        const chatHistory = self.transcriptStore.messages;
-        yield deleteThread();
-        yield createThread();
-        const messageSent = yield self.apiConnection.beta.threads.messages.create(self.thread.id, {
-          role: "user",
-          content: `This is a system message. A previous thread was deleted because it took to long to cancel a run.
-          Here is the preserved chat history: ${chatHistory}`,
+        self.transcriptStore.addMessage(DAVAI_SPEAKER, {
+          content: "I encountered an error while trying to cancel your request. Please wait while I begin a new conversation...",
         });
-        self.transcriptStore.addMessage(DEBUG_SPEAKER, {description: "Thread cleared and history preserved", content: formatJsonMessage(messageSent)});
+
+        const chatHistory = self.transcriptStore.messages
+          .filter(msg => msg.speaker !== DEBUG_SPEAKER)
+          .map(msg => ({
+            speaker: msg.speaker,
+            content: msg.messageContent.content,
+            timestamp: msg.timestamp
+          }));
+
+        yield createThread().then(async () => {
+          const messageSent = await self.apiConnection.beta.threads.messages.create(self.thread.id, {
+            role: "user",
+            content: `This is a system message. A previous thread was deleted because it took to long to cancel a run.
+            Here is the preserved chat history: ${chatHistory}`,
+          });
+          self.transcriptStore.addMessage(DEBUG_SPEAKER, {description: "Thread cleared and history sent to LLM", content: formatJsonMessage(messageSent)});
+        });
       }
       catch (err) {
         console.error("Failed to clear thread and preserve history:", err);
@@ -290,10 +286,15 @@ export const AssistantModel = types
         content: formatJsonMessage(runState.status),
       });
 
-      const stopPollingStates = ["completed", "requires_action", "cancelled", "cancelling"];
+      const stopPollingStates = ["completed", "requires_action", "cancelled"];
       const errorStates = ["failed", "incomplete"];
 
       while (!stopPollingStates.includes(runState.status) && !errorStates.includes(runState.status)) {
+        if (runState.status === "cancelling") {
+          backgroundPollCancel(runId);
+          return;
+        }
+
         yield new Promise((resolve) => setTimeout(resolve, 2000));
         runState = yield self.apiConnection.beta.threads.runs.retrieve(self.thread.id, runId);
 
@@ -301,14 +302,6 @@ export const AssistantModel = types
           description: "Run state status (from pollRunState)",
           content: formatJsonMessage(runState.status),
         });
-      }
-
-      if (runState.status === "cancelled") {
-        self.transcriptStore.addMessage(DEBUG_SPEAKER, {
-          description: "Run cancelled (from pollRunState)",
-          content: formatJsonMessage(runState),
-        });
-        self.setIsLoadingResponse(false);
       }
 
       if (runState.status === "requires_action") {
@@ -350,6 +343,18 @@ export const AssistantModel = types
           self.run = undefined;
           self.setIsLoadingResponse(false);
         }
+      }
+
+      if (runState.status === "cancelled") {
+        self.transcriptStore.addMessage(DEBUG_SPEAKER, {
+          description: "Run cancelled",
+          content: formatJsonMessage(runState),
+        });
+        self.transcriptStore.addMessage(DAVAI_SPEAKER, {
+          content: "Your request was cancelled."
+        });
+        self.run = undefined;
+        self.setIsLoadingResponse(false);
       }
 
       if (errorStates.includes(runState.status)) {

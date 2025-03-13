@@ -55,34 +55,47 @@
     button {
       border: none;
       border-radius: 6px;
-      color: $dark-gray;
+      padding: 0px;
       cursor: pointer;
-      display: block;
-      flex: 0 0 auto;
       font-family: 'Montserrat', sans-serif;
       font-size: .75rem;
       height: 32px;
       margin: 0;
-      overflow: hidden;
       pointer-events: auto;
-      text-indent: -9999px;
       width: 32px;
+      background-color: transparent;
+      color: $dark-gray;
+
+      &.enabled {
+        color: $dark-teal;
+        background-color: $light-teal-3;
+
+        svg {
+          path.main-shape {
+            fill: $dark-teal;
+          }
+        }
+
+        &:hover {
+          background-color: $light-teal-2;
+        }
+
+        &:active {
+          background-color: $light-teal-1;
+        }
+      }
 
       &.send {
-        background: transparent url(../assets/send-icon.svg) 4px 4px no-repeat;
         margin-left: auto;
         order: 2;
       }
 
       &.cancel {
-        background: red 4px 4px;
         margin-left: auto;
         order: 2;
       }
 
       &.dictate {
-        background: transparent url(../assets/voice-typing-icon.svg) 0 0 no-repeat;
-        margin-right: auto;
         order: 1;
 
         &.active {
@@ -90,9 +103,11 @@
           filter: brightness(0) saturate(100%) invert(32%) sepia(0%) saturate(2419%) hue-rotate(165deg) brightness(101%) contrast(66%);
         }
       }
+
       &:disabled {
         cursor: not-allowed;
         opacity: .5;
+        background-color: transparent;
       }
     }
   }

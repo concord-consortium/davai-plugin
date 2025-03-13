@@ -1,6 +1,10 @@
 import React, { FormEvent, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { alertSound, isInputElement, isShortcutPressed } from "../utils/utils";
 
+import StopIcon from "../assets/stop-icon.svg";
+import SendIcon from "../assets/send-icon.svg";
+import VoiceTypingIcon from "../assets/voice-typing-icon.svg";
+
 import "./chat-input.scss";
 
 interface IProps {
@@ -8,12 +12,13 @@ interface IProps {
   isLoadingResponse?: boolean;
   keyboardShortcutEnabled: boolean;
   shortcutKeys: string;
+  showCancelButton?: boolean;
   onCancel: () => void;
   onKeyboardShortcut: () => void;
   onSubmit: (messageText: string) => void;
 }
 
-export const ChatInputComponent = ({disabled, isLoadingResponse, keyboardShortcutEnabled,
+export const ChatInputComponent = ({showCancelButton, disabled, isLoadingResponse, keyboardShortcutEnabled,
     shortcutKeys, onCancel, onKeyboardShortcut, onSubmit}: IProps) => {
   const [dictationEnabled, setDictationEnabled] = useState(false);
   const [inputValue, setInputValue] = useState("");
@@ -249,38 +254,38 @@ export const ChatInputComponent = ({disabled, isLoadingResponse, keyboardShortcu
             />
           </div>
           <div className="buttons-container">
-            { isLoadingResponse ?
+            {showCancelButton ?
               <button
-                className="cancel"
+                className="cancel enabled"
                 data-testid="chat-input-cancel"
                 type="button"
                 aria-label="Cancel streaming"
                 onClick={onCancel}
               >
-                Cancel Streaming
+                <StopIcon />
               </button>
-              :
+             :
               <button
-                className="send"
+                className={`send ${!disabled && inputValue ? "enabled" : ""}`}
                 data-testid="chat-input-send"
-                disabled={disabled}
+                disabled={disabled || !inputValue}
                 type="submit"
                 aria-label="Send message"
               >
-                Send
+                <SendIcon />
               </button>
             }
             {browserSupportsDictation &&
               <button
                 aria-pressed={dictationEnabled}
-                className={dictationEnabled ? "dictate active" : "dictate"}
+                className={`dictate ${!isLoadingResponse && "enabled"} ${dictationEnabled && "active"}`}
                 data-testid="chat-input-dictate"
                 disabled={disabled}
                 title={dictationEnabled ? "Stop Dictation" : "Start Dictation"}
                 type="button"
                 onClick={handleDictateToggle}
               >
-                {dictationEnabled ? "Listening..." : "Dictate"}
+                <VoiceTypingIcon/>
               </button>
             }
           </div>

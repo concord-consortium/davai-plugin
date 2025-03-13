@@ -205,6 +205,7 @@ export const App = observer(() => {
         isLoadingResponse={assistantStore.isLoadingResponse && !appConfig.isAssistantMocked}
         keyboardShortcutEnabled={keyboardShortcutEnabled}
         shortcutKeys={keyboardShortcutKeys}
+        showCancelButton={assistantStore.run && assistantStore.isLoadingResponse}
         onSubmit={handleChatInputSubmit}
         onCancel={handleCancelRun}
         onKeyboardShortcut={handleFocusShortcut}
