@@ -2,7 +2,11 @@ import React from "react";
 import { DAVAI_SPEAKER } from "../constants";
 import { timeStamp } from "../utils/utils";
 
-export const LoadingMessage = () => {
+interface IProps {
+  cancelStatus?: string;
+}
+
+export const LoadingMessage: React.FC<IProps> = ({cancelStatus}) => {
   return (
     <div
       aria-label={`${DAVAI_SPEAKER} at ${timeStamp()}`}
@@ -17,12 +21,18 @@ export const LoadingMessage = () => {
         className={`chat-message-content ${DAVAI_SPEAKER.toLowerCase()}`}
         data-testid="chat-message-content"
       >
-        <div
-          aria-label="Loading response, please wait"
-          className="loading"
-          data-testid="loading" role="status" aria-live="polite"
-        >
-        </div>
+        { cancelStatus ?
+          <div className="cancelling">
+            {cancelStatus}
+            <div className="loading"/>
+          </div> :
+          <div
+            aria-label="Loading response, please wait"
+            className="loading"
+            data-testid="loading" role="status" aria-live="polite"
+          >
+          </div>
+        }
       </div>
     </div>
   );

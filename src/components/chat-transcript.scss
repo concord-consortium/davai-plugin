@@ -114,6 +114,12 @@
             }
           }
         }
+
+        .cancelling {
+          display: flex;
+          font-size: .75rem;
+        }
+
         .loading:after {
           overflow: hidden;
           display: inline-block;

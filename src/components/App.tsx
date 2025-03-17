@@ -2,12 +2,12 @@ import React, { useCallback, useEffect, useRef, useState } from "react";
 import { observer } from "mobx-react-lite";
 import { addDataContextChangeListener, addDataContextsListListener, ClientNotification, getDataContext, getListOfDataContexts, initializePlugin, selectSelf } from "@concord-consortium/codap-plugin-api";
 import { useAppConfigContext } from "../hooks/use-app-config-context";
-import { useAssistantStore } from "../hooks/use-assistant-store";
+import { useAssistantStoreContext } from "../contexts/assistant-store-context";
 import { ChatInputComponent } from "./chat-input";
 import { ChatTranscriptComponent } from "./chat-transcript";
 import { ReadAloudMenu } from "./readaloud-menu";
 import { KeyboardShortcutControls } from "./keyboard-shortcut-controls";
-import { DAVAI_SPEAKER, DEBUG_SPEAKER, GREETING, USER_SPEAKER, notificationsToIgnore } from "../constants";
+import { DAVAI_SPEAKER, DEBUG_SPEAKER, GREETING, notificationsToIgnore } from "../constants";
 import { DeveloperOptionsComponent } from "./developer-options";
 import { formatJsonMessage, getUrlParam } from "../utils/utils";
 
@@ -18,7 +18,7 @@ const kVersion = "0.0.1";
 
 export const App = observer(() => {
   const appConfig = useAppConfigContext();
-  const assistantStore = useAssistantStore();
+  const assistantStore = useAssistantStoreContext();
   const transcriptStore = assistantStore.transcriptStore;
   const dimensions = { width: appConfig.dimensions.width, height: appConfig.dimensions.height };
   const [readAloudEnabled, setReadAloudEnabled] = useState(false);
@@ -116,21 +116,6 @@ export const App = observer(() => {
     setPlaybackSpeed(speed);
   };
 
-  const handleChatInputSubmit = async (messageText: string) => {
-    transcriptStore.addMessage(USER_SPEAKER, {content: messageText});
-
-    if (appConfig.isAssistantMocked) {
-      assistantStore.handleMessageSubmitMockAssistant();
-    } else {
-      assistantStore.handleMessageSubmit(messageText);
-    }
-
-  };
-
-  const handleCancelRun = async () => {
-    assistantStore.cancelRun();
-  };
-
   const handleCreateThread = async () => {
     const confirmCreate = window.confirm("Are you sure you want to create a new thread? If you do, you will lose any existing chat history.");
     if (!confirmCreate) return;
@@ -178,7 +163,6 @@ export const App = observer(() => {
       <ChatTranscriptComponent
         chatTranscript={transcriptStore}
         showDebugLog={showDebugLog}
-        isLoading={assistantStore.isLoadingResponse}
       />
       {isDevMode &&
         <div className="show-debug-controls">
@@ -201,13 +185,8 @@ export const App = observer(() => {
         </div>
       }
       <ChatInputComponent
-        disabled={(!assistantStore.thread && !appConfig.isAssistantMocked) || assistantStore.isLoadingResponse}
-        isLoadingResponse={assistantStore.isLoadingResponse && !appConfig.isAssistantMocked}
         keyboardShortcutEnabled={keyboardShortcutEnabled}
         shortcutKeys={keyboardShortcutKeys}
-        showCancelButton={assistantStore.run && assistantStore.isLoadingResponse}
-        onSubmit={handleChatInputSubmit}
-        onCancel={handleCancelRun}
         onKeyboardShortcut={handleFocusShortcut}
       />
       <ReadAloudMenu

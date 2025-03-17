@@ -1,5 +1,9 @@
 import React, { FormEvent, useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { observer } from "mobx-react-lite";
+import classNames from "classnames";
 import { alertSound, isInputElement, isShortcutPressed } from "../utils/utils";
+import { useAssistantStoreContext } from "../contexts/assistant-store-context";
+import { useAppConfigContext } from "../hooks/use-app-config-context";
 
 import StopIcon from "../assets/stop-icon.svg";
 import SendIcon from "../assets/send-icon.svg";
@@ -8,18 +12,14 @@ import VoiceTypingIcon from "../assets/voice-typing-icon.svg";
 import "./chat-input.scss";
 
 interface IProps {
-  disabled?: boolean;
-  isLoadingResponse?: boolean;
   keyboardShortcutEnabled: boolean;
   shortcutKeys: string;
-  showCancelButton?: boolean;
-  onCancel: () => void;
   onKeyboardShortcut: () => void;
-  onSubmit: (messageText: string) => void;
 }
 
-export const ChatInputComponent = ({showCancelButton, disabled, isLoadingResponse, keyboardShortcutEnabled,
-    shortcutKeys, onCancel, onKeyboardShortcut, onSubmit}: IProps) => {
+export const ChatInputComponent = observer(({keyboardShortcutEnabled, shortcutKeys, onKeyboardShortcut}: IProps) => {
+  const appConfig = useAppConfigContext();
+  const assistantStore = useAssistantStoreContext();
   const [dictationEnabled, setDictationEnabled] = useState(false);
   const [inputValue, setInputValue] = useState("");
   const kDefaultHeight = 47;
@@ -34,6 +34,8 @@ export const ChatInputComponent = ({showCancelButton, disabled, isLoadingRespons
   // We will use this ref in places where asynchronous state updates make directly using the state variable
   // dictationEnabled problematic.
   const dictationEnabledRef = useRef(false);
+  const {thread, isLoadingResponse, isCancelling, handleCancel, handleMessageSubmit, handleMessageSubmitMockAssistant} = assistantStore;
+  const disabled = (!thread?.id && !appConfig.isAssistantMocked) || isLoadingResponse || isCancelling;
 
   const fitTextInputToContent = () => {
     if (textAreaRef.current && fieldsetRef.current) {
@@ -59,8 +61,10 @@ export const ChatInputComponent = ({showCancelButton, disabled, isLoadingRespons
     if (!inputValue || inputValue.trim() === "") {
       setShowError(true);
       textAreaRef.current?.focus();
+    } else if (appConfig.isAssistantMocked) {
+      handleMessageSubmitMockAssistant();
     } else {
-      onSubmit(inputValue);
+      handleMessageSubmit(inputValue);
       setInputValue("");
       finalSpeechTranscript.current = "";
       textAreaRef.current?.focus();
@@ -230,7 +234,7 @@ export const ChatInputComponent = ({showCancelButton, disabled, isLoadingRespons
     <div className="chat-input" data-testid="chat-input">
       <form onSubmit={handleSubmit}>
         <fieldset
-          className={textareaHasFocus ? "has-focus" : ""}
+          className={classNames({"has-focus": textareaHasFocus})}
           data-testid="chat-input-fieldset"
           ref={fieldsetRef}
         >
@@ -254,21 +258,22 @@ export const ChatInputComponent = ({showCancelButton, disabled, isLoadingRespons
             />
           </div>
           <div className="buttons-container">
-            {showCancelButton ?
+            {isLoadingResponse ?
               <button
-                className="cancel enabled"
+                className={classNames("cancel", {"enabled": !isCancelling})}
                 data-testid="chat-input-cancel"
                 type="button"
+                disabled={isCancelling}
                 aria-label="Cancel streaming"
-                onClick={onCancel}
+                onClick={handleCancel}
               >
                 <StopIcon />
               </button>
              :
               <button
-                className={`send ${!disabled && inputValue ? "enabled" : ""}`}
+                className={classNames("send", {"enabled": !disabled && inputValue})}
                 data-testid="chat-input-send"
-                disabled={disabled || !inputValue}
+                disabled={disabled && !inputValue}
                 type="submit"
                 aria-label="Send message"
               >
@@ -278,7 +283,7 @@ export const ChatInputComponent = ({showCancelButton, disabled, isLoadingRespons
             {browserSupportsDictation &&
               <button
                 aria-pressed={dictationEnabled}
-                className={`dictate ${!isLoadingResponse && "enabled"} ${dictationEnabled && "active"}`}
+                className={classNames("dictate", {"enabled": !disabled, "active": dictationEnabled})}
                 data-testid="chat-input-dictate"
                 disabled={disabled}
                 title={dictationEnabled ? "Stop Dictation" : "Start Dictation"}
@@ -304,4 +309,4 @@ export const ChatInputComponent = ({showCancelButton, disabled, isLoadingRespons
       </form>
     </div>
   );
-};
+});
