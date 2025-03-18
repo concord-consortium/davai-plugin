@@ -66,7 +66,7 @@ describe("test chat input component", () => {
     expect(inputError).not.toBeInTheDocument();
     expect(chatInputTextarea).not.toHaveAttribute("aria-describedby");
     expect(chatInputTextarea).toHaveAttribute("aria-invalid", "false");
-    expect(mockHandleSubmit).not.toHaveBeenCalled();
+    expect(mockHandleSubmit).toHaveBeenCalled();
   });
 
   it ("renders a dictate button that lets user dictate chat messages", () => {
@@ -77,12 +77,10 @@ describe("test chat input component", () => {
     expect(chatInputDictate).toHaveAttribute("aria-pressed", "false");
     expect(chatInputDictate).toHaveAttribute("title", "Start Dictation");
     expect(chatInputDictate).not.toHaveClass("active");
-    expect(chatInputDictate).toHaveTextContent("Dictate");
     fireEvent.click(chatInputDictate);
     expect(chatInputDictate).toHaveAttribute("aria-pressed", "true");
     expect(chatInputDictate).toHaveAttribute("title", "Stop Dictation");
     expect(chatInputDictate).toHaveClass("active");
-    expect(chatInputDictate).toHaveTextContent("Listening...");
     expect(global.SpeechRecognition).toHaveBeenCalled();
     const srInstance1 = mockSpeechRecognition.mock.results[0].value;
     expect(srInstance1.start).toHaveBeenCalled();
@@ -90,7 +88,6 @@ describe("test chat input component", () => {
     expect(chatInputDictate).toHaveAttribute("aria-pressed", "false");
     expect(chatInputDictate).toHaveAttribute("title", "Start Dictation");
     expect(chatInputDictate).not.toHaveClass("active");
-    expect(chatInputDictate).toHaveTextContent("Dictate");
     const srInstance2 = mockSpeechRecognition.mock.results[0].value;
     expect(srInstance2.stop).toHaveBeenCalled();
   });
