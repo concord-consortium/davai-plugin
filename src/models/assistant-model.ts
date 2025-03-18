@@ -59,7 +59,7 @@ export const AssistantModel = types
     setIsLoadingResponse(isLoading: boolean) {
       self.isLoadingResponse = isLoading;
     },
-    cleanup() {
+    resetAfterResponse() {
       self.isLoadingResponse =  false;
       self.isCancelling = false;
       self.cancelStatus = "";
@@ -165,7 +165,7 @@ export const AssistantModel = types
       } catch (err) {
         console.error("Failed to handle message submit:", err);
         self.transcriptStore.addMessage(DEBUG_SPEAKER, {description: "Failed to handle message submit", content: formatJsonMessage(err)});
-        self.cleanup();
+        self.resetAfterResponse();
       }
     });
 
@@ -181,7 +181,7 @@ export const AssistantModel = types
           description: "Failed to complete run",
           content: formatJsonMessage(err),
         });
-        self.cleanup();
+        self.resetAfterResponse();
       }
     });
 
@@ -195,10 +195,13 @@ export const AssistantModel = types
         const startTime = Date.now();
         let runState = yield self.apiConnection.beta.threads.runs.retrieve(self.thread.id, runId);
         const MAX_WAIT_TIME = 10_000; // 10 seconds
+        let reset = false;
 
         while (runState.status === "cancelling") {
           const elapsed = Date.now() - startTime;
           if (elapsed >= MAX_WAIT_TIME) {
+            self.cancelStatus = "I encountered an error. Please wait";
+            reset = true;
             yield resetThread();
             break;
           }
@@ -211,20 +214,24 @@ export const AssistantModel = types
           content: formatJsonMessage(runState),
         });
 
+        const messageContent =
+          reset ?
+          "I encountered an error while trying to cancel your request and had to restart our conversation. " +
+          "I won't be able to remember what we were talking about, but you can still ask me about the CODAP document."
+          : "Your request was cancelled.";
         self.transcriptStore.addMessage(DAVAI_SPEAKER, {
-          content: "Your request was cancelled."
+          content: messageContent
         });
 
-        self.cleanup();
+        self.resetAfterResponse();
       } catch (err) {
         console.error("Background poll cancel error:", err);
-        self.cleanup();
+        self.resetAfterResponse();
       }
     });
 
     const resetThread = flow(function* () {
       try {
-        self.cancelStatus = "I encountered an error trying to cancel your request. Please wait";
         const threadId = self.thread.id;
         const deletedThread = yield self.apiConnection.beta.threads.del(threadId);
         self.transcriptStore.addMessage(DEBUG_SPEAKER, {
@@ -237,7 +244,7 @@ export const AssistantModel = types
       catch (err) {
         console.error("Failed to delete thread:", err);
         self.transcriptStore.addMessage(DEBUG_SPEAKER, {description: "Failed to delete thread", content: formatJsonMessage(err)});
-        self.cleanup();
+        self.resetAfterResponse();
       }
     });
 
@@ -245,16 +252,23 @@ export const AssistantModel = types
       try {
         yield self.apiConnection.beta.threads.runs.cancel(self.thread.id, runId);
         pollCancel(runId);
-      } catch (err) {
-        if (err === "BadRequestError: 400 Cannot cancel run with status 'cancelled'.") {
+      } catch (err: any) {
+        const errorMessage =
+          err instanceof Error
+            ? err.message
+            : typeof err === "string"
+            ? err
+            : JSON.stringify(err);
+        if (errorMessage.includes("Cannot cancel run with status 'cancelled'")) {
           self.transcriptStore.addMessage(DAVAI_SPEAKER, {
             content: "Your request was cancelled.",
           });
+          self.resetAfterResponse();
         } else {
-          console.error("Failed to cancel run:", err);
-          self.transcriptStore.addMessage(DEBUG_SPEAKER, {description: "Failed to cancel run", content: formatJsonMessage(err)});
+          console.error("Failed to cancel run:", errorMessage);
+          self.transcriptStore.addMessage(DEBUG_SPEAKER, {description: "Failed to cancel run", content: formatJsonMessage(errorMessage)});
         }
-        self.cleanup();
+        self.resetAfterResponse();
       }
     });
 
@@ -318,7 +332,7 @@ export const AssistantModel = types
               content: "I'm sorry, I don't have a response for that.",
             });
           }
-          self.cleanup();
+          self.resetAfterResponse();
         }
       }
 
@@ -330,7 +344,7 @@ export const AssistantModel = types
         self.transcriptStore.addMessage(DAVAI_SPEAKER, {
           content: "I'm sorry, I encountered an error. Please try again.",
         });
-        self.cleanup();
+        self.resetAfterResponse();
       }
     });
 
@@ -346,7 +360,7 @@ export const AssistantModel = types
       catch (err) {
         console.error("Failed to upload image:", err);
         self.transcriptStore.addMessage(DEBUG_SPEAKER, {description: "Failed to upload image", content: formatJsonMessage(err)});
-        self.cleanup();
+        self.resetAfterResponse();
       }
     });
 
@@ -371,7 +385,7 @@ export const AssistantModel = types
       } catch (err) {
         console.error("Failed to send file message:", err);
         self.transcriptStore.addMessage(DEBUG_SPEAKER, {description: "Failed to send file message", content: formatJsonMessage(err)});
-        self.cleanup();
+        self.resetAfterResponse();
       }
     });
 
@@ -414,7 +428,7 @@ export const AssistantModel = types
       } catch (err) {
         console.error(err);
         self.transcriptStore.addMessage(DEBUG_SPEAKER, {description: "Error taking required action", content: formatJsonMessage(err)});
-        self.cleanup();
+        self.resetAfterResponse();
       }
     });
 
@@ -437,7 +451,7 @@ export const AssistantModel = types
         const threadId = self.thread.id;
         yield self.apiConnection.beta.threads.del(threadId);
         self.thread = undefined;
-        self.cleanup();
+        self.resetAfterResponse();
       } catch (err) {
         console.error("Error deleting thread:", err);
       }
