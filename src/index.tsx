@@ -3,7 +3,6 @@ import { createRoot } from "react-dom/client";
 import { App } from "./components/App";
 import { AppConfigProvider } from "./contexts/app-config-provider";
 import { OpenAIConnectionProvider } from "./contexts/openai-connection-provider";
-import { AssistantStoreProvider } from "./contexts/assistant-store-context";
 
 import "./index.scss";
 
@@ -18,9 +17,7 @@ if (container) {
   root.render(
     <AppConfigProvider>
       <OpenAIConnectionProvider>
-        <AssistantStoreProvider>
           <App />
-        </AssistantStoreProvider>
       </OpenAIConnectionProvider>
     </AppConfigProvider>
   );

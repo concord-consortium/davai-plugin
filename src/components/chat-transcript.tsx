@@ -1,5 +1,4 @@
 import React, { useRef, useEffect } from "react";
-import { useAssistantStoreContext } from "../contexts/assistant-store-context";
 import { observer } from "mobx-react-lite";
 import { ChatTranscriptMessage } from "./chat-transcript-message";
 import { ChatTranscript, ChatMessage } from "../types";
@@ -7,14 +6,14 @@ import { LoadingMessage } from "./loading-message";
 
 import "./chat-transcript.scss";
 interface IProps {
+  cancelStatus?: string;
   chatTranscript: ChatTranscript;
+  isLoading: boolean;
   showDebugLog: boolean;
 }
 
-export const ChatTranscriptComponent = observer(({chatTranscript, showDebugLog}: IProps) => {
-  const assistantStore = useAssistantStoreContext();
+export const ChatTranscriptComponent = observer(({cancelStatus, chatTranscript, isLoading, showDebugLog}: IProps) => {
   const chatTranscriptRef = useRef<HTMLDivElement>(null);
-  const {isLoadingResponse, cancelStatus} = assistantStore;
 
   useEffect(() => {
     // Autoscroll to the top of the latest message in the transcript.
@@ -23,7 +22,7 @@ export const ChatTranscriptComponent = observer(({chatTranscript, showDebugLog}:
       const lastMessage = chatTranscriptContainer.querySelector(".chat-transcript__message:last-of-type");
       lastMessage?.scrollIntoView({behavior: "smooth", block: "nearest"});
     }
-  }, [chatTranscript.messages.length, isLoadingResponse, cancelStatus]);
+  }, [chatTranscript.messages.length, isLoading, cancelStatus]);
 
   return (
     <div ref={chatTranscriptRef} id="chat-transcript" className="chat-transcript" data-testid="chat-transcript" role="group">
@@ -44,7 +43,7 @@ export const ChatTranscriptComponent = observer(({chatTranscript, showDebugLog}:
             />
           );
         })}
-        {isLoadingResponse && <LoadingMessage cancelStatus={cancelStatus}/>}
+        {isLoading && <LoadingMessage cancelStatus={cancelStatus}/>}
       </div>
     </div>
   );

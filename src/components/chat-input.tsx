@@ -1,9 +1,6 @@
 import React, { FormEvent, useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { observer } from "mobx-react-lite";
 import classNames from "classnames";
 import { alertSound, isInputElement, isShortcutPressed } from "../utils/utils";
-import { useAssistantStoreContext } from "../contexts/assistant-store-context";
-import { useAppConfigContext } from "../hooks/use-app-config-context";
 
 import StopIcon from "../assets/stop-icon.svg";
 import SendIcon from "../assets/send-icon.svg";
@@ -12,14 +9,18 @@ import VoiceTypingIcon from "../assets/voice-typing-icon.svg";
 import "./chat-input.scss";
 
 interface IProps {
+  disabled?: boolean;
+  isCancelling?: boolean;
+  isLoadingResponse?: boolean;
   keyboardShortcutEnabled: boolean;
   shortcutKeys: string;
+  onCancel: () => void;
   onKeyboardShortcut: () => void;
+  onSubmit: (message: string) => void;
 }
 
-export const ChatInputComponent = observer(({keyboardShortcutEnabled, shortcutKeys, onKeyboardShortcut}: IProps) => {
-  const appConfig = useAppConfigContext();
-  const assistantStore = useAssistantStoreContext();
+export const ChatInputComponent = ({disabled, isCancelling, isLoadingResponse, keyboardShortcutEnabled, shortcutKeys,
+  onCancel, onKeyboardShortcut, onSubmit}: IProps) => {
   const [dictationEnabled, setDictationEnabled] = useState(false);
   const [inputValue, setInputValue] = useState("");
   const kDefaultHeight = 47;
@@ -34,8 +35,6 @@ export const ChatInputComponent = observer(({keyboardShortcutEnabled, shortcutKe
   // We will use this ref in places where asynchronous state updates make directly using the state variable
   // dictationEnabled problematic.
   const dictationEnabledRef = useRef(false);
-  const {thread, isLoadingResponse, isCancelling, handleCancel, handleMessageSubmit, handleMessageSubmitMockAssistant} = assistantStore;
-  const disabled = (!thread?.id && !appConfig.isAssistantMocked) || isLoadingResponse || isCancelling;
 
   const fitTextInputToContent = () => {
     if (textAreaRef.current && fieldsetRef.current) {
@@ -61,10 +60,8 @@ export const ChatInputComponent = observer(({keyboardShortcutEnabled, shortcutKe
     if (!inputValue || inputValue.trim() === "") {
       setShowError(true);
       textAreaRef.current?.focus();
-    } else if (appConfig.isAssistantMocked) {
-      handleMessageSubmitMockAssistant();
     } else {
-      handleMessageSubmit(inputValue);
+      onSubmit(inputValue);
       setInputValue("");
       finalSpeechTranscript.current = "";
       textAreaRef.current?.focus();
@@ -265,7 +262,7 @@ export const ChatInputComponent = observer(({keyboardShortcutEnabled, shortcutKe
                 type="button"
                 disabled={isCancelling}
                 aria-label="Cancel streaming"
-                onClick={handleCancel}
+                onClick={onCancel}
               >
                 <StopIcon />
               </button>
@@ -309,4 +306,4 @@ export const ChatInputComponent = observer(({keyboardShortcutEnabled, shortcutKe
       </form>
     </div>
   );
-});
+};

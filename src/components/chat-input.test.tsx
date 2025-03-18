@@ -36,9 +36,9 @@ beforeEach(() => {
 });
 
 describe("test chat input component", () => {
-
+  const mockHandleSubmit = jest.fn();
   it("renders a textarea and submit button that lets user send chat messages", () => {
-    render(<ChatInputComponent keyboardShortcutEnabled={true} shortcutKeys="ctrl+?" onKeyboardShortcut={jest.fn()} />);
+    render(<ChatInputComponent keyboardShortcutEnabled={true} shortcutKeys="ctrl+?" onCancel={jest.fn()} onSubmit={mockHandleSubmit} onKeyboardShortcut={jest.fn()} />);
 
     const chatInput = screen.getByTestId("chat-input");
     const chatInputFieldset = within(chatInput).getByTestId("chat-input-fieldset");
@@ -58,6 +58,7 @@ describe("test chat input component", () => {
     expect(inputError).toHaveTextContent("Please enter a message before sending.");
     expect(chatInputTextarea).toHaveAttribute("aria-describedby", "input-error");
     expect(chatInputTextarea).toHaveAttribute("aria-invalid", "true");
+    expect(mockHandleSubmit).not.toHaveBeenCalled();
     // If message is entered, no error should appear and the message should be submitted.
     chatInputTextarea.focus();
     fireEvent.change(chatInputTextarea, {target: {value: "Hello!"}});
@@ -65,10 +66,11 @@ describe("test chat input component", () => {
     expect(inputError).not.toBeInTheDocument();
     expect(chatInputTextarea).not.toHaveAttribute("aria-describedby");
     expect(chatInputTextarea).toHaveAttribute("aria-invalid", "false");
+    expect(mockHandleSubmit).not.toHaveBeenCalled();
   });
 
   it ("renders a dictate button that lets user dictate chat messages", () => {
-    render(<ChatInputComponent keyboardShortcutEnabled={true} shortcutKeys="ctrl+?" onKeyboardShortcut={jest.fn()} />);
+    render(<ChatInputComponent keyboardShortcutEnabled={true} shortcutKeys="ctrl+?" onCancel={jest.fn()} onSubmit={mockHandleSubmit} onKeyboardShortcut={jest.fn()} />);
 
     const chatInput = screen.getByTestId("chat-input");
     const chatInputDictate = within(chatInput).getByTestId("chat-input-dictate");
