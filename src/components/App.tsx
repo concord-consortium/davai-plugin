@@ -1,8 +1,8 @@
-import React, { useCallback, useEffect, useRef } from "react";
+import React, { useCallback, useEffect, useRef, useState } from "react";
 import * as Tone from "tone";
 import { observer } from "mobx-react-lite";
 import removeMarkdown from "remove-markdown";
-import { addDataContextChangeListener, addDataContextsListListener, ClientNotification, getDataContext, getListOfDataContexts, initializePlugin, selectSelf } from "@concord-consortium/codap-plugin-api";
+import { addDataContextChangeListener, addDataContextsListListener, ClientNotification, codapInterface, getDataContext, getListOfDataContexts, initializePlugin, IResult, selectSelf } from "@concord-consortium/codap-plugin-api";
 import { useAppConfigContext } from "../hooks/use-app-config-context";
 import { useAssistantStore } from "../hooks/use-assistant-store";
 import { useAriaLive } from "../contexts/aria-live-context";
@@ -12,6 +12,7 @@ import { ChatTranscriptComponent } from "./chat-transcript";
 import { DAVAI_SPEAKER, DEBUG_SPEAKER, LOADING_NOTE, USER_SPEAKER, notificationsToIgnore } from "../constants";
 import { UserOptions } from "./user-options";
 import { formatJsonMessage, playSound } from "../utils/utils";
+import { GraphSonification } from "./graph-sonification";
 
 import "./App.scss";
 
@@ -23,6 +24,8 @@ export const App = observer(() => {
   const { ariaLiveText, setAriaLiveText } = useAriaLive();
   const assistantStore = useAssistantStore();
   const { playProcessingTone } = useOptions();
+  const [componentsList, setComponentsList] = useState<Record<string, any>[]>([]);
+
   const assistantStoreRef = useRef(assistantStore);
   const dimensions = { width: appConfig.dimensions.width, height: appConfig.dimensions.height };
   const subscribedDataCtxsRef = useRef<string[]>([]);
@@ -78,6 +81,8 @@ export const App = observer(() => {
         subscribedDataCtxsRef.current.push(ctx.name);
         addDataContextChangeListener(ctx.name, handleDataContextChangeNotice);
       });
+      const componentListRes = await codapInterface.sendRequest({action: "get", resource: "componentList"}) as IResult;
+      setComponentsList(componentListRes.values);
     };
     init();
     selectSelf();
@@ -157,6 +162,8 @@ export const App = observer(() => {
         onSubmit={handleChatInputSubmit}
         onKeyboardShortcut={handleFocusShortcut}
       />
+      <h2>Graph Sonification</h2>
+      <GraphSonification componentsList={componentsList}/>
       <UserOptions assistantStore={assistantStore} />
       {/*
         The aria-live region is used to announce the last message from DAVAI.
