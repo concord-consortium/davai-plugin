@@ -1,3 +1,5 @@
+import * as Tone from "tone";
+
 export const timeStamp = (): string => {
   const now = new Date();
   return now.toLocaleString();
@@ -120,17 +122,9 @@ export const isShortcutPressed = (pressedKeys: Set<string>, shortcutKeys: string
   });
 };
 
-export const alertSound = (mode?: string) => {
-  if (!window.AudioContext) return;
-
-  const frequency = mode === "stop" ? 293.665 : 587.33; // the musical note D (for DAVAI)
-  const context = new window.AudioContext();
-  const oscillator = context.createOscillator();
-  oscillator.type = "sine";
-  oscillator.frequency.setValueAtTime(frequency, context.currentTime);
-  oscillator.connect(context.destination);
-  oscillator.start();
-  oscillator.stop(context.currentTime + 0.05);
+export const playSound = (note: string) => {
+  const synth = new Tone.Synth().toDestination();
+  synth.triggerAttackRelease(note, "8n");
 };
 
 export const convertBase64ToImage = async (base64Data: string, filename = "image.png") => {

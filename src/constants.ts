@@ -15,3 +15,7 @@ export const notificationsToIgnore = [
 ];
 
 export const kDefaultChatInputHeight = 47;
+
+export const STOP_RECORDING_NOTE = "D4";
+export const START_RECORDING_NOTE = "B4";
+export const LOADING_NOTE = "C4";

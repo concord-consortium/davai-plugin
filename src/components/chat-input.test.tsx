@@ -23,6 +23,13 @@ const mockSpeechRecognition = jest.fn().mockImplementation(() => ({
   onstart: null
 }));
 
+jest.mock("../utils/utils", () => {
+  return {
+    ...jest.requireActual("../utils/utils"),
+    playSound: jest.fn()
+  };
+});
+
 beforeAll(() => {
   global.SpeechRecognition = mockSpeechRecognition;
 });

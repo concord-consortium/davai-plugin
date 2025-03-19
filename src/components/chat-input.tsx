@@ -1,6 +1,6 @@
 import React, { FormEvent, useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { alertSound, isInputElement, isShortcutPressed } from "../utils/utils";
-import { kDefaultChatInputHeight } from "../constants";
+import { kDefaultChatInputHeight, START_RECORDING_NOTE, STOP_RECORDING_NOTE } from "../constants";
+import { playSound, isInputElement, isShortcutPressed } from "../utils/utils";
 
 import "./chat-input.scss";
 
@@ -107,7 +107,7 @@ export const ChatInputComponent = ({disabled, keyboardShortcutEnabled, shortcutK
       speechRecognitionRef.current.onerror = (event) => {
         console.error("Speech recognition error detected:", event.error);
         setDictationEnabled(false);
-        alertSound("stop");
+        playSound(STOP_RECORDING_NOTE);
       };
     }
   }, []);
@@ -131,7 +131,7 @@ export const ChatInputComponent = ({disabled, keyboardShortcutEnabled, shortcutK
           if (dictationEnabled && speechRecognitionRef.current) {
             setDictationEnabled(false);
             speechRecognitionRef.current.stop();
-            alertSound("stop");
+            playSound(STOP_RECORDING_NOTE);
           }
         }, 60000);
       } catch (error) {
@@ -157,9 +157,9 @@ export const ChatInputComponent = ({disabled, keyboardShortcutEnabled, shortcutK
     setDictationEnabled(!dictationEnabled);
 
     if (dictationEnabled) {
-      alertSound("stop");
+      playSound(STOP_RECORDING_NOTE);
     } else {
-      alertSound("start");
+      playSound(START_RECORDING_NOTE);
     }
   };
 
