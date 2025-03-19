@@ -3,17 +3,30 @@ import { DAVAI_SPEAKER } from "../constants";
 import { timeStamp } from "../utils/utils";
 import * as Tone from "tone";
 
-export const LoadingMessage = () => {
+interface IProps {
+  playProcessingTone: boolean;
+}
+
+export const LoadingMessage = ({ playProcessingTone }: IProps) => {
   const playSound = () => {
     const synth = new Tone.Synth().toDestination();
     synth.triggerAttackRelease("C4", "8n");
   };
 
   useEffect(() => {
-    playSound();
-    const interval = setInterval(playSound, 2000);
-    return () => clearInterval(interval);
-  }, []);
+    let interval: NodeJS.Timeout | undefined;
+
+    if (playProcessingTone) {
+      playSound();
+      interval = setInterval(playSound, 2000);
+    }
+
+    return () => {
+      if (interval) {
+        clearInterval(interval);
+      }
+    };
+  }, [playProcessingTone]);
 
   return (
     <div

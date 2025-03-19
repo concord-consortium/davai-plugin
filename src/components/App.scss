@@ -72,7 +72,24 @@
     }
   }
 
-  // taken from: https://www.tpgi.com/the-anatomy-of-visually-hidden/
+  .processing-chime-controls {
+    display: flex;
+    align-items: center;
+    justify-content: flex-start;
+    label {
+      font-size: .75rem;
+      margin-right: 5px;
+      font-weight: bold;
+      user-select: none;
+      cursor: pointer;
+      color: $dark-gray;
+    }
+    input {
+      cursor: pointer;
+    }
+    margin-bottom: 5px;
+  }
+
   .visually-hidden:not(:focus):not(:active) {
     border: 0;
     clip-path: inset(50%);

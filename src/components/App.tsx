@@ -23,6 +23,7 @@ export const App = observer(() => {
   const assistantStore = useAssistantStore();
   const assistantStoreRef = useRef(assistantStore);
   const dimensions = { width: appConfig.dimensions.width, height: appConfig.dimensions.height };
+  const [playProcessingTone, setPlayProcessingTone] = useState(true);
   const subscribedDataCtxsRef = useRef<string[]>([]);
   const transcriptStore = assistantStore.transcriptStore;
   /* read aloud state */
@@ -190,8 +191,9 @@ export const App = observer(() => {
       </header>
       <ChatTranscriptComponent
         chatTranscript={transcriptStore}
-        showDebugLog={showDebugLog}
         isLoading={assistantStore.isLoadingResponse}
+        playProcessingTone={playProcessingTone}
+        showDebugLog={showDebugLog}
       />
       {isDevMode &&
         <div className="show-debug-controls">
@@ -204,6 +206,7 @@ export const App = observer(() => {
             name="ShowDebugLog"
             aria-checked={showDebugLog}
             checked={showDebugLog}
+            role="switch"
             onChange={() => setShowDebugLog(!showDebugLog)}
             onKeyDown={(e) => {
               if (e.key === "Enter") {
@@ -220,6 +223,26 @@ export const App = observer(() => {
         onSubmit={handleChatInputSubmit}
         onKeyboardShortcut={handleFocusShortcut}
       />
+      <div className="processing-chime-controls">
+        <label htmlFor="processing-chime-toggle">
+          Play chime while DAVAI is responding:
+        </label>
+        <input
+          className="processing-chime-toggle"
+          id="processing-chime-toggle"
+          type="checkbox"
+          role="switch"
+          checked={playProcessingTone}
+          aria-label={playProcessingTone ? "Turn off processing chime" : "Turn on processing chime"}
+          aria-checked={playProcessingTone}
+          onChange={() => setPlayProcessingTone(!playProcessingTone)}
+          onKeyDown={(e) => {
+            if (e.key === "Enter") {
+              setPlayProcessingTone(!playProcessingTone);
+            }
+          }}
+        />
+      </div>
       <ReadAloudMenu
         enabled={readAloudEnabled}
         onToggle={handleSetReadAloudEnabled}

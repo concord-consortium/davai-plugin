@@ -23,7 +23,7 @@ describe("test chat transcript component", () => {
   };
 
   it("renders a chat transcript that lists all chat messages", () => {
-    render(<ChatTranscriptComponent chatTranscript={chatTranscript} showDebugLog={false}/>);
+    render(<ChatTranscriptComponent chatTranscript={chatTranscript} playProcessingTone={false} showDebugLog={false}/>);
 
     const transcript = screen.getByTestId("chat-transcript");
     const messages = within(transcript).getAllByTestId("chat-message");
