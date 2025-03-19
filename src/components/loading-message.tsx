@@ -1,24 +1,18 @@
 import React, { useEffect } from "react";
-import { DAVAI_SPEAKER } from "../constants";
-import { timeStamp } from "../utils/utils";
-import * as Tone from "tone";
+import { DAVAI_SPEAKER, LOADING_NOTE } from "../constants";
+import { playSound, timeStamp } from "../utils/utils";
 
 interface IProps {
   playProcessingTone: boolean;
 }
 
 export const LoadingMessage = ({ playProcessingTone }: IProps) => {
-  const playSound = () => {
-    const synth = new Tone.Synth().toDestination();
-    synth.triggerAttackRelease("C4", "8n");
-  };
-
   useEffect(() => {
     let interval: NodeJS.Timeout | undefined;
 
     if (playProcessingTone) {
-      playSound();
-      interval = setInterval(playSound, 2000);
+      playSound(LOADING_NOTE);
+      interval = setInterval(() => playSound(LOADING_NOTE), 2000);
     }
 
     return () => {
