@@ -1,6 +1,6 @@
 import React, { useCallback, useEffect, useRef, useState } from "react";
 import { observer } from "mobx-react-lite";
-import { addDataContextChangeListener, addDataContextsListListener, ClientNotification, getDataContext, getListOfDataContexts, initializePlugin, selectSelf } from "@concord-consortium/codap-plugin-api";
+import { addDataContextChangeListener, addDataContextsListListener, ClientNotification, codapInterface, getDataContext, getListOfDataContexts, initializePlugin, IResult, selectSelf } from "@concord-consortium/codap-plugin-api";
 import { useAppConfigContext } from "../hooks/use-app-config-context";
 import { useAssistantStore } from "../hooks/use-assistant-store";
 import { ChatInputComponent } from "./chat-input";
@@ -10,6 +10,7 @@ import { KeyboardShortcutControls } from "./keyboard-shortcut-controls";
 import { DAVAI_SPEAKER, DEBUG_SPEAKER, GREETING, USER_SPEAKER, notificationsToIgnore } from "../constants";
 import { DeveloperOptionsComponent } from "./developer-options";
 import { formatJsonMessage, getUrlParam } from "../utils/utils";
+import { GraphSonification } from "./graph-sonification";
 
 import "./App.scss";
 
@@ -21,6 +22,7 @@ export const App = observer(() => {
   const assistantStore = useAssistantStore();
   const transcriptStore = assistantStore.transcriptStore;
   const dimensions = { width: appConfig.dimensions.width, height: appConfig.dimensions.height };
+  const [componentsList, setComponentsList] = useState<Record<string, any>[]>([]);
   const [readAloudEnabled, setReadAloudEnabled] = useState(false);
   const [playbackSpeed, setPlaybackSpeed] = useState(1);
   const [playProcessingTone, setPlayProcessingTone] = useState(true);
@@ -84,6 +86,8 @@ export const App = observer(() => {
         subscribedDataCtxsRef.current.push(ctx.name);
         addDataContextChangeListener(ctx.name, handleDataContextChangeNotice);
       });
+      const componentListRes = await codapInterface.sendRequest({action: "get", resource: "componentList"}) as IResult;
+      setComponentsList(componentListRes.values);
     };
     init();
     selectSelf();
@@ -233,6 +237,9 @@ export const App = observer(() => {
         onPlaybackSpeedSelect={handleSetPlaybackSpeed}
       />
       <hr />
+      <h2>Graph Sonification</h2>
+      <GraphSonification componentsList={componentsList}/>
+      <hr/>
       <h2>Options</h2>
       <KeyboardShortcutControls
         shortcutEnabled={keyboardShortcutEnabled}
