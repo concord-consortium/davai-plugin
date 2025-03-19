@@ -8,11 +8,12 @@ import "./chat-transcript.scss";
 
 interface IProps {
   chatTranscript: ChatTranscript;
+  playProcessingTone: boolean;
   showDebugLog: boolean;
   isLoading?: boolean;
 }
 
-export const ChatTranscriptComponent = observer(({chatTranscript, showDebugLog, isLoading}: IProps) => {
+export const ChatTranscriptComponent = observer(({chatTranscript, playProcessingTone, showDebugLog, isLoading}: IProps) => {
   const chatTranscriptRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -43,7 +44,7 @@ export const ChatTranscriptComponent = observer(({chatTranscript, showDebugLog, 
             />
           );
         })}
-        {isLoading && <LoadingMessage />}
+        {isLoading && <LoadingMessage playProcessingTone={playProcessingTone}/>}
       </div>
     </div>
   );
