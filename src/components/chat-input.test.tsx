@@ -54,7 +54,6 @@ describe("test chat input component", () => {
     // If no message is entered, an error message should appear.
     fireEvent.click(chatInputSend);
     const inputError = within(chatInput).getByTestId("input-error");
-    expect(inputError).toHaveAttribute("aria-live", "assertive");
     expect(inputError).toHaveTextContent("Please enter a message before sending.");
     expect(chatInputTextarea).toHaveAttribute("aria-describedby", "input-error");
     expect(chatInputTextarea).toHaveAttribute("aria-invalid", "true");

@@ -60,11 +60,11 @@ export const KeyboardShortcutControls = (props: IProps) => {
           <button data-testid="custom-keyboard-shortcut-submit" type="submit">Customize</button>
           {showConfirmation &&
             <div
-              aria-live="assertive"
+              aria-live="polite"
               className="confirmation-message"
               data-testid="custom-keyboard-shortcut-confirmation"
               id="custom-keyboard-shortcut-confirmation"
-              role="alert"
+              role="status"
             >
               Keyboard shortcut changed to {shortcutKeys}
               <button
