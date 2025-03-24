@@ -1,5 +1,6 @@
 import React, { FormEvent, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { alertSound, isInputElement, isShortcutPressed } from "../utils/utils";
+import { kDefaultChatInputHeight } from "../constants";
 
 import "./chat-input.scss";
 
@@ -12,12 +13,11 @@ interface IProps {
 }
 
 export const ChatInputComponent = ({disabled, keyboardShortcutEnabled, shortcutKeys, onKeyboardShortcut, onSubmit}: IProps) => {
+  const [browserSupportsDictation, setBrowserSupportsDictation] = useState(false);
   const [dictationEnabled, setDictationEnabled] = useState(false);
   const [inputValue, setInputValue] = useState("");
-  const kDefaultHeight = 47;
-  const [textareaHasFocus, setTextareaHasFocus] = useState(false);
   const [showError, setShowError] = useState(false);
-  const [browserSupportsDictation, setBrowserSupportsDictation] = useState(false);
+  const [textareaHasFocus, setTextareaHasFocus] = useState(false);
   const textAreaRef = useRef<HTMLTextAreaElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
   const speechRecognitionRef = useRef<SpeechRecognition | null>(null);
@@ -31,9 +31,9 @@ export const ChatInputComponent = ({disabled, keyboardShortcutEnabled, shortcutK
     if (textAreaRef.current && containerRef.current) {
       // Temporarily reset the height to recalculate the correct scrollHeight,
       // then set the height as needed to show all text.
-      textAreaRef.current.style.height = `${kDefaultHeight}px`;
-      containerRef.current.style.height = `${kDefaultHeight}px`;
-      const newHeight = Math.max(textAreaRef.current.scrollHeight, kDefaultHeight);
+      textAreaRef.current.style.height = `${kDefaultChatInputHeight}px`;
+      containerRef.current.style.height = `${kDefaultChatInputHeight}px`;
+      const newHeight = Math.max(textAreaRef.current.scrollHeight, kDefaultChatInputHeight);
       textAreaRef.current.style.height = `${newHeight}px`;
       containerRef.current.style.height = `${newHeight}px`;
     }
@@ -215,13 +215,8 @@ export const ChatInputComponent = ({disabled, keyboardShortcutEnabled, shortcutK
 
   // Place focus on the textarea when the component mounts.
   useEffect(() => {
-    console.log("i am mounting");
     textAreaRef.current?.focus();
   }, []);
-
-  useEffect(() => {
-    console.log("window.document.activeElement", window.document.activeElement);
-  });
 
   const handleBlur = () => {
     setTextareaHasFocus(false);
