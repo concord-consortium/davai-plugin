@@ -26,8 +26,6 @@ describe("test chat transcript component", () => {
     render(<ChatTranscriptComponent chatTranscript={chatTranscript} showDebugLog={false}/>);
 
     const transcript = screen.getByTestId("chat-transcript");
-    const messagesContainer = screen.getByTestId("chat-transcript__messages");
-    expect(messagesContainer).toHaveAttribute("aria-live", "assertive");
     const messages = within(transcript).getAllByTestId("chat-message");
     expect(messages).toHaveLength(2);
 

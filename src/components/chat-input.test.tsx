@@ -42,8 +42,7 @@ describe("test chat input component", () => {
     render(<ChatInputComponent keyboardShortcutEnabled={true} shortcutKeys="ctrl+?" onSubmit={mockHandleSubmit} onKeyboardShortcut={jest.fn()} />);
 
     const chatInput = screen.getByTestId("chat-input");
-    const chatInputFieldset = within(chatInput).getByTestId("chat-input-fieldset");
-    expect(chatInputFieldset).toHaveClass("has-focus");
+    expect(chatInput).toHaveClass("has-focus");
     const chatInputLabel = within(chatInput).getByTestId("chat-input-label");
     expect(chatInputLabel).toHaveAttribute("for", "chat-input");
     expect(chatInputLabel).toHaveClass("visually-hidden");

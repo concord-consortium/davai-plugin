@@ -74,7 +74,7 @@ export const DeveloperOptionsComponent = observer(function DeveloperOptions({ass
       </button>
       <button
         data-testid="new-thread-button"
-        aria-disabled={!assistantStore.assistant || assistantStore.thread || appConfig.isAssistantMocked}
+        aria-disabled={!assistantStore.assistant || !!assistantStore.thread || appConfig.isAssistantMocked}
         onClick={onCreateThread}
       >
         New Thread
