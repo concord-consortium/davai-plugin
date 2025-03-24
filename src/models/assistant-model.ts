@@ -132,12 +132,12 @@ export const AssistantModel = types
 
     const sendCODAPDocumentInfo = flow(function* (message) {
       try {
-        self.transcriptStore.addMessage(DEBUG_SPEAKER, {description: "Sending CODAP document information to LLM", content: message});
+        self.transcriptStore.addMessage(DEBUG_SPEAKER, {description: "Sending CODAP document info to LLM", content: message});
         const messageSent = yield self.apiConnection.beta.threads.messages.create(self.thread.id, {
           role: "user",
           content: `This is a system message containing information about the CODAP document. ${message}`,
         });
-        self.transcriptStore.addMessage(DEBUG_SPEAKER, {description: "CODAP document information received by LLM", content: formatJsonMessage(messageSent)});
+        self.transcriptStore.addMessage(DEBUG_SPEAKER, {description: "CODAP document info received by LLM", content: formatJsonMessage(messageSent)});
       }
       catch (err) {
         console.error("Failed to send system message:", err);

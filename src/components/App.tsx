@@ -247,7 +247,7 @@ export const App = observer(() => {
         </>
       }
       <div
-        className="aria-live"
+        className="visually-hidden"
         role="alert"
         aria-live="assertive"
         aria-atomic="true"
