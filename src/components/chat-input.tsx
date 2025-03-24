@@ -154,7 +154,6 @@ export const ChatInputComponent = ({disabled, keyboardShortcutEnabled, shortcutK
   }, [dictationEnabled]);
 
   const handleDictateToggle = () => {
-    if (disabled) return;
     setDictationEnabled(!dictationEnabled);
 
     if (dictationEnabled) {
@@ -257,7 +256,6 @@ export const ChatInputComponent = ({disabled, keyboardShortcutEnabled, shortcutK
             aria-pressed={dictationEnabled}
             className={dictationEnabled ? "dictate active" : "dictate"}
             data-testid="chat-input-dictate"
-            aria-disabled={disabled}
             title={dictationEnabled ? "Stop Dictation" : "Start Dictation"}
             type="button"
             onClick={handleDictateToggle}
