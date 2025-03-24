@@ -32,7 +32,7 @@ describe("test chat transcript component", () => {
     expect(messages).toHaveLength(2);
 
     messages.forEach((message: HTMLElement, index: number) => {
-      const labelContent = `${chatTranscript.messages[index].speaker} at ${chatTranscript.messages[index].timestamp}`;
+      const labelContent = chatTranscript.messages[index].speaker;
       expect(message).toHaveAttribute("aria-label", labelContent);
 
       const speaker = within(message).getByTestId("chat-message-speaker");

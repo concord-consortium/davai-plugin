@@ -20,6 +20,7 @@ export const KeyboardShortcutControls = (props: IProps) => {
   };
 
   const handleCustomizeShortcut = (event: FormEvent) => {
+    if (!shortcutEnabled) return;
     event.preventDefault();
     const form = event.target as HTMLInputElement;
     const shortcut = form.querySelector("input")?.value.trim();
@@ -46,7 +47,7 @@ export const KeyboardShortcutControls = (props: IProps) => {
         {toggleButtonLabel}
       </button>
       <form data-testid="custom-keyboard-shortcut-form" onSubmit={handleCustomizeShortcut}>
-        <fieldset disabled={!shortcutEnabled}>
+        <fieldset aria-disabled={!shortcutEnabled}>
           <label htmlFor="custom-keyboard-shortcut">Customize Keystroke</label>
           <input
             aria-describedby={customShortcutInputDescribedBy}
@@ -67,7 +68,7 @@ export const KeyboardShortcutControls = (props: IProps) => {
             >
               Keyboard shortcut changed to {shortcutKeys}
               <button
-                aria-label="Dismiss this message." 
+                aria-label="Dismiss this message."
                 className="dismiss"
                 data-testid="custom-keyboard-shortcut-confirmation-dismiss"
                 onClick={() => setShowConfirmation(false)}>

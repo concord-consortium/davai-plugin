@@ -143,6 +143,7 @@ export const App = observer(() => {
   };
 
   const handleCreateThread = async () => {
+    if (!assistantStore.assistant || assistantStore.thread || appConfig.isAssistantMocked) return;
     const confirmCreate = window.confirm("Are you sure you want to create a new thread? If you do, you will lose any existing chat history.");
     if (!confirmCreate) return;
 
@@ -153,6 +154,7 @@ export const App = observer(() => {
   };
 
   const handleDeleteThread = async () => {
+    if (!assistantStore.assistant || !assistantStore.thread) return;
     const confirmDelete = window.confirm("Are you sure you want to delete the current thread? If you do, you will not be able to continue this chat.");
     if (!confirmDelete) return false;
 

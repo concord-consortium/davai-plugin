@@ -67,14 +67,14 @@ export const DeveloperOptionsComponent = observer(function DeveloperOptions({ass
       </select>
       <button
         data-testid="delete-thread-button"
-        disabled={!assistantStore.assistant || !assistantStore.thread}
+        aria-disabled={!assistantStore.assistant || !assistantStore.thread}
         onClick={onDeleteThread}
       >
         Delete Thread
       </button>
       <button
         data-testid="new-thread-button"
-        disabled={!assistantStore.assistant || assistantStore.thread || appConfig.isAssistantMocked}
+        aria-disabled={!assistantStore.assistant || assistantStore.thread || appConfig.isAssistantMocked}
         onClick={onCreateThread}
       >
         New Thread

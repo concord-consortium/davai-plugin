@@ -26,7 +26,7 @@ export const ChatTranscriptComponent = observer(({chatTranscript, showDebugLog, 
 
   return (
     <div ref={chatTranscriptRef} id="chat-transcript" className="chat-transcript" data-testid="chat-transcript" role="group">
-      <h2 className="visually-hidden">DAVAI Chat Transcript</h2>
+      <h2 className="visually-hidden">Chat Transcript</h2>
       <div
         className="chat-transcript__messages"
         data-testid="chat-transcript__messages"

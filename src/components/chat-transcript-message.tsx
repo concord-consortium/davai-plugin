@@ -9,7 +9,7 @@ interface IProps {
 }
 
 export const ChatTranscriptMessage = ({message, showDebugLog}: IProps) => {
-  const { speaker, messageContent, timestamp } = message;
+  const { speaker, messageContent } = message;
   const [showMessage, setShowMessage] = useState(false);
 
   if (speaker === DEBUG_SPEAKER && !showDebugLog) {
@@ -41,7 +41,7 @@ export const ChatTranscriptMessage = ({message, showDebugLog}: IProps) => {
 
   return (
     <div
-      aria-label={`${speaker} at ${timestamp}`}
+      aria-label={speaker}
       className={`chat-transcript__message ${speakerClass}`}
       data-testid="chat-message"
       role="listitem"

@@ -44,6 +44,7 @@ export const ChatInputComponent = ({disabled, keyboardShortcutEnabled, shortcutK
   };
 
   const handleSubmit = (event?: FormEvent) => {
+    if (disabled) return;
     event?.preventDefault();
     event?.stopPropagation();
     setDictationEnabled(false);
@@ -62,6 +63,7 @@ export const ChatInputComponent = ({disabled, keyboardShortcutEnabled, shortcutK
   };
 
   const handleKeyDown = (event: React.KeyboardEvent<HTMLTextAreaElement>) => {
+    if (disabled) return;
     if (event.key === "Enter" && !event.shiftKey) {
       event.preventDefault();
       handleSubmit();
@@ -152,6 +154,7 @@ export const ChatInputComponent = ({disabled, keyboardShortcutEnabled, shortcutK
   }, [dictationEnabled]);
 
   const handleDictateToggle = () => {
+    if (disabled) return;
     setDictationEnabled(!dictationEnabled);
 
     if (dictationEnabled) {
@@ -254,7 +257,7 @@ export const ChatInputComponent = ({disabled, keyboardShortcutEnabled, shortcutK
             aria-pressed={dictationEnabled}
             className={dictationEnabled ? "dictate active" : "dictate"}
             data-testid="chat-input-dictate"
-            disabled={disabled}
+            aria-disabled={disabled}
             title={dictationEnabled ? "Stop Dictation" : "Start Dictation"}
             type="button"
             onClick={handleDictateToggle}
@@ -265,7 +268,7 @@ export const ChatInputComponent = ({disabled, keyboardShortcutEnabled, shortcutK
         <button
           className="send"
           data-testid="chat-input-send"
-          disabled={disabled}
+          aria-disabled={disabled}
           onClick={handleSubmit}
         >
           Send
