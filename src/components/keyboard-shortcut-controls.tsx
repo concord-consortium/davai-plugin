@@ -48,7 +48,7 @@ export const KeyboardShortcutControls = () => {
       </div>
       <form data-testid="custom-keyboard-shortcut-form" onSubmit={handleCustomizeShortcut}>
         <fieldset aria-disabled={!keyboardShortcutEnabled}>
-          <label htmlFor="custom-keyboard-shortcut">Customize Keystroke:</label>
+          <label htmlFor="custom-keyboard-shortcut">Customize Shortcut:</label>
           <input
             aria-describedby={customShortcutInputDescribedBy}
             aria-invalid={showError}
@@ -68,11 +68,10 @@ export const KeyboardShortcutControls = () => {
             >
               Keyboard shortcut changed to {keyboardShortcutKeys}
               <button
-                aria-label="Dismiss this message."
                 className="dismiss"
                 data-testid="custom-keyboard-shortcut-confirmation-dismiss"
                 onClick={() => setShowConfirmation(false)}>
-                  <span className="visually-hidden">dismiss</span>
+                  <span className="visually-hidden">Dismiss this message.</span>
               </button>
             </div>
           }

@@ -173,13 +173,9 @@ export const ChatInputComponent = ({disabled, onKeyboardShortcut, onSubmit}: IPr
         const activeElement = context.document.activeElement;
         if (isInputElement(activeElement)) return;
 
-        if (window.frameElement) {
-          textAreaRef.current?.focus();
-          onKeyboardShortcut();
-        } else {
-          textAreaRef.current?.focus();
-          onKeyboardShortcut();
-        }
+        onKeyboardShortcut();
+        textAreaRef.current?.focus();
+        textAreaRef.current?.scrollIntoView({behavior: "smooth", block: "nearest"});
       }
     };
 
@@ -253,14 +249,12 @@ export const ChatInputComponent = ({disabled, onKeyboardShortcut, onSubmit}: IPr
       <div className="buttons-container">
         {browserSupportsDictation &&
           <button
-            aria-pressed={dictationEnabled}
             className={dictationEnabled ? "dictate active" : "dictate"}
             data-testid="chat-input-dictate"
-            title={dictationEnabled ? "Stop Dictation" : "Start Dictation"}
             type="button"
             onClick={handleDictateToggle}
           >
-            {dictationEnabled ? "Listening..." : "Dictate"}
+            {dictationEnabled ? "Stop Dictation" : "Start Dictation"}
           </button>
         }
         <button

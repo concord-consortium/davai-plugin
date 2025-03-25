@@ -5,19 +5,6 @@ export const timeStamp = (): string => {
   return now.toLocaleString();
 };
 
-// format timeStamp to "HH:MM"
-export const formatTime = (time: string, isDebugSpeaker?: boolean): string => {
-  const date = new Date(time);
-  const options: Intl.DateTimeFormatOptions = { hour: "2-digit", minute: "2-digit" };
-  if (isDebugSpeaker) options.second = "2-digit";
-
-  const timeStr = date.toLocaleTimeString([], options);
-  const parts = timeStr.split(":");
-  parts[0] = parts[0].startsWith("0") ? parts[0].slice(1) : parts[0];
-
-  return parts.join(":");
-};
-
 export const formatJsonMessage = (json: any) => {
   return JSON.stringify(json, null, 2);
 };

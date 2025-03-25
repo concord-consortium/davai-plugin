@@ -18,12 +18,12 @@ export const UserOptions: React.FC<IProps> = ({assistantStore}) => {
   const createToggleOption = (option: keyof IUserOptions, optionLabel: string) => {
     return (
       <div className="user-option">
-        <label htmlFor="readaloud-toggle" data-testid="toggle-label">
+        <label htmlFor={`${option}-toggle`} data-testid={`${option}-toggle-label`}>
           {optionLabel}:
         </label>
         <input
-          data-testid="readaloud-toggle"
-          id="readaloud-toggle"
+          data-testid={option}
+          id={option}
           type="checkbox"
           role="switch"
           checked={!!options[option]}
