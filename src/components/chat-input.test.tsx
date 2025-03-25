@@ -46,7 +46,7 @@ describe("test chat input component", () => {
   const mockHandleSubmit = jest.fn();
 
   it("renders a textarea and submit button that lets user send chat messages", () => {
-    render(<ChatInputComponent keyboardShortcutEnabled={true} shortcutKeys="ctrl+?" onSubmit={mockHandleSubmit} onKeyboardShortcut={jest.fn()} />);
+    render(<ChatInputComponent onSubmit={mockHandleSubmit} onKeyboardShortcut={jest.fn()} />);
 
     const chatInput = screen.getByTestId("chat-input");
     expect(chatInput).toHaveClass("has-focus");
@@ -76,7 +76,7 @@ describe("test chat input component", () => {
   });
 
   it ("renders a dictate button that lets user dictate chat messages", () => {
-    render(<ChatInputComponent keyboardShortcutEnabled={true} shortcutKeys="ctrl+?" onSubmit={mockHandleSubmit} onKeyboardShortcut={jest.fn()} />);
+    render(<ChatInputComponent onSubmit={mockHandleSubmit} onKeyboardShortcut={jest.fn()} />);
 
     const chatInput = screen.getByTestId("chat-input");
     const chatInputDictate = within(chatInput).getByTestId("chat-input-dictate");

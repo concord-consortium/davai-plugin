@@ -10,24 +10,8 @@ describe("test keyboard shortcut controls component", () => {
   afterEach(cleanup);
 
   const WrapperComponent = () => {
-    const [shortcutEnabled, setShortcutEnabled] = useState(true);
-    const [shortcutKeys, setShortcutKeys] = useState(defaultShortcut);
-
-    const mockToggleShortcut = jest.fn(() => {
-      setShortcutEnabled((prev) => !prev);
-    });
-
-    const mockCustomizeShortcut = jest.fn((shortcut: string) => {
-      setShortcutKeys(shortcut);
-    });
-
     return (
-      <KeyboardShortcutControls
-        shortcutEnabled={shortcutEnabled}
-        shortcutKeys={shortcutKeys}
-        onToggleShortcut={mockToggleShortcut}
-        onCustomizeShortcut={mockCustomizeShortcut}
-      />
+      <KeyboardShortcutControls/>
     );
   };
 

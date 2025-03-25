@@ -1,4 +1,5 @@
 import React, { FormEvent, useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useOptions } from "../contexts/user-options-context";
 import { kDefaultChatInputHeight, START_RECORDING_NOTE, STOP_RECORDING_NOTE } from "../constants";
 import { playSound, isInputElement, isShortcutPressed } from "../utils/utils";
 
@@ -6,13 +7,12 @@ import "./chat-input.scss";
 
 interface IProps {
   disabled?: boolean;
-  keyboardShortcutEnabled: boolean;
-  shortcutKeys: string;
   onKeyboardShortcut: () => void;
   onSubmit: (messageText: string) => void;
 }
 
-export const ChatInputComponent = ({disabled, keyboardShortcutEnabled, shortcutKeys, onKeyboardShortcut, onSubmit}: IProps) => {
+export const ChatInputComponent = ({disabled, onKeyboardShortcut, onSubmit}: IProps) => {
+  const { keyboardShortcutEnabled, keyboardShortcutKeys } = useOptions();
   const [browserSupportsDictation, setBrowserSupportsDictation] = useState(false);
   const [dictationEnabled, setDictationEnabled] = useState(false);
   const [inputValue, setInputValue] = useState("");
@@ -168,7 +168,7 @@ export const ChatInputComponent = ({disabled, keyboardShortcutEnabled, shortcutK
   const addShortcutListener = useCallback((context: Window) => {
     const keydownHandler = (event: KeyboardEvent) => {
       pressedKeys.add(event.code);
-      if (isShortcutPressed(pressedKeys, shortcutKeys)) {
+      if (isShortcutPressed(pressedKeys, keyboardShortcutKeys)) {
         event.preventDefault();
         const activeElement = context.document.activeElement;
         if (isInputElement(activeElement)) return;
@@ -195,7 +195,7 @@ export const ChatInputComponent = ({disabled, keyboardShortcutEnabled, shortcutK
       context.document.removeEventListener("keydown", keydownHandler);
       context.document.removeEventListener("keyup", keyupHandler);
     };
-  }, [onKeyboardShortcut, pressedKeys, shortcutKeys]);
+  }, [onKeyboardShortcut, pressedKeys, keyboardShortcutKeys]);
 
   useEffect(() => {
     const keydownListeners: (() => void)[] = [];

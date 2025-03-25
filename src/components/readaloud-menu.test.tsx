@@ -9,12 +9,7 @@ describe("test read aloud menu component", () => {
 
   it("renders a toggle switch to turn readaloud on and off and a select menu to control playback speed", () => {
     render(
-      <ReadAloudMenu
-        enabled={false}
-        onToggle={mockHandleToggle}
-        playbackSpeed={1}
-        onPlaybackSpeedSelect={mockHandleSelect}
-      />
+      <ReadAloudMenu/>
     );
 
     const readAloudToggle = screen.getByTestId("readaloud-toggle");

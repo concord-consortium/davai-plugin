@@ -1,44 +1,38 @@
 import React from "react";
+import { useOptions } from "../contexts/user-options-context";
 
-import "./readaloud-menu.scss";
-
-interface IReadAloudMenuProps {
-  enabled: boolean;
-  onToggle: () => void;
-  playbackSpeed: number;
-  onPlaybackSpeedSelect: (speed: number) => void;
-}
-
-export const ReadAloudMenu = (props: IReadAloudMenuProps) => {
-  const { enabled, onToggle, playbackSpeed, onPlaybackSpeedSelect } = props;
+export const ReadAloudMenu = () => {
+  const { readAloudEnabled, playbackSpeed, toggleOption, updateOptions } = useOptions();
 
   const handleSelect = (event: React.ChangeEvent<HTMLSelectElement>) => {
-    onPlaybackSpeedSelect(parseFloat(event.target.value));
+    updateOptions({playbackSpeed: parseFloat(event.target.value)});
   };
 
   return (
-    <div className="readaloud-controls">
-      <div className="toggle">
+    <div className="options-section">
+      <div className="options-section-header">
+        <h3>Tap to Read</h3>
+      </div>
+      <div className="user-option">
         <label htmlFor="readaloud-toggle" data-testid="toggle-label">
-          Tap text to listen
+          {`Enable "Tap to Read" mode:`}
         </label>
         <input
           data-testid="readaloud-toggle"
           id="readaloud-toggle"
           type="checkbox"
           role="switch"
-          checked={enabled}
-          aria-checked={enabled}
-          onChange={onToggle}
+          checked={readAloudEnabled}
+          aria-checked={readAloudEnabled}
+          onChange={() => toggleOption("readAloudEnabled")}
         />
       </div>
-      <div className="select-playback-speed">
+      <div className="user-option">
         <label
           data-testid="speed-label"
-          className="visually-hidden"
           htmlFor="readaloud-playback-speed"
         >
-          Select playback speed
+          {`"Tap to Read" playback speed:`}
         </label>
         <select
           onChange={handleSelect}

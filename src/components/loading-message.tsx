@@ -1,27 +1,7 @@
-import React, { useEffect } from "react";
-import { DAVAI_SPEAKER, LOADING_NOTE } from "../constants";
-import { playSound, timeStamp } from "../utils/utils";
+import React from "react";
+import { DAVAI_SPEAKER } from "../constants";
 
-interface IProps {
-  playProcessingTone: boolean;
-}
-
-export const LoadingMessage = ({ playProcessingTone }: IProps) => {
-  useEffect(() => {
-    let interval: NodeJS.Timeout | undefined;
-
-    if (playProcessingTone) {
-      playSound(LOADING_NOTE);
-      interval = setInterval(() => playSound(LOADING_NOTE), 2000);
-    }
-
-    return () => {
-      if (interval) {
-        clearInterval(interval);
-      }
-    };
-  }, [playProcessingTone]);
-
+export const LoadingMessage = () => {
   return (
     <div
       aria-label={DAVAI_SPEAKER}

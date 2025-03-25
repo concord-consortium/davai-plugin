@@ -1,5 +1,6 @@
 import React, { useRef, useEffect } from "react";
 import { observer } from "mobx-react-lite";
+import { useOptions } from "../contexts/user-options-context";
 import { ChatTranscriptMessage } from "./chat-transcript-message";
 import { ChatTranscript, ChatMessage } from "../types";
 import { LoadingMessage } from "./loading-message";
@@ -8,12 +9,11 @@ import "./chat-transcript.scss";
 
 interface IProps {
   chatTranscript: ChatTranscript;
-  playProcessingTone: boolean;
-  showDebugLog: boolean;
   isLoading?: boolean;
 }
 
-export const ChatTranscriptComponent = observer(({chatTranscript, playProcessingTone, showDebugLog, isLoading}: IProps) => {
+export const ChatTranscriptComponent = observer(({chatTranscript, isLoading}: IProps) => {
+  const { showDebugLog } = useOptions();
   const chatTranscriptRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -42,7 +42,7 @@ export const ChatTranscriptComponent = observer(({chatTranscript, playProcessing
             />
           );
         })}
-        {isLoading && <LoadingMessage playProcessingTone={playProcessingTone}/>}
+        {isLoading && <LoadingMessage/>}
       </div>
     </div>
   );
