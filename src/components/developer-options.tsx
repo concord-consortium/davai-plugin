@@ -4,18 +4,18 @@ import { observer } from "mobx-react-lite";
 import { AssistantModelType } from "../models/assistant-model";
 import { useAppConfigContext } from "../hooks/use-app-config-context";
 import { useOpenAIContext } from "../hooks/use-openai-context";
-import { useOptions } from "../contexts/user-options-context";
 import { getUrlParam } from "../utils/utils";
 import { DAVAI_SPEAKER, GREETING } from "../constants";
+import { IUserOptions } from "../types";
 
 interface IProps {
+  createToggleOption: (option: keyof IUserOptions, optionLabel: string) => React.JSX.Element;
   assistantStore: AssistantModelType;
 }
 
-export const DeveloperOptionsComponent = observer(function DeveloperOptions({assistantStore}: IProps) {
+export const DeveloperOptionsComponent = observer(function DeveloperOptions({assistantStore, createToggleOption}: IProps) {
   const appConfig = useAppConfigContext();
   const apiConnection = useOpenAIContext();
-  const {showDebugLog, toggleOption} = useOptions();
   const selectedAssistant = assistantStore.assistantId ? assistantStore.assistantId : "mock";
   const [assistantOptions, setAssistantOptions] = useState<Map<string, string>>();
   const isDevMode = getUrlParam("mode") === "development" || appConfig.mode === "development";
@@ -85,25 +85,7 @@ export const DeveloperOptionsComponent = observer(function DeveloperOptions({ass
       <div className="options-section-header">
         <h3>Developer Options</h3>
       </div>
-      <div className="user-option">
-        <label htmlFor="debug-log-toggle">
-          Show Debug Log:
-        </label>
-        <input
-          type="checkbox"
-          id="debug-log-toggle"
-          name="ShowDebugLog"
-          aria-checked={showDebugLog}
-          checked={showDebugLog}
-          role="switch"
-          onChange={() => toggleOption("showDebugLog")}
-          onKeyDown={(e) => {
-            if (e.key === "Enter") {
-              toggleOption("showDebugLog");
-            }
-          }}
-        />
-      </div>
+      {createToggleOption("showDebugLog", "Show Debug Log")}
       <div className="user-option">
         <label htmlFor="assistant-select" data-testid="assistant-select-label">
           Select an Assistant:

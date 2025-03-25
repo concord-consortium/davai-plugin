@@ -6,10 +6,11 @@ import { ReadAloudMenu } from "./readaloud-menu";
 describe("test read aloud menu component", () => {
   const mockHandleToggle = jest.fn();
   const mockHandleSelect = jest.fn();
+  const mockCreateToggleOption = jest.fn();
 
   it("renders a toggle switch to turn readaloud on and off and a select menu to control playback speed", () => {
     render(
-      <ReadAloudMenu/>
+      <ReadAloudMenu createToggleOption={mockCreateToggleOption}/>
     );
 
     const readAloudToggle = screen.getByTestId("readaloud-toggle");

@@ -45,6 +45,7 @@ describe("test developer options component", () => {
       <MockAppConfigProvider>
         <MockOpenAiConnectionProvider>
           <DeveloperOptionsComponent
+            createToggleOption={() => <div />}
             assistantStore={mockAssistantStore}
           />
         </MockOpenAiConnectionProvider>

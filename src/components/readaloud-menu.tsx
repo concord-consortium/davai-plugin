@@ -1,8 +1,13 @@
 import React from "react";
 import { useOptions } from "../contexts/user-options-context";
+import { IUserOptions } from "../types";
 
-export const ReadAloudMenu = () => {
-  const { readAloudEnabled, playbackSpeed, toggleOption, updateOptions } = useOptions();
+interface IProps {
+  createToggleOption: (option: keyof IUserOptions, optionLabel: string) => React.JSX.Element
+}
+
+export const ReadAloudMenu: React.FC<IProps> = ({createToggleOption}) => {
+  const { playbackSpeed, updateOptions } = useOptions();
 
   const handleSelect = (event: React.ChangeEvent<HTMLSelectElement>) => {
     updateOptions({playbackSpeed: parseFloat(event.target.value)});
@@ -13,20 +18,7 @@ export const ReadAloudMenu = () => {
       <div className="options-section-header">
         <h3>Tap to Read</h3>
       </div>
-      <div className="user-option">
-        <label htmlFor="readaloud-toggle" data-testid="toggle-label">
-          {`Enable "Tap to Read" mode:`}
-        </label>
-        <input
-          data-testid="readaloud-toggle"
-          id="readaloud-toggle"
-          type="checkbox"
-          role="switch"
-          checked={readAloudEnabled}
-          aria-checked={readAloudEnabled}
-          onChange={() => toggleOption("readAloudEnabled")}
-        />
-      </div>
+      {createToggleOption("readAloudEnabled", `Enable "Tap to Read" mode`)}
       <div className="user-option">
         <label
           data-testid="speed-label"

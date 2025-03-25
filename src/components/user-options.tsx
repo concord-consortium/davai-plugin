@@ -39,7 +39,7 @@ export const UserOptions: React.FC<IProps> = ({assistantStore}) => {
       <div className="options-header">
         <h2>Options</h2>
       </div>
-      <ReadAloudMenu/>
+      <ReadAloudMenu createToggleOption={createToggleOption}/>
       <div className="options-section">
         <div className="options-section-header">
           <h3>Loading Indicators</h3>
@@ -48,7 +48,7 @@ export const UserOptions: React.FC<IProps> = ({assistantStore}) => {
         {createToggleOption("playProcessingTone", "Play loading tone")}
       </div>
       <KeyboardShortcutControls/>
-      <DeveloperOptionsComponent assistantStore={assistantStore}/>
+      <DeveloperOptionsComponent createToggleOption={createToggleOption} assistantStore={assistantStore}/>
     </div>
   );
 };
