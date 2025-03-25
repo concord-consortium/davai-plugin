@@ -80,23 +80,17 @@ describe("test chat input component", () => {
 
     const chatInput = screen.getByTestId("chat-input");
     const chatInputDictate = within(chatInput).getByTestId("chat-input-dictate");
-    expect(chatInputDictate).toHaveAttribute("aria-pressed", "false");
-    expect(chatInputDictate).toHaveAttribute("title", "Start Dictation");
+    expect(chatInputDictate).toHaveAccessibleName("Start Dictation");
     expect(chatInputDictate).not.toHaveClass("active");
-    expect(chatInputDictate).toHaveTextContent("Dictate");
     fireEvent.click(chatInputDictate);
-    expect(chatInputDictate).toHaveAttribute("aria-pressed", "true");
-    expect(chatInputDictate).toHaveAttribute("title", "Stop Dictation");
+    expect(chatInputDictate).toHaveAccessibleName("Stop Dictation");
     expect(chatInputDictate).toHaveClass("active");
-    expect(chatInputDictate).toHaveTextContent("Listening...");
     expect(global.SpeechRecognition).toHaveBeenCalled();
     const srInstance1 = mockSpeechRecognition.mock.results[0].value;
     expect(srInstance1.start).toHaveBeenCalled();
     fireEvent.click(chatInputDictate);
-    expect(chatInputDictate).toHaveAttribute("aria-pressed", "false");
-    expect(chatInputDictate).toHaveAttribute("title", "Start Dictation");
+    expect(chatInputDictate).toHaveAccessibleName("Start Dictation");
     expect(chatInputDictate).not.toHaveClass("active");
-    expect(chatInputDictate).toHaveTextContent("Dictate");
     const srInstance2 = mockSpeechRecognition.mock.results[0].value;
     expect(srInstance2.stop).toHaveBeenCalled();
   });

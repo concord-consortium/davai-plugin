@@ -1,6 +1,6 @@
 import React, { useRef, useEffect } from "react";
 import { observer } from "mobx-react-lite";
-import { useOptions } from "../contexts/user-options-context";
+import { useOptions } from "../hooks/use-options";
 import { ChatTranscriptMessage } from "./chat-transcript-message";
 import { ChatTranscript, ChatMessage } from "../types";
 import { LoadingMessage } from "./loading-message";

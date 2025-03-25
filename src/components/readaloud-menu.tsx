@@ -1,5 +1,5 @@
 import React from "react";
-import { useOptions } from "../contexts/user-options-context";
+import { useOptions } from "../hooks/use-options";
 import { IUserOptions } from "../types";
 
 interface IProps {

@@ -1,7 +1,7 @@
 import React, { useEffect } from "react";
 import { DAVAI_SPEAKER } from "../constants";
 import { useAriaLive } from "../contexts/aria-live-context";
-import { useOptions } from "../contexts/user-options-context";
+import { useOptions } from "../hooks/use-options";
 
 export const LoadingMessage = () => {
   const {setAriaLiveText} = useAriaLive();

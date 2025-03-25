@@ -1,9 +1,6 @@
-import React, { useEffect, useState } from "react";
-import { OpenAI } from "openai";
-import { observer } from "mobx-react-lite";
+import React from "react";
 import { AssistantModelType } from "../models/assistant-model";
 import { useAppConfigContext } from "../hooks/use-app-config-context";
-import { useOpenAIContext } from "../hooks/use-openai-context";
 import { getUrlParam } from "../utils/utils";
 import { DAVAI_SPEAKER, GREETING } from "../constants";
 import { IUserOptions } from "../types";
@@ -13,31 +10,10 @@ interface IProps {
   assistantStore: AssistantModelType;
 }
 
-export const DeveloperOptionsComponent = observer(function DeveloperOptions({assistantStore, createToggleOption}: IProps) {
+export const DeveloperOptionsComponent: React.FC<IProps> = ({assistantStore, createToggleOption}) => {
   const appConfig = useAppConfigContext();
-  const apiConnection = useOpenAIContext();
   const selectedAssistant = assistantStore.assistantId ? assistantStore.assistantId : "mock";
-  const [assistantOptions, setAssistantOptions] = useState<Map<string, string>>();
   const isDevMode = getUrlParam("mode") === "development" || appConfig.mode === "development";
-
-  useEffect(() => {
-    if (!isDevMode) return;
-    const fetchAssistants = async () => {
-      try {
-        const res = await apiConnection.beta.assistants.list();
-        const assistants = new Map();
-        res.data.map((assistant: OpenAI.Beta.Assistant) => {
-          const assistantName = assistant.name || assistant.id;
-          assistants.set(assistant.id, assistantName);
-        });
-        setAssistantOptions(assistants);
-      } catch (err) {
-        console.error(err);
-      }
-    };
-
-    fetchAssistants();
-  }, [apiConnection.beta.assistants, isDevMode]);
 
   const handleCreateThread = async () => {
     if (!assistantStore.assistant || assistantStore.thread || appConfig.isAssistantMocked) return;
@@ -97,7 +73,7 @@ export const DeveloperOptionsComponent = observer(function DeveloperOptions({ass
           onChange={handleSelectAssistant}
         >
           <option value="mock">Mock Assistant</option>
-          {Array.from(assistantOptions?.entries() || []).map(([assistantId, assistantName]) => (
+          {Array.from(assistantStore.assistantList?.entries() || []).map(([assistantId, assistantName]) => (
             <option
               aria-selected={assistantStore.assistantId === assistantId}
               key={assistantId}
@@ -128,4 +104,4 @@ export const DeveloperOptionsComponent = observer(function DeveloperOptions({ass
       </div>
     </div>
   );
-});
+};

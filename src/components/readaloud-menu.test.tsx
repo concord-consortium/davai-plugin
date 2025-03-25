@@ -5,15 +5,31 @@ import { ReadAloudMenu } from "./readaloud-menu";
 
 describe("test read aloud menu component", () => {
   const mockHandleToggle = jest.fn();
-  const mockHandleSelect = jest.fn();
-  const mockCreateToggleOption = jest.fn();
+  const mockCreateToggleOption = jest.fn().mockImplementation((option: string, optionLabel: string) => {
+    return (
+      <div className="user-option">
+        <label htmlFor={`${option}-toggle`} data-testid={`${option}-toggle-label`}>
+          {optionLabel}:
+        </label>
+        <input
+          data-testid={`${option}-toggle`}
+          id={`${option}-toggle`}
+          type="checkbox"
+          role="switch"
+          checked={false}
+          aria-checked="false"
+          onChange={mockHandleToggle}
+        />
+      </div>
+    );
+  });
 
   it("renders a toggle switch to turn readaloud on and off and a select menu to control playback speed", () => {
     render(
       <ReadAloudMenu createToggleOption={mockCreateToggleOption}/>
     );
 
-    const readAloudToggle = screen.getByTestId("readaloud-toggle");
+    const readAloudToggle = screen.getByTestId("readAloudEnabled-toggle");
     expect(readAloudToggle).toHaveAttribute("type", "checkbox");
     expect(readAloudToggle).toHaveAttribute("role", "switch");
     expect(readAloudToggle).toHaveAttribute("aria-checked", "false");
@@ -30,7 +46,6 @@ describe("test read aloud menu component", () => {
     const option3 = screen.getByTestId("playback-speed-option-3") as HTMLOptionElement;
     fireEvent.click(option3);
     fireEvent.change(readAloudPlaybackSpeed, { target: { value: "1.5" } });
-    expect(mockHandleSelect).toHaveBeenCalled();
     expect(readAloudPlaybackSpeed).toHaveValue("1.5");
   });
 });

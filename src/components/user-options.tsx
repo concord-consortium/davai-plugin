@@ -1,5 +1,5 @@
 import React from "react";
-import { useOptions } from "../contexts/user-options-context";
+import { useOptions } from "../hooks/use-options";
 import { ReadAloudMenu } from "./readaloud-menu";
 import { KeyboardShortcutControls } from "./keyboard-shortcut-controls";
 import { IUserOptions } from "../types";
@@ -22,8 +22,8 @@ export const UserOptions: React.FC<IProps> = ({assistantStore}) => {
           {optionLabel}:
         </label>
         <input
-          data-testid={option}
-          id={option}
+          data-testid={`${option}-toggle`}
+          id={`${option}-toggle`}
           type="checkbox"
           role="switch"
           checked={!!options[option]}

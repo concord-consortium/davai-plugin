@@ -1,5 +1,5 @@
 import React, { FormEvent, useState } from "react";
-import { useOptions } from "../contexts/user-options-context";
+import { useOptions } from "../hooks/use-options";
 
 import "./keyboard-shortcut-controls.scss";
 

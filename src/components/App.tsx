@@ -5,7 +5,7 @@ import { addDataContextChangeListener, addDataContextsListListener, ClientNotifi
 import { useAppConfigContext } from "../hooks/use-app-config-context";
 import { useAssistantStore } from "../hooks/use-assistant-store";
 import { useAriaLive } from "../contexts/aria-live-context";
-import { useOptions } from "../contexts/user-options-context";
+import { useOptions } from "../hooks/use-options";
 import { ChatInputComponent } from "./chat-input";
 import { ChatTranscriptComponent } from "./chat-transcript";
 import { DAVAI_SPEAKER, DEBUG_SPEAKER, LOADING_NOTE, USER_SPEAKER, notificationsToIgnore } from "../constants";
@@ -85,6 +85,7 @@ export const App = observer(() => {
 
   useEffect(() => {
     assistantStore.initializeAssistant();
+    assistantStore.fetchAssistantsList();
     assistantStoreRef.current = assistantStore;
   }, [assistantStore, appConfig.assistantId]);
 

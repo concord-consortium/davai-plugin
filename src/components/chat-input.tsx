@@ -1,5 +1,5 @@
 import React, { FormEvent, useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { useOptions } from "../contexts/user-options-context";
+import { useOptions } from "../hooks/use-options";
 import { kDefaultChatInputHeight, START_RECORDING_NOTE, STOP_RECORDING_NOTE } from "../constants";
 import { playSound, isInputElement, isShortcutPressed } from "../utils/utils";
 
