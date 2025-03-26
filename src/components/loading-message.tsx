@@ -13,9 +13,9 @@ export const LoadingMessage = () => {
       let isAlternate = false;
 
       const interval = setInterval(() => {
-        // alternate between "Processing" and "Processing " so scren readers will read the message
+        // alternate between "Processing" and "Processing." so scren readers will read the message
         isAlternate = !isAlternate;
-        const processingMessage = isAlternate ? "Processing " : "Processing";
+        const processingMessage = isAlternate ? "Processing." : "Processing";
         setAriaLiveText(processingMessage);
       }, 4000);
       return () => clearInterval(interval);
