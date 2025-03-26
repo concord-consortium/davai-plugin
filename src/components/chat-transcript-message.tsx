@@ -37,8 +37,8 @@ export const ChatTranscriptMessage = ({message, showDebugLog}: IProps) => {
           aria-expanded={showMessage}
           aria-controls="debug-message-content"
           onClick={handleToggleMessage}
-          className="debug-message-toggle"
         >
+          <span aria-hidden="true" className="arrow-icon">▼</span>
           {messageContent.description}
         </button>
         <pre

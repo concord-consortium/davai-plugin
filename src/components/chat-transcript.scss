@@ -68,7 +68,7 @@
 
             &.collapsed{
               button {
-                &:before {
+                .arrow-icon {
                   transform: rotate(-90deg);
                 }
               }
@@ -90,11 +90,9 @@
               padding: 0;
               margin: 0;
               cursor: pointer;
-
-              &:before {
+              .arrow-icon {
                 display: inline-block;
-                content: "\25BC";
-                color: $dark-gray;
+                font-size: .7rem;
                 margin-right: 5px;
               }
             }
