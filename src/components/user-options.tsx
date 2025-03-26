@@ -35,14 +35,14 @@ export const UserOptions: React.FC<IProps> = ({assistantStore}) => {
   };
 
   return (
-    <div className="user-options">
+    <div className="user-options" role="group" aria-labelledby="options-heading">
       <div className="options-header">
-        <h2>Options</h2>
+        <h2 id="options-heading">Options</h2>
       </div>
       <ReadAloudMenu createToggleOption={createToggleOption}/>
-      <div className="options-section">
+      <div className="options-section" role="group" aria-labelledby="loading-indicators-heading">
         <div className="options-section-header">
-          <h3>Loading Indicators</h3>
+          <h3 id="loading-indicators-heading">Loading Indicators</h3>
         </div>
         {createToggleOption("playProcessingMessage", "Play loading message")}
         {createToggleOption("playProcessingTone", "Play loading tone")}

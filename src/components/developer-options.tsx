@@ -58,9 +58,9 @@ export const DeveloperOptionsComponent = observer(({assistantStore, createToggle
 
   return (
     !isDevMode ? <div/> :
-    <div className="options-section" data-testid="developer-options">
+    <div className="options-section" role="group" aria-labelledby="dev-options-heading" data-testid="developer-options">
       <div className="options-section-header">
-        <h3>Developer Options</h3>
+        <h3 id="dev-options-heading">Developer Options</h3>
       </div>
       {createToggleOption("showDebugLog", "Show Debug Log")}
       <div className="user-option">

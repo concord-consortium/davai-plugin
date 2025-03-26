@@ -37,9 +37,14 @@ export const KeyboardShortcutControls = () => {
       : undefined;
 
   return (
-    <div className="options-section" data-testid="keyboard-shortcut-controls">
+    <div
+      className="options-section"
+      role="group"
+      aria-labelledby="keyboard-shortcuts-heading"
+      data-testid="keyboard-shortcut-controls"
+    >
       <div className="options-section-header">
-        <h3>Keyboard Shortcuts</h3>
+        <h3 id="keyboard-shortcuts-heading">Keyboard Shortcuts</h3>
       </div>
       <div className="user-option">
         <button onClick={handleToggleShortcut} data-testid="keyboard-shortcut-toggle">
