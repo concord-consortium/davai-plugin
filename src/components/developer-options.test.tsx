@@ -5,9 +5,7 @@ import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { DeveloperOptionsComponent } from "./developer-options";
 import { AssistantModel } from "../models/assistant-model";
 import { ChatTranscriptModel } from "../models/chat-transcript-model";
-import { MockAppConfigProvider } from "../test-utils/app-config-provider";
 import { mockAppConfig } from "../test-utils/mock-app-config";
-import { MockOpenAiConnectionProvider } from "../test-utils/openai-connection-provider";
 
 const mockTranscriptStore = ChatTranscriptModel.create({
   messages: [
@@ -27,34 +25,31 @@ const mockAssistantStore = AssistantModel.create({
   },
   assistant: {},
   assistantId: "asst_abc123",
+  assistantList: {
+    asst_abc123: "Jest Mock Assistant",
+  },
   thread: {},
   transcriptStore: mockTranscriptStore,
 });
 
 jest.mock("../models/app-config-model", () => ({
   AppConfigModel: {
-    create: jest.fn(() => (mockAppConfig)),
+    create: jest.fn(() => ({...mockAppConfig, mode: "development"})),
     initialize: jest.fn(),
   }
 }));
 
+jest.mock("../hooks/use-app-config-context", () => ({
+  useAppConfigContext: jest.fn(() => ({...mockAppConfig, mode: "development"})),
+}));
+
 describe("test developer options component", () => {
 
-  const WrapperComponent = () => {
-    return (
-      <MockAppConfigProvider>
-        <MockOpenAiConnectionProvider>
-          <DeveloperOptionsComponent
-            createToggleOption={() => <div />}
-            assistantStore={mockAssistantStore}
-          />
-        </MockOpenAiConnectionProvider>
-      </MockAppConfigProvider>
-    );
-  };
-
   it("renders a developer options component with mock assistant checkbox and thread buttons", async () => {
-    render(<WrapperComponent />);
+    render(<DeveloperOptionsComponent
+      createToggleOption={() => <div />}
+      assistantStore={mockAssistantStore}
+    />);
 
     const developerOptions = screen.getByTestId("developer-options");
     expect(developerOptions).toBeInTheDocument();
@@ -84,4 +79,6 @@ describe("test developer options component", () => {
     expect(newThreadButton).toHaveAttribute("aria-disabled", "true");
     expect(newThreadButton).toHaveTextContent("New Thread");
   });
+
+
 });

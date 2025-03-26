@@ -57,7 +57,7 @@ export const DeveloperOptionsComponent: React.FC<IProps> = ({assistantStore, cre
 
   return (
     !isDevMode ? <div/> :
-    <div className="options-section">
+    <div className="options-section" data-testid="developer-options">
       <div className="options-section-header">
         <h3>Developer Options</h3>
       </div>

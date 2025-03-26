@@ -37,7 +37,7 @@ export const KeyboardShortcutControls = () => {
       : undefined;
 
   return (
-    <div className="options-section">
+    <div className="options-section" data-testid="keyboard-shortcut-controls">
       <div className="options-section-header">
         <h3>Keyboard Shortcuts</h3>
       </div>

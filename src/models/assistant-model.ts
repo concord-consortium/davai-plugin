@@ -46,7 +46,7 @@ export const AssistantModel = types
     apiConnection: OpenAIType,
     assistant: types.maybe(types.frozen()),
     assistantId: types.string,
-    assistantList: types.maybe(types.map(types.string)), // Changed to maybe with a map of string to string
+    assistantList: types.optional(types.map(types.string), {}),
     isLoadingResponse: types.optional(types.boolean, false),
     thread: types.maybe(types.frozen()),
     transcriptStore: ChatTranscriptModel,
