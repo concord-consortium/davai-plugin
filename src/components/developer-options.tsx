@@ -4,13 +4,14 @@ import { useAppConfigContext } from "../hooks/use-app-config-context";
 import { getUrlParam } from "../utils/utils";
 import { DAVAI_SPEAKER, GREETING } from "../constants";
 import { IUserOptions } from "../types";
+import { observer } from "mobx-react-lite";
 
 interface IProps {
   createToggleOption: (option: keyof IUserOptions, optionLabel: string) => React.JSX.Element;
   assistantStore: AssistantModelType;
 }
 
-export const DeveloperOptionsComponent: React.FC<IProps> = ({assistantStore, createToggleOption}) => {
+export const DeveloperOptionsComponent = observer(({assistantStore, createToggleOption}: IProps) => {
   const appConfig = useAppConfigContext();
   const selectedAssistant = assistantStore.assistantId ? assistantStore.assistantId : "mock";
   const isDevMode = getUrlParam("mode") === "development" || appConfig.mode === "development";
@@ -104,4 +105,4 @@ export const DeveloperOptionsComponent: React.FC<IProps> = ({assistantStore, cre
       </div>
     </div>
   );
-};
+});
