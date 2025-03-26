@@ -1,6 +1,7 @@
 import React, { useCallback, useEffect, useRef } from "react";
 import * as Tone from "tone";
 import { observer } from "mobx-react-lite";
+import removeMarkdown from "remove-markdown";
 import { addDataContextChangeListener, addDataContextsListListener, ClientNotification, getDataContext, getListOfDataContexts, initializePlugin, selectSelf } from "@concord-consortium/codap-plugin-api";
 import { useAppConfigContext } from "../hooks/use-app-config-context";
 import { useAssistantStore } from "../hooks/use-assistant-store";
@@ -26,6 +27,7 @@ export const App = observer(() => {
   const dimensions = { width: appConfig.dimensions.width, height: appConfig.dimensions.height };
   const subscribedDataCtxsRef = useRef<string[]>([]);
   const transcriptStore = assistantStore.transcriptStore;
+  // const [backgroundColor, setBackgroundColor] = useState<string>("#fff");
 
   const handleDataContextChangeNotice = useCallback(async (notification: ClientNotification) => {
     if (notificationsToIgnore.includes(notification.values.operation)) return;
@@ -94,7 +96,8 @@ export const App = observer(() => {
     if (transcriptStore.messages.length > 0) {
       const lastMessage = messages[messages.length - 1];
       if (lastMessage.speaker === DAVAI_SPEAKER) {
-        setAriaLiveText(lastMessage.messageContent.content);
+        const plainTextContent = removeMarkdown(lastMessage.messageContent.content, {stripListLeaders: false, useImgAltText: true});
+        setAriaLiveText(plainTextContent);
       }
     }
   }, [transcriptStore, transcriptStore.messages.length, setAriaLiveText]);
@@ -132,6 +135,12 @@ export const App = observer(() => {
     }
   };
 
+  // useEffect(() => {
+  //   // change background color to a new random color
+  //   const randomColor = Math.floor(Math.random()*16777215).toString(16);
+  //   setBackgroundColor(`#${randomColor}`);
+  // }, [ariaLiveText]);
+
   return (
     <div className="App">
       <header>
@@ -152,6 +161,7 @@ export const App = observer(() => {
       <UserOptions assistantStore={assistantStore} />
       <div
         className="visually-hidden"
+        // style={{backgroundColor}}
         role="alert"
         aria-live="assertive"
         aria-atomic="true"
