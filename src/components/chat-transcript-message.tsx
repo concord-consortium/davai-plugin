@@ -32,20 +32,17 @@ export const ChatTranscriptMessage = ({message, showDebugLog}: IProps) => {
     const expandedClass = showMessage ? "expanded" : "collapsed";
     return (
       <div className={`debug-message-wrapper ${expandedClass}`}>
-        <div className="debug-message-header">
-          <input
-              type="checkbox"
-              role="switch"
-              aria-label={"Expand content"}
-              aria-checked={showMessage}
-              id={"debug-message-toggle"}
-              className="debug-message-toggle"
-              onClick={handleToggleMessage}
-            />
-          <h4>{messageContent.description}:</h4>
-        </div>
-        <pre
+        <button
+          type="button"
           aria-expanded={showMessage}
+          aria-controls="debug-message-content"
+          onClick={handleToggleMessage}
+          className="debug-message-toggle"
+        >
+          {messageContent.description}
+        </button>
+        <pre
+          id="debug-message-content"
         >
             {messageContent.content}
         </pre>
