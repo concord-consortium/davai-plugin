@@ -134,6 +134,10 @@ export const App = observer(() => {
     }
   };
 
+  const handleCancel = () => {
+    console.log("cancel");
+  };
+
   return (
     <div className="App">
       <header>
@@ -148,6 +152,8 @@ export const App = observer(() => {
       />
       <ChatInputComponent
         disabled={(!assistantStore.thread && !appConfig.isAssistantMocked) || assistantStore.isLoadingResponse}
+        isLoadingResponse={assistantStore.isLoadingResponse}
+        onCancel={handleCancel}
         onSubmit={handleChatInputSubmit}
         onKeyboardShortcut={handleFocusShortcut}
       />
