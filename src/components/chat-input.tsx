@@ -3,15 +3,21 @@ import { useOptions } from "../hooks/use-options";
 import { kDefaultChatInputHeight, START_RECORDING_NOTE, STOP_RECORDING_NOTE } from "../constants";
 import { playSound, isInputElement, isShortcutPressed } from "../utils/utils";
 
+import StopIcon from "../assets/stop-icon.svg";
+import SendIcon from "../assets/send-icon.svg";
+import VoiceTypingIcon from "../assets/voice-typing-icon.svg";
+
 import "./chat-input.scss";
 
 interface IProps {
   disabled?: boolean;
+  isLoadingResponse?: boolean;
+  onCancel: () => void;
   onKeyboardShortcut: () => void;
   onSubmit: (messageText: string) => void;
 }
 
-export const ChatInputComponent = ({disabled, onKeyboardShortcut, onSubmit}: IProps) => {
+export const ChatInputComponent = ({disabled, isLoadingResponse, onCancel, onKeyboardShortcut, onSubmit}: IProps) => {
   const { keyboardShortcutEnabled, keyboardShortcutKeys } = useOptions();
   const [browserSupportsDictation, setBrowserSupportsDictation] = useState(false);
   const [dictationEnabled, setDictationEnabled] = useState(false);
@@ -246,24 +252,39 @@ export const ChatInputComponent = ({disabled, onKeyboardShortcut, onSubmit}: IPr
         />
       </div>
       <div className="buttons-container">
-        {browserSupportsDictation &&
+        {browserSupportsDictation && (
           <button
+            aria-pressed={dictationEnabled}
             className={dictationEnabled ? "dictate active" : "dictate"}
             data-testid="chat-input-dictate"
+            aria-label={dictationEnabled ? "Stop Dictation" : "Start Dictation"}
             type="button"
             onClick={handleDictateToggle}
           >
-            {dictationEnabled ? "Stop Dictation" : "Start Dictation"}
+            <VoiceTypingIcon />
           </button>
-        }
-        <button
-          className="send"
-          data-testid="chat-input-send"
-          aria-disabled={disabled}
-          onClick={handleSubmit}
-        >
-          Send
-        </button>
+        )}
+        {isLoadingResponse ? (
+          <button
+            className="cancel"
+            data-testid="chat-input-cancel"
+            type="button"
+            aria-label="Cancel sending message"
+            onClick={onCancel}
+          >
+            <StopIcon />
+          </button>
+        ) : (
+          <button
+            className="send"
+            data-testid="chat-input-send"
+            aria-disabled={disabled || !inputValue}
+            type="submit"
+            aria-label="Send message"
+          >
+            <SendIcon />
+          </button>
+        )}
       </div>
     {showError &&
       <div

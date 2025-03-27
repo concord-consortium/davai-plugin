@@ -135,6 +135,10 @@ export const App = observer(() => {
     }
   };
 
+  const handleCancel = () => {
+    console.log("cancel");
+  };
+
   // useEffect(() => {
   //   // change background color to a new random color
   //   const randomColor = Math.floor(Math.random()*16777215).toString(16);
@@ -155,6 +159,8 @@ export const App = observer(() => {
       />
       <ChatInputComponent
         disabled={(!assistantStore.thread && !appConfig.isAssistantMocked) || assistantStore.isLoadingResponse}
+        isLoadingResponse={assistantStore.isLoadingResponse}
+        onCancel={handleCancel}
         onSubmit={handleChatInputSubmit}
         onKeyboardShortcut={handleFocusShortcut}
       />
