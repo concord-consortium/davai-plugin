@@ -499,13 +499,11 @@ export const AssistantModel = types
     afterCreate() {
       onSnapshot(self, async () => {
         const doneProcessing = !self.isLoadingResponse && !self.isCancelling && !self.isResetting;
-        console.log("doneProcessing", doneProcessing);
         if (doneProcessing && self.codapNotificationQueue.length > 0) {
           const allMsgs = self.codapNotificationQueue.join("\n");
           self.codapNotificationQueue.clear();
           await self.sendCODAPDocumentInfo(allMsgs);
         } else if (doneProcessing && self.messageQueue.length > 0) {
-          console.log("messageQueue length", self.messageQueue.length);
           const allMsgs = self.messageQueue.join("\n");
           self.messageQueue.clear();
           await self.handleMessageSubmit(allMsgs);
