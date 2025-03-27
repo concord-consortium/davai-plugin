@@ -26,14 +26,6 @@
         background: lightyellow;
       }
 
-      .chat-message-header {
-        display: flex;
-        align-items: center;
-        justify-content: space-between;
-        font-size: .75rem;
-        margin-bottom: 5px;
-      }
-
       h3, li, p {
         font-size: .75rem;
         line-height: 17px;
@@ -59,20 +51,10 @@
           .debug-message-wrapper {
             display: flex;
             padding: 5px;
-            // align-items: center;
+            align-items: center;
             gap: 10px;
-
-            .debug-message-header {
-              display: flex;
-              align-items: center;
-              word-break: none;
-              white-space: nowrap;
-              h4 {
-                font-size: .75rem;
-                margin: 0;
-                padding: 0;
-              }
-            }
+            word-break: none;
+            white-space: nowrap;
 
             &.expanded{
               flex-direction: column;
@@ -85,8 +67,8 @@
             }
 
             &.collapsed{
-              input {
-                &:before {
+              button {
+                .arrow-icon {
                   transform: rotate(-90deg);
                 }
               }
@@ -98,26 +80,26 @@
               }
             }
 
-            input {
-              appearance: none;
+            button {
+              font-family: $font-family;
+              font-size: .75rem;
+              font-weight: bold;
               background-color: transparent;
               border: 0;
-              position: relative;
               height: auto;
               padding: 0;
               margin: 0;
-              width: 20px;
               cursor: pointer;
-
-              &:before {
+              .arrow-icon {
                 display: inline-block;
-                content: "\25BC";
-                color: $dark-gray;
-                top: 0;
-                left: 0;
+                font-size: .7rem;
+                margin-right: 5px;
               }
             }
           }
+        }
+        .loading {
+          font-size: .75rem;
         }
         .loading:after {
           overflow: hidden;

@@ -1,44 +1,30 @@
 import React from "react";
+import { useOptions } from "../hooks/use-options";
+import { IUserOptions } from "../types";
 
-import "./readaloud-menu.scss";
-
-interface IReadAloudMenuProps {
-  enabled: boolean;
-  onToggle: () => void;
-  playbackSpeed: number;
-  onPlaybackSpeedSelect: (speed: number) => void;
+interface IProps {
+  createToggleOption: (option: keyof IUserOptions, optionLabel: string) => React.JSX.Element
 }
 
-export const ReadAloudMenu = (props: IReadAloudMenuProps) => {
-  const { enabled, onToggle, playbackSpeed, onPlaybackSpeedSelect } = props;
+export const ReadAloudMenu: React.FC<IProps> = ({createToggleOption}) => {
+  const { playbackSpeed, updateOptions } = useOptions();
 
   const handleSelect = (event: React.ChangeEvent<HTMLSelectElement>) => {
-    onPlaybackSpeedSelect(parseFloat(event.target.value));
+    updateOptions({playbackSpeed: parseFloat(event.target.value)});
   };
 
   return (
-    <div className="readaloud-controls">
-      <div className="toggle">
-        <label htmlFor="readaloud-toggle" data-testid="toggle-label">
-          Tap text to listen
-        </label>
-        <input
-          data-testid="readaloud-toggle"
-          id="readaloud-toggle"
-          type="checkbox"
-          role="switch"
-          checked={enabled}
-          aria-checked={enabled}
-          onChange={onToggle}
-        />
+    <div className="options-section" role="group" aria-labelledby="readaloud-heading" data-testid="readaloud-menu">
+      <div className="options-section-header">
+        <h3 id="readaloud-heading">Tap to Read</h3>
       </div>
-      <div className="select-playback-speed">
+      {createToggleOption("readAloudEnabled", `Enable "Tap to Read" mode`)}
+      <div className="user-option">
         <label
           data-testid="speed-label"
-          className="visually-hidden"
           htmlFor="readaloud-playback-speed"
         >
-          Select playback speed
+          {`"Tap to Read" playback speed:`}
         </label>
         <select
           onChange={handleSelect}

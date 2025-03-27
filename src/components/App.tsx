@@ -1,16 +1,17 @@
-import React, { useCallback, useEffect, useRef, useState } from "react";
+import React, { useCallback, useEffect, useRef } from "react";
+import * as Tone from "tone";
 import { observer } from "mobx-react-lite";
+import removeMarkdown from "remove-markdown";
 import { addDataContextChangeListener, addDataContextsListListener, ClientNotification, getDataContext, getListOfDataContexts, initializePlugin, selectSelf } from "@concord-consortium/codap-plugin-api";
 import { useAppConfigContext } from "../hooks/use-app-config-context";
 import { useAssistantStore } from "../hooks/use-assistant-store";
 import { useAriaLive } from "../contexts/aria-live-context";
+import { useOptions } from "../hooks/use-options";
 import { ChatInputComponent } from "./chat-input";
 import { ChatTranscriptComponent } from "./chat-transcript";
-import { ReadAloudMenu } from "./readaloud-menu";
-import { KeyboardShortcutControls } from "./keyboard-shortcut-controls";
-import { DAVAI_SPEAKER, DEBUG_SPEAKER, GREETING, USER_SPEAKER, notificationsToIgnore } from "../constants";
-import { DeveloperOptionsComponent } from "./developer-options";
-import { formatJsonMessage, getUrlParam } from "../utils/utils";
+import { DAVAI_SPEAKER, DEBUG_SPEAKER, LOADING_NOTE, USER_SPEAKER, notificationsToIgnore } from "../constants";
+import { UserOptions } from "./user-options";
+import { formatJsonMessage, playSound } from "../utils/utils";
 
 import "./App.scss";
 
@@ -21,22 +22,11 @@ export const App = observer(() => {
   const appConfig = useAppConfigContext();
   const { ariaLiveText, setAriaLiveText } = useAriaLive();
   const assistantStore = useAssistantStore();
+  const { playProcessingTone } = useOptions();
   const assistantStoreRef = useRef(assistantStore);
   const dimensions = { width: appConfig.dimensions.width, height: appConfig.dimensions.height };
   const subscribedDataCtxsRef = useRef<string[]>([]);
   const transcriptStore = assistantStore.transcriptStore;
-  /* read aloud state */
-  const [playbackSpeed, setPlaybackSpeed] = useState(1);
-  const [readAloudEnabled, setReadAloudEnabled] = useState(false);
-  /* keyboard shortcut state */
-  const isShortcutEnabled = JSON.parse(localStorage.getItem("keyboardShortcutEnabled") || "true");
-  const [keyboardShortcutEnabled, setKeyboardShortcutEnabled] = useState(isShortcutEnabled);
-  const shortcutKeys = localStorage.getItem("keyboardShortcutKeys") || appConfig.accessibility.keyboardShortcut;
-  const [keyboardShortcutKeys, setKeyboardShortcutKeys] = useState(shortcutKeys);
-  /* debug log state */
-  const modeUrlParam = getUrlParam("mode") || "";
-  const isDevMode = modeUrlParam === "development" || appConfig.mode === "development";
-  const [showDebugLog, setShowDebugLog] = useState(isDevMode);
 
   const handleDataContextChangeNotice = useCallback(async (notification: ClientNotification) => {
     if (notificationsToIgnore.includes(notification.values.operation)) return;
@@ -96,6 +86,7 @@ export const App = observer(() => {
 
   useEffect(() => {
     assistantStore.initializeAssistant();
+    assistantStore.fetchAssistantsList();
     assistantStoreRef.current = assistantStore;
   }, [assistantStore, appConfig.assistantId]);
 
@@ -104,34 +95,36 @@ export const App = observer(() => {
     if (transcriptStore.messages.length > 0) {
       const lastMessage = messages[messages.length - 1];
       if (lastMessage.speaker === DAVAI_SPEAKER) {
-        setAriaLiveText(lastMessage.messageContent.content);
+        const plainTextContent = removeMarkdown(lastMessage.messageContent.content, {stripListLeaders: false, useImgAltText: true});
+        setAriaLiveText(plainTextContent);
       }
     }
   }, [transcriptStore, transcriptStore.messages.length, setAriaLiveText]);
+
+  useEffect(() => {
+    if (!assistantStore.isLoadingResponse) return;
+
+    let interval: NodeJS.Timeout | undefined;
+
+    if (playProcessingTone) {
+      playSound(LOADING_NOTE);
+      interval = setInterval(() => playSound(LOADING_NOTE), 2000);
+    }
+
+    return () => {
+      if (interval) {
+        clearInterval(interval);
+      }
+    };
+
+  }, [assistantStore.isLoadingResponse, playProcessingTone]);
 
   const handleFocusShortcut = () => {
     selectSelf();
   };
 
-  const handleToggleShortcut = () => {
-    localStorage.setItem("keyboardShortcutEnabled", JSON.stringify(!keyboardShortcutEnabled));
-    setKeyboardShortcutEnabled(!keyboardShortcutEnabled);
-  };
-
-  const handleCustomizeShortcut = (shortcut: string) => {
-    localStorage.setItem("keyboardShortcutKeys", shortcut);
-    setKeyboardShortcutKeys(shortcut);
-  };
-
-  const handleSetReadAloudEnabled = () => {
-    setReadAloudEnabled(!readAloudEnabled);
-  };
-
-  const handleSetPlaybackSpeed = (speed: number) => {
-    setPlaybackSpeed(speed);
-  };
-
   const handleChatInputSubmit = async (messageText: string) => {
+    Tone.start();
     transcriptStore.addMessage(USER_SPEAKER, {content: messageText});
 
     if (appConfig.isAssistantMocked) {
@@ -139,45 +132,6 @@ export const App = observer(() => {
     } else {
       assistantStore.handleMessageSubmit(messageText);
     }
-
-  };
-
-  const handleCreateThread = async () => {
-    if (!assistantStore.assistant || assistantStore.thread || appConfig.isAssistantMocked) return;
-    const confirmCreate = window.confirm("Are you sure you want to create a new thread? If you do, you will lose any existing chat history.");
-    if (!confirmCreate) return;
-
-    transcriptStore.clearTranscript();
-    transcriptStore.addMessage(DAVAI_SPEAKER, {content: GREETING});
-
-    await assistantStore.createThread();
-  };
-
-  const handleDeleteThread = async () => {
-    if (!assistantStore.assistant || !assistantStore.thread) return;
-    const confirmDelete = window.confirm("Are you sure you want to delete the current thread? If you do, you will not be able to continue this chat.");
-    if (!confirmDelete) return false;
-
-    await assistantStore.deleteThread();
-    return true;
-  };
-
-  const handleSelectAssistant = async (id: string) => {
-    // If we switch assistants, we delete the current thread and clear the transcript.
-    // First make sure the user is OK with that.
-    const threadDeleted = await handleDeleteThread();
-    if (!threadDeleted) return;
-
-    if (id === "mock") {
-      transcriptStore.clearTranscript();
-      transcriptStore.addMessage(DAVAI_SPEAKER, {content: GREETING});
-      appConfig.setMockAssistant(true);
-      appConfig.setAssistantId(id);
-      return;
-    }
-
-    appConfig.setMockAssistant(false);
-    appConfig.setAssistantId(id);
   };
 
   return (
@@ -190,62 +144,19 @@ export const App = observer(() => {
       </header>
       <ChatTranscriptComponent
         chatTranscript={transcriptStore}
-        showDebugLog={showDebugLog}
         isLoading={assistantStore.isLoadingResponse}
       />
-      {isDevMode &&
-        <div className="show-debug-controls">
-          <label htmlFor="debug-log-toggle">
-            Show Debug Log:
-          </label>
-          <input
-            type="checkbox"
-            id="debug-log-toggle"
-            name="ShowDebugLog"
-            aria-checked={showDebugLog}
-            checked={showDebugLog}
-            onChange={() => setShowDebugLog(!showDebugLog)}
-            onKeyDown={(e) => {
-              if (e.key === "Enter") {
-                setShowDebugLog(!showDebugLog);
-              }
-            }}
-          />
-        </div>
-      }
       <ChatInputComponent
         disabled={(!assistantStore.thread && !appConfig.isAssistantMocked) || assistantStore.isLoadingResponse}
-        keyboardShortcutEnabled={keyboardShortcutEnabled}
-        shortcutKeys={keyboardShortcutKeys}
         onSubmit={handleChatInputSubmit}
         onKeyboardShortcut={handleFocusShortcut}
       />
-      <ReadAloudMenu
-        enabled={readAloudEnabled}
-        onToggle={handleSetReadAloudEnabled}
-        playbackSpeed={playbackSpeed}
-        onPlaybackSpeedSelect={handleSetPlaybackSpeed}
-      />
-      <hr />
-      <h2>Options</h2>
-      <KeyboardShortcutControls
-        shortcutEnabled={keyboardShortcutEnabled}
-        shortcutKeys={keyboardShortcutKeys}
-        onCustomizeShortcut={handleCustomizeShortcut}
-        onToggleShortcut={handleToggleShortcut}
-      />
-      {isDevMode &&
-        <>
-          <hr />
-          <h2>Developer Options</h2>
-          <DeveloperOptionsComponent
-            assistantStore={assistantStore}
-            onCreateThread={handleCreateThread}
-            onDeleteThread={handleDeleteThread}
-            onSelectAssistant={handleSelectAssistant}
-          />
-        </>
-      }
+      <UserOptions assistantStore={assistantStore} />
+      {/*
+        The aria-live region is used to announce the last message from DAVAI.
+        The region is updated whenever a new message is added to the transcript,
+        or while the LLM is processing with a "Processing" message.
+      */}
       <div
         className="visually-hidden"
         role="alert"

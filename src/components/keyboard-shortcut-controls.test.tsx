@@ -1,7 +1,9 @@
-import React, { useState } from "react";
+import React from "react";
 import { cleanup, fireEvent, render, screen, within } from "@testing-library/react";
 
 import { KeyboardShortcutControls } from "./keyboard-shortcut-controls";
+import { MockUserOptionsProvider } from "../test-utils/mock-user-options-provider";
+
 
 describe("test keyboard shortcut controls component", () => {
   const defaultShortcut = "ctrl+?";
@@ -10,24 +12,10 @@ describe("test keyboard shortcut controls component", () => {
   afterEach(cleanup);
 
   const WrapperComponent = () => {
-    const [shortcutEnabled, setShortcutEnabled] = useState(true);
-    const [shortcutKeys, setShortcutKeys] = useState(defaultShortcut);
-
-    const mockToggleShortcut = jest.fn(() => {
-      setShortcutEnabled((prev) => !prev);
-    });
-
-    const mockCustomizeShortcut = jest.fn((shortcut: string) => {
-      setShortcutKeys(shortcut);
-    });
-
     return (
-      <KeyboardShortcutControls
-        shortcutEnabled={shortcutEnabled}
-        shortcutKeys={shortcutKeys}
-        onToggleShortcut={mockToggleShortcut}
-        onCustomizeShortcut={mockCustomizeShortcut}
-      />
+      <MockUserOptionsProvider initialOptions={{ keyboardShortcutEnabled: true, keyboardShortcutKeys: defaultShortcut }}>
+        <KeyboardShortcutControls/>
+      </MockUserOptionsProvider>
     );
   };
 
@@ -57,7 +45,7 @@ describe("test keyboard shortcut controls component", () => {
     const confirmationMsg = screen.getByTestId("custom-keyboard-shortcut-confirmation").textContent;
     expect(confirmationMsg).toContain(`Keyboard shortcut changed to ${customShortcut}`);
     const dismissButton = screen.getByTestId("custom-keyboard-shortcut-confirmation-dismiss");
-    expect(dismissButton).toHaveTextContent("dismiss");
+    expect(dismissButton).toHaveTextContent("Dismiss this message.");
   });
 
   it("shows an error message if the custom keyboard shortcut input is empty", () => {

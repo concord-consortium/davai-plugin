@@ -1,25 +1,8 @@
 @use "./vars.scss" as *;
 
-.keyboard-shortcut-controls {
-  display: flex;
-  flex-direction: column;
-
-  button {
-    appearance: none;
-    background-color: $light-teal-3;
-    border: solid 1px rgb(118, 118, 118);
-    border-radius: 6px;
-    color: $dark-gray;
-    cursor: pointer;
-    font-family: 'Montserrat', sans-serif;
-    font-size: .75rem;
-    height: 32px;
-    text-align: center;
-    width: auto;
-  }
-
+.options-section {
   form {
-    margin: 0 10px;
+    padding: 0px 10px;
   }
 
   fieldset {
@@ -28,6 +11,7 @@
     margin: 0;
     padding: 0;
     text-align: left;
+    margin-bottom: 10px;
 
     &[disabled] {
       cursor: not-allowed;
@@ -39,17 +23,28 @@
     }
 
     button {
-      margin: 0 0 0 10px;
+      appearance: none;
+      background-color: $light-teal-3;
+      border: solid 1px rgb(118, 118, 118);
+      border-radius: 6px;
+      color: $dark-gray;
+      cursor: pointer;
+      font-family: $font-family;
+      font-size: .75rem;
+      height: 32px;
+      text-align: center;
+      width: auto;
+      margin: 0px 10px;
     }
+
     label {
       cursor: pointer;
       display: block;
       font-size: .75rem;
       font-weight: normal;
-      line-height: 1.4;
-      margin: 0 0 5px;
       user-select: none;
       white-space: nowrap;
+      padding: 5px 0;
     }
     input[type="text"] {
       border: solid 1px rgb(118, 118, 118);
@@ -59,9 +54,6 @@
       padding: 7px 10px;
     }
   }
-
-  h3 {
-    margin: 10px 0 0;
-    text-align: left;
-  }
 }
+
+

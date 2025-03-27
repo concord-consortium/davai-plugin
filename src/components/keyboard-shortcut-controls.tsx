@@ -1,31 +1,27 @@
 import React, { FormEvent, useState } from "react";
+import { useOptions } from "../hooks/use-options";
 
 import "./keyboard-shortcut-controls.scss";
 
-interface IProps {
-  shortcutEnabled: boolean;
-  shortcutKeys?: string;
-  onCustomizeShortcut?: (shortcut: string) => void;
-  onToggleShortcut: () => void;
-}
-
-export const KeyboardShortcutControls = (props: IProps) => {
-  const { shortcutEnabled, shortcutKeys, onCustomizeShortcut, onToggleShortcut } = props;
-  const toggleButtonLabel = shortcutEnabled ? "Disable Shortcut" : "Enable Shortcut";
+export const KeyboardShortcutControls = () => {
+  const { keyboardShortcutEnabled, keyboardShortcutKeys, toggleOption, updateOptions } = useOptions();
+  const toggleButtonLabel = keyboardShortcutEnabled ? "Disable Shortcut" : "Enable Shortcut";
   const [showError, setShowError] = useState(false);
   const [showConfirmation, setShowConfirmation] = useState(false);
 
   const handleToggleShortcut = () => {
-    onToggleShortcut();
+    localStorage.setItem("keyboardShortcutEnabled", JSON.stringify(!keyboardShortcutEnabled));
+    toggleOption("keyboardShortcutEnabled");
   };
 
   const handleCustomizeShortcut = (event: FormEvent) => {
-    if (!shortcutEnabled) return;
+    if (!keyboardShortcutEnabled) return;
     event.preventDefault();
     const form = event.target as HTMLInputElement;
     const shortcut = form.querySelector("input")?.value.trim();
     if (shortcut) {
-      onCustomizeShortcut?.(shortcut);
+      localStorage.setItem("keyboardShortcutKeys", shortcut);
+      updateOptions?.({keyboardShortcutKeys: shortcut});
       setShowError(false);
       setShowConfirmation(true);
     } else {
@@ -41,19 +37,28 @@ export const KeyboardShortcutControls = (props: IProps) => {
       : undefined;
 
   return (
-    <div className="keyboard-shortcut-controls">
-      <h3>Keyboard Shortcut</h3>
-      <button onClick={handleToggleShortcut} data-testid="keyboard-shortcut-toggle">
-        {toggleButtonLabel}
-      </button>
+    <div
+      className="options-section"
+      role="group"
+      aria-labelledby="keyboard-shortcuts-heading"
+      data-testid="keyboard-shortcut-controls"
+    >
+      <div className="options-section-header">
+        <h3 id="keyboard-shortcuts-heading">Keyboard Shortcuts</h3>
+      </div>
+      <div className="user-option">
+        <button onClick={handleToggleShortcut} data-testid="keyboard-shortcut-toggle">
+          {toggleButtonLabel}
+        </button>
+      </div>
       <form data-testid="custom-keyboard-shortcut-form" onSubmit={handleCustomizeShortcut}>
-        <fieldset aria-disabled={!shortcutEnabled}>
-          <label htmlFor="custom-keyboard-shortcut">Customize Keystroke</label>
+        <fieldset aria-disabled={!keyboardShortcutEnabled}>
+          <label htmlFor="custom-keyboard-shortcut">Customize Shortcut:</label>
           <input
             aria-describedby={customShortcutInputDescribedBy}
             aria-invalid={showError}
             data-testid="custom-keyboard-shortcut"
-            defaultValue={shortcutKeys}
+            defaultValue={keyboardShortcutKeys}
             id="custom-keyboard-shortcut"
             type="text"
           />
@@ -66,13 +71,12 @@ export const KeyboardShortcutControls = (props: IProps) => {
               id="custom-keyboard-shortcut-confirmation"
               role="status"
             >
-              Keyboard shortcut changed to {shortcutKeys}
+              Keyboard shortcut changed to {keyboardShortcutKeys}
               <button
-                aria-label="Dismiss this message."
                 className="dismiss"
                 data-testid="custom-keyboard-shortcut-confirmation-dismiss"
                 onClick={() => setShowConfirmation(false)}>
-                  <span className="visually-hidden">dismiss</span>
+                  <span className="visually-hidden">Dismiss this message.</span>
               </button>
             </div>
           }

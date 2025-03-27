@@ -8,6 +8,7 @@ import { MockAppConfigProvider } from "../test-utils/app-config-provider";
 jest.mock("../hooks/use-assistant-store", () => ({
   useAssistantStore: jest.fn(() => ({
     initializeAssistant: jest.fn(),
+    fetchAssistantsList: jest.fn(),
     transcriptStore: {
       messages: [],
       addMessage: jest.fn(),

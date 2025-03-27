@@ -1,5 +1,6 @@
 const transpileModules = [
   "react-markdown",
+  "tone",
   "bail",
   "comma-separated-tokens",
   "decode-named-character-reference",

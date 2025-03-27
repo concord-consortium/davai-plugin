@@ -1,18 +1,18 @@
 import React, { FormEvent, useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { alertSound, isInputElement, isShortcutPressed } from "../utils/utils";
-import { kDefaultChatInputHeight } from "../constants";
+import { useOptions } from "../hooks/use-options";
+import { kDefaultChatInputHeight, START_RECORDING_NOTE, STOP_RECORDING_NOTE } from "../constants";
+import { playSound, isInputElement, isShortcutPressed } from "../utils/utils";
 
 import "./chat-input.scss";
 
 interface IProps {
   disabled?: boolean;
-  keyboardShortcutEnabled: boolean;
-  shortcutKeys: string;
   onKeyboardShortcut: () => void;
   onSubmit: (messageText: string) => void;
 }
 
-export const ChatInputComponent = ({disabled, keyboardShortcutEnabled, shortcutKeys, onKeyboardShortcut, onSubmit}: IProps) => {
+export const ChatInputComponent = ({disabled, onKeyboardShortcut, onSubmit}: IProps) => {
+  const { keyboardShortcutEnabled, keyboardShortcutKeys } = useOptions();
   const [browserSupportsDictation, setBrowserSupportsDictation] = useState(false);
   const [dictationEnabled, setDictationEnabled] = useState(false);
   const [inputValue, setInputValue] = useState("");
@@ -107,7 +107,7 @@ export const ChatInputComponent = ({disabled, keyboardShortcutEnabled, shortcutK
       speechRecognitionRef.current.onerror = (event) => {
         console.error("Speech recognition error detected:", event.error);
         setDictationEnabled(false);
-        alertSound("stop");
+        playSound(STOP_RECORDING_NOTE);
       };
     }
   }, []);
@@ -131,7 +131,7 @@ export const ChatInputComponent = ({disabled, keyboardShortcutEnabled, shortcutK
           if (dictationEnabled && speechRecognitionRef.current) {
             setDictationEnabled(false);
             speechRecognitionRef.current.stop();
-            alertSound("stop");
+            playSound(STOP_RECORDING_NOTE);
           }
         }, 60000);
       } catch (error) {
@@ -157,9 +157,9 @@ export const ChatInputComponent = ({disabled, keyboardShortcutEnabled, shortcutK
     setDictationEnabled(!dictationEnabled);
 
     if (dictationEnabled) {
-      alertSound("stop");
+      playSound(STOP_RECORDING_NOTE);
     } else {
-      alertSound("start");
+      playSound(START_RECORDING_NOTE);
     }
   };
 
@@ -168,18 +168,14 @@ export const ChatInputComponent = ({disabled, keyboardShortcutEnabled, shortcutK
   const addShortcutListener = useCallback((context: Window) => {
     const keydownHandler = (event: KeyboardEvent) => {
       pressedKeys.add(event.code);
-      if (isShortcutPressed(pressedKeys, shortcutKeys)) {
+      if (isShortcutPressed(pressedKeys, keyboardShortcutKeys)) {
         event.preventDefault();
         const activeElement = context.document.activeElement;
         if (isInputElement(activeElement)) return;
 
-        if (window.frameElement) {
-          textAreaRef.current?.focus();
-          onKeyboardShortcut();
-        } else {
-          textAreaRef.current?.focus();
-          onKeyboardShortcut();
-        }
+        onKeyboardShortcut();
+        textAreaRef.current?.focus();
+        textAreaRef.current?.scrollIntoView({behavior: "smooth", block: "nearest"});
       }
     };
 
@@ -195,7 +191,7 @@ export const ChatInputComponent = ({disabled, keyboardShortcutEnabled, shortcutK
       context.document.removeEventListener("keydown", keydownHandler);
       context.document.removeEventListener("keyup", keyupHandler);
     };
-  }, [onKeyboardShortcut, pressedKeys, shortcutKeys]);
+  }, [onKeyboardShortcut, pressedKeys, keyboardShortcutKeys]);
 
   useEffect(() => {
     const keydownListeners: (() => void)[] = [];
@@ -222,7 +218,6 @@ export const ChatInputComponent = ({disabled, keyboardShortcutEnabled, shortcutK
 
   const handleBlur = () => {
     setTextareaHasFocus(false);
-    textAreaRef.current?.blur();
   };
 
   const handleFocus = () => {
@@ -253,14 +248,12 @@ export const ChatInputComponent = ({disabled, keyboardShortcutEnabled, shortcutK
       <div className="buttons-container">
         {browserSupportsDictation &&
           <button
-            aria-pressed={dictationEnabled}
             className={dictationEnabled ? "dictate active" : "dictate"}
             data-testid="chat-input-dictate"
-            title={dictationEnabled ? "Stop Dictation" : "Start Dictation"}
             type="button"
             onClick={handleDictateToggle}
           >
-            {dictationEnabled ? "Listening..." : "Dictate"}
+            {dictationEnabled ? "Stop Dictation" : "Start Dictation"}
           </button>
         }
         <button
