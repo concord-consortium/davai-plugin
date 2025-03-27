@@ -26,13 +26,11 @@ describe("test chat transcript component", () => {
     render(<ChatTranscriptComponent chatTranscript={chatTranscript} showDebugLog={false}/>);
 
     const transcript = screen.getByTestId("chat-transcript");
-    const messagesContainer = screen.getByTestId("chat-transcript__messages");
-    expect(messagesContainer).toHaveAttribute("aria-live", "assertive");
     const messages = within(transcript).getAllByTestId("chat-message");
     expect(messages).toHaveLength(2);
 
     messages.forEach((message: HTMLElement, index: number) => {
-      const labelContent = `${chatTranscript.messages[index].speaker} at ${chatTranscript.messages[index].timestamp}`;
+      const labelContent = chatTranscript.messages[index].speaker;
       expect(message).toHaveAttribute("aria-label", labelContent);
 
       const speaker = within(message).getByTestId("chat-message-speaker");

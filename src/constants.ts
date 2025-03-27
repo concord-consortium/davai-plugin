@@ -13,3 +13,5 @@ export const notificationsToIgnore = [
   "createItems",
   "updateCases"
 ];
+
+export const kDefaultChatInputHeight = 47;

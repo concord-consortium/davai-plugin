@@ -3,6 +3,7 @@ import { observer } from "mobx-react-lite";
 import { addDataContextChangeListener, addDataContextsListListener, ClientNotification, getDataContext, getListOfDataContexts, initializePlugin, selectSelf } from "@concord-consortium/codap-plugin-api";
 import { useAppConfigContext } from "../hooks/use-app-config-context";
 import { useAssistantStore } from "../hooks/use-assistant-store";
+import { useAriaLive } from "../contexts/aria-live-context";
 import { ChatInputComponent } from "./chat-input";
 import { ChatTranscriptComponent } from "./chat-transcript";
 import { ReadAloudMenu } from "./readaloud-menu";
@@ -18,20 +19,24 @@ const kVersion = "0.0.1";
 
 export const App = observer(() => {
   const appConfig = useAppConfigContext();
+  const { ariaLiveText, setAriaLiveText } = useAriaLive();
   const assistantStore = useAssistantStore();
-  const transcriptStore = assistantStore.transcriptStore;
+  const assistantStoreRef = useRef(assistantStore);
   const dimensions = { width: appConfig.dimensions.width, height: appConfig.dimensions.height };
-  const [readAloudEnabled, setReadAloudEnabled] = useState(false);
+  const subscribedDataCtxsRef = useRef<string[]>([]);
+  const transcriptStore = assistantStore.transcriptStore;
+  /* read aloud state */
   const [playbackSpeed, setPlaybackSpeed] = useState(1);
+  const [readAloudEnabled, setReadAloudEnabled] = useState(false);
+  /* keyboard shortcut state */
   const isShortcutEnabled = JSON.parse(localStorage.getItem("keyboardShortcutEnabled") || "true");
   const [keyboardShortcutEnabled, setKeyboardShortcutEnabled] = useState(isShortcutEnabled);
   const shortcutKeys = localStorage.getItem("keyboardShortcutKeys") || appConfig.accessibility.keyboardShortcut;
   const [keyboardShortcutKeys, setKeyboardShortcutKeys] = useState(shortcutKeys);
+  /* debug log state */
   const modeUrlParam = getUrlParam("mode") || "";
   const isDevMode = modeUrlParam === "development" || appConfig.mode === "development";
   const [showDebugLog, setShowDebugLog] = useState(isDevMode);
-  const assistantStoreRef = useRef(assistantStore);
-  const subscribedDataCtxsRef = useRef<string[]>([]);
 
   const handleDataContextChangeNotice = useCallback(async (notification: ClientNotification) => {
     if (notificationsToIgnore.includes(notification.values.operation)) return;
@@ -94,6 +99,16 @@ export const App = observer(() => {
     assistantStoreRef.current = assistantStore;
   }, [assistantStore, appConfig.assistantId]);
 
+  useEffect(() => {
+    const { messages } = transcriptStore;
+    if (transcriptStore.messages.length > 0) {
+      const lastMessage = messages[messages.length - 1];
+      if (lastMessage.speaker === DAVAI_SPEAKER) {
+        setAriaLiveText(lastMessage.messageContent.content);
+      }
+    }
+  }, [transcriptStore, transcriptStore.messages.length, setAriaLiveText]);
+
   const handleFocusShortcut = () => {
     selectSelf();
   };
@@ -128,6 +143,7 @@ export const App = observer(() => {
   };
 
   const handleCreateThread = async () => {
+    if (!assistantStore.assistant || assistantStore.thread || appConfig.isAssistantMocked) return;
     const confirmCreate = window.confirm("Are you sure you want to create a new thread? If you do, you will lose any existing chat history.");
     if (!confirmCreate) return;
 
@@ -138,6 +154,7 @@ export const App = observer(() => {
   };
 
   const handleDeleteThread = async () => {
+    if (!assistantStore.assistant || !assistantStore.thread) return;
     const confirmDelete = window.confirm("Are you sure you want to delete the current thread? If you do, you will not be able to continue this chat.");
     if (!confirmDelete) return false;
 
@@ -229,6 +246,14 @@ export const App = observer(() => {
           />
         </>
       }
+      <div
+        className="visually-hidden"
+        role="alert"
+        aria-live="assertive"
+        aria-atomic="true"
+      >
+        {ariaLiveText}
+      </div>
     </div>
   );
 });

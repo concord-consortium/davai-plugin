@@ -86,7 +86,7 @@ describe("test developer options component", () => {
 
     const newThreadButton = screen.getByTestId("new-thread-button");
     expect(newThreadButton).toBeInTheDocument();
-    expect(newThreadButton).toBeDisabled();
+    expect(newThreadButton).toHaveAttribute("aria-disabled", "true");
     expect(newThreadButton).toHaveTextContent("New Thread");
   });
 });

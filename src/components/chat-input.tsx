@@ -1,5 +1,6 @@
 import React, { FormEvent, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { alertSound, isInputElement, isShortcutPressed } from "../utils/utils";
+import { kDefaultChatInputHeight } from "../constants";
 
 import "./chat-input.scss";
 
@@ -12,14 +13,13 @@ interface IProps {
 }
 
 export const ChatInputComponent = ({disabled, keyboardShortcutEnabled, shortcutKeys, onKeyboardShortcut, onSubmit}: IProps) => {
+  const [browserSupportsDictation, setBrowserSupportsDictation] = useState(false);
   const [dictationEnabled, setDictationEnabled] = useState(false);
   const [inputValue, setInputValue] = useState("");
-  const kDefaultHeight = 47;
-  const [textareaHasFocus, setTextareaHasFocus] = useState(false);
   const [showError, setShowError] = useState(false);
-  const [browserSupportsDictation, setBrowserSupportsDictation] = useState(false);
+  const [textareaHasFocus, setTextareaHasFocus] = useState(false);
   const textAreaRef = useRef<HTMLTextAreaElement>(null);
-  const fieldsetRef = useRef<HTMLFieldSetElement>(null);
+  const containerRef = useRef<HTMLDivElement>(null);
   const speechRecognitionRef = useRef<SpeechRecognition | null>(null);
   const finalSpeechTranscript = useRef<string>("");
   const timeoutRef = useRef<NodeJS.Timeout | null>(null);
@@ -28,14 +28,14 @@ export const ChatInputComponent = ({disabled, keyboardShortcutEnabled, shortcutK
   const dictationEnabledRef = useRef(false);
 
   const fitTextInputToContent = () => {
-    if (textAreaRef.current && fieldsetRef.current) {
+    if (textAreaRef.current && containerRef.current) {
       // Temporarily reset the height to recalculate the correct scrollHeight,
       // then set the height as needed to show all text.
-      textAreaRef.current.style.height = `${kDefaultHeight}px`;
-      fieldsetRef.current.style.height = `${kDefaultHeight}px`;
-      const newHeight = Math.max(textAreaRef.current.scrollHeight, kDefaultHeight);
+      textAreaRef.current.style.height = `${kDefaultChatInputHeight}px`;
+      containerRef.current.style.height = `${kDefaultChatInputHeight}px`;
+      const newHeight = Math.max(textAreaRef.current.scrollHeight, kDefaultChatInputHeight);
       textAreaRef.current.style.height = `${newHeight}px`;
-      fieldsetRef.current.style.height = `${newHeight}px`;
+      containerRef.current.style.height = `${newHeight}px`;
     }
   };
 
@@ -44,26 +44,28 @@ export const ChatInputComponent = ({disabled, keyboardShortcutEnabled, shortcutK
   };
 
   const handleSubmit = (event?: FormEvent) => {
+    if (disabled) return;
     event?.preventDefault();
+    event?.stopPropagation();
     setDictationEnabled(false);
     speechRecognitionRef.current?.stop();
 
     if (!inputValue || inputValue.trim() === "") {
       setShowError(true);
-      textAreaRef.current?.focus();
     } else {
-      onSubmit(inputValue);
-      setInputValue("");
-      finalSpeechTranscript.current = "";
-      textAreaRef.current?.focus();
       setShowError(false);
+      setInputValue("");
+      onSubmit(inputValue);
+      finalSpeechTranscript.current = "";
     }
+
+    textAreaRef.current?.focus();
   };
 
-  const handleKeyUp = (event: React.KeyboardEvent<HTMLTextAreaElement>) => {
+  const handleKeyDown = (event: React.KeyboardEvent<HTMLTextAreaElement>) => {
+    if (disabled) return;
     if (event.key === "Enter" && !event.shiftKey) {
       event.preventDefault();
-      textAreaRef.current?.blur();
       handleSubmit();
     }
   };
@@ -218,69 +220,69 @@ export const ChatInputComponent = ({disabled, keyboardShortcutEnabled, shortcutK
     textAreaRef.current?.focus();
   }, []);
 
+  const handleBlur = () => {
+    setTextareaHasFocus(false);
+    textAreaRef.current?.blur();
+  };
+
+  const handleFocus = () => {
+    setTextareaHasFocus(true);
+    textAreaRef.current?.focus();
+  };
+
   return (
-    <div className="chat-input" data-testid="chat-input">
-      <form onSubmit={handleSubmit}>
-        <fieldset
-          className={textareaHasFocus ? "has-focus" : ""}
-          data-testid="chat-input-fieldset"
-          ref={fieldsetRef}
-        >
-          <label className="visually-hidden" data-testid="chat-input-label" htmlFor="chat-input">
-            Chat Input
-          </label>
-          <div className="textarea-container">
-            <textarea
-              aria-describedby={showError ? "input-error" : undefined}
-              aria-invalid={showError}
-              data-testid="chat-input-textarea"
-              disabled={disabled}
-              id="chat-input"
-              placeholder={"Ask DAVAI about the data"}
-              ref={textAreaRef}
-              value={inputValue}
-              onBlur={() => setTextareaHasFocus(false)}
-              onChange={handleTextInputChange}
-              onFocus={() => setTextareaHasFocus(true)}
-              onKeyUp={handleKeyUp}
-            />
-          </div>
-          <div className="buttons-container">
-            <button
-              className="send"
-              data-testid="chat-input-send"
-              disabled={disabled}
-              type="submit"
-            >
-              Send
-            </button>
-            {browserSupportsDictation && 
-              <button
-                aria-pressed={dictationEnabled}
-                className={dictationEnabled ? "dictate active" : "dictate"}
-                data-testid="chat-input-dictate"
-                disabled={disabled}
-                title={dictationEnabled ? "Stop Dictation" : "Start Dictation"}
-                type="button"
-                onClick={handleDictateToggle}
-              >
-                {dictationEnabled ? "Listening..." : "Dictate"}
-              </button>
-            }
-          </div>
-        </fieldset>
-        {showError &&
-          <div
-            aria-live="assertive"
-            className="error-message"
-            data-testid="input-error"
-            id="input-error"
-            role="alert"
+    <div className={`chat-input ${textareaHasFocus ? "has-focus" : ""}`} ref={containerRef} data-testid="chat-input">
+      <label className="visually-hidden" data-testid="chat-input-label" htmlFor="chat-input">
+        Chat Input
+      </label>
+      <div className="textarea-container">
+        <textarea
+          aria-describedby={showError ? "input-error" : undefined}
+          aria-invalid={showError}
+          data-testid="chat-input-textarea"
+          id="chat-input"
+          placeholder={"Ask DAVAI about the data"}
+          ref={textAreaRef}
+          value={inputValue}
+          onBlur={handleBlur}
+          onFocus={handleFocus}
+          onChange={handleTextInputChange}
+          onKeyDown={handleKeyDown}
+        />
+      </div>
+      <div className="buttons-container">
+        {browserSupportsDictation &&
+          <button
+            aria-pressed={dictationEnabled}
+            className={dictationEnabled ? "dictate active" : "dictate"}
+            data-testid="chat-input-dictate"
+            title={dictationEnabled ? "Stop Dictation" : "Start Dictation"}
+            type="button"
+            onClick={handleDictateToggle}
           >
-            Please enter a message before sending.
-          </div>
+            {dictationEnabled ? "Listening..." : "Dictate"}
+          </button>
         }
-      </form>
+        <button
+          className="send"
+          data-testid="chat-input-send"
+          aria-disabled={disabled}
+          onClick={handleSubmit}
+        >
+          Send
+        </button>
+      </div>
+    {showError &&
+      <div
+        aria-live="assertive"
+        className="error-message"
+        data-testid="input-error"
+        id="input-error"
+        role="alert"
+      >
+        Please enter a message before sending.
+      </div>
+    }
     </div>
   );
 };

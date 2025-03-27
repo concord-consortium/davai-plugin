@@ -2,6 +2,7 @@ import React, { useState } from "react";
 import Markdown from "react-markdown";
 import { DEBUG_SPEAKER } from "../constants";
 import { ChatMessage } from "../types";
+import { formatTime } from "../utils/utils";
 
 interface IProps {
   message: ChatMessage;
@@ -9,7 +10,7 @@ interface IProps {
 }
 
 export const ChatTranscriptMessage = ({message, showDebugLog}: IProps) => {
-  const { speaker, messageContent, timestamp } = message;
+  const { speaker, messageContent } = message;
   const [showMessage, setShowMessage] = useState(false);
 
   if (speaker === DEBUG_SPEAKER && !showDebugLog) {
@@ -20,12 +21,18 @@ export const ChatTranscriptMessage = ({message, showDebugLog}: IProps) => {
     const expandedClass = showMessage ? "expanded" : "collapsed";
     return (
       <div className={`debug-message-wrapper ${expandedClass}`}>
-        <div className="header">
-          <button
+        <div className="debug-message-header">
+          <label htmlFor="debug-message-toggle" className="visually-hidden">
+            {showMessage ? "Collapse" : "Expand"}
+          </label>
+          <input
+            type="checkbox"
+            role="switch"
+            aria-checked={showMessage}
+            id={"debug-message-toggle"}
+            className="debug-message-toggle"
             onClick={() => setShowMessage(!showMessage)}
-          >
-            <span>{showMessage ? "Collapse content" : "Expand content"}</span>
-          </button>
+          />
           <h4>{messageContent.description}:</h4>
         </div>
         <pre
@@ -41,14 +48,19 @@ export const ChatTranscriptMessage = ({message, showDebugLog}: IProps) => {
 
   return (
     <div
-      aria-label={`${speaker} at ${timestamp}`}
+      aria-label={speaker}
       className={`chat-transcript__message ${speakerClass}`}
       data-testid="chat-message"
       role="listitem"
     >
-      <h3 data-testid="chat-message-speaker">
-        {speaker}
-      </h3>
+      <div className="chat-message-header">
+        <h3 data-testid="chat-message-speaker">
+          {speaker}
+        </h3>
+        <span className="chat-message-time">
+          {formatTime(message.timestamp, speaker === DEBUG_SPEAKER)}
+        </span>
+      </div>
       <div
         className={`chat-message-content ${speakerClass}`}
         data-testid="chat-message-content"

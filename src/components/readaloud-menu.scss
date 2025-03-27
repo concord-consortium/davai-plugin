@@ -20,7 +20,7 @@
 
         &:hover {
           &::before {
-            box-shadow: 0 0px 8px 0 rgba(0, 0, 0, 0.35);
+            box-shadow: 0 0 8px 0 rgba(0, 0, 0, 0.35);
           }
         }
       }
@@ -68,7 +68,7 @@
         left: 0;
         bottom: 0;
         object-fit: contain;
-        box-shadow: 0 0px 8px 0 rgba(0, 0, 0, 0.35);
+        box-shadow: 0 0 8px 0 rgba(0, 0, 0, 0.35);
         border: solid 1.5px #797979;
         background-color: white;
         transition: all 0.3s;
@@ -78,7 +78,7 @@
 
       &:hover {
         &::before {
-          box-shadow: 0 0px 8px 2px $dark-teal;
+          box-shadow: 0 0 8px 2px $dark-teal;
         }
       }
     }
