@@ -72,6 +72,7 @@
     }
   }
 
+  // taken from: https://www.tpgi.com/the-anatomy-of-visually-hidden/
   .visually-hidden:not(:focus):not(:active) {
     border: 0;
     clip-path: inset(50%);

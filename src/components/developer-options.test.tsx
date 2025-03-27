@@ -64,21 +64,15 @@ describe("test developer options component", () => {
     await waitFor(() => {
       expect(selectAssistantOption).toHaveTextContent("Jest Mock Assistant");
     });
-    fireEvent.change(selectAssistantOption, { target: { value: "mock" } });
-    // expect(onSelectAssistant).toHaveBeenCalledTimes(1);
 
     const deleteThreadButton = screen.getByTestId("delete-thread-button");
     expect(deleteThreadButton).toBeInTheDocument();
     expect(deleteThreadButton).toBeEnabled();
     expect(deleteThreadButton).toHaveTextContent("Delete Thread");
-    fireEvent.click(deleteThreadButton);
-    // expect(onDeleteThread).toHaveBeenCalledTimes(1);
 
     const newThreadButton = screen.getByTestId("new-thread-button");
     expect(newThreadButton).toBeInTheDocument();
     expect(newThreadButton).toHaveAttribute("aria-disabled", "true");
     expect(newThreadButton).toHaveTextContent("New Thread");
   });
-
-
 });
