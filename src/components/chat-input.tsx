@@ -218,7 +218,6 @@ export const ChatInputComponent = ({disabled, onKeyboardShortcut, onSubmit}: IPr
 
   const handleBlur = () => {
     setTextareaHasFocus(false);
-    textAreaRef.current?.blur();
   };
 
   const handleFocus = () => {
