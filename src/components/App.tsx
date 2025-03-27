@@ -27,7 +27,6 @@ export const App = observer(() => {
   const dimensions = { width: appConfig.dimensions.width, height: appConfig.dimensions.height };
   const subscribedDataCtxsRef = useRef<string[]>([]);
   const transcriptStore = assistantStore.transcriptStore;
-  // const [backgroundColor, setBackgroundColor] = useState<string>("#fff");
 
   const handleDataContextChangeNotice = useCallback(async (notification: ClientNotification) => {
     if (notificationsToIgnore.includes(notification.values.operation)) return;
@@ -135,12 +134,6 @@ export const App = observer(() => {
     }
   };
 
-  // useEffect(() => {
-  //   // change background color to a new random color
-  //   const randomColor = Math.floor(Math.random()*16777215).toString(16);
-  //   setBackgroundColor(`#${randomColor}`);
-  // }, [ariaLiveText]);
-
   return (
     <div className="App">
       <header>
@@ -159,9 +152,13 @@ export const App = observer(() => {
         onKeyboardShortcut={handleFocusShortcut}
       />
       <UserOptions assistantStore={assistantStore} />
+      {/*
+        The aria-live region is used to announce the last message from DAVAI.
+        The region is updated whenever a new message is added to the transcript,
+        or while the LLM is processing with a "Processing" message.
+      */}
       <div
         className="visually-hidden"
-        // style={{backgroundColor}}
         role="alert"
         aria-live="assertive"
         aria-atomic="true"
