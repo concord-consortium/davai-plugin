@@ -11,13 +11,13 @@ import "./chat-input.scss";
 
 interface IProps {
   disabled?: boolean;
-  isLoadingResponse?: boolean;
+  isLoading?: boolean;
   onCancel: () => void;
   onKeyboardShortcut: () => void;
   onSubmit: (messageText: string) => void;
 }
 
-export const ChatInputComponent = ({disabled, isLoadingResponse, onCancel, onKeyboardShortcut, onSubmit}: IProps) => {
+export const ChatInputComponent = ({disabled, isLoading, onCancel, onKeyboardShortcut, onSubmit}: IProps) => {
   const { keyboardShortcutEnabled, keyboardShortcutKeys } = useOptions();
   const [browserSupportsDictation, setBrowserSupportsDictation] = useState(false);
   const [dictationEnabled, setDictationEnabled] = useState(false);
@@ -264,7 +264,7 @@ export const ChatInputComponent = ({disabled, isLoadingResponse, onCancel, onKey
             <VoiceTypingIcon />
           </button>
         )}
-        {isLoadingResponse ? (
+        {isLoading ? (
           <button
             className="cancel"
             data-testid="chat-input-cancel"
@@ -279,8 +279,8 @@ export const ChatInputComponent = ({disabled, isLoadingResponse, onCancel, onKey
             className="send"
             data-testid="chat-input-send"
             aria-disabled={disabled || !inputValue}
-            type="submit"
             aria-label="Send message"
+            onClick={handleSubmit}
           >
             <SendIcon />
           </button>
