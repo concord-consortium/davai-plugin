@@ -46,6 +46,7 @@ export const AssistantModel = types
     apiConnection: OpenAIType,
     assistant: types.maybe(types.frozen()),
     assistantId: types.string,
+    assistantList: types.optional(types.map(types.string), {}),
     isLoadingResponse: types.optional(types.boolean, false),
     thread: types.maybe(types.frozen()),
     transcriptStore: ChatTranscriptModel,
@@ -97,6 +98,19 @@ export const AssistantModel = types
           description: "Failed to initialize assistant",
           content: formatJsonMessage(err)
         });
+      }
+    });
+
+    const fetchAssistantsList = flow(function* () {
+      try{
+        self.assistantList = self.assistantList ?? types.map(types.string).create();
+        const res = yield self.apiConnection.beta.assistants.list();
+        res.data.map((assistant: OpenAI.Beta.Assistant) => {
+          const assistantName = assistant.name || assistant.id;
+          self.assistantList?.set(assistant.id, assistantName);
+        });
+      } catch (err) {
+        console.error(err);
       }
     });
 
@@ -358,7 +372,7 @@ export const AssistantModel = types
       }
     });
 
-    return { createThread, deleteThread, initializeAssistant, handleMessageSubmit, sendDataCtxChangeInfo, sendCODAPDocumentInfo };
+    return { createThread, deleteThread, initializeAssistant, fetchAssistantsList, handleMessageSubmit, sendDataCtxChangeInfo, sendCODAPDocumentInfo };
   })
   .actions((self) => ({
     afterCreate() {

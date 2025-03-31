@@ -2,7 +2,7 @@ import React, { useState } from "react";
 import Markdown from "react-markdown";
 import { DEBUG_SPEAKER } from "../constants";
 import { ChatMessage } from "../types";
-import { formatTime } from "../utils/utils";
+import { useAriaLive } from "../contexts/aria-live-context";
 
 interface IProps {
   message: ChatMessage;
@@ -10,6 +10,7 @@ interface IProps {
 }
 
 export const ChatTranscriptMessage = ({message, showDebugLog}: IProps) => {
+  const { setAriaLiveText } = useAriaLive();
   const { speaker, messageContent } = message;
   const [showMessage, setShowMessage] = useState(false);
 
@@ -17,26 +18,31 @@ export const ChatTranscriptMessage = ({message, showDebugLog}: IProps) => {
     return null;
   }
 
+  const handleToggleMessage = () => {
+    const newState = !showMessage;
+    setShowMessage(newState);
+    if (newState) {
+      setAriaLiveText(messageContent.content);
+    } else {
+      setAriaLiveText("");
+    }
+  };
+
   const renderDebugPreview = () => {
     const expandedClass = showMessage ? "expanded" : "collapsed";
     return (
       <div className={`debug-message-wrapper ${expandedClass}`}>
-        <div className="debug-message-header">
-          <label htmlFor="debug-message-toggle" className="visually-hidden">
-            {showMessage ? "Collapse" : "Expand"}
-          </label>
-          <input
-            type="checkbox"
-            role="switch"
-            aria-checked={showMessage}
-            id={"debug-message-toggle"}
-            className="debug-message-toggle"
-            onClick={() => setShowMessage(!showMessage)}
-          />
-          <h4>{messageContent.description}:</h4>
-        </div>
-        <pre
+        <button
+          type="button"
           aria-expanded={showMessage}
+          aria-controls="debug-message-content"
+          onClick={handleToggleMessage}
+        >
+          <span aria-hidden="true" className="arrow-icon">▼</span>
+          {messageContent.description}
+        </button>
+        <pre
+          id="debug-message-content"
         >
             {messageContent.content}
         </pre>
@@ -53,14 +59,9 @@ export const ChatTranscriptMessage = ({message, showDebugLog}: IProps) => {
       data-testid="chat-message"
       role="listitem"
     >
-      <div className="chat-message-header">
-        <h3 data-testid="chat-message-speaker">
-          {speaker}
-        </h3>
-        <span className="chat-message-time">
-          {formatTime(message.timestamp, speaker === DEBUG_SPEAKER)}
-        </span>
-      </div>
+      <h3 data-testid="chat-message-speaker">
+        {speaker}
+      </h3>
       <div
         className={`chat-message-content ${speakerClass}`}
         data-testid="chat-message-content"

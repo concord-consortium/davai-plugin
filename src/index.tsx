@@ -4,6 +4,7 @@ import { App } from "./components/App";
 import { AppConfigProvider } from "./contexts/app-config-provider";
 import { OpenAIConnectionProvider } from "./contexts/openai-connection-provider";
 import { AriaLiveProvider } from "./contexts/aria-live-context";
+import { UserOptionsProvider } from "./contexts/user-options-context";
 
 import "./index.scss";
 
@@ -11,15 +12,13 @@ const container = document.getElementById("app");
 if (container) {
   const root = createRoot(container);
 
-  window.addEventListener("load", () => {
-    window.focus();
-  });
-
   root.render(
     <AppConfigProvider>
       <OpenAIConnectionProvider>
         <AriaLiveProvider>
-          <App />
+          <UserOptionsProvider>
+            <App />
+          </UserOptionsProvider>
         </AriaLiveProvider>
       </OpenAIConnectionProvider>
     </AppConfigProvider>

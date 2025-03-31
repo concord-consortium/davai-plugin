@@ -1,7 +1,27 @@
-import React from "react";
+import React, { useEffect } from "react";
 import { DAVAI_SPEAKER } from "../constants";
+import { useAriaLive } from "../contexts/aria-live-context";
+import { useOptions } from "../hooks/use-options";
 
 export const LoadingMessage = () => {
+  const {setAriaLiveText} = useAriaLive();
+  const {playProcessingMessage} = useOptions();
+
+  useEffect(() => {
+    if (playProcessingMessage) {
+      setAriaLiveText("Processing");
+      let isAlternate = false;
+
+      const interval = setInterval(() => {
+        // alternate with non-breaking space so screen readers will re-announce the message
+        isAlternate = !isAlternate;
+        const processingMessage = isAlternate ? "Processing\u00a0" : "Processing";
+        setAriaLiveText(processingMessage);
+      }, 4000);
+      return () => clearInterval(interval);
+    }
+  }, [playProcessingMessage, setAriaLiveText]);
+
   return (
     <div
       aria-label={DAVAI_SPEAKER}
@@ -16,11 +36,8 @@ export const LoadingMessage = () => {
         className={`chat-message-content ${DAVAI_SPEAKER.toLowerCase()}`}
         data-testid="chat-message-content"
       >
-        <div
-          aria-label="Loading response, please wait"
-          className="loading"
-          data-testid="loading" role="status" aria-live="polite"
-        >
+        <div className="loading">
+          Processing
         </div>
       </div>
     </div>
