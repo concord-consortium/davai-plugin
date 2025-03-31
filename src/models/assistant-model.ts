@@ -37,7 +37,11 @@ const OpenAIType = types.custom({
  * @property {Object|null} thread - The assistant's thread used for the current chat, or `null` if no thread is active.
  * @property {ChatTranscriptModel} transcriptStore - The assistant's chat transcript store for recording and managing chat messages.
  * @property {boolean} isLoadingResponse - Flag indicating whether the assistant is currently processing a response.
- * @property {string[]} messageQueue - Queue of messages to be sent to the assistant. Used if CODAP generates notifications while assistant is processing a response.
+ * @property {string[]} codapNotificationQueue - Queue of messages to be sent to the assistant. Used if CODAP generates notifications while assistant is processing a response.
+ * @property {string[]} messageQueue - Queue of messages to be sent to the assistant. Used if user sends messages while assistant is processing a response.
+ * @property {boolean} showLoadingIndicator - Flag indicating whether to show a loading indicator to the user; this is decoupled from the assistant's internal loading state to allow for more control over UI elements.
+ * @property {boolean} isCancelling - Flag indicating whether the assistant is currently cancelling a request.
+ * @property {boolean} isResetting - Flag indicating whether the assistant is currently resetting the chat.
  * @property {boolean} uploadFileAfterRun - Flag indicating whether to upload a file after the assistant completes a run.
  * @property {string} dataUri - The data URI of the file to be uploaded.
  */
@@ -47,28 +51,33 @@ export const AssistantModel = types
     assistant: types.maybe(types.frozen()),
     assistantId: types.string,
     assistantList: types.optional(types.map(types.string), {}),
+    codapNotificationQueue: types.array(types.string),
+    isCancelling: types.optional(types.boolean, false),
     isLoadingResponse: types.optional(types.boolean, false),
+    isResetting: types.optional(types.boolean, false),
+    messageQueue: types.array(types.string),
+    showLoadingIndicator: types.optional(types.boolean, false),
     thread: types.maybe(types.frozen()),
     transcriptStore: ChatTranscriptModel,
-    messageQueue: types.array(types.string),
     uploadFileAfterRun: false,
     dataUri: "",
   })
   .actions((self) => ({
-    setIsLoadingResponse(isLoading: boolean) {
-      self.isLoadingResponse = isLoading;
+    resetAfterResponse() {
+      self.isLoadingResponse = false;
+      self.showLoadingIndicator = false;
     }
   }))
   .actions((self) => ({
     handleMessageSubmitMockAssistant() {
-      self.setIsLoadingResponse(true);
+      self.showLoadingIndicator = true;
       // Use a brief delay to prevent duplicate timestamp-based keys.
       setTimeout(() => {
         self.transcriptStore.addMessage(
           DAVAI_SPEAKER,
           { content: "I'm just a mock assistant and can't process that request." }
         );
-        self.setIsLoadingResponse(false);
+        self.showLoadingIndicator = false;
       }, 2000);
     },
     setTranscriptStore(transcriptStore: any) {
@@ -133,8 +142,8 @@ export const AssistantModel = types
 
     const sendDataCtxChangeInfo = flow(function* (msg: string) {
       try {
-        if (self.isLoadingResponse) {
-          self.messageQueue.push(msg);
+        if (self.isLoadingResponse || self.isCancelling || self.isResetting) {
+          self.codapNotificationQueue.push(msg);
         } else {
           yield sendCODAPDocumentInfo(msg);
         }
@@ -161,18 +170,27 @@ export const AssistantModel = types
 
     const handleMessageSubmit = flow(function* (messageText) {
       try {
-        const messageSent = yield self.apiConnection.beta.threads.messages.create(self.thread.id, {
-          role: "user",
-          content: messageText,
-        });
-        self.setIsLoadingResponse(true);
-        self.transcriptStore.addMessage(DEBUG_SPEAKER, {description: "Message received by LLM", content: formatJsonMessage(messageSent)});
-        yield startRun();
-
+        self.showLoadingIndicator = true;
+        if (self.isCancelling || self.isResetting) {
+          const description = self.isCancelling ? "Cancelling" : "Resetting";
+          self.transcriptStore.addMessage(DEBUG_SPEAKER, {
+            description,
+            content: "User message added to queue."
+          });
+          self.messageQueue.push(messageText);
+        } else {
+          self.isLoadingResponse = true;
+          const messageSent = yield self.apiConnection.beta.threads.messages.create(self.thread.id, {
+            role: "user",
+            content: messageText,
+          });
+          self.transcriptStore.addMessage(DEBUG_SPEAKER, {description: "Message received by LLM", content: formatJsonMessage(messageSent)});
+          yield startRun();
+        }
       } catch (err) {
         console.error("Failed to handle message submit:", err);
         self.transcriptStore.addMessage(DEBUG_SPEAKER, {description: "Failed to handle message submit", content: formatJsonMessage(err)});
-        self.setIsLoadingResponse(false);
+        self.resetAfterResponse();
       }
     });
 
@@ -191,6 +209,14 @@ export const AssistantModel = types
       }
     });
 
+    const handleCancel = () => {
+      self.isCancelling = true;
+      self.showLoadingIndicator = false;
+      self.transcriptStore.addMessage(DAVAI_SPEAKER, {
+        content: "Request cancelled.",
+      });
+    };
+
     const pollRunState: (currentRunId: string) => Promise<any> = flow(function* (currentRunId) {
       let runState = yield self.apiConnection.beta.threads.runs.retrieve(self.thread.id, currentRunId);
       self.transcriptStore.addMessage(DEBUG_SPEAKER, {
@@ -198,9 +224,10 @@ export const AssistantModel = types
         content: formatJsonMessage(runState.status),
       });
 
-      const errorStates = ["failed", "cancelled", "incomplete"];
+      const stopPollingStates = ["completed", "requires_action"];
+      const errorStates = ["failed", "incomplete"];
 
-      while (runState.status !== "completed" && runState.status !== "requires_action" && !errorStates.includes(runState.status)) {
+      while (!stopPollingStates.includes(runState.status) && !errorStates.includes(runState.status) && !self.isCancelling) {
         yield new Promise((resolve) => setTimeout(resolve, 2000));
         runState = yield self.apiConnection.beta.threads.runs.retrieve(self.thread.id, currentRunId);
         self.transcriptStore.addMessage(DEBUG_SPEAKER, {
@@ -209,10 +236,16 @@ export const AssistantModel = types
         });
       }
 
+      if (self.isCancelling) {
+        self.isLoadingResponse = false;
+        yield cancelRun(currentRunId);
+        return;
+      }
+
       if (runState.status === "requires_action") {
         self.transcriptStore.addMessage(DEBUG_SPEAKER, {
           description: "Run requires action",
-          content: formatJsonMessage(runState),
+          content: formatJsonMessage(runState.required_action),
         });
         yield handleRequiredAction(runState, currentRunId);
         yield pollRunState(currentRunId);
@@ -245,7 +278,6 @@ export const AssistantModel = types
               content: "I'm sorry, I don't have a response for that.",
             });
           }
-          self.setIsLoadingResponse(false);
         }
       }
 
@@ -257,8 +289,8 @@ export const AssistantModel = types
         self.transcriptStore.addMessage(DAVAI_SPEAKER, {
           content: "I'm sorry, I encountered an error. Please try again.",
         });
-        self.setIsLoadingResponse(false);
       }
+      self.resetAfterResponse();
     });
 
     const uploadFile = flow(function* () {
@@ -339,7 +371,96 @@ export const AssistantModel = types
       } catch (err) {
         console.error(err);
         self.transcriptStore.addMessage(DEBUG_SPEAKER, {description: "Error taking required action", content: formatJsonMessage(err)});
-        self.setIsLoadingResponse(false);
+        self.resetAfterResponse();
+      }
+    });
+
+    const cancelRun = flow(function* (runId: string) {
+      try {
+        const cancelRes = yield self.apiConnection.beta.threads.runs.cancel(self.thread.id, runId);
+        self.transcriptStore.addMessage(DEBUG_SPEAKER, {
+          description: `Cancel request sent`,
+          content: formatJsonMessage(cancelRes),
+        });
+        pollCancel(runId);
+      } catch (err: any) {
+        const errorMessage =
+          err instanceof Error
+            ? err.message
+            : typeof err === "string"
+            ? err
+            : JSON.stringify(err);
+        if (errorMessage.includes("Cannot cancel run with status 'cancelled'")) {
+          self.isCancelling = false;
+          return;
+        } else {
+          console.error("Failed to cancel run:", errorMessage);
+          self.transcriptStore.addMessage(DEBUG_SPEAKER, {description: "Failed to cancel run", content: formatJsonMessage(errorMessage)});
+        }
+        self.isCancelling = false;
+      }
+    });
+
+    const pollCancel = flow(function* (runId: string) {
+      try {
+        const startTime = Date.now();
+        let runState = yield self.apiConnection.beta.threads.runs.retrieve(self.thread.id, runId);
+        const MAX_WAIT_TIME = 10_000; // 10 seconds
+
+        while (runState.status === "cancelling") {
+          const elapsed = Date.now() - startTime;
+          if (elapsed >= MAX_WAIT_TIME) {
+            yield resetThread();
+            break;
+          }
+          yield new Promise(resolve => setTimeout(resolve, 2000));
+          runState = yield self.apiConnection.beta.threads.runs.retrieve(self.thread.id, runId);
+          self.transcriptStore.addMessage(DEBUG_SPEAKER, {
+            description: "Cancellation status",
+            content: `Run ${runId} has status: ${runState.status}.`,
+          });
+        }
+
+        if (runState.status === "cancelled") {
+          self.transcriptStore.addMessage(DEBUG_SPEAKER, {
+            description: "Run cancelled",
+            content: `Run ${runId} has been cancelled.`,
+          });
+        }
+        self.isCancelling = false;
+      } catch (err) {
+        console.error("Background poll cancel error:", err);
+        self.isCancelling = false;
+      }
+    });
+
+    const resetThread = flow(function* () {
+      try {
+        self.isResetting = true;
+        const threadId = self.thread.id;
+        const allThreadMessages = yield self.apiConnection.beta.threads.messages.list(threadId);
+
+        const deletedThread = yield self.apiConnection.beta.threads.del(threadId);
+        self.transcriptStore.addMessage(DEBUG_SPEAKER, {
+          description: "Thread deleted",
+          content: formatJsonMessage(deletedThread),
+        });
+
+        yield createThread();
+        yield fetchAndSendDataContexts();
+        self.transcriptStore.addMessage(DEBUG_SPEAKER, {description: "Sending thread history to LLM", content: formatJsonMessage(allThreadMessages)});
+        const messageSent = yield self.apiConnection.beta.threads.messages.create(self.thread.id, {
+          role: "user",
+          content: `This is a system message containing the previous conversation history. ${allThreadMessages}`,
+        });
+        self.transcriptStore.addMessage(DEBUG_SPEAKER, {description: "Thread history received by LLM", content: formatJsonMessage(messageSent)});
+        self.isResetting = false;
+      }
+      catch (err) {
+        console.error("Failed to delete thread:", err);
+        self.transcriptStore.addMessage(DEBUG_SPEAKER, {description: "Failed to delete thread", content: formatJsonMessage(err)});
+        self.isCancelling = false;
+        self.isResetting = false;
       }
     });
 
@@ -372,15 +493,20 @@ export const AssistantModel = types
       }
     });
 
-    return { createThread, deleteThread, initializeAssistant, fetchAssistantsList, handleMessageSubmit, sendDataCtxChangeInfo, sendCODAPDocumentInfo };
+    return { createThread, deleteThread, initializeAssistant, fetchAssistantsList, handleMessageSubmit, handleCancel, sendDataCtxChangeInfo, sendCODAPDocumentInfo };
   })
   .actions((self) => ({
     afterCreate() {
       onSnapshot(self, async () => {
-        if (!self.isLoadingResponse && self.messageQueue.length > 0) {
+        const doneProcessing = !self.isLoadingResponse && !self.isCancelling && !self.isResetting;
+        if (doneProcessing && self.codapNotificationQueue.length > 0) {
+          const allMsgs = self.codapNotificationQueue.join("\n");
+          self.codapNotificationQueue.clear();
+          await self.sendCODAPDocumentInfo(allMsgs);
+        } else if (doneProcessing && self.messageQueue.length > 0) {
           const allMsgs = self.messageQueue.join("\n");
           self.messageQueue.clear();
-          await self.sendCODAPDocumentInfo(allMsgs);
+          await self.handleMessageSubmit(allMsgs);
         }
       });
     }

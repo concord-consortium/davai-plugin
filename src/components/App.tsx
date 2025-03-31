@@ -102,7 +102,7 @@ export const App = observer(() => {
   }, [transcriptStore, transcriptStore.messages.length, setAriaLiveText]);
 
   useEffect(() => {
-    if (!assistantStore.isLoadingResponse) return;
+    if (!assistantStore.showLoadingIndicator) return;
 
     let interval: NodeJS.Timeout | undefined;
 
@@ -117,7 +117,7 @@ export const App = observer(() => {
       }
     };
 
-  }, [assistantStore.isLoadingResponse, playProcessingTone]);
+  }, [assistantStore.showLoadingIndicator, playProcessingTone]);
 
   const handleFocusShortcut = () => {
     selectSelf();
@@ -134,6 +134,10 @@ export const App = observer(() => {
     }
   };
 
+  const handleCancel = () => {
+    assistantStore.handleCancel();
+  };
+
   return (
     <div className="App">
       <header>
@@ -144,10 +148,12 @@ export const App = observer(() => {
       </header>
       <ChatTranscriptComponent
         chatTranscript={transcriptStore}
-        isLoading={assistantStore.isLoadingResponse}
+        isLoading={assistantStore.showLoadingIndicator}
       />
       <ChatInputComponent
-        disabled={(!assistantStore.thread && !appConfig.isAssistantMocked) || assistantStore.isLoadingResponse}
+        disabled={(!assistantStore.thread && !appConfig.isAssistantMocked) || assistantStore.showLoadingIndicator}
+        isLoading={assistantStore.showLoadingIndicator}
+        onCancel={handleCancel}
         onSubmit={handleChatInputSubmit}
         onKeyboardShortcut={handleFocusShortcut}
       />

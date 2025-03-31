@@ -3,15 +3,21 @@ import { useOptions } from "../hooks/use-options";
 import { kDefaultChatInputHeight, START_RECORDING_NOTE, STOP_RECORDING_NOTE } from "../constants";
 import { playSound, isInputElement, isShortcutPressed } from "../utils/utils";
 
+import StopIcon from "../assets/stop-icon.svg";
+import SendIcon from "../assets/send-icon.svg";
+import VoiceTypingIcon from "../assets/voice-typing-icon.svg";
+
 import "./chat-input.scss";
 
 interface IProps {
   disabled?: boolean;
+  isLoading?: boolean;
+  onCancel: () => void;
   onKeyboardShortcut: () => void;
   onSubmit: (messageText: string) => void;
 }
 
-export const ChatInputComponent = ({disabled, onKeyboardShortcut, onSubmit}: IProps) => {
+export const ChatInputComponent = ({disabled, isLoading, onCancel, onKeyboardShortcut, onSubmit}: IProps) => {
   const { keyboardShortcutEnabled, keyboardShortcutKeys } = useOptions();
   const [browserSupportsDictation, setBrowserSupportsDictation] = useState(false);
   const [dictationEnabled, setDictationEnabled] = useState(false);
@@ -41,6 +47,11 @@ export const ChatInputComponent = ({disabled, onKeyboardShortcut, onSubmit}: IPr
 
   const handleTextInputChange = (event: React.ChangeEvent<HTMLTextAreaElement>) => {
     setInputValue(event.target.value);
+  };
+
+  const handleCancel = () => {
+    onCancel();
+    textAreaRef.current?.focus();
   };
 
   const handleSubmit = (event?: FormEvent) => {
@@ -246,24 +257,39 @@ export const ChatInputComponent = ({disabled, onKeyboardShortcut, onSubmit}: IPr
         />
       </div>
       <div className="buttons-container">
-        {browserSupportsDictation &&
+        {browserSupportsDictation && (
           <button
+            aria-pressed={dictationEnabled}
             className={dictationEnabled ? "dictate active" : "dictate"}
             data-testid="chat-input-dictate"
+            aria-label={dictationEnabled ? "Stop Dictation" : "Start Dictation"}
             type="button"
             onClick={handleDictateToggle}
           >
-            {dictationEnabled ? "Stop Dictation" : "Start Dictation"}
+            <VoiceTypingIcon />
           </button>
-        }
-        <button
-          className="send"
-          data-testid="chat-input-send"
-          aria-disabled={disabled}
-          onClick={handleSubmit}
-        >
-          Send
-        </button>
+        )}
+        {isLoading ? (
+          <button
+            className="cancel"
+            data-testid="chat-input-cancel"
+            type="button"
+            aria-label="Cancel processing"
+            onClick={handleCancel}
+          >
+            <StopIcon />
+          </button>
+        ) : (
+          <button
+            className="send"
+            data-testid="chat-input-send"
+            aria-disabled={disabled || !inputValue}
+            aria-label="Send message"
+            onClick={handleSubmit}
+          >
+            <SendIcon />
+          </button>
+        )}
       </div>
     {showError &&
       <div
