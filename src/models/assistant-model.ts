@@ -39,7 +39,7 @@ const OpenAIType = types.custom({
  * @property {boolean} isLoadingResponse - Flag indicating whether the assistant is currently processing a response.
  * @property {string[]} codapNotificationQueue - Queue of messages to be sent to the assistant. Used if CODAP generates notifications while assistant is processing a response.
  * @property {string[]} messageQueue - Queue of messages to be sent to the assistant. Used if user sends messages while assistant is processing a response.
- * @property {boolean} showLoadingIndicator - Flag indicating whether to show a loading indicator while the assistant is processing a response.
+ * @property {boolean} showLoadingIndicator - Flag indicating whether to show a loading indicator to the user; this is decoupled from the assistant's internal loading state to allow for more control over UI elements.
  * @property {boolean} isCancelling - Flag indicating whether the assistant is currently cancelling a request.
  * @property {boolean} isResetting - Flag indicating whether the assistant is currently resetting the chat.
  * @property {boolean} uploadFileAfterRun - Flag indicating whether to upload a file after the assistant completes a run.

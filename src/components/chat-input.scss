@@ -50,11 +50,14 @@
       font-family: $font-family;
       font-size: .75rem;
       height: 32px;
-      margin: 0;
-      pointer-events: auto;
       width: 32px;
+      margin: 0;
       padding: 0px;
+      pointer-events: auto;
       background-color: $light-teal-3;
+      display: flex;
+      justify-content: center;
+      align-items: center;
 
       svg {
         path.main-shape {
@@ -75,15 +78,19 @@
       }
       &.dictate {
         margin-right: auto;
-
         &.active {
-          // darken the color of the icon when active
-          filter: brightness(0) saturate(100%) invert(32%) sepia(0%) saturate(2419%) hue-rotate(165deg) brightness(101%) contrast(66%);
+          background-color: $light-teal-1;
         }
       }
-      &:disabled {
+
+      &[aria-disabled="true"] {
+        background-color: transparent;
         cursor: not-allowed;
-        opacity: .5;
+        svg {
+          path.main-shape {
+            fill: #949494;
+          }
+        }
       }
     }
   }

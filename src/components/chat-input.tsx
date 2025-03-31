@@ -49,6 +49,11 @@ export const ChatInputComponent = ({disabled, isLoading, onCancel, onKeyboardSho
     setInputValue(event.target.value);
   };
 
+  const handleCancel = () => {
+    onCancel();
+    textAreaRef.current?.focus();
+  };
+
   const handleSubmit = (event?: FormEvent) => {
     if (disabled) return;
     event?.preventDefault();
@@ -269,8 +274,8 @@ export const ChatInputComponent = ({disabled, isLoading, onCancel, onKeyboardSho
             className="cancel"
             data-testid="chat-input-cancel"
             type="button"
-            aria-label="Cancel sending message"
-            onClick={onCancel}
+            aria-label="Cancel processing"
+            onClick={handleCancel}
           >
             <StopIcon />
           </button>
