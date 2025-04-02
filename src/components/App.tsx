@@ -24,7 +24,7 @@ export const App = observer(() => {
   const { ariaLiveText, setAriaLiveText } = useAriaLive();
   const assistantStore = useAssistantStore();
   const { playProcessingTone } = useOptions();
-  const [componentsList, setComponentsList] = useState<Record<string, any>[]>([]);
+  const [graphOptions, setGraphOptions] = useState<Record<string, any>[]>([]);
 
   const assistantStoreRef = useRef(assistantStore);
   const dimensions = { width: appConfig.dimensions.width, height: appConfig.dimensions.height };
@@ -50,7 +50,7 @@ export const App = observer(() => {
   // documentation of the documentChangeNotice object here:
   // https://github.com/concord-consortium/codap/wiki/CODAP-Data-Interactive-Plugin-API#documentchangenotice
   const handleDocumentChangeNotice = useCallback(async (notification: ClientNotification) => {
-    if (notification.values.operation === "dataContextCountChanged") { // ignore the other notifications -- they are not useful for our purposes
+        if (notification.values.operation === "dataContextCountChanged") { // ignore the other notifications -- they are not useful for our purposes
       assistantStoreRef.current.transcriptStore.addMessage(DEBUG_SPEAKER, {
         description: "Document change notice", content: formatJsonMessage(notification)
       });
@@ -82,7 +82,13 @@ export const App = observer(() => {
         addDataContextChangeListener(ctx.name, handleDataContextChangeNotice);
       });
       const componentListRes = await codapInterface.sendRequest({action: "get", resource: "componentList"}) as IResult;
-      setComponentsList(componentListRes.values);
+      const graphComponents = componentListRes.values.filter((c: any) => c.type === "graph");
+      const graphDetails = await Promise.all(graphComponents.map(async (c: any) => {
+        const req = {action: "get", resource: `component[${c.name}]`};
+        const res = await codapInterface.sendRequest(req) as IResult;
+        return res.values;
+      }));
+      setGraphOptions(graphDetails);
     };
     init();
     selectSelf();
@@ -163,7 +169,7 @@ export const App = observer(() => {
         onKeyboardShortcut={handleFocusShortcut}
       />
       <h2>Graph Sonification</h2>
-      <GraphSonification componentsList={componentsList}/>
+      <GraphSonification graphOptions={graphOptions}/>
       <UserOptions assistantStore={assistantStore} />
       {/*
         The aria-live region is used to announce the last message from DAVAI.
