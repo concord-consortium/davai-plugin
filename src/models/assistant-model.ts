@@ -44,6 +44,7 @@ const OpenAIType = types.custom({
  * @property {boolean} isResetting - Flag indicating whether the assistant is currently resetting the chat.
  * @property {boolean} uploadFileAfterRun - Flag indicating whether to upload a file after the assistant completes a run.
  * @property {string} dataUri - The data URI of the file to be uploaded.
+ * @property {string} graphToSonify - The name of the graph to sonify, if applicable.
  */
 export const AssistantModel = types
   .model("AssistantModel", {
@@ -61,6 +62,7 @@ export const AssistantModel = types
     transcriptStore: ChatTranscriptModel,
     uploadFileAfterRun: false,
     dataUri: "",
+    graphToSonify: types.optional(types.string, ""),
   })
   .actions((self) => ({
     resetAfterResponse() {
@@ -354,6 +356,13 @@ export const AssistantModel = types
                   ? { ...res, values: { ...res.values, exportDataUri: undefined } }
                   : res;
                 return { tool_call_id: toolCall.id, output: JSON.stringify(res) };
+              } else if (toolCall.function.name === "sonify_graph") {
+                const { graphName } = JSON.parse(toolCall.function.arguments);
+                self.graphToSonify = graphName;
+                return {
+                  tool_call_id: toolCall.id,
+                  output: `The graph "${graphName}" is ready to be sonified. It will play shortly.`,
+                };
               } else {
                 return { tool_call_id: toolCall.id, output: "Tool call not recognized." };
               }

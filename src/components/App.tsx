@@ -24,7 +24,6 @@ export const App = observer(() => {
   const { ariaLiveText, setAriaLiveText } = useAriaLive();
   const assistantStore = useAssistantStore();
   const { playProcessingTone } = useOptions();
-  const [graphOptions, setGraphOptions] = useState<Record<string, any>[]>([]);
 
   const assistantStoreRef = useRef(assistantStore);
   const dimensions = { width: appConfig.dimensions.width, height: appConfig.dimensions.height };
@@ -81,14 +80,6 @@ export const App = observer(() => {
         subscribedDataCtxsRef.current.push(ctx.name);
         addDataContextChangeListener(ctx.name, handleDataContextChangeNotice);
       });
-      const componentListRes = await codapInterface.sendRequest({action: "get", resource: "componentList"}) as IResult;
-      const graphComponents = componentListRes.values.filter((c: any) => c.type === "graph");
-      const graphDetails = await Promise.all(graphComponents.map(async (c: any) => {
-        const req = {action: "get", resource: `component[${c.name}]`};
-        const res = await codapInterface.sendRequest(req) as IResult;
-        return res.values;
-      }));
-      setGraphOptions(graphDetails);
     };
     init();
     selectSelf();
@@ -168,8 +159,9 @@ export const App = observer(() => {
         onSubmit={handleChatInputSubmit}
         onKeyboardShortcut={handleFocusShortcut}
       />
-      <h2>Graph Sonification</h2>
-      <GraphSonification graphOptions={graphOptions}/>
+      { !assistantStore.showLoadingIndicator && assistantStore.graphToSonify &&
+        <GraphSonification graphToSonify={assistantStore.graphToSonify}/>
+      }
       <UserOptions assistantStore={assistantStore} />
       {/*
         The aria-live region is used to announce the last message from DAVAI.
