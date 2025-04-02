@@ -1,8 +1,8 @@
-import React, { useCallback, useEffect, useRef } from "react";
+import React, { useCallback, useEffect, useRef, useState } from "react";
 import * as Tone from "tone";
 import { observer } from "mobx-react-lite";
 import removeMarkdown from "remove-markdown";
-import { addDataContextChangeListener, addDataContextsListListener, ClientNotification, getDataContext, getListOfDataContexts, initializePlugin, selectSelf } from "@concord-consortium/codap-plugin-api";
+import { addDataContextChangeListener, addDataContextsListListener, ClientNotification, codapInterface, getDataContext, getListOfDataContexts, initializePlugin, IResult, selectSelf } from "@concord-consortium/codap-plugin-api";
 import { useAppConfigContext } from "../hooks/use-app-config-context";
 import { useAssistantStore } from "../hooks/use-assistant-store";
 import { useAriaLive } from "../contexts/aria-live-context";
@@ -12,6 +12,7 @@ import { ChatTranscriptComponent } from "./chat-transcript";
 import { DAVAI_SPEAKER, DEBUG_SPEAKER, LOADING_NOTE, USER_SPEAKER, notificationsToIgnore } from "../constants";
 import { UserOptions } from "./user-options";
 import { formatJsonMessage, playSound } from "../utils/utils";
+import { GraphSonification } from "./graph-sonification";
 
 import "./App.scss";
 
@@ -23,6 +24,7 @@ export const App = observer(() => {
   const { ariaLiveText, setAriaLiveText } = useAriaLive();
   const assistantStore = useAssistantStore();
   const { playProcessingTone } = useOptions();
+
   const assistantStoreRef = useRef(assistantStore);
   const dimensions = { width: appConfig.dimensions.width, height: appConfig.dimensions.height };
   const subscribedDataCtxsRef = useRef<string[]>([]);
@@ -47,7 +49,7 @@ export const App = observer(() => {
   // documentation of the documentChangeNotice object here:
   // https://github.com/concord-consortium/codap/wiki/CODAP-Data-Interactive-Plugin-API#documentchangenotice
   const handleDocumentChangeNotice = useCallback(async (notification: ClientNotification) => {
-    if (notification.values.operation === "dataContextCountChanged") { // ignore the other notifications -- they are not useful for our purposes
+        if (notification.values.operation === "dataContextCountChanged") { // ignore the other notifications -- they are not useful for our purposes
       assistantStoreRef.current.transcriptStore.addMessage(DEBUG_SPEAKER, {
         description: "Document change notice", content: formatJsonMessage(notification)
       });
@@ -157,6 +159,9 @@ export const App = observer(() => {
         onSubmit={handleChatInputSubmit}
         onKeyboardShortcut={handleFocusShortcut}
       />
+      { !assistantStore.showLoadingIndicator && assistantStore.graphToSonify &&
+        <GraphSonification graphToSonify={assistantStore.graphToSonify}/>
+      }
       <UserOptions assistantStore={assistantStore} />
       {/*
         The aria-live region is used to announce the last message from DAVAI.
