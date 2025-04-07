@@ -105,8 +105,14 @@ export const GraphSonification = ({ graphToSonify, isSonificationPlaying, onRese
       
         Tone.getTransport().scheduleOnce((time) => {
           indices.forEach((i) => {
-            const pFrac = pitchFractions[i];
-            const freq = 220 + pFrac * (880 - 220);
+            let freq: number;
+            if (!secondaryAttribute) {
+              // Use the time fraction as pitch so the pitch increases as we move along the axis
+              freq = 220 + fraction * (880 - 220);
+            } else {
+              const pFrac = pitchFractions[i];
+              freq = 220 + pFrac * (880 - 220);
+            }            
 
             // For each data point, determine the pan value based on the x-axis position.
             // Normalize the x-axis position to a value between -1 and 1.
