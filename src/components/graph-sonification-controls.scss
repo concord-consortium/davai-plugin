@@ -1,0 +1,17 @@
+@use "vars" as *;
+
+.graph-sonification-controls {
+  align-items: center;
+  display: flex;
+
+  button {
+    cursor: pointer;
+    display: inline-block;
+    margin: 5px 0 5px 5px !important;
+    padding: 0 5px;
+  }
+
+  select {
+    font-size: .75rem;
+  }
+}

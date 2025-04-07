@@ -64,10 +64,19 @@ export const AssistantModel = types
     dataUri: "",
     graphToSonify: types.optional(types.string, ""),
   })
+  .volatile((self) => ({
+    isSonificationPlaying: false
+  }))
   .actions((self) => ({
     resetAfterResponse() {
       self.isLoadingResponse = false;
       self.showLoadingIndicator = false;
+    },
+    setGraphToSonify(graphName: string) {
+      self.graphToSonify = graphName;
+    },
+    setIsSonificationPlaying(isPlaying: boolean) {
+      self.isSonificationPlaying = isPlaying;
     }
   }))
   .actions((self) => ({

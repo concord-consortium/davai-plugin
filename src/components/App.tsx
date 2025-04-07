@@ -2,7 +2,7 @@ import React, { useCallback, useEffect, useRef, useState } from "react";
 import * as Tone from "tone";
 import { observer } from "mobx-react-lite";
 import removeMarkdown from "remove-markdown";
-import { addDataContextChangeListener, addDataContextsListListener, ClientNotification, codapInterface, getDataContext, getListOfDataContexts, initializePlugin, IResult, selectSelf } from "@concord-consortium/codap-plugin-api";
+import { addDataContextChangeListener, addDataContextsListListener, ClientNotification, codapInterface, getDataContext, getListOfDataContexts, initializePlugin, selectSelf } from "@concord-consortium/codap-plugin-api";
 import { useAppConfigContext } from "../hooks/use-app-config-context";
 import { useAssistantStore } from "../hooks/use-assistant-store";
 import { useAriaLive } from "../contexts/aria-live-context";
@@ -13,6 +13,7 @@ import { DAVAI_SPEAKER, DEBUG_SPEAKER, LOADING_NOTE, USER_SPEAKER, notifications
 import { UserOptions } from "./user-options";
 import { formatJsonMessage, playSound } from "../utils/utils";
 import { GraphSonification } from "./graph-sonification";
+import { GraphSonificationControls } from "./graph-sonification-controls";
 
 import "./App.scss";
 
@@ -24,6 +25,7 @@ export const App = observer(() => {
   const { ariaLiveText, setAriaLiveText } = useAriaLive();
   const assistantStore = useAssistantStore();
   const { playProcessingTone } = useOptions();
+  const [availableGraphs, setAvailableGraphs] = useState<string[]>([]);
 
   const assistantStoreRef = useRef(assistantStore);
   const dimensions = { width: appConfig.dimensions.width, height: appConfig.dimensions.height };
@@ -80,6 +82,14 @@ export const App = observer(() => {
         subscribedDataCtxsRef.current.push(ctx.name);
         addDataContextChangeListener(ctx.name, handleDataContextChangeNotice);
       });
+      const codapComponents = await codapInterface.sendRequest({
+        action: "get",
+        resource: "componentList"
+      }) as ClientNotification;
+      const graphNames = codapComponents.values.filter((component: Record<string, any>) => {
+        return component.type === "graph";
+      }).map((component: Record<string, any>) => component.name);
+      setAvailableGraphs(graphNames);
     };
     init();
     selectSelf();
@@ -140,6 +150,18 @@ export const App = observer(() => {
     assistantStore.handleCancel();
   };
 
+  const handleSelectGraph = (graphName: string) => {
+    assistantStore.setGraphToSonify(graphName);
+  };
+
+  const handleSonifyGraph = () => {
+    assistantStore.setIsSonificationPlaying(!assistantStore.isSonificationPlaying);
+  };
+
+  const handleResetGraphToSonify = () => {
+    assistantStore.setIsSonificationPlaying(false);
+  };
+
   return (
     <div className="App">
       <header>
@@ -159,9 +181,19 @@ export const App = observer(() => {
         onSubmit={handleChatInputSubmit}
         onKeyboardShortcut={handleFocusShortcut}
       />
-      { !assistantStore.showLoadingIndicator && assistantStore.graphToSonify &&
-        <GraphSonification graphToSonify={assistantStore.graphToSonify}/>
+      { !assistantStore.showLoadingIndicator && assistantStore.graphToSonify && assistantStore.isSonificationPlaying &&
+        <GraphSonification 
+          graphToSonify={assistantStore.graphToSonify}
+          isSonificationPlaying={assistantStore.isSonificationPlaying}
+          onResetGraphToSonify={handleResetGraphToSonify}
+        />
       }
+      <GraphSonificationControls
+        availableGraphs={availableGraphs}
+        graphToSonify={assistantStore.graphToSonify}
+        onSelectGraph={handleSelectGraph}
+        onSonifyGraph={handleSonifyGraph}
+      />
       <UserOptions assistantStore={assistantStore} />
       {/*
         The aria-live region is used to announce the last message from DAVAI.
