@@ -181,7 +181,7 @@ export const App = observer(() => {
         onSubmit={handleChatInputSubmit}
         onKeyboardShortcut={handleFocusShortcut}
       />
-      { !assistantStore.showLoadingIndicator && assistantStore.graphToSonify && assistantStore.isSonificationPlaying &&
+      { !assistantStore.showLoadingIndicator && assistantStore.graphToSonify &&
         <GraphSonification 
           graphToSonify={assistantStore.graphToSonify}
           isSonificationPlaying={assistantStore.isSonificationPlaying}

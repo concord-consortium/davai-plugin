@@ -11,10 +11,6 @@ interface IProps {
 
 export const GraphSonificationControls = ({ availableGraphs, graphToSonify, onSelectGraph, onSonifyGraph }: IProps) => {
 
-  const handlePlayPause = () => {
-    onSonifyGraph();
-  };
-
   return (
     <div className="graph-sonification-controls">
       <select id="graph-select" value={graphToSonify} onChange={(e) => onSelectGraph(e.target.value)}>
@@ -25,9 +21,6 @@ export const GraphSonificationControls = ({ availableGraphs, graphToSonify, onSe
           </option>
         ))}
       </select>
-      <button className="play-pause-button" onClick={handlePlayPause}>
-        Play
-      </button>
     </div>
   );
 };
