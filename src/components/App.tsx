@@ -160,6 +160,7 @@ export const App = observer(() => {
 
   const handleResetGraphToSonify = () => {
     assistantStore.setIsSonificationPlaying(false);
+    assistantStore.setGraphToSonify("");
   };
 
   return (
