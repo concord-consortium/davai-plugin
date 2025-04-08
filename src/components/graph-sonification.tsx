@@ -5,13 +5,14 @@ import { CodapItem } from "../types";
 
 interface IProps {
   graphToSonify: string;
-  isSonificationPlaying: boolean;
   onResetGraphToSonify: () => void;
 }
 
 export const GraphSonification = ({ graphToSonify, onResetGraphToSonify }: IProps) => {
   const synthRef = useRef<Tone.PolySynth | null>(null);
   const pannerRef = useRef<Tone.Panner | null>(null);
+  const frameIdRef = useRef<number | null>(null);
+  const currentGraphIdRef = useRef<string | null>(null);
 
   if (!pannerRef.current) {
     pannerRef.current = new Tone.Panner(0).toDestination();
@@ -21,14 +22,29 @@ export const GraphSonification = ({ graphToSonify, onResetGraphToSonify }: IProp
     synthRef.current = new Tone.PolySynth().connect(pannerRef.current);
   }
 
+  const removeROIAdornment = async (graphId: string) => {
+    await codapInterface.sendRequest({
+      action: "delete",
+      resource: `component[${graphId}].adornment`,
+      values: {
+        type: "Region of Interest"
+      }
+    });
+  };
+
   useEffect(() => {
     const fetchGraphData = async () => {
-
       const res = await codapInterface.sendRequest({action: "get", resource: `component[${graphToSonify}]`}) as IResult;
       const graphDetails = res.values;
       if (!graphDetails) return;
 
-      codapInterface.sendRequest({
+      if (currentGraphIdRef.current && currentGraphIdRef.current !== graphDetails.id) {
+        await removeROIAdornment(currentGraphIdRef.current);
+      }
+
+      currentGraphIdRef.current = graphDetails.id;
+
+      await codapInterface.sendRequest({
         action: "create",
         resource: `component[${graphDetails.id}].adornment`,
         values: {
@@ -100,7 +116,6 @@ export const GraphSonification = ({ graphToSonify, onResetGraphToSonify }: IProp
       });
 
       Tone.getTransport().start();
-      let frameId: number;
       const step = () => {
         const elapsed = Tone.getTransport().seconds;
         const fraction = Math.min(elapsed / totalDuration, 1);
@@ -115,9 +130,12 @@ export const GraphSonification = ({ graphToSonify, onResetGraphToSonify }: IProp
         });
 
         if (fraction < 1) {
-          frameId = requestAnimationFrame(step);
+          frameIdRef.current = requestAnimationFrame(step);
         } else {
-          cancelAnimationFrame(frameId);
+          if (frameIdRef.current) {
+            cancelAnimationFrame(frameIdRef.current);
+            frameIdRef.current = null;
+          }
           codapInterface.sendRequest({
             action: "update",
             resource: `component[${graphDetails.id}].adornment`,
@@ -131,12 +149,24 @@ export const GraphSonification = ({ graphToSonify, onResetGraphToSonify }: IProp
         }
       };
   
-      frameId = requestAnimationFrame(step);
+      frameIdRef.current = requestAnimationFrame(step);
     };
 
     fetchGraphData();
-  }, [graphToSonify, onResetGraphToSonify]);
 
+    return () => {
+      if (frameIdRef.current) {
+        cancelAnimationFrame(frameIdRef.current);
+        frameIdRef.current = null;
+      }
+      Tone.getTransport().stop();
+
+      if (currentGraphIdRef.current) {
+        removeROIAdornment(currentGraphIdRef.current);
+        currentGraphIdRef.current = null;
+      }
+    };
+  }, [graphToSonify, onResetGraphToSonify]);
 
   return (
     <div hidden={true}/>

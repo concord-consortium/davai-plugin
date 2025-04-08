@@ -185,7 +185,6 @@ export const App = observer(() => {
       { !assistantStore.showLoadingIndicator && assistantStore.graphToSonify &&
         <GraphSonification 
           graphToSonify={assistantStore.graphToSonify}
-          isSonificationPlaying={assistantStore.isSonificationPlaying}
           onResetGraphToSonify={handleResetGraphToSonify}
         />
       }
