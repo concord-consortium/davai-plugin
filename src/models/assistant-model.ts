@@ -386,11 +386,17 @@ export const AssistantModel = types
                 return { tool_call_id: toolCall.id, output: JSON.stringify(res) };
               } else if (toolCall.function.name === "sonify_graph") {
                 const { graphName } = JSON.parse(toolCall.function.arguments);
-                self.graphToSonify = graphName;
-                return {
-                  tool_call_id: toolCall.id,
-                  output: `The graph "${graphName}" is ready to be sonified. It will play shortly.`,
-                };
+                const graphRes = yield codapInterface.sendRequest({ action: "get", resource: `component[${graphName}]` });
+                const graph = graphRes.values;
+                const isGraphNumericScatterPlot = graph.xLowerBound && graph.xUpperBound && graph.yLowerBound && graph.yUpperBound;
+                let outputMsg = "";
+                if (isGraphNumericScatterPlot) {
+                  self.graphToSonify = graphName;
+                  outputMsg = `The graph "${graphName}" is ready to be sonified. It will play shortly.`;
+                } else {
+                  outputMsg = `The graph "${graphName}" is not a numeric scatter plot. Tell the user they must select a numeric scatter plot.`;
+                }
+                return { tool_call_id: toolCall.id, output: outputMsg };
               } else {
                 return { tool_call_id: toolCall.id, output: "Tool call not recognized." };
               }
