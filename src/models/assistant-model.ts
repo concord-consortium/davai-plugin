@@ -63,9 +63,13 @@ export const AssistantModel = types
     uploadFileAfterRun: false,
     dataUri: "",
     graphToSonify: types.optional(types.string, ""),
+    loopSonification: false,
+    sonificationSpeed: 1
   })
   .volatile((self) => ({
-    isSonificationPlaying: false
+    isSonificationPaused: false,
+    isSonificationPlaying: false,
+    sonificationStep: 0
   }))
   .actions((self) => ({
     resetAfterResponse() {
@@ -75,8 +79,20 @@ export const AssistantModel = types
     setGraphToSonify(graphName: string) {
       self.graphToSonify = graphName;
     },
+    setLoopSonification(loop: boolean) {
+      self.loopSonification = loop;
+    },
+    setSonificationSpeed(speed: number) {
+      self.sonificationSpeed = speed;
+    },
+    setIsSonificationPaused(isPaused: boolean) {
+      self.isSonificationPaused = isPaused;
+    },
     setIsSonificationPlaying(isPlaying: boolean) {
       self.isSonificationPlaying = isPlaying;
+    },
+    setSonificationStep(step: number) {
+      self.sonificationStep = step;
     }
   }))
   .actions((self) => ({

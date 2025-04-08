@@ -163,6 +163,19 @@ export const App = observer(() => {
     assistantStore.setGraphToSonify("");
   };
 
+  const handleSetSonifySpeed = (speed: number) => {
+    assistantStore.setSonificationSpeed(speed);
+  };
+
+  const handlePauseSonification = (step: number) => {
+    assistantStore.setIsSonificationPaused(true);
+    assistantStore.setIsSonificationPlaying(false);
+  };
+
+  const handleSetLoopSonification = () => {
+    assistantStore.setLoopSonification(!assistantStore.loopSonification);
+  };
+
   return (
     <div className="App">
       <header>
@@ -182,16 +195,26 @@ export const App = observer(() => {
         onSubmit={handleChatInputSubmit}
         onKeyboardShortcut={handleFocusShortcut}
       />
-      { !assistantStore.showLoadingIndicator && assistantStore.graphToSonify &&
+      { !assistantStore.showLoadingIndicator &&
         <GraphSonification 
           graphToSonify={assistantStore.graphToSonify}
+          isSonificationLooping={assistantStore.loopSonification}
+          isSonificationPaused={assistantStore.isSonificationPaused}
+          isSonificationPlaying={assistantStore.isSonificationPlaying}
+          sonificationStep={assistantStore.sonificationStep}
           onResetGraphToSonify={handleResetGraphToSonify}
         />
       }
       <GraphSonificationControls
         availableGraphs={availableGraphs}
         graphToSonify={assistantStore.graphToSonify}
+        isSonificationPlaying={assistantStore.isSonificationPlaying}
+        isSonificationLooping={assistantStore.loopSonification}
+        sonificationStep={assistantStore.sonificationStep}
+        onPauseSonification={handlePauseSonification}
         onSelectGraph={handleSelectGraph}
+        onSetLoopSonification={handleSetLoopSonification}
+        onSetSonifySpeed={handleSetSonifySpeed}
         onSonifyGraph={handleSonifyGraph}
       />
       <UserOptions assistantStore={assistantStore} />

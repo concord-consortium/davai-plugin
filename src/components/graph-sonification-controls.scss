@@ -1,17 +1,120 @@
 @use "vars" as *;
 
 .graph-sonification-controls {
-  align-items: center;
-  display: flex;
+  border: solid 1px $medium-gray-2;
+  border-radius: 6px;
+  margin: 0 0 10px;
+  overflow: hidden;
+  padding: 8px 6px;
 
-  button {
-    cursor: pointer;
-    display: inline-block;
-    margin: 5px 0 5px 5px !important;
-    padding: 0 5px;
+  .graph-selection {
+    background: $light-teal-4;
+    margin: -8px -6px 10px;
+    padding: 5px 10px;
+    width: calc(100% + 12px);
+
+    label {
+      display: inline-block;
+      font-family: $font-family;
+      font-size: .75rem;
+      font-weight: 700;
+      margin: 0 4px 0 0;
+    }
+
+    select {
+      font-family: $font-family;
+      font-size: .75rem;
+    }
   }
 
-  select {
-    font-size: .75rem;
+  .sonification-buttons {
+    align-items: flex-start;
+    display: flex;
+    font-family: $font-family;
+    gap: 0;
+    height: 66px;
+    justify-content: flex-start;
+
+    button {
+      align-self: flex-start;
+      appearance: none;
+      background: transparent;
+      border: none;
+      color: $dark-gray;
+      cursor: pointer;
+      font-family: $font-family;
+      font-size: .65rem;
+      height: 66px;
+      margin: 0 !important;
+      padding: 0;
+      text-align: center;
+      width: 44px;
+
+      &.disabled {
+        color: $medium-gray-2;
+
+        svg, svg:hover {
+          background: transparent;
+
+          path.fill {
+            fill: $medium-gray-2;
+          }
+        };
+      }
+
+      svg {
+        background: $light-teal-3;
+        border-radius: 6px;
+        height: 24px;
+        margin: 0 0 3px;
+        padding: 4px;
+        width: 24px;
+
+        &:hover {
+          background: $light-teal-2
+        }
+        &:active {
+          background: $light-teal-1;
+        }
+
+        path.fill {
+          fill: $dark-teal;
+        }
+      }
+
+      span {
+        display: block;
+        height: 55px;
+      }
+    }
+
+    .sonify-speed-control {
+      height: 66px;
+      margin: 0 0 0 auto;
+      text-align: center;
+      width: 44px;
+
+      select {
+        appearance: none;
+        background: $light-teal-3;
+        border: none;
+        border-radius: 6px;
+        color: $dark-gray;
+        cursor: pointer;
+        font-family: $font-family;
+        font-size: .65rem;
+        height: 32px;
+        margin: 0 auto 4px;
+        padding: 4px;
+        text-align: center;
+        width: 32px;
+      }
+
+      label {
+        display: block;
+        font-family: $font-family;
+        font-size: .65rem;
+      }
+    }
   }
 }
