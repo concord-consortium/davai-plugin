@@ -112,6 +112,7 @@ export const AssistantModel = types
           content: formatJsonMessage(self.thread)
         });
         fetchAndSendDataContexts();
+        fetchAndSendGraphs();
       } catch (err) {
         console.error("Failed to initialize assistant:", err);
         self.transcriptStore.addMessage(DEBUG_SPEAKER, {
@@ -148,6 +149,24 @@ export const AssistantModel = types
       } catch (err) {
         console.error("Failed to get data contexts:", err);
         self.transcriptStore.addMessage(DEBUG_SPEAKER, {description: "Failed to get data contexts", content: formatJsonMessage(err)});
+      }
+    });
+
+    const fetchAndSendGraphs = flow(function* () {
+      try {
+        const components = yield codapInterface.sendRequest({action: "get", resource: "componentList"});
+        const onlyGraphs = components.values.filter((component: Record<string, any>) => component.type === "graph");
+        const componentsDetails = [];
+        for (const component of onlyGraphs) {
+          const { id } = component;
+          const details = yield codapInterface.sendRequest({action: "get", resource: `component[${id}]`});
+          componentsDetails.push(details.values);
+        }
+        self.transcriptStore.addMessage(DEBUG_SPEAKER, {description: "Graphs available for sonification", content: formatJsonMessage(componentsDetails)});
+        sendCODAPDocumentInfo(`The following graphs are available for sonification: ${JSON.stringify(componentsDetails)}`);
+      } catch (err) {
+        console.error("Failed to get graph information:", err);
+        self.transcriptStore.addMessage(DEBUG_SPEAKER, {description: "Failed to get graph information", content: formatJsonMessage(err)});
       }
     });
 
