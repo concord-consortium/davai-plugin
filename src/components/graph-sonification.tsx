@@ -49,7 +49,7 @@ export const GraphSonification = ({ graphToSonify, onResetGraphToSonify }: IProp
         resource: `component[${graphDetails.id}].adornment`,
         values: {
           type: "Region of Interest",
-          primary: { "position": 0, "extent": .1 },
+          primary: { "position": 0, "extent": 0.05 },
           secondary: { "position": 0, "extent": "100%" }
         }
       });
@@ -125,7 +125,7 @@ export const GraphSonification = ({ graphToSonify, onResetGraphToSonify }: IProp
           resource: `component[${graphDetails.id}].adornment`,
           values: {
             type: "Region of Interest",
-            primary: { "position": `${fraction * 100}%`, "extent": .1 }
+            primary: { "position": `${fraction * 100}%`, "extent": 0.05 }
           }
         });
 
@@ -141,7 +141,7 @@ export const GraphSonification = ({ graphToSonify, onResetGraphToSonify }: IProp
             resource: `component[${graphDetails.id}].adornment`,
             values: {
               type: "Region of Interest",
-              primary: { "position": "0%", "extent": .1 }
+              primary: { "position": "0%", "extent": 0 }
             }
           });
           Tone.getTransport().stop();
