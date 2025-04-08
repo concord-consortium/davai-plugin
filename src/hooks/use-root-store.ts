@@ -5,12 +5,14 @@ import { useAppConfigContext } from "./use-app-config-context";
 import { ChatTranscriptModel } from "../models/chat-transcript-model";
 import { DAVAI_SPEAKER, GREETING } from "../constants";
 import { timeStamp } from "../utils/utils";
+import { RootStore } from "../models/root-store";
+import { GraphSonificationModel } from "../models/graph-sonification-model";
 
-export const useAssistantStore = () => {
+export const useRootStore = () => {
   const apiConnection = useOpenAIContext();
   const appConfig = useAppConfigContext();
   const assistantId = appConfig.assistantId;
-  const assistantStore = useMemo(() => {
+  const rootStore = useMemo(() => {
     const newTranscriptStore = ChatTranscriptModel.create({
       messages: [
         {
@@ -22,12 +24,17 @@ export const useAssistantStore = () => {
       ],
     });
 
-    return AssistantModel.create({
-      apiConnection,
-      assistantId,
-      transcriptStore: newTranscriptStore
+    return RootStore.create({
+      assistantStore: AssistantModel.create({
+        apiConnection,
+        assistantId,
+        transcriptStore: newTranscriptStore,
+      }),
+      sonificationStore: GraphSonificationModel.create({
+        duration: 5,
+      }),
     });
   }, [apiConnection, assistantId]);
 
-  return assistantStore;
+  return rootStore;
 };

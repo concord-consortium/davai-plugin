@@ -4,7 +4,7 @@ import { observer } from "mobx-react-lite";
 import removeMarkdown from "remove-markdown";
 import { addDataContextChangeListener, addDataContextsListListener, ClientNotification, codapInterface, getDataContext, getListOfDataContexts, initializePlugin, selectSelf } from "@concord-consortium/codap-plugin-api";
 import { useAppConfigContext } from "../hooks/use-app-config-context";
-import { useAssistantStore } from "../hooks/use-assistant-store";
+import { useRootStore } from "../hooks/use-root-store";
 import { useAriaLive } from "../contexts/aria-live-context";
 import { useOptions } from "../hooks/use-options";
 import { ChatInputComponent } from "./chat-input";
@@ -23,7 +23,7 @@ const kVersion = "0.0.1";
 export const App = observer(() => {
   const appConfig = useAppConfigContext();
   const { ariaLiveText, setAriaLiveText } = useAriaLive();
-  const assistantStore = useAssistantStore();
+  const { assistantStore, sonificationStore } = useRootStore();
   const { playProcessingTone } = useOptions();
   const [availableGraphs, setAvailableGraphs] = useState<string[]>([]);
 
@@ -150,32 +150,6 @@ export const App = observer(() => {
     assistantStore.handleCancel();
   };
 
-  const handleSelectGraph = (graphName: string) => {
-    assistantStore.setGraphToSonify(graphName);
-  };
-
-  const handleSonifyGraph = () => {
-    assistantStore.setIsSonificationPlaying(!assistantStore.isSonificationPlaying);
-  };
-
-  const handleResetGraphToSonify = () => {
-    assistantStore.setIsSonificationPlaying(false);
-    assistantStore.setGraphToSonify("");
-  };
-
-  const handleSetSonifySpeed = (speed: number) => {
-    assistantStore.setSonificationSpeed(speed);
-  };
-
-  const handlePauseSonification = (step: number) => {
-    assistantStore.setIsSonificationPaused(true);
-    assistantStore.setIsSonificationPlaying(false);
-  };
-
-  const handleSetLoopSonification = () => {
-    assistantStore.setLoopSonification(!assistantStore.loopSonification);
-  };
-
   return (
     <div className="App">
       <header>
@@ -195,27 +169,12 @@ export const App = observer(() => {
         onSubmit={handleChatInputSubmit}
         onKeyboardShortcut={handleFocusShortcut}
       />
-      { !assistantStore.showLoadingIndicator &&
-        <GraphSonification 
-          graphToSonify={assistantStore.graphToSonify}
-          isSonificationLooping={assistantStore.loopSonification}
-          isSonificationPaused={assistantStore.isSonificationPaused}
-          isSonificationPlaying={assistantStore.isSonificationPlaying}
-          sonificationStep={assistantStore.sonificationStep}
-          onResetGraphToSonify={handleResetGraphToSonify}
-        />
-      }
+      <GraphSonification
+        sonificationStore={sonificationStore}
+      />
       <GraphSonificationControls
         availableGraphs={availableGraphs}
-        graphToSonify={assistantStore.graphToSonify}
-        isSonificationPlaying={assistantStore.isSonificationPlaying}
-        isSonificationLooping={assistantStore.loopSonification}
-        sonificationStep={assistantStore.sonificationStep}
-        onPauseSonification={handlePauseSonification}
-        onSelectGraph={handleSelectGraph}
-        onSetLoopSonification={handleSetLoopSonification}
-        onSetSonifySpeed={handleSetSonifySpeed}
-        onSonifyGraph={handleSonifyGraph}
+        sonificationStore={sonificationStore}
       />
       <UserOptions assistantStore={assistantStore} />
       {/*

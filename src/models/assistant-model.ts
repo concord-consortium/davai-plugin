@@ -1,4 +1,4 @@
-import { types, flow, Instance, onSnapshot } from "mobx-state-tree";
+import { types, flow, Instance, onSnapshot, getRoot } from "mobx-state-tree";
 import { OpenAI } from "openai";
 import { Message } from "openai/resources/beta/threads/messages";
 import { codapInterface, getDataContext, getListOfDataContexts } from "@concord-consortium/codap-plugin-api";
@@ -62,7 +62,6 @@ export const AssistantModel = types
     transcriptStore: ChatTranscriptModel,
     uploadFileAfterRun: false,
     dataUri: "",
-    graphToSonify: types.optional(types.string, ""),
     loopSonification: false,
     sonificationSpeed: 1
   })
@@ -75,9 +74,6 @@ export const AssistantModel = types
     resetAfterResponse() {
       self.isLoadingResponse = false;
       self.showLoadingIndicator = false;
-    },
-    setGraphToSonify(graphName: string) {
-      self.graphToSonify = graphName;
     },
     setLoopSonification(loop: boolean) {
       self.loopSonification = loop;
@@ -383,7 +379,8 @@ export const AssistantModel = types
                 return { tool_call_id: toolCall.id, output: JSON.stringify(res) };
               } else if (toolCall.function.name === "sonify_graph") {
                 const { graphName } = JSON.parse(toolCall.function.arguments);
-                self.graphToSonify = graphName;
+                const root = getRoot(self) as any;
+                root.sonificationStore.setGraphToSonify(graphName);
                 return {
                   tool_call_id: toolCall.id,
                   output: `The graph "${graphName}" is ready to be sonified. It will play shortly.`,
