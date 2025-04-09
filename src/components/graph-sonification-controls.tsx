@@ -3,6 +3,7 @@ import { GraphSonificationModelType } from "../models/graph-sonification-model";
 import { observer } from "mobx-react-lite";
 import { codapInterface, getAllItems, IResult } from "@concord-consortium/codap-plugin-api";
 import { CodapItem } from "../types";
+import { updateRoiAdornment } from "./graph-sonification-utils";
 
 import PlayIcon from "../assets/play-sonification-icon.svg";
 import PauseIcon from "../assets/pause-sonification-icon.svg";
@@ -19,21 +20,21 @@ interface IProps {
 
 export const GraphSonificationControls = observer((props: IProps) => {
   const { availableGraphs, sonificationStore } = props;
-  const { graphToSonify, isPlaying: isSonificationPlaying, isPaused: isSonificationPaused, isLooping, sonifySpeed } = sonificationStore;
+  const { graphToSonify, isPlaying, isPaused, startFromPause, isLooping, sonifySpeed } = sonificationStore;
 
   const handlePlayPauseClick = () => {
-    if (isSonificationPlaying) {
+    if (isPlaying) {
       sonificationStore.setIsPaused(true);
       sonificationStore.setIsPlaying(false);
       sonificationStore.setStartFromPause(true);
       return;
     }
 
-    if (isSonificationPaused) {
+    if (isPaused) {
       sonificationStore.setIsPaused(false);
+      sonificationStore.setStartFromPause(true);
     }
 
-    sonificationStore.setStartFromPause(false);
     sonificationStore.setIsPlaying(true);
   };
 
@@ -41,6 +42,7 @@ export const GraphSonificationControls = observer((props: IProps) => {
     sonificationStore.setIsPlaying(false);
     sonificationStore.setIsPaused(false);
     sonificationStore.setStartFromPause(false);
+    updateRoiAdornment(graphToSonify, 0);
   };
 
   const handleSelectGraph =  async (graphName: string) => {
@@ -93,16 +95,24 @@ export const GraphSonificationControls = observer((props: IProps) => {
       </div>
       <div className="sonification-buttons">
         <button className="play" onClick={handlePlayPauseClick}>
-          { isSonificationPlaying ? <PauseIcon /> : <PlayIcon /> }
-          <span>{isSonificationPlaying ? "Pause" : "Play" }</span>
+          { isPlaying ? <PauseIcon /> : <PlayIcon /> }
+          <span>{isPlaying ? "Pause" : "Play" }</span>
         </button>
-        <button className={`reset ${!isSonificationPlaying && "disabled"}`} onClick={handleReset}>
+        <button
+          className={`reset ${!startFromPause && "disabled"}`}
+          onClick={handleReset}
+        >
           <ResetIcon />
           <span>Reset</span>
         </button>
-        <button className="repeat" onClick={handleToggleLoop}>
+        <button
+          className="repeat"
+          onClick={handleToggleLoop}
+          role="switch"
+          aria-checked={isLooping}
+        >
           {isLooping ? <LoopIcon /> : <LoopOffIcon /> }
-          <span>{isLooping ? "Repeat On" : "Repeat Off" }</span>
+          <span>Repeat</span>
         </button>
         <div className="sonify-speed-control">
           <select id="speed-select" value={sonifySpeed} onChange={(e) => handleSetSpeed(parseFloat(e.target.value))}>

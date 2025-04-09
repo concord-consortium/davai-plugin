@@ -3,29 +3,11 @@ import React, { useCallback, useEffect, useRef } from "react";
 import * as Tone from "tone";
 import { GraphSonificationModelType } from "../models/graph-sonification-model";
 import { observer } from "mobx-react-lite";
+import { updateRoiAdornment, removeRoiAdornment } from "./graph-sonification-utils";
 
 interface IProps {
   sonificationStore: GraphSonificationModelType;
 }
-
-const updateRoiAdornment = async (graphName: string, fraction: number) => {
-  await codapInterface.sendRequest({
-    action: "update",
-    resource: `component[${graphName}].adornment`,
-    values: {
-      type: "Region of Interest",
-      primary: { "position": `${fraction * 100}%`, "extent": 0.05 }
-    }
-  });
-};
-
-const removeRoiAdornment = async (graphId: string) => {
-  await codapInterface.sendRequest({
-    action: "delete",
-    resource: `component[${graphId}].adornment`,
-    values: { type: "Region of Interest" }
-  });
-};
 
 export const GraphSonification = observer(({sonificationStore}: IProps) => {
   const { graphToSonify, graphInfo, isPlaying, isPaused, startFromPause,
@@ -34,6 +16,11 @@ export const GraphSonification = observer(({sonificationStore}: IProps) => {
   const pannerRef = useRef<Tone.Panner | null>(null);
   const frameIdRef = useRef<number | null>(null);
   const currentGraphIdRef = useRef<string | null>(null);
+  const isLoopingRef = useRef(isLooping);
+
+  useEffect(() => {
+    isLoopingRef.current = isLooping;
+  }, [isLooping]);
 
   if (!pannerRef.current) {
     pannerRef.current = new Tone.Panner(0).toDestination();
@@ -55,6 +42,7 @@ export const GraphSonification = observer(({sonificationStore}: IProps) => {
       .sort((a, b) => a - b);
 
     uniqueFractions.forEach((fraction) => {
+      // to-do: use the width of the line in calculation of offset
       const offsetSeconds = fraction * duration;
       const indices = fractionGroups[fraction];
 
@@ -85,14 +73,13 @@ export const GraphSonification = observer(({sonificationStore}: IProps) => {
         return;
       }
 
-      updateRoiAdornment(graphToSonify, 0);
-
-      if (frameIdRef.current && !isLooping) {
+      if (frameIdRef.current && !isLoopingRef.current) {
         cancelAnimationFrame(frameIdRef.current);
         frameIdRef.current = null;
         Tone.getTransport().stop();
         handlePlayEnd();
       } else {
+        updateRoiAdornment(graphToSonify, 0);
         scheduleTones();
         Tone.getTransport().seconds = 0;
         Tone.getTransport().position = 0;
@@ -102,7 +89,7 @@ export const GraphSonification = observer(({sonificationStore}: IProps) => {
     };
 
     frameIdRef.current = requestAnimationFrame(step);
-  }, [duration, graphToSonify, isLooping, scheduleTones, handlePlayEnd]);
+  }, [duration, graphToSonify, handlePlayEnd, scheduleTones]);
 
   const prepareSonification = useCallback(async () => {
       if (!graphInfo) return;
@@ -125,6 +112,8 @@ export const GraphSonification = observer(({sonificationStore}: IProps) => {
         }
       });
 
+      Tone.getTransport().seconds = 0;
+      Tone.getTransport().position = 0;
       Tone.getTransport().start();
       animateSonification();
 
@@ -140,10 +129,11 @@ export const GraphSonification = observer(({sonificationStore}: IProps) => {
         cancelAnimationFrame(frameIdRef.current);
         frameIdRef.current = null;
       }
-    } else if (startFromPause) {
+    } else if (isPlaying && startFromPause) {
       animateSonification();
+      Tone.getTransport().start();
     }
-  }, [isPlaying, isPaused, startFromPause, prepareSonification, animateSonification]);
+  }, [graphToSonify, isPlaying, isPaused, startFromPause, prepareSonification, animateSonification]);
 
   return (
     <div hidden={true}/>

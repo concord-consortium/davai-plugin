@@ -9,13 +9,8 @@ export const RootStore = types.model("RootStore", {
 
 export function createRootStore() {
   return RootStore.create({
-    assistantStore: {
-      assistantId: "mock",
-    },
-    sonificationStore: {
-      graphToSonify: "",
-      isSonificationPlaying: false
-    }
+    assistantStore: {},
+    sonificationStore: {}
   });
 }
 
