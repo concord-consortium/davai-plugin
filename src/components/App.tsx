@@ -83,17 +83,6 @@ export const App = observer(() => {
       });
     };
 
-    const graphDetails = async (graphs: Record<string, any>[]) => {
-      const allGraphDetails = await Promise.all(graphs.map(async (graph: Record<string, any>) => {
-        const graphRes = await codapInterface.sendRequest({ action: "get", resource: `component[${graph.id}]` }) as IResult;
-        return graphRes.values;
-      }));
-
-      return allGraphDetails.filter((graph: Record<string, any>) => {
-        return graph.graphType === "scatterPlot";
-      });
-    };
-
     const fetchGraphs = async () => {
       const codapComponents = await codapInterface.sendRequest({
         action: "get",
@@ -103,7 +92,14 @@ export const App = observer(() => {
         return component.type === "graph";
       });
 
-      const validGraphs = await graphDetails(graphs);
+      const promises = graphs.map(async (graph: Record<string, any>) => {
+        const graphRes = await codapInterface.sendRequest({ action: "get", resource: `component[${graph.id}]` }) as IResult;
+        return graphRes.values;
+      });
+      const allGraphDetails = await Promise.all(promises);
+      const validGraphs = allGraphDetails.filter((graph: Record<string, any>) => {
+        return graph.plotType === "scatterPlot";
+      });
 
       setAvailableGraphs(validGraphs);
     };
