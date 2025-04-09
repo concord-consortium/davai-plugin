@@ -1,6 +1,6 @@
 @use "vars" as *;
 
-.graph-sonification-controls {
+.graph-sonification {
   border: solid 1px $medium-gray-2;
   border-radius: 6px;
   margin: 0 0 10px;
@@ -8,10 +8,6 @@
   padding: 8px 6px;
 
   .graph-selection {
-    background: $light-teal-4;
-    margin: -8px -6px 10px;
-    padding: 5px 10px;
-    width: calc(100% + 12px);
 
     label {
       display: inline-block;

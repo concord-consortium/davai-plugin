@@ -13,7 +13,6 @@ import { DAVAI_SPEAKER, DEBUG_SPEAKER, LOADING_NOTE, USER_SPEAKER, notifications
 import { UserOptions } from "./user-options";
 import { formatJsonMessage, playSound } from "../utils/utils";
 import { GraphSonification } from "./graph-sonification";
-import { GraphSonificationControls } from "./graph-sonification-controls";
 
 import "./App.scss";
 
@@ -170,9 +169,6 @@ export const App = observer(() => {
         onKeyboardShortcut={handleFocusShortcut}
       />
       <GraphSonification
-        sonificationStore={sonificationStore}
-      />
-      <GraphSonificationControls
         availableGraphs={availableGraphs}
         sonificationStore={sonificationStore}
       />
