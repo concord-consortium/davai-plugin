@@ -61,34 +61,12 @@ export const AssistantModel = types
     thread: types.maybe(types.frozen()),
     transcriptStore: ChatTranscriptModel,
     uploadFileAfterRun: false,
-    dataUri: "",
-    loopSonification: false,
-    sonificationSpeed: 1
+    dataUri: ""
   })
-  .volatile((self) => ({
-    isSonificationPaused: false,
-    isSonificationPlaying: false,
-    sonificationStep: 0
-  }))
   .actions((self) => ({
     resetAfterResponse() {
       self.isLoadingResponse = false;
       self.showLoadingIndicator = false;
-    },
-    setLoopSonification(loop: boolean) {
-      self.loopSonification = loop;
-    },
-    setSonificationSpeed(speed: number) {
-      self.sonificationSpeed = speed;
-    },
-    setIsSonificationPaused(isPaused: boolean) {
-      self.isSonificationPaused = isPaused;
-    },
-    setIsSonificationPlaying(isPlaying: boolean) {
-      self.isSonificationPlaying = isPlaying;
-    },
-    setSonificationStep(step: number) {
-      self.sonificationStep = step;
     }
   }))
   .actions((self) => ({

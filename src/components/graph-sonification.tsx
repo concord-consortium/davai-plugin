@@ -2,7 +2,7 @@ import React, { useCallback, useEffect, useRef, useState } from "react";
 import * as Tone from "tone";
 import { GraphSonificationModelType } from "../models/graph-sonification-model";
 import { observer } from "mobx-react-lite";
-import { ClientNotification, codapInterface, getAllItems, IResult } from "@concord-consortium/codap-plugin-api";
+import { codapInterface, getAllItems, IResult } from "@concord-consortium/codap-plugin-api";
 import { CodapItem } from "../types";
 import { removeRoiAdornment, updateRoiAdornment } from "./graph-sonification-utils";
 
@@ -15,13 +15,14 @@ import LoopOffIcon from "../assets/not-loop-sonification-icon.svg";
 import "./graph-sonification.scss";
 
 interface IProps {
+  availableGraphs: Record<string, any>[];
   sonificationStore: GraphSonificationModelType;
 }
 
 const kDefaultDuration = 5;
 
 export const GraphSonification = observer((props: IProps) => {
-  const { sonificationStore } = props;
+  const { availableGraphs, sonificationStore } = props;
   const { selectedGraph } = sonificationStore;
 
   const synthRef = useRef<Tone.PolySynth | null>(null);
@@ -31,18 +32,24 @@ export const GraphSonification = observer((props: IProps) => {
   const isLoopingRef = useRef(false);
   const duration = useRef(kDefaultDuration);
 
-  const [availableGraphs, setAvailableGraphs] = useState<Record<string, any>[]>([]);
-  const [isPlaying, setIsPlaying] = useState(false);
-  const [isPaused, setIsPaused] = useState(false);
-  const [startFromPause, setStartFromPause] = useState(false);
-  const [hasEnded, setHasEnded] = useState(false);
+  // const [isPlaying, setIsPlaying] = useState(false);
+  // const [isPaused, setIsPaused] = useState(false);
+  // const [startFromPause, setStartFromPause] = useState(false);
+  // const [hasEnded, setHasEnded] = useState(false);
   const [speed, setSpeed] = useState(1);
   const [isLooping, setIsLooping] = useState(false);
   const [timeValues, setTimeValues] = useState<number[]>([]);
   const [timeFractions, setTimeFractions] = useState<number[]>([]);
   const [pitchFractions, setPitchFractions] = useState<number[]>([]);
+  const [playState, setPlayState] = useState({
+    playing: false,
+    paused: false,
+    position: 0,
+    ended: false
+  });
 
-  const isAtBeginning = !isPlaying && !isPaused && !hasEnded;
+
+  const isAtBeginning = !playState.playing && !playState.paused && !playState.ended;
 
   if (!pannerRef.current) {
     pannerRef.current = new Tone.Panner(0).toDestination();
@@ -53,10 +60,12 @@ export const GraphSonification = observer((props: IProps) => {
   }
 
   const handlePlayEnd = useCallback(() => {
-    setIsPlaying(false);
-    setIsPaused(false);
-    setStartFromPause(false);
-    setHasEnded(true);
+    // setIsPlaying(false);
+    // setIsPaused(false);
+    // setHasEnded(true);
+    // setStartFromPause(false);
+    const position = Tone.getTransport().seconds;
+    setPlayState({ playing: false, paused: false, ended: true, position });
   }, []);
 
   const scheduleTones = useCallback(() => {
@@ -91,6 +100,12 @@ export const GraphSonification = observer((props: IProps) => {
     });
   }, [duration, selectedGraph.xLowerBound, selectedGraph.xUpperBound, pitchFractions, timeFractions, timeValues]);
 
+  const restartTransport = () => {
+    Tone.getTransport().seconds = 0;
+    Tone.getTransport().position = 0;
+    Tone.getTransport().start();
+  };
+
   const animateSonification = useCallback(() => {
     const step = () => {
       const elapsed = Tone.getTransport().seconds;
@@ -111,9 +126,7 @@ export const GraphSonification = observer((props: IProps) => {
       } else {
         updateRoiAdornment(selectedGraph.id, 0);
         scheduleTones();
-        Tone.getTransport().seconds = 0;
-        Tone.getTransport().position = 0;
-        Tone.getTransport().start();
+        restartTransport();
         frameIdRef.current = requestAnimationFrame(step);
       }
     };
@@ -142,35 +155,39 @@ export const GraphSonification = observer((props: IProps) => {
         }
       });
 
-      Tone.getTransport().seconds = 0;
-      Tone.getTransport().position = 0;
-      Tone.getTransport().start();
+      restartTransport();
       animateSonification();
 
   }, [animateSonification, selectedGraph, scheduleTones]);
 
   const handlePlayPauseClick = () => {
-    if (hasEnded || isAtBeginning) {
+    if (playState.ended || isAtBeginning) {
       prepareSonification();
-      setHasEnded(false);
-      setIsPlaying(true);
-      setIsPaused(false);
+      // setHasEnded(false);
+      // setIsPlaying(true);
+      // setIsPaused(false);
+      const position = Tone.getTransport().seconds;
+      setPlayState({ playing: true, paused: false, ended: false, position });
       return;
     }
 
-    if (startFromPause) {
-      setIsPlaying(true);
-      setIsPaused(false);
-      setStartFromPause(false);
+    if (playState.position !== 0 && !playState.playing) {
+      // setIsPlaying(true);
+      // setIsPaused(false);
+      // setStartFromPause(false);
+      const position = Tone.getTransport().seconds;
+      setPlayState({ playing: true, paused: false, ended: false, position });
       animateSonification();
       Tone.getTransport().start();
       return;
     }
 
-    if (isPlaying) {
-      setIsPaused(true);
-      setIsPlaying(false);
-      setStartFromPause(true);
+    if (playState.playing) {
+      // setIsPaused(true);
+      // setIsPlaying(false);
+      // setStartFromPause(true);
+      const position = Tone.getTransport().seconds;
+      setPlayState({ playing: false, paused: true, ended: false, position });
       Tone.getTransport().pause();
       if (frameIdRef.current) {
         cancelAnimationFrame(frameIdRef.current);
@@ -182,10 +199,12 @@ export const GraphSonification = observer((props: IProps) => {
   const handleReset = () => {
     if (isAtBeginning) return;
 
-    setHasEnded(false);
-    setIsPlaying(false);
-    setIsPaused(false);
-    setStartFromPause(false);
+    // setHasEnded(false);
+    // setIsPlaying(false);
+    // setIsPaused(false);
+    // setStartFromPause(false);
+    const position = Tone.getTransport().seconds;
+    setPlayState({ playing: false, paused: false, ended: false, position });
     updateRoiAdornment(selectedGraph.id, 0);
     Tone.getTransport().stop();
     if (frameIdRef.current) {
@@ -228,7 +247,7 @@ export const GraphSonification = observer((props: IProps) => {
   };
 
   const handleSetSpeed = (s: number) => {
-    if (isPlaying) return;
+    if (playState.playing) return;
     setSpeed(s);
   };
 
@@ -240,27 +259,6 @@ export const GraphSonification = observer((props: IProps) => {
     duration.current = kDefaultDuration / speed;
   }, [speed]);
 
-  useEffect(() => {
-    const fetchGraphs = async () => {
-      const codapComponents = await codapInterface.sendRequest({
-        action: "get",
-        resource: "componentList"
-      }) as ClientNotification;
-      const graphs = codapComponents.values.filter((component: Record<string, any>) => {
-        return component.type === "graph";
-      });
-      setAvailableGraphs(graphs);
-    };
-
-    fetchGraphs();
-    const interval = setInterval(fetchGraphs, 5000);
-
-    return () => {
-      clearInterval(interval);
-    };
-
-  }, []);
-
   return (
     <div className="graph-sonification">
       <div className="options-header">
@@ -268,7 +266,7 @@ export const GraphSonification = observer((props: IProps) => {
       </div>
       <div className="graph-selection">
         <label htmlFor="graph-select">Graph to sonify:</label>
-        <select id="graph-select" value={selectedGraph.id} onChange={(e) => handleSelectGraph(e.target.value)}>
+        <select id="graph-select" value={selectedGraph.id || ""} onChange={(e) => handleSelectGraph(e.target.value)}>
           <option value="" disabled>Select a graph</option>
           {availableGraphs.map((graph) => (
             <option key={graph.id} value={graph.id}>
@@ -279,8 +277,8 @@ export const GraphSonification = observer((props: IProps) => {
       </div>
       <div className="sonification-buttons">
         <button className="play" onClick={handlePlayPauseClick}>
-          { isPlaying ? <PauseIcon /> : <PlayIcon /> }
-          <span>{isPlaying ? "Pause" : "Play" }</span>
+          { playState.playing ? <PauseIcon /> : <PlayIcon /> }
+          <span>{playState.playing ? "Pause" : "Play" }</span>
         </button>
         <button
           className={`reset ${isAtBeginning && "disabled"}`}
