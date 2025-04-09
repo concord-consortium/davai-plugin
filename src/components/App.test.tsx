@@ -13,9 +13,12 @@ jest.mock("../hooks/use-root-store", () => ({
       transcriptStore: {
         messages: [],
         addMessage: jest.fn(),
-      },
+      }
+    },
+    sonificationStore: {
+      selectedGraph: { id: "graph1", name: "Graph 1" },
     }
-  })),
+  }))
 }));
 
 jest.mock("../models/app-config-model", () => ({
@@ -24,7 +27,6 @@ jest.mock("../models/app-config-model", () => ({
     initialize: jest.fn(),
   }
 }));
-
 
 describe("test load app", () => {
   it("renders without crashing", () => {

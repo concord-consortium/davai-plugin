@@ -31,7 +31,7 @@ export const useRootStore = () => {
         transcriptStore: newTranscriptStore,
       }),
       sonificationStore: GraphSonificationModel.create({
-        duration: 5,
+        selectedGraph: undefined,
       }),
     });
   }, [apiConnection, assistantId]);

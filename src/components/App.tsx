@@ -170,6 +170,10 @@ export const App = observer(() => {
     assistantStore.handleCancel();
   };
 
+  const handleSelectGraph = async (graph: Record<string, any>) => {
+    sonificationStore.setSelectedGraph(graph);
+  };
+
   return (
     <div className="App">
       <header>
@@ -191,7 +195,8 @@ export const App = observer(() => {
       />
       <GraphSonification
         availableGraphs={availableGraphs}
-        sonificationStore={sonificationStore}
+        selectedGraph={sonificationStore?.selectedGraph}
+        onSelectGraph={handleSelectGraph}
       />
       <UserOptions assistantStore={assistantStore} />
       {/*
