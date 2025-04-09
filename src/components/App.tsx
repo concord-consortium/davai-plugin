@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useRef, useState } from "react";
+import React, { useCallback, useEffect, useRef } from "react";
 import * as Tone from "tone";
 import { observer } from "mobx-react-lite";
 import removeMarkdown from "remove-markdown";
@@ -24,7 +24,6 @@ export const App = observer(() => {
   const { ariaLiveText, setAriaLiveText } = useAriaLive();
   const { assistantStore, sonificationStore } = useRootStore();
   const { playProcessingTone } = useOptions();
-  const [availableGraphs, setAvailableGraphs] = useState<string[]>([]);
 
   const assistantStoreRef = useRef(assistantStore);
   const dimensions = { width: appConfig.dimensions.width, height: appConfig.dimensions.height };
@@ -81,14 +80,6 @@ export const App = observer(() => {
         subscribedDataCtxsRef.current.push(ctx.name);
         addDataContextChangeListener(ctx.name, handleDataContextChangeNotice);
       });
-      const codapComponents = await codapInterface.sendRequest({
-        action: "get",
-        resource: "componentList"
-      }) as ClientNotification;
-      const graphNames = codapComponents.values.filter((component: Record<string, any>) => {
-        return component.type === "graph";
-      }).map((component: Record<string, any>) => component.name);
-      setAvailableGraphs(graphNames);
     };
     init();
     selectSelf();
@@ -169,7 +160,6 @@ export const App = observer(() => {
         onKeyboardShortcut={handleFocusShortcut}
       />
       <GraphSonification
-        availableGraphs={availableGraphs}
         sonificationStore={sonificationStore}
       />
       <UserOptions assistantStore={assistantStore} />

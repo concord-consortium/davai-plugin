@@ -2,7 +2,7 @@ import React, { useCallback, useEffect, useRef, useState } from "react";
 import * as Tone from "tone";
 import { GraphSonificationModelType } from "../models/graph-sonification-model";
 import { observer } from "mobx-react-lite";
-import { codapInterface, getAllItems, IResult } from "@concord-consortium/codap-plugin-api";
+import { ClientNotification, codapInterface, getAllItems, IResult } from "@concord-consortium/codap-plugin-api";
 import { CodapItem } from "../types";
 import { removeRoiAdornment, updateRoiAdornment } from "./graph-sonification-utils";
 
@@ -15,15 +15,14 @@ import LoopOffIcon from "../assets/not-loop-sonification-icon.svg";
 import "./graph-sonification.scss";
 
 interface IProps {
-  availableGraphs: string[];
   sonificationStore: GraphSonificationModelType;
 }
 
 const kDefaultDuration = 5;
 
 export const GraphSonification = observer((props: IProps) => {
-  const { availableGraphs, sonificationStore } = props;
-  const { graphInfo, graphToSonify } = sonificationStore;
+  const { sonificationStore } = props;
+  const { selectedGraph } = sonificationStore;
 
   const synthRef = useRef<Tone.PolySynth | null>(null);
   const pannerRef = useRef<Tone.Panner | null>(null);
@@ -32,6 +31,7 @@ export const GraphSonification = observer((props: IProps) => {
   const isLoopingRef = useRef(false);
   const duration = useRef(kDefaultDuration);
 
+  const [availableGraphs, setAvailableGraphs] = useState<Record<string, any>[]>([]);
   const [isPlaying, setIsPlaying] = useState(false);
   const [isPaused, setIsPaused] = useState(false);
   const [startFromPause, setStartFromPause] = useState(false);
@@ -83,20 +83,20 @@ export const GraphSonification = observer((props: IProps) => {
           const freq = lowerFreqBound + pFrac * (upperFreqBound - lowerFreqBound);
           // For each data point, determine the pan value based on the x-axis position.
           // Normalize the x-axis position to a value between -1 and 1.
-          const panValue = ((timeValues[i] - graphInfo.xLowerBound) / (graphInfo.xUpperBound - graphInfo.xLowerBound)) * 2 - 1;
+          const panValue = ((timeValues[i] - selectedGraph.xLowerBound) / (selectedGraph.xUpperBound - selectedGraph.xLowerBound)) * 2 - 1;
           pannerRef.current?.pan.setValueAtTime(panValue, time);
           synthRef.current?.triggerAttackRelease(freq, "8n", time);
         });
       }, offsetSeconds);
     });
-  }, [duration, graphInfo.xLowerBound, graphInfo.xUpperBound, pitchFractions, timeFractions, timeValues]);
+  }, [duration, selectedGraph.xLowerBound, selectedGraph.xUpperBound, pitchFractions, timeFractions, timeValues]);
 
   const animateSonification = useCallback(() => {
     const step = () => {
       const elapsed = Tone.getTransport().seconds;
       const fraction = Math.min(elapsed / duration.current, 1);
 
-      updateRoiAdornment(graphToSonify, fraction);
+      updateRoiAdornment(selectedGraph.id, fraction);
 
       if (fraction < 1) {
         frameIdRef.current = requestAnimationFrame(step);
@@ -109,7 +109,7 @@ export const GraphSonification = observer((props: IProps) => {
         Tone.getTransport().stop();
         handlePlayEnd();
       } else {
-        updateRoiAdornment(graphToSonify, 0);
+        updateRoiAdornment(selectedGraph.id, 0);
         scheduleTones();
         Tone.getTransport().seconds = 0;
         Tone.getTransport().position = 0;
@@ -119,22 +119,22 @@ export const GraphSonification = observer((props: IProps) => {
     };
 
     frameIdRef.current = requestAnimationFrame(step);
-  }, [duration, graphToSonify, handlePlayEnd, scheduleTones]);
+  }, [duration, selectedGraph.id, handlePlayEnd, scheduleTones]);
 
   const prepareSonification = useCallback(async () => {
-      if (!graphInfo) return;
+      if (!selectedGraph) return;
 
-      if (currentGraphIdRef.current && currentGraphIdRef.current !== graphInfo.id) {
+      if (currentGraphIdRef.current && currentGraphIdRef.current !== selectedGraph.id) {
         await removeRoiAdornment(currentGraphIdRef.current);
       }
 
-      currentGraphIdRef.current = graphInfo.id;
+      currentGraphIdRef.current = selectedGraph.id;
       await Tone.start();
       scheduleTones();
 
       await codapInterface.sendRequest({
         action: "create",
-        resource: `component[${graphInfo.id}].adornment`,
+        resource: `component[${selectedGraph.id}].adornment`,
         values: {
           type: "Region of Interest",
           primary: { "position": 0, "extent": 0.05 },
@@ -147,7 +147,7 @@ export const GraphSonification = observer((props: IProps) => {
       Tone.getTransport().start();
       animateSonification();
 
-  }, [animateSonification, graphInfo, scheduleTones]);
+  }, [animateSonification, selectedGraph, scheduleTones]);
 
   const handlePlayPauseClick = () => {
     if (hasEnded || isAtBeginning) {
@@ -186,38 +186,41 @@ export const GraphSonification = observer((props: IProps) => {
     setIsPlaying(false);
     setIsPaused(false);
     setStartFromPause(false);
-    updateRoiAdornment(graphToSonify, 0);
+    updateRoiAdornment(selectedGraph.id, 0);
     Tone.getTransport().stop();
     if (frameIdRef.current) {
       cancelAnimationFrame(frameIdRef.current);
     }
   };
 
-  const handleSelectGraph =  async (graphName: string) => {
-    sonificationStore.setGraphToSonify(graphName);
-    const res = await codapInterface.sendRequest({action: "get", resource: `component[${graphName}]`}) as IResult;
+  const handleSelectGraph =  async (graphId: string) => {
+    if (graphId === selectedGraph.id) return;
+
+    handleReset();
+
+    const res = await codapInterface.sendRequest({action: "get", resource: `component[${graphId}]`}) as IResult;
     const graphDetails = res.values;
+    sonificationStore.setSelectedGraph(graphDetails);
+
     const pitchAttr = graphDetails.yAttributeName;
     const timeAttr = graphDetails.xAttributeName;
     const allItemsRes = await getAllItems(graphDetails.dataContext);
     const allItems = allItemsRes.values;
+
     // Asign pitch and time values to the dataset items -- do not include items that are missing values for
     // either attribute.
     const validItems = pitchAttr && timeAttr
       ? allItems.filter((item: CodapItem) => item.values[pitchAttr] !== "" && item.values[timeAttr] !== "")
       : allItems.filter((item: CodapItem) => item.values[timeAttr] !== "");
     const pitchValues: number[] = validItems.map((item: CodapItem) => item.values[pitchAttr]);
-    const timeValues2: number[] = validItems.map((item: CodapItem) => item.values[timeAttr]);
-    const minTime = graphDetails.xLowerBound;
-    const maxTime = graphDetails.xUpperBound;
-    const timeRange = maxTime - minTime || 1;
-    const minPitch = graphDetails.yLowerBound;
-    const maxPitch = graphDetails.yUpperBound;
-    const pitchRange = maxPitch - minPitch || 1;
-    setTimeValues(timeValues2);
-    setTimeFractions(timeValues2.map((value: number) => (value - minTime) / timeRange));
-    setPitchFractions(pitchValues.map((value: number) => (value - minPitch) / pitchRange));
-    sonificationStore.setGraphInfo(graphDetails);
+    const timeVals: number[] = validItems.map((item: CodapItem) => item.values[timeAttr]);
+
+    const timeRange = graphDetails.xUpperBound - graphDetails.xLowerBound || 1;
+    const pitchRange = graphDetails.yUpperBound - graphDetails.yLowerBound || 1;
+
+    setTimeValues(timeVals);
+    setTimeFractions(timeVals.map((value: number) => (value - graphDetails.xLowerBound) / timeRange));
+    setPitchFractions(pitchValues.map((value: number) => (value - graphDetails.yLowerBound) / pitchRange));
   };
 
   const handleToggleLoop = () => {
@@ -237,6 +240,27 @@ export const GraphSonification = observer((props: IProps) => {
     duration.current = kDefaultDuration / speed;
   }, [speed]);
 
+  useEffect(() => {
+    const fetchGraphs = async () => {
+      const codapComponents = await codapInterface.sendRequest({
+        action: "get",
+        resource: "componentList"
+      }) as ClientNotification;
+      const graphs = codapComponents.values.filter((component: Record<string, any>) => {
+        return component.type === "graph";
+      });
+      setAvailableGraphs(graphs);
+    };
+
+    fetchGraphs();
+    const interval = setInterval(fetchGraphs, 5000);
+
+    return () => {
+      clearInterval(interval);
+    };
+
+  }, []);
+
   return (
     <div className="graph-sonification">
       <div className="options-header">
@@ -244,11 +268,11 @@ export const GraphSonification = observer((props: IProps) => {
       </div>
       <div className="graph-selection">
         <label htmlFor="graph-select">Graph to sonify:</label>
-        <select id="graph-select" value={graphToSonify} onChange={(e) => handleSelectGraph(e.target.value)}>
+        <select id="graph-select" value={selectedGraph.id} onChange={(e) => handleSelectGraph(e.target.value)}>
           <option value="" disabled>Select a graph</option>
           {availableGraphs.map((graph) => (
-            <option key={graph} value={graph}>
-              {graph}
+            <option key={graph.id} value={graph.id}>
+              {graph.name || graph.title || graph.id}
             </option>
           ))}
         </select>

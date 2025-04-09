@@ -2,15 +2,11 @@ import { types } from "mobx-state-tree";
 
 export const GraphSonificationModel = types
   .model("GraphSonificationModel", {
-    graphToSonify: types.optional(types.string, ""),
-    graphInfo: types.optional(types.frozen(), {})
+    selectedGraph: types.optional(types.frozen(), {}),
   })
   .actions((self) => ({
-    setGraphToSonify(graphName: string) {
-      self.graphToSonify = graphName;
-    },
-    setGraphInfo(graphInfo: any) {
-      self.graphInfo = graphInfo;
+    setSelectedGraph(graph: Record<string, any>) {
+      self.selectedGraph = graph;
     }
   }));
 

@@ -380,7 +380,9 @@ export const AssistantModel = types
               } else if (toolCall.function.name === "sonify_graph") {
                 const { graphName } = JSON.parse(toolCall.function.arguments);
                 const root = getRoot(self) as any;
-                root.sonificationStore.setGraphToSonify(graphName);
+                const graphRes = yield codapInterface.sendRequest({ action: "get", resource: `component[${graphName}]` });
+                const graph = graphRes.values;
+                root.sonificationStore.setSelectedGraph(graph);
                 return {
                   tool_call_id: toolCall.id,
                   output: `The graph "${graphName}" is ready to be sonified. It will play shortly.`,
