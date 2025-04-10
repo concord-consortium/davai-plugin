@@ -3,6 +3,7 @@ import * as Tone from "tone";
 import { codapInterface, getAllItems, IResult } from "@concord-consortium/codap-plugin-api";
 import { CodapItem } from "../types";
 import { removeRoiAdornment, updateRoiAdornment } from "./graph-sonification-utils";
+import { ErrorMessage } from "./error-message";
 
 import PlayIcon from "../assets/play-sonification-icon.svg";
 import PauseIcon from "../assets/pause-sonification-icon.svg";
@@ -28,6 +29,7 @@ export const GraphSonification = ({availableGraphs, selectedGraph, onSelectGraph
   const isLoopingRef = useRef(false);
   const duration = useRef(kDefaultDuration);
 
+  const [showError, setShowError] = useState(false);
   const [speed, setSpeed] = useState(1);
   const [isLooping, setIsLooping] = useState(false);
   const [timeValues, setTimeValues] = useState<number[]>([]);
@@ -153,7 +155,12 @@ export const GraphSonification = ({availableGraphs, selectedGraph, onSelectGraph
   }, [animateSonification, selectedGraph, scheduleTones]);
 
   const handlePlayPauseClick = () => {
-    if (!selectedGraph?.id) return;
+    if (!selectedGraph?.id) {
+      setShowError(true);
+      return;
+    } else {
+      setShowError(false);
+    }
 
     if (playState.ended || isAtBeginning) {
       prepareSonification();
@@ -310,6 +317,7 @@ export const GraphSonification = ({availableGraphs, selectedGraph, onSelectGraph
           <label htmlFor="speed-select">Speed</label>
         </div>
       </div>
+      {showError && <ErrorMessage slug={"sonification"} message={"Please select a graph to sonify."} />}
     </div>
   );
 };

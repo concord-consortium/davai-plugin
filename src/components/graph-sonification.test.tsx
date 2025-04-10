@@ -28,6 +28,20 @@ describe("GraphSonification Component", () => {
     expect(screen.getByText("Repeat")).toBeInTheDocument();
   });
 
+  it("shows an error message when no graph is selected", () => {
+    render(
+      <GraphSonification
+        availableGraphs={mockAvailableGraphs}
+        onSelectGraph={mockOnSelectGraph}
+      />
+    );
+
+    const playButton = screen.getByTestId("playback-button");
+    fireEvent.click(playButton);
+    const errorMessage = screen.getByTestId("sonification-error");
+    expect(errorMessage).toHaveTextContent("Please select a graph to sonify.");
+  });
+
   it("toggles play and pause state", () => {
     render(
       <GraphSonification
