@@ -26,6 +26,7 @@ describe("GraphSonification Component", () => {
     expect(screen.getByText("Play")).toBeInTheDocument();
     expect(screen.getByText("Reset")).toBeInTheDocument();
     expect(screen.getByText("Repeat")).toBeInTheDocument();
+    expect(screen.getByLabelText("Playback Speed")).toBeInTheDocument();
   });
 
   it("shows an error message when no graph is selected", () => {
@@ -38,6 +39,7 @@ describe("GraphSonification Component", () => {
 
     const playButton = screen.getByTestId("playback-button");
     fireEvent.click(playButton);
+
     const errorMessage = screen.getByTestId("sonification-error");
     expect(errorMessage).toHaveTextContent("Please select a graph to sonify.");
   });
@@ -52,10 +54,19 @@ describe("GraphSonification Component", () => {
     );
 
     const playButton = screen.getByTestId("playback-button");
+    const resetButton = screen.getByTestId("reset-button");
+
+    expect(resetButton).toHaveAccessibleName("Reset");
+    expect(resetButton).toHaveAttribute("aria-disabled", "true");
+
     fireEvent.click(playButton);
+
     expect(playButton).toHaveAccessibleName("Pause");
+
     fireEvent.click(playButton);
+    
     expect(playButton).toHaveAccessibleName("Play");
+    expect(resetButton).toHaveAttribute("aria-disabled", "false");
   });
 
   it("toggles looping state", () => {
@@ -84,6 +95,9 @@ describe("GraphSonification Component", () => {
     );
 
     const speedSelect = screen.getByLabelText("Playback Speed");
+
+    expect(speedSelect).toHaveValue("1");
+
     fireEvent.change(speedSelect, { target: { value: "1.5" } });
 
     expect(speedSelect).toHaveValue("1.5");
