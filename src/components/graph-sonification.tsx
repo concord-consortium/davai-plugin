@@ -71,7 +71,6 @@ export const GraphSonification = ({availableGraphs, selectedGraph, onSelectGraph
       .sort((a, b) => a - b);
 
     uniqueFractions.forEach((fraction) => {
-      // to-do: use the width of the line in calculation of offset
       const offsetSeconds = fraction * duration.current;
       const indices = fractionGroups[fraction];
 
@@ -138,13 +137,16 @@ export const GraphSonification = ({availableGraphs, selectedGraph, onSelectGraph
       await Tone.start();
       scheduleTones();
 
-      // to-do: calculate extent based on width of graph
+      // Calculate the value to use in the request so the ROI is one pixel wide
+      const primaryAxisRange = selectedGraph.xUpperBound - selectedGraph.xLowerBound;
+      const primaryExtent = primaryAxisRange / selectedGraph.width;
+
       await codapInterface.sendRequest({
         action: "create",
         resource: `component[${selectedGraph.id}].adornment`,
         values: {
           type: "Region of Interest",
-          primary: { "position": 0, "extent": 0.05 },
+          primary: { "position": 0, "extent": primaryExtent },
           secondary: { "position": 0, "extent": "100%" }
         }
       });
