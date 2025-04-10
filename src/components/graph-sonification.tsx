@@ -257,10 +257,8 @@ export const GraphSonification = ({availableGraphs, selectedGraph, onSelectGraph
   }, [speed]);
 
   return (
-    <div className="graph-sonification">
-      <div className="options-header">
-        <h2 className="options-heading">Sonification</h2>
-      </div>
+    <div className="graph-sonification control-panel" role="group" aria-labelledby="control-panel-heading">
+      <h2 id="control-panel-heading">Sonification</h2>
       <div className="graph-selection">
         <label htmlFor="graph-select">Graph to sonify:</label>
         <select id="graph-select" value={selectedGraph?.id || ""} onChange={(e) => handleSelectGraph(e.target.value)}>

@@ -39,14 +39,12 @@ export const KeyboardShortcutControls = () => {
 
   return (
     <div
-      className="options-section"
+      className="control-panel-section"
       role="group"
       aria-labelledby="keyboard-shortcuts-heading"
       data-testid="keyboard-shortcut-controls"
     >
-      <div className="options-section-header">
-        <h3 id="keyboard-shortcuts-heading">Keyboard Shortcuts</h3>
-      </div>
+      <h3 id="keyboard-shortcuts-heading">Keyboard Shortcuts</h3>
       <div className="user-option">
         <button onClick={handleToggleShortcut} data-testid="keyboard-shortcut-toggle">
           {toggleButtonLabel}

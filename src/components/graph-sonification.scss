@@ -1,13 +1,14 @@
 @use "vars" as *;
+@use "./mixins.scss" as *;
 
-.graph-sonification {
-  border: solid 1px $medium-gray-2;
-  border-radius: 6px;
+.control-panel {
   margin: 0 0 10px;
   overflow: hidden;
-  padding: 8px 6px;
 
   .graph-selection {
+    background-color: $light-teal-4;
+    margin: 0 0 6px;
+    padding: 6px;
 
     label {
       display: inline-block;
@@ -28,7 +29,7 @@
     display: flex;
     font-family: $font-family;
     gap: 0;
-    height: 66px;
+    height: 60px;
     justify-content: flex-start;
 
     button {
@@ -40,7 +41,7 @@
       cursor: pointer;
       font-family: $font-family;
       font-size: .65rem;
-      height: 66px;
+      height: 60px;
       margin: 0 !important;
       padding: 0;
       text-align: center;
@@ -85,7 +86,7 @@
     }
 
     .sonify-speed-control {
-      height: 66px;
+      height: 60px;
       margin: 0 0 0 auto;
       text-align: center;
       width: 44px;
@@ -98,7 +99,7 @@
         color: $dark-gray;
         cursor: pointer;
         font-family: $font-family;
-        font-size: .65rem;
+        font-size: .75rem;
         height: 32px;
         margin: 0 auto 4px;
         padding: 4px;
