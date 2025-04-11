@@ -2,7 +2,7 @@ import React, { useCallback, useEffect, useRef, useState } from "react";
 import * as Tone from "tone";
 import { codapInterface, getAllItems, IResult } from "@concord-consortium/codap-plugin-api";
 import { CodapItem } from "../types";
-import { removeRoiAdornment, updateRoiAdornment } from "./graph-sonification-utils";
+import { removeRoiAdornment, mapPitchFractionToFrequency, mapValueToStereoPan, updateRoiAdornment } from "./graph-sonification-utils";
 import { ErrorMessage } from "./error-message";
 
 import PlayIcon from "../assets/play-sonification-icon.svg";
@@ -27,7 +27,7 @@ export const GraphSonification = ({availableGraphs, selectedGraph, onSelectGraph
   const frameIdRef = useRef<number | null>(null);
   const currentGraphIdRef = useRef<string | null>(null);
   const isLoopingRef = useRef(false);
-  const duration = useRef(kDefaultDuration);
+  const durationRef = useRef(kDefaultDuration);
 
   const [showError, setShowError] = useState(false);
   const [speed, setSpeed] = useState(1);
@@ -41,7 +41,6 @@ export const GraphSonification = ({availableGraphs, selectedGraph, onSelectGraph
     position: 0,
     ended: false
   });
-
 
   const isAtBeginning = !playState.playing && !playState.paused && !playState.ended;
 
@@ -58,9 +57,18 @@ export const GraphSonification = ({availableGraphs, selectedGraph, onSelectGraph
     setPlayState({ playing: false, paused: false, ended: true, position });
   }, []);
 
+  const restartTransport = () => {
+    Tone.getTransport().seconds = 0;
+    Tone.getTransport().position = 0;
+    Tone.getTransport().start();
+  };
+
   const scheduleTones = useCallback(() => {
     if (!selectedGraph) return;
+
+    const { xLowerBound, xUpperBound } = selectedGraph;
     const fractionGroups: Record<number, number[]> = {};
+
     timeFractions.forEach((frac: number, i: number) => {
       if (!fractionGroups[frac]) fractionGroups[frac] = [];
       fractionGroups[frac].push(i);
@@ -71,37 +79,26 @@ export const GraphSonification = ({availableGraphs, selectedGraph, onSelectGraph
       .sort((a, b) => a - b);
 
     uniqueFractions.forEach((fraction) => {
-      const offsetSeconds = fraction * duration.current;
+      const offsetSeconds = fraction * durationRef.current;
       const indices = fractionGroups[fraction];
 
       Tone.getTransport().scheduleOnce((time) => {
         indices.forEach((i) => {
           const pFrac = pitchFractions[i];
-          const lowerFreqBound = 220;
-          const upperFreqBound = 880;
-          const freq = lowerFreqBound + pFrac * (upperFreqBound - lowerFreqBound);
-          // For each data point, determine the pan value based on the x-axis position.
-          // Normalize the x-axis position to a value between -1 and 1.
-          const { xLowerBound, xUpperBound } = selectedGraph;
-          const panValue = ((timeValues[i] - xLowerBound) / (xUpperBound - xLowerBound)) * 2 - 1;
+          const freq = mapPitchFractionToFrequency(pFrac);
+          const panValue = mapValueToStereoPan(timeValues[i], xLowerBound, xUpperBound);
           pannerRef.current?.pan.setValueAtTime(panValue, time);
           synthRef.current?.triggerAttackRelease(freq, "8n", time);
         });
       }, offsetSeconds);
     });
-  }, [duration, selectedGraph, pitchFractions, timeFractions, timeValues]);
-
-  const restartTransport = () => {
-    Tone.getTransport().seconds = 0;
-    Tone.getTransport().position = 0;
-    Tone.getTransport().start();
-  };
+  }, [durationRef, selectedGraph, pitchFractions, timeFractions, timeValues]);
 
   const animateSonification = useCallback(() => {
     if (!selectedGraph) return;
     const step = () => {
       const elapsed = Tone.getTransport().seconds;
-      const fraction = Math.min(elapsed / duration.current, 1);
+      const fraction = Math.min(elapsed / durationRef.current, 1);
 
       updateRoiAdornment(selectedGraph.id, fraction);
 
@@ -124,7 +121,7 @@ export const GraphSonification = ({availableGraphs, selectedGraph, onSelectGraph
     };
 
     frameIdRef.current = requestAnimationFrame(step);
-  }, [duration, selectedGraph, handlePlayEnd, scheduleTones]);
+  }, [durationRef, selectedGraph, handlePlayEnd, scheduleTones]);
 
   const prepareSonification = useCallback(async () => {
       if (!selectedGraph) return;
@@ -137,23 +134,18 @@ export const GraphSonification = ({availableGraphs, selectedGraph, onSelectGraph
       await Tone.start();
       scheduleTones();
 
-      // Calculate the value to use in the request so the ROI is one pixel wide
-      const primaryAxisRange = selectedGraph.xUpperBound - selectedGraph.xLowerBound;
-      const primaryExtent = primaryAxisRange / selectedGraph.width;
-
       await codapInterface.sendRequest({
         action: "create",
         resource: `component[${selectedGraph.id}].adornment`,
         values: {
           type: "Region of Interest",
-          primary: { "position": "0%", "extent": primaryExtent },
+          primary: { "position": "0%", "extent": "0.05%" }, // 0.05% consistently approximates 1 pixel
           secondary: { "position": "0%", "extent": "100%" }
         }
       });
 
       restartTransport();
       animateSonification();
-
   }, [animateSonification, selectedGraph, scheduleTones]);
 
   const handlePlayPauseClick = () => {
@@ -206,9 +198,31 @@ export const GraphSonification = ({availableGraphs, selectedGraph, onSelectGraph
     setPlayState({ playing: false, paused: false, ended: false, position: 0 });
     updateRoiAdornment(selectedGraph?.id, 0);
     Tone.getTransport().stop();
+
     if (frameIdRef.current) {
       cancelAnimationFrame(frameIdRef.current);
     }
+  };
+
+  const mapValuesToTimeAndPitch = async (graphDetails: Record<string, any>) => {
+    const pitchAttr = graphDetails.yAttributeName;
+    const timeAttr = graphDetails.xAttributeName;
+    const allItemsRes = await getAllItems(graphDetails.dataContext);
+    const allItems = allItemsRes.values;
+
+    // Do not include items that are missing values for the attributes.
+    const validItems = pitchAttr && timeAttr
+      ? allItems.filter((item: CodapItem) => item.values[pitchAttr] !== "" && item.values[timeAttr] !== "")
+      : allItems.filter((item: CodapItem) => item.values[timeAttr] !== "");
+    const pitchValues: number[] = validItems.map((item: CodapItem) => item.values[pitchAttr]);
+    const timeVals: number[] = validItems.map((item: CodapItem) => item.values[timeAttr]);
+    const timeRange = graphDetails.xUpperBound - graphDetails.xLowerBound || 1;
+    const pitchRange = graphDetails.yUpperBound - graphDetails.yLowerBound || 1;
+
+    setTimeValues(timeVals);
+    setTimeFractions(timeVals.map((value: number) => (value - graphDetails.xLowerBound) / timeRange));
+    setPitchFractions(pitchValues.map((value: number) => (value - graphDetails.yLowerBound) / pitchRange));
+
   };
 
   const handleSelectGraph =  async (graphId: string) => {
@@ -218,27 +232,9 @@ export const GraphSonification = ({availableGraphs, selectedGraph, onSelectGraph
 
     const res = await codapInterface.sendRequest({action: "get", resource: `component[${graphId}]`}) as IResult;
     const graphDetails = res.values;
+
     onSelectGraph(graphDetails);
-
-    const pitchAttr = graphDetails.yAttributeName;
-    const timeAttr = graphDetails.xAttributeName;
-    const allItemsRes = await getAllItems(graphDetails.dataContext);
-    const allItems = allItemsRes.values;
-
-    // Asign pitch and time values to the dataset items -- do not include items that are missing values for
-    // either attribute.
-    const validItems = pitchAttr && timeAttr
-      ? allItems.filter((item: CodapItem) => item.values[pitchAttr] !== "" && item.values[timeAttr] !== "")
-      : allItems.filter((item: CodapItem) => item.values[timeAttr] !== "");
-    const pitchValues: number[] = validItems.map((item: CodapItem) => item.values[pitchAttr]);
-    const timeVals: number[] = validItems.map((item: CodapItem) => item.values[timeAttr]);
-
-    const timeRange = graphDetails.xUpperBound - graphDetails.xLowerBound || 1;
-    const pitchRange = graphDetails.yUpperBound - graphDetails.yLowerBound || 1;
-
-    setTimeValues(timeVals);
-    setTimeFractions(timeVals.map((value: number) => (value - graphDetails.xLowerBound) / timeRange));
-    setPitchFractions(pitchValues.map((value: number) => (value - graphDetails.yLowerBound) / pitchRange));
+    mapValuesToTimeAndPitch(graphDetails);
   };
 
   const handleToggleLoop = () => {
@@ -255,7 +251,7 @@ export const GraphSonification = ({availableGraphs, selectedGraph, onSelectGraph
   }, [isLooping]);
 
   useEffect(() => {
-    duration.current = kDefaultDuration / speed;
+    durationRef.current = kDefaultDuration / speed;
   }, [speed]);
 
   return (
