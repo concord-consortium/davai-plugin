@@ -102,6 +102,7 @@ export const AssistantModel = types
           content: formatJsonMessage(self.thread)
         });
         fetchAndSendDataContexts();
+        fetchAndSendGraphs();
       } catch (err) {
         console.error("Failed to initialize assistant:", err);
         self.transcriptStore.addMessage(DEBUG_SPEAKER, {
@@ -138,6 +139,24 @@ export const AssistantModel = types
       } catch (err) {
         console.error("Failed to get data contexts:", err);
         self.transcriptStore.addMessage(DEBUG_SPEAKER, {description: "Failed to get data contexts", content: formatJsonMessage(err)});
+      }
+    });
+
+    const fetchAndSendGraphs = flow(function* () {
+      try {
+        const components = yield codapInterface.sendRequest({action: "get", resource: "componentList"});
+        const onlyGraphs = components.values.filter((component: Record<string, any>) => component.type === "graph");
+        const componentsDetails = [];
+        for (const component of onlyGraphs) {
+          const { id } = component;
+          const details = yield codapInterface.sendRequest({action: "get", resource: `component[${id}]`});
+          componentsDetails.push(details.values);
+        }
+        self.transcriptStore.addMessage(DEBUG_SPEAKER, {description: "Graphs available for sonification", content: formatJsonMessage(componentsDetails)});
+        sendCODAPDocumentInfo(`The following graphs are available for sonification: ${JSON.stringify(componentsDetails)}`);
+      } catch (err) {
+        console.error("Failed to get graph information:", err);
+        self.transcriptStore.addMessage(DEBUG_SPEAKER, {description: "Failed to get graph information", content: formatJsonMessage(err)});
       }
     });
 
@@ -357,14 +376,21 @@ export const AssistantModel = types
                 return { tool_call_id: toolCall.id, output: JSON.stringify(res) };
               } else if (toolCall.function.name === "sonify_graph") {
                 const { graphName } = JSON.parse(toolCall.function.arguments);
+
                 const root = getRoot(self) as any;
                 const graphRes = yield codapInterface.sendRequest({ action: "get", resource: `component[${graphName}]` });
                 const graph = graphRes.values;
-                root.sonificationStore.setSelectedGraph(graph);
-                return {
-                  tool_call_id: toolCall.id,
-                  output: `The graph "${graphName}" is ready to be sonified. It will play shortly.`,
-                };
+                const isGraphNumericScatterPlot = graph.xLowerBound && graph.xUpperBound && graph.yLowerBound && graph.yUpperBound;
+                let outputMsg = "";
+
+                if (isGraphNumericScatterPlot) {
+                  root.sonificationStore.setSelectedGraph(graph);
+                  outputMsg = `The graph "${graphName}" is ready to be sonified. It will play shortly.`;
+                } else {
+                  outputMsg = `The graph "${graphName}" is not a numeric scatter plot. Tell the user they must select a numeric scatter plot.`;
+                }
+
+                return { tool_call_id: toolCall.id, output: outputMsg };
               } else {
                 return { tool_call_id: toolCall.id, output: "Tool call not recognized." };
               }

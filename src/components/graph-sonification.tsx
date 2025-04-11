@@ -146,8 +146,8 @@ export const GraphSonification = ({availableGraphs, selectedGraph, onSelectGraph
         resource: `component[${selectedGraph.id}].adornment`,
         values: {
           type: "Region of Interest",
-          primary: { "position": 0, "extent": primaryExtent },
-          secondary: { "position": 0, "extent": "100%" }
+          primary: { "position": "0%", "extent": primaryExtent },
+          secondary: { "position": "0%", "extent": "100%" }
         }
       });
 
