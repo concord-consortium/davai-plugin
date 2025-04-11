@@ -12,6 +12,7 @@ import { ChatTranscriptComponent } from "./chat-transcript";
 import { DAVAI_SPEAKER, DEBUG_SPEAKER, LOADING_NOTE, USER_SPEAKER, notificationsToIgnore } from "../constants";
 import { UserOptions } from "./user-options";
 import { formatJsonMessage, playSound } from "../utils/utils";
+import { GraphSonification } from "./graph-sonification";
 
 import "./App.scss";
 
@@ -23,6 +24,7 @@ export const App = observer(() => {
   const { ariaLiveText, setAriaLiveText } = useAriaLive();
   const assistantStore = useAssistantStore();
   const { playProcessingTone } = useOptions();
+
   const assistantStoreRef = useRef(assistantStore);
   const dimensions = { width: appConfig.dimensions.width, height: appConfig.dimensions.height };
   const subscribedDataCtxsRef = useRef<string[]>([]);
@@ -47,7 +49,7 @@ export const App = observer(() => {
   // documentation of the documentChangeNotice object here:
   // https://github.com/concord-consortium/codap/wiki/CODAP-Data-Interactive-Plugin-API#documentchangenotice
   const handleDocumentChangeNotice = useCallback(async (notification: ClientNotification) => {
-    if (notification.values.operation === "dataContextCountChanged") { // ignore the other notifications -- they are not useful for our purposes
+        if (notification.values.operation === "dataContextCountChanged") { // ignore the other notifications -- they are not useful for our purposes
       assistantStoreRef.current.transcriptStore.addMessage(DEBUG_SPEAKER, {
         description: "Document change notice", content: formatJsonMessage(notification)
       });
@@ -138,6 +140,11 @@ export const App = observer(() => {
     assistantStore.handleCancel();
   };
 
+  const handleResetGraphToSonify = () => {
+    assistantStore.setIsSonificationPlaying(false);
+    assistantStore.setGraphToSonify("");
+  };
+
   return (
     <div className="App">
       <header>
@@ -157,6 +164,12 @@ export const App = observer(() => {
         onSubmit={handleChatInputSubmit}
         onKeyboardShortcut={handleFocusShortcut}
       />
+      { !assistantStore.showLoadingIndicator && assistantStore.graphToSonify &&
+        <GraphSonification
+          graphToSonify={assistantStore.graphToSonify}
+          onResetGraphToSonify={handleResetGraphToSonify}
+        />
+      }
       <UserOptions assistantStore={assistantStore} />
       {/*
         The aria-live region is used to announce the last message from DAVAI.

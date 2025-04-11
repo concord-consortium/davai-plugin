@@ -44,6 +44,7 @@ const OpenAIType = types.custom({
  * @property {boolean} isResetting - Flag indicating whether the assistant is currently resetting the chat.
  * @property {boolean} uploadFileAfterRun - Flag indicating whether to upload a file after the assistant completes a run.
  * @property {string} dataUri - The data URI of the file to be uploaded.
+ * @property {string} graphToSonify - The name of the graph to sonify, if applicable.
  */
 export const AssistantModel = types
   .model("AssistantModel", {
@@ -61,11 +62,21 @@ export const AssistantModel = types
     transcriptStore: ChatTranscriptModel,
     uploadFileAfterRun: false,
     dataUri: "",
+    graphToSonify: types.optional(types.string, ""),
   })
+  .volatile((self) => ({
+    isSonificationPlaying: false
+  }))
   .actions((self) => ({
     resetAfterResponse() {
       self.isLoadingResponse = false;
       self.showLoadingIndicator = false;
+    },
+    setGraphToSonify(graphName: string) {
+      self.graphToSonify = graphName;
+    },
+    setIsSonificationPlaying(isPlaying: boolean) {
+      self.isSonificationPlaying = isPlaying;
     }
   }))
   .actions((self) => ({
@@ -101,6 +112,7 @@ export const AssistantModel = types
           content: formatJsonMessage(self.thread)
         });
         fetchAndSendDataContexts();
+        fetchAndSendGraphs();
       } catch (err) {
         console.error("Failed to initialize assistant:", err);
         self.transcriptStore.addMessage(DEBUG_SPEAKER, {
@@ -137,6 +149,24 @@ export const AssistantModel = types
       } catch (err) {
         console.error("Failed to get data contexts:", err);
         self.transcriptStore.addMessage(DEBUG_SPEAKER, {description: "Failed to get data contexts", content: formatJsonMessage(err)});
+      }
+    });
+
+    const fetchAndSendGraphs = flow(function* () {
+      try {
+        const components = yield codapInterface.sendRequest({action: "get", resource: "componentList"});
+        const onlyGraphs = components.values.filter((component: Record<string, any>) => component.type === "graph");
+        const componentsDetails = [];
+        for (const component of onlyGraphs) {
+          const { id } = component;
+          const details = yield codapInterface.sendRequest({action: "get", resource: `component[${id}]`});
+          componentsDetails.push(details.values);
+        }
+        self.transcriptStore.addMessage(DEBUG_SPEAKER, {description: "Graphs available for sonification", content: formatJsonMessage(componentsDetails)});
+        sendCODAPDocumentInfo(`The following graphs are available for sonification: ${JSON.stringify(componentsDetails)}`);
+      } catch (err) {
+        console.error("Failed to get graph information:", err);
+        self.transcriptStore.addMessage(DEBUG_SPEAKER, {description: "Failed to get graph information", content: formatJsonMessage(err)});
       }
     });
 
@@ -354,6 +384,19 @@ export const AssistantModel = types
                   ? { ...res, values: { ...res.values, exportDataUri: undefined } }
                   : res;
                 return { tool_call_id: toolCall.id, output: JSON.stringify(res) };
+              } else if (toolCall.function.name === "sonify_graph") {
+                const { graphName } = JSON.parse(toolCall.function.arguments);
+                const graphRes = yield codapInterface.sendRequest({ action: "get", resource: `component[${graphName}]` });
+                const graph = graphRes.values;
+                const isGraphNumericScatterPlot = graph.xLowerBound && graph.xUpperBound && graph.yLowerBound && graph.yUpperBound;
+                let outputMsg = "";
+                if (isGraphNumericScatterPlot) {
+                  self.graphToSonify = graphName;
+                  outputMsg = `The graph "${graphName}" is ready to be sonified. It will play shortly.`;
+                } else {
+                  outputMsg = `The graph "${graphName}" is not a numeric scatter plot. Tell the user they must select a numeric scatter plot.`;
+                }
+                return { tool_call_id: toolCall.id, output: outputMsg };
               } else {
                 return { tool_call_id: toolCall.id, output: "Tool call not recognized." };
               }
