@@ -2,6 +2,7 @@ import React, { FormEvent, useCallback, useEffect, useMemo, useRef, useState } f
 import { useOptions } from "../hooks/use-options";
 import { kDefaultChatInputHeight, START_RECORDING_NOTE, STOP_RECORDING_NOTE } from "../constants";
 import { playSound, isInputElement, isShortcutPressed } from "../utils/utils";
+import { ErrorMessage } from "./error-message";
 
 import StopIcon from "../assets/stop-icon.svg";
 import SendIcon from "../assets/send-icon.svg";
@@ -291,17 +292,7 @@ export const ChatInputComponent = ({disabled, isLoading, onCancel, onKeyboardSho
           </button>
         )}
       </div>
-    {showError &&
-      <div
-        aria-live="assertive"
-        className="error-message"
-        data-testid="input-error"
-        id="input-error"
-        role="alert"
-      >
-        Please enter a message before sending.
-      </div>
-    }
+      {showError && <ErrorMessage slug="input" message="Please enter a message before sending." />}
     </div>
   );
 };

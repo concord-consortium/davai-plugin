@@ -1,5 +1,6 @@
 import React, { FormEvent, useState } from "react";
 import { useOptions } from "../hooks/use-options";
+import { ErrorMessage } from "./error-message";
 
 import "./keyboard-shortcut-controls.scss";
 
@@ -38,14 +39,12 @@ export const KeyboardShortcutControls = () => {
 
   return (
     <div
-      className="options-section"
+      className="control-panel-section"
       role="group"
       aria-labelledby="keyboard-shortcuts-heading"
       data-testid="keyboard-shortcut-controls"
     >
-      <div className="options-section-header">
-        <h3 id="keyboard-shortcuts-heading">Keyboard Shortcuts</h3>
-      </div>
+      <h3 id="keyboard-shortcuts-heading">Keyboard Shortcuts</h3>
       <div className="user-option">
         <button onClick={handleToggleShortcut} data-testid="keyboard-shortcut-toggle">
           {toggleButtonLabel}
@@ -80,17 +79,7 @@ export const KeyboardShortcutControls = () => {
               </button>
             </div>
           }
-          {showError &&
-            <div
-              aria-live="assertive"
-              className="error-message"
-              data-testid="custom-keyboard-shortcut-error"
-              id="custom-keyboard-shortcut-error"
-              role="alert"
-            >
-              Please enter a value for the keyboard shortcut.
-            </div>
-          }
+          { showError && <ErrorMessage slug="custom-keyboard-shortcut" message="Please enter a value for the keyboard shortcut." /> }
         </fieldset>
       </form>
     </div>

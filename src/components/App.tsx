@@ -1,10 +1,10 @@
-import React, { useCallback, useEffect, useRef } from "react";
+import React, { useCallback, useEffect, useRef, useState } from "react";
 import * as Tone from "tone";
 import { observer } from "mobx-react-lite";
 import removeMarkdown from "remove-markdown";
-import { addDataContextChangeListener, addDataContextsListListener, ClientNotification, getDataContext, getListOfDataContexts, initializePlugin, selectSelf } from "@concord-consortium/codap-plugin-api";
+import { addDataContextChangeListener, addDataContextsListListener, ClientNotification, codapInterface, getDataContext, getListOfDataContexts, initializePlugin, IResult, selectSelf } from "@concord-consortium/codap-plugin-api";
 import { useAppConfigContext } from "../hooks/use-app-config-context";
-import { useAssistantStore } from "../hooks/use-assistant-store";
+import { useRootStore } from "../hooks/use-root-store";
 import { useAriaLive } from "../contexts/aria-live-context";
 import { useOptions } from "../hooks/use-options";
 import { ChatInputComponent } from "./chat-input";
@@ -22,8 +22,9 @@ const kVersion = "0.0.1";
 export const App = observer(() => {
   const appConfig = useAppConfigContext();
   const { ariaLiveText, setAriaLiveText } = useAriaLive();
-  const assistantStore = useAssistantStore();
+  const { assistantStore, sonificationStore } = useRootStore();
   const { playProcessingTone } = useOptions();
+  const [availableGraphs, setAvailableGraphs] = useState<Record<string, any>[]>([]);
 
   const assistantStoreRef = useRef(assistantStore);
   const dimensions = { width: appConfig.dimensions.width, height: appConfig.dimensions.height };
@@ -81,8 +82,37 @@ export const App = observer(() => {
         addDataContextChangeListener(ctx.name, handleDataContextChangeNotice);
       });
     };
+
+    const fetchGraphs = async () => {
+      const codapComponents = await codapInterface.sendRequest({
+        action: "get",
+        resource: "componentList"
+      }) as ClientNotification;
+      const graphs = codapComponents.values.filter((component: Record<string, any>) => {
+        return component.type === "graph";
+      });
+
+      const promises = graphs.map(async (graph: Record<string, any>) => {
+        const graphRes = await codapInterface.sendRequest({ action: "get", resource: `component[${graph.id}]` }) as IResult;
+        return graphRes.values;
+      });
+      const allGraphDetails = await Promise.all(promises);
+      const validGraphs = allGraphDetails.filter((graph: Record<string, any>) => {
+        return graph.plotType === "scatterPlot";
+      });
+
+      setAvailableGraphs(validGraphs);
+    };
+
     init();
+    fetchGraphs();
     selectSelf();
+
+    const interval = setInterval(fetchGraphs, 5000);
+
+    return () => {
+      clearInterval(interval);
+    };
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
@@ -140,9 +170,10 @@ export const App = observer(() => {
     assistantStore.handleCancel();
   };
 
-  const handleResetGraphToSonify = () => {
-    assistantStore.setIsSonificationPlaying(false);
-    assistantStore.setGraphToSonify("");
+  const handleSelectGraph = async (graph: Record<string, any>) => {
+    sonificationStore.setSelectedGraph(graph);
+    // TODO: Send a select request to CODAP to bring the selected graph tile to front.
+    // CODAP v3 does not yet support this.
   };
 
   return (
@@ -164,12 +195,11 @@ export const App = observer(() => {
         onSubmit={handleChatInputSubmit}
         onKeyboardShortcut={handleFocusShortcut}
       />
-      { !assistantStore.showLoadingIndicator && assistantStore.graphToSonify &&
-        <GraphSonification
-          graphToSonify={assistantStore.graphToSonify}
-          onResetGraphToSonify={handleResetGraphToSonify}
-        />
-      }
+      <GraphSonification
+        availableGraphs={availableGraphs}
+        selectedGraph={sonificationStore?.selectedGraph}
+        onSelectGraph={handleSelectGraph}
+      />
       <UserOptions assistantStore={assistantStore} />
       {/*
         The aria-live region is used to announce the last message from DAVAI.

@@ -5,15 +5,20 @@ import { App } from "./App";
 import { mockAppConfig } from "../test-utils/mock-app-config";
 import { MockAppConfigProvider } from "../test-utils/app-config-provider";
 
-jest.mock("../hooks/use-assistant-store", () => ({
-  useAssistantStore: jest.fn(() => ({
-    initializeAssistant: jest.fn(),
-    fetchAssistantsList: jest.fn(),
-    transcriptStore: {
-      messages: [],
-      addMessage: jest.fn(),
+jest.mock("../hooks/use-root-store", () => ({
+  useRootStore: jest.fn(() => ({
+    assistantStore: {
+      initializeAssistant: jest.fn(),
+      fetchAssistantsList: jest.fn(),
+      transcriptStore: {
+        messages: [],
+        addMessage: jest.fn(),
+      }
     },
-  })),
+    sonificationStore: {
+      selectedGraph: { id: "graph1", name: "Graph 1" },
+    }
+  }))
 }));
 
 jest.mock("../models/app-config-model", () => ({
@@ -22,7 +27,6 @@ jest.mock("../models/app-config-model", () => ({
     initialize: jest.fn(),
   }
 }));
-
 
 describe("test load app", () => {
   it("renders without crashing", () => {

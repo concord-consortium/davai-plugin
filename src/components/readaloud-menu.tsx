@@ -14,10 +14,8 @@ export const ReadAloudMenu: React.FC<IProps> = ({createToggleOption}) => {
   };
 
   return (
-    <div className="options-section" role="group" aria-labelledby="readaloud-heading" data-testid="readaloud-menu">
-      <div className="options-section-header">
-        <h3 id="readaloud-heading">Tap to Read</h3>
-      </div>
+    <div className="control-panel-section" role="group" aria-labelledby="readaloud-heading" data-testid="readaloud-menu">
+      <h3 id="readaloud-heading">Tap to Read</h3>
       {createToggleOption("readAloudEnabled", `Enable "Tap to Read" mode`)}
       <div className="user-option">
         <label
