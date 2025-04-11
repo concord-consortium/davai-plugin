@@ -49,8 +49,8 @@ export const GraphSonification = ({ graphToSonify, onResetGraphToSonify }: IProp
         resource: `component[${graphDetails.id}].adornment`,
         values: {
           type: "Region of Interest",
-          primary: { "position": 0, "extent": 0.05 },
-          secondary: { "position": 0, "extent": "100%" }
+          primary: { "position": "0%", "extent": 0.05 },
+          secondary: { "position": "0%", "extent": "100%" }
         }
       });
 
