@@ -172,6 +172,8 @@ export const App = observer(() => {
 
   const handleSelectGraph = async (graph: Record<string, any>) => {
     sonificationStore.setSelectedGraph(graph);
+    // TODO: Send a select request to CODAP to bring the selected graph tile to front.
+    // CODAP v3 does not yet support this.
   };
 
   return (

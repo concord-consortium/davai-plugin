@@ -242,7 +242,6 @@ export const GraphSonification = ({availableGraphs, selectedGraph, onSelectGraph
     const graphDetails = res.values;
 
     onSelectGraph(graphDetails);
-    mapValuesToTimeAndPitch(graphDetails);
   };
 
   useEffect(() => {
@@ -252,6 +251,14 @@ export const GraphSonification = ({availableGraphs, selectedGraph, onSelectGraph
   useEffect(() => {
     durationRef.current = kDefaultDuration / speed;
   }, [speed]);
+
+  useEffect(() => {
+    // Since the selected graph can be set outside the component (i.e. not using the component's graph select menu),
+    // we call `mapValuesToTimeAndPitch` in an effect.
+    if (selectedGraph) {
+      mapValuesToTimeAndPitch(selectedGraph);
+    }
+  }, [selectedGraph]);
 
   useEffect(() => {
     return () => {

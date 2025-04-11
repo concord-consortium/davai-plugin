@@ -385,7 +385,7 @@ export const AssistantModel = types
 
                 if (isGraphNumericScatterPlot) {
                   root.sonificationStore.setSelectedGraph(graph);
-                  outputMsg = `The graph "${graphName}" is ready to be sonified. It will play shortly.`;
+                  outputMsg = `The graph "${graphName}" is ready to be sonified. Tell the user they can use the sonification controls to hear it.`;
                 } else {
                   outputMsg = `The graph "${graphName}" is not a numeric scatter plot. Tell the user they must select a numeric scatter plot.`;
                 }
