@@ -11,8 +11,9 @@ import { ChatInputComponent } from "./chat-input";
 import { ChatTranscriptComponent } from "./chat-transcript";
 import { DAVAI_SPEAKER, DEBUG_SPEAKER, LOADING_NOTE, USER_SPEAKER, notificationsToIgnore } from "../constants";
 import { UserOptions } from "./user-options";
-import { formatJsonMessage, playSound } from "../utils/utils";
+import { checkIsValidGraph, formatJsonMessage, playSound } from "../utils/utils";
 import { GraphSonification } from "./graph-sonification";
+import { ICODAPComponentListItem, ICODAPGraph } from "../types";
 
 import "./App.scss";
 
@@ -88,20 +89,29 @@ export const App = observer(() => {
         action: "get",
         resource: "componentList"
       }) as ClientNotification;
-      const graphs = codapComponents.values.filter((component: Record<string, any>) => {
+      const graphComponents = codapComponents.values.filter((component: Record<string, any>) => {
         return component.type === "graph";
       });
 
-      const promises = graphs.map(async (graph: Record<string, any>) => {
-        const graphRes = await codapInterface.sendRequest({ action: "get", resource: `component[${graph.id}]` }) as IResult;
+      const promises = graphComponents.map(async (component: ICODAPComponentListItem) => {
+        const graphRes = await codapInterface.sendRequest({ action: "get", resource: `component[${component.id}]` }) as IResult;
         return graphRes.values;
       });
       const allGraphDetails = await Promise.all(promises);
-      const validGraphs = allGraphDetails.filter((graph: Record<string, any>) => {
-        return graph.plotType === "scatterPlot";
+      const validGraphs = allGraphDetails.filter((graph: ICODAPGraph) => {
+        return checkIsValidGraph(graph);
       });
 
       setAvailableGraphs(validGraphs);
+
+      if (sonificationStore.selectedGraph !== undefined) {
+        const matchingGraph = validGraphs.find(graph => graph.id === sonificationStore.selectedGraph?.id);
+        if (!matchingGraph) {
+          sonificationStore.removeSelectedGraph();
+        } else {
+          sonificationStore.setSelectedGraph(matchingGraph);
+        }
+      }
     };
 
     init();
@@ -170,7 +180,7 @@ export const App = observer(() => {
     assistantStore.handleCancel();
   };
 
-  const handleSelectGraph = async (graph: Record<string, any>) => {
+  const handleSelectGraph = async (graph: ICODAPGraph) => {
     sonificationStore.setSelectedGraph(graph);
     // TODO: Send a select request to CODAP to bring the selected graph tile to front.
     // CODAP v3 does not yet support this.

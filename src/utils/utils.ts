@@ -1,4 +1,18 @@
 import * as Tone from "tone";
+import { ICODAPGraph } from "../types";
+
+export const checkIsValidGraph = (graph: ICODAPGraph) => {
+  const {
+    plotType,
+    topSplitAttributeID: topId,
+    y2AttributeID: y2Id,
+    xAttributeID: xId,
+    yAttributeID: yId,
+    rightSplitAttributeID: rightId
+  } = graph;
+  const isUniDotPlot = (plotType === "dotPlot" || plotType === "binnedDotPlot") && !topId && !rightId && !y2Id && ((xId && !yId) || (yId && !xId));
+  return plotType === "scatterPlot" || isUniDotPlot;
+};
 
 export const timeStamp = (): string => {
   const now = new Date();
