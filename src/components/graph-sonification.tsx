@@ -281,7 +281,7 @@ export const GraphSonification = ({availableGraphs, selectedGraph, onSelectGraph
     if (selectedGraph) {
       mapValuesToTimeAndPitch(selectedGraph);
     }
-  }, [selectedGraph]);
+  }, [selectedGraph, selectedGraph?.xAttributeID, selectedGraph?.yAttributeID]);
 
   useEffect(() => {
     return () => {
