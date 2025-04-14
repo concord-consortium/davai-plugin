@@ -2,7 +2,7 @@ import { codapInterface } from "@concord-consortium/codap-plugin-api";
 
 interface IBinParams {
   binAlignment: number;
-  binWidth: number;
+  numBins: number;
   minBinEdge: number;
   maxBinEdge: number;
   minValue: number;
@@ -34,16 +34,16 @@ export const computeCodapBins = (values: number[]): IBinParams => {
     }
   });
 
-  const binWidth = 10;
-  const binAlignment = Math.floor(minValue / binWidth) * binWidth;
+  const numBins = 10;
+  const binAlignment = Math.floor(minValue / numBins) * numBins;
   const diff = binAlignment - minValue;
-  const minBinEdge = binAlignment - Math.ceil(diff / binWidth) * binWidth;
-  const totalNumberOfBins = Math.ceil((maxValue - minBinEdge) / binWidth + 0.000001);
-  const maxBinEdge = minBinEdge + (totalNumberOfBins * binWidth);
+  const minBinEdge = binAlignment - Math.ceil(diff / numBins) * numBins;
+  const totalNumberOfBins = Math.ceil((maxValue - minBinEdge) / numBins + 0.000001);
+  const maxBinEdge = minBinEdge + (totalNumberOfBins * numBins);
 
   return {
     binAlignment,
-    binWidth,
+    numBins,
     minBinEdge,
     maxBinEdge,
     minValue,
@@ -54,7 +54,7 @@ export const computeCodapBins = (values: number[]): IBinParams => {
 
 export function binUsingCodapEdges(values: number[], binParams: IBinParams) {
   const {
-    minBinEdge, maxBinEdge, binWidth, totalNumberOfBins
+    minBinEdge, maxBinEdge, numBins, totalNumberOfBins
   } = binParams;
 
   const bins = Array(totalNumberOfBins).fill(0);
@@ -64,7 +64,7 @@ export function binUsingCodapEdges(values: number[], binParams: IBinParams) {
     if (v < minBinEdge) v = minBinEdge;
     if (v >= maxBinEdge) v = maxBinEdge - 1e-9; // so we fall in the last bin
     // figure out which bin
-    const idx = Math.floor((v - minBinEdge) / binWidth);
+    const idx = Math.floor((v - minBinEdge) / numBins);
     if (idx >= 0 && idx < totalNumberOfBins) {
       bins[idx]++;
     }

@@ -147,7 +147,8 @@ export const GraphSonification = ({availableGraphs, selectedGraph, onSelectGraph
         Tone.getTransport().scheduleOnce((time) => {
           const countFraction = count / (Math.max(...bins) || 1);
           const freq = mapPitchFractionToFrequency(countFraction);
-          const panValue = mapValueToStereoPan(timeValues[i], xLowerBound, xUpperBound);
+          const binAvgForPanValue = binParams.minBinEdge + (i + 0.5) * binParams.numBins;
+          const panValue = mapValueToStereoPan(binAvgForPanValue, binParams.minBinEdge, binParams.maxBinEdge);
           pannerRef.current?.pan.setValueAtTime(panValue, time);
           monoSynthRef.current?.triggerAttackRelease(freq, binDuration, time);
         }, offset);
