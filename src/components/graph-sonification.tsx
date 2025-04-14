@@ -1,8 +1,9 @@
 import React, { useCallback, useEffect, useRef, useState } from "react";
 import * as Tone from "tone";
 import { codapInterface, getAllItems, IResult } from "@concord-consortium/codap-plugin-api";
-import { CodapItem } from "../types";
-import { removeRoiAdornment, mapPitchFractionToFrequency, mapValueToStereoPan, updateRoiAdornment } from "./graph-sonification-utils";
+import { CodapItem, ICODAPGraph } from "../types";
+import { removeRoiAdornment, mapPitchFractionToFrequency, mapValueToStereoPan, updateRoiAdornment,
+  computeCodapBins, binUsingCodapEdges } from "./graph-sonification-utils";
 import { ErrorMessage } from "./error-message";
 
 import PlayIcon from "../assets/play-sonification-icon.svg";
@@ -16,13 +17,14 @@ import "./graph-sonification.scss";
 interface IProps {
   availableGraphs: Record<string, any>[];
   selectedGraph?: Record<string, any>;
-  onSelectGraph: (graph: Record<string, any>) => Promise<void>;
+  onSelectGraph: (graph: ICODAPGraph) => Promise<void>;
 }
 
 const kDefaultDuration = 5;
 
 export const GraphSonification = ({availableGraphs, selectedGraph, onSelectGraph}: IProps) => {
-  const synthRef = useRef<Tone.PolySynth | null>(null);
+  const monoSynthRef = useRef<Tone.MonoSynth | null>(null);
+  const polySynthRef = useRef<Tone.PolySynth | null>(null);
   const pannerRef = useRef<Tone.Panner | null>(null);
   const frameIdRef = useRef<number | null>(null);
   const currentGraphIdRef = useRef<string | null>(null);
@@ -48,8 +50,12 @@ export const GraphSonification = ({availableGraphs, selectedGraph, onSelectGraph
     pannerRef.current = new Tone.Panner(0).toDestination();
   }
 
-  if (!synthRef.current) {
-    synthRef.current = new Tone.PolySynth().connect(pannerRef.current);
+  if (!monoSynthRef.current) {
+    monoSynthRef.current = new Tone.MonoSynth().connect(pannerRef.current);
+  }
+
+  if (!polySynthRef.current) {
+    polySynthRef.current = new Tone.PolySynth().connect(pannerRef.current);
   }
 
   const handlePlayPause = () => {
@@ -130,33 +136,58 @@ export const GraphSonification = ({availableGraphs, selectedGraph, onSelectGraph
 
   const scheduleTones = useCallback(() => {
     if (!selectedGraph) return;
+    const { xLowerBound, xUpperBound, plotType } = selectedGraph;
+    if (plotType === "dotPlot" || plotType === "binnedDotPlot") {
+      const binParams = computeCodapBins(timeValues);
+      const bins = binUsingCodapEdges(timeValues, binParams);
+      const binDuration = durationRef.current / bins.length;
 
-    const { xLowerBound, xUpperBound } = selectedGraph;
-    const fractionGroups: Record<number, number[]> = {};
+      const frequencyForCount = (count: number) => {
+        const maxCount = Math.max(...bins) || 1;
+        const frac = count / maxCount;
+        return 220 + frac * (880 - 220);
+      };
 
-    timeFractions.forEach((frac: number, i: number) => {
-      if (!fractionGroups[frac]) fractionGroups[frac] = [];
-      fractionGroups[frac].push(i);
-    });
+      const now = Tone.now();
+      monoSynthRef.current?.triggerAttack(frequencyForCount(bins[0]), now);
 
-    const uniqueFractions = Object.keys(fractionGroups)
-      .map(parseFloat)
-      .sort((a, b) => a - b);
+      bins.forEach((count, i) => {
+        if (i === 0) return;
+        const freq = frequencyForCount(count);
+        const rampStart = now + binDuration * i;
+        monoSynthRef.current?.setNote(freq, rampStart);
+      });
 
-    uniqueFractions.forEach((fraction) => {
-      const offsetSeconds = fraction * durationRef.current;
-      const indices = fractionGroups[fraction];
+      const endTime = now + durationRef.current;
+      monoSynthRef.current?.triggerRelease(endTime);
 
-      Tone.getTransport().scheduleOnce((time) => {
-        indices.forEach((i) => {
-          const pFrac = pitchFractions[i];
-          const freq = mapPitchFractionToFrequency(pFrac);
-          const panValue = mapValueToStereoPan(timeValues[i], xLowerBound, xUpperBound);
-          pannerRef.current?.pan.setValueAtTime(panValue, time);
-          synthRef.current?.triggerAttackRelease(freq, "8n", time);
-        });
-      }, offsetSeconds);
-    });
+    } else { // assume scatterplot
+      const fractionGroups: Record<number, number[]> = {};
+
+      timeFractions.forEach((frac: number, i: number) => {
+        if (!fractionGroups[frac]) fractionGroups[frac] = [];
+        fractionGroups[frac].push(i);
+      });
+
+      const uniqueFractions = Object.keys(fractionGroups)
+        .map(parseFloat)
+        .sort((a, b) => a - b);
+
+      uniqueFractions.forEach((fraction) => {
+        const offsetSeconds = fraction * durationRef.current;
+        const indices = fractionGroups[fraction];
+
+        Tone.getTransport().scheduleOnce((time) => {
+          indices.forEach((i) => {
+            const pFrac = pitchFractions[i];
+            const freq = mapPitchFractionToFrequency(pFrac);
+            const panValue = mapValueToStereoPan(timeValues[i], xLowerBound, xUpperBound);
+            pannerRef.current?.pan.setValueAtTime(panValue, time);
+            polySynthRef.current?.triggerAttackRelease(freq, "8n", time);
+          });
+        }, offsetSeconds);
+      });
+    }
   }, [durationRef, selectedGraph, pitchFractions, timeFractions, timeValues]);
 
   const animateSonification = useCallback(() => {
@@ -196,8 +227,6 @@ export const GraphSonification = ({availableGraphs, selectedGraph, onSelectGraph
       }
 
       currentGraphIdRef.current = selectedGraph.id;
-      await Tone.start();
-      scheduleTones();
 
       await codapInterface.sendRequest({
         action: "create",
@@ -208,6 +237,9 @@ export const GraphSonification = ({availableGraphs, selectedGraph, onSelectGraph
           secondary: { "position": "0%", "extent": "100%" }
         }
       });
+
+      await Tone.start();
+      scheduleTones();
 
       restartTransport();
       animateSonification();

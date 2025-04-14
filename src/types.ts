@@ -69,3 +69,66 @@ export interface CodapItem {
 }
 
 export type Action = "create" | "get" | "update" | "delete";
+
+export interface ICODAPComponentListItem {
+  hidden: boolean;
+  id: number;
+  name: string;
+  title: string;
+  type: "caseTable" | "graph" | "map" | "text" | "slider";
+}
+
+export interface ICODAPGraph {
+  backgroundColor?: string;
+  cannotClose?: boolean;
+  captionAttributeID?: string;
+  captionAttributeName?: string;
+  dataContext?: string;
+  dimensions?: {
+    width: number;
+    height: number;
+  };
+  displayOnlySelectedCases?: boolean;
+  enableNumberToggle?: boolean;
+  filterFormula?: string;
+  hiddenCases?: any[];
+  id: number;
+  legendAttributeID?: string;
+  legendAttributeName?: string;
+  name?: string;
+  numberToggleLastMode?: string;
+  plotType?: string;
+  pointColor?: string;
+  pointSize?: number;
+  position?: {
+    left: number;
+    top: number;
+  };
+  rightSplitAttributeID?: string;
+  rightSplitAttributeName?: string;
+  showMeasuresForSelection?: boolean;
+  strokeColor?: string;
+  strokeSameAsFill?: boolean;
+  title?: string;
+  topSplitAttributeID?: string;
+  topSplitAttributeName?: string;
+  transparent?: boolean;
+  type?: string;
+  xAttributeID?: string;
+  xAttributeName?: string;
+  xAttributeType?: string;
+  xLowerBound?: number;
+  xUpperBound?: number;
+  y2AttributeID?: string;
+  y2AttributeName?: string;
+  y2AttributeType?: string;
+  y2LowerBound?: number;
+  y2UpperBound?: number;
+  yAttributeID?: number;
+  yAttributeIDs?: number[];
+  yAttributeName?: string;
+  yAttributeNames?: string[];
+  yAttributeType?: string;
+  yLowerBound?: number;
+  yUpperBound?: number;
+}

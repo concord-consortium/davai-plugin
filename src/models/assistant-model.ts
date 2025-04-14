@@ -3,7 +3,7 @@ import { OpenAI } from "openai";
 import { Message } from "openai/resources/beta/threads/messages";
 import { codapInterface, getDataContext, getListOfDataContexts } from "@concord-consortium/codap-plugin-api";
 import { DAVAI_SPEAKER, DEBUG_SPEAKER } from "../constants";
-import { convertBase64ToImage, formatJsonMessage } from "../utils/utils";
+import { checkIsValidGraph, convertBase64ToImage, formatJsonMessage } from "../utils/utils";
 import { requestThreadDeletion } from "../utils/openai-utils";
 import { ChatTranscriptModel } from "./chat-transcript-model";
 
@@ -44,7 +44,6 @@ const OpenAIType = types.custom({
  * @property {boolean} isResetting - Flag indicating whether the assistant is currently resetting the chat.
  * @property {boolean} uploadFileAfterRun - Flag indicating whether to upload a file after the assistant completes a run.
  * @property {string} dataUri - The data URI of the file to be uploaded.
- * @property {string} graphToSonify - The name of the graph to sonify, if applicable.
  */
 export const AssistantModel = types
   .model("AssistantModel", {
@@ -380,14 +379,13 @@ export const AssistantModel = types
                 const root = getRoot(self) as any;
                 const graphRes = yield codapInterface.sendRequest({ action: "get", resource: `component[${graphName}]` });
                 const graph = graphRes.values;
-                const isGraphNumericScatterPlot = graph.xLowerBound && graph.xUpperBound && graph.yLowerBound && graph.yUpperBound;
                 let outputMsg = "";
 
-                if (isGraphNumericScatterPlot) {
+                if (checkIsValidGraph(graph)) {
                   root.sonificationStore.setSelectedGraph(graph);
                   outputMsg = `The graph "${graphName}" is ready to be sonified. Tell the user they can use the sonification controls to hear it.`;
                 } else {
-                  outputMsg = `The graph "${graphName}" is not a numeric scatter plot. Tell the user they must select a numeric scatter plot.`;
+                  outputMsg = `The graph "${graphName}" is not a numeric scatter plot. Tell the user they must select a numeric scatter plot or a univariate dot plot.`;
                 }
 
                 return { tool_call_id: toolCall.id, output: outputMsg };
