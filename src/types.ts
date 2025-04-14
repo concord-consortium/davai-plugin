@@ -114,12 +114,12 @@ export interface ICODAPGraph {
   topSplitAttributeName?: string;
   transparent?: boolean;
   type?: string;
-  xAttributeID?: string;
+  xAttributeID?: number;
   xAttributeName?: string;
   xAttributeType?: string;
   xLowerBound?: number;
   xUpperBound?: number;
-  y2AttributeID?: string;
+  y2AttributeID?: number;
   y2AttributeName?: string;
   y2AttributeType?: string;
   y2LowerBound?: number;

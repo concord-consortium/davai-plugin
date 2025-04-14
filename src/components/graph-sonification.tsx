@@ -23,8 +23,9 @@ interface IProps {
 const kDefaultDuration = 5;
 
 export const GraphSonification = ({availableGraphs, selectedGraph, onSelectGraph}: IProps) => {
-  const monoSynthRef = useRef<Tone.MonoSynth | null>(null);
+  const oscillatorRef = useRef<Tone.Oscillator | null>(null);
   const polySynthRef = useRef<Tone.PolySynth | null>(null);
+  const gainRef = useRef<Tone.Gain | null>(null);
   const pannerRef = useRef<Tone.Panner | null>(null);
   const frameIdRef = useRef<number | null>(null);
   const currentGraphIdRef = useRef<string | null>(null);
@@ -47,15 +48,19 @@ export const GraphSonification = ({availableGraphs, selectedGraph, onSelectGraph
   const isAtBeginning = !playState.playing && !playState.paused && !playState.ended;
 
   if (!pannerRef.current) {
-    pannerRef.current = new Tone.Panner(0).toDestination();
+    pannerRef.current = new Tone.Panner(0);
   }
 
-  if (!monoSynthRef.current) {
-    monoSynthRef.current = new Tone.MonoSynth().connect(pannerRef.current);
+  if (!gainRef.current) {
+    gainRef.current = new Tone.Gain(1).toDestination().connect(pannerRef.current);
   }
 
-  if (!polySynthRef.current) {
-    polySynthRef.current = new Tone.PolySynth().connect(pannerRef.current);
+  if (!polySynthRef.current && gainRef.current) {
+    polySynthRef.current = new Tone.PolySynth().connect(gainRef.current);
+  }
+
+  if (!oscillatorRef.current && gainRef.current) {
+    oscillatorRef.current = new Tone.Oscillator(220, "sine").connect(gainRef.current);
   }
 
   const handlePlayPause = () => {
@@ -77,6 +82,9 @@ export const GraphSonification = ({availableGraphs, selectedGraph, onSelectGraph
       // if we were paused, resume
       if (!prev.playing) {
         animateSonification();
+        if (oscillatorRef.current) {
+          oscillatorRef.current.mute = false;
+        }
         Tone.getTransport().start();
         return {
           ...prev,
@@ -87,6 +95,9 @@ export const GraphSonification = ({availableGraphs, selectedGraph, onSelectGraph
         };
       }
       // otherwise, pause
+      if (oscillatorRef.current) {
+        oscillatorRef.current.mute = true;
+      }
       Tone.getTransport().pause();
       if (frameIdRef.current) {
         cancelAnimationFrame(frameIdRef.current);
@@ -108,6 +119,7 @@ export const GraphSonification = ({availableGraphs, selectedGraph, onSelectGraph
     setPlayState({ playing: false, paused: false, ended: false, position: 0 });
     updateRoiAdornment(selectedGraph?.id, 0);
     Tone.getTransport().stop();
+    oscillatorRef.current?.stop();
 
     if (frameIdRef.current) {
       cancelAnimationFrame(frameIdRef.current);
@@ -141,18 +153,41 @@ export const GraphSonification = ({availableGraphs, selectedGraph, onSelectGraph
       const binParams = computeCodapBins(timeValues);
       const bins = binUsingCodapEdges(timeValues, binParams);
       const binDuration = durationRef.current / bins.length;
+      const maxCount = (Math.max(...bins) || 1);
 
-      bins.forEach((count: number, i: number) => {
+      const getBinPanValue = (i: number) => {
+        const binAvgForPanValue = binParams.minBinEdge + (i + 0.5) * binParams.numBins;
+        return mapValueToStereoPan(binAvgForPanValue, binParams.minBinEdge, binParams.maxBinEdge);
+      };
+
+      oscillatorRef.current?.start();
+
+      if (oscillatorRef.current) {
+        oscillatorRef.current.mute = false;
+      }
+
+      bins.forEach((count, i) => {
         const offset = i * binDuration;
+        const prevValue = i === 0 ? undefined : bins[i - 1];
+        const rampTime = count === 0 ? 0.01 : binDuration / 4;
         Tone.getTransport().scheduleOnce((time) => {
-          const countFraction = count / (Math.max(...bins) || 1);
+          const countFraction = count / maxCount;
           const freq = mapPitchFractionToFrequency(countFraction);
-          const binAvgForPanValue = binParams.minBinEdge + (i + 0.5) * binParams.numBins;
-          const panValue = mapValueToStereoPan(binAvgForPanValue, binParams.minBinEdge, binParams.maxBinEdge);
+          const panValue = getBinPanValue(i);
           pannerRef.current?.pan.setValueAtTime(panValue, time);
-          monoSynthRef.current?.triggerAttackRelease(freq, binDuration, time);
+          oscillatorRef.current?.frequency.rampTo(freq, rampTime, time);
+          if (count === 0) {
+            gainRef.current?.gain.rampTo(0, rampTime, time);
+          } else if (prevValue === 0) {
+            gainRef.current?.gain.rampTo(1, rampTime, time);
+          }
         }, offset);
       });
+
+      Tone.getTransport().scheduleOnce((time) => {
+        oscillatorRef.current?.stop(time);
+      }, durationRef.current);
+
     } else { // assume scatterplot
       const fractionGroups: Record<number, number[]> = {};
 
