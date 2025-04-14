@@ -142,25 +142,16 @@ export const GraphSonification = ({availableGraphs, selectedGraph, onSelectGraph
       const bins = binUsingCodapEdges(timeValues, binParams);
       const binDuration = durationRef.current / bins.length;
 
-      const frequencyForCount = (count: number) => {
-        const maxCount = Math.max(...bins) || 1;
-        const frac = count / maxCount;
-        return 220 + frac * (880 - 220);
-      };
-
-      const now = Tone.now();
-      monoSynthRef.current?.triggerAttack(frequencyForCount(bins[0]), now);
-
-      bins.forEach((count, i) => {
-        if (i === 0) return;
-        const freq = frequencyForCount(count);
-        const rampStart = now + binDuration * i;
-        monoSynthRef.current?.setNote(freq, rampStart);
+      bins.forEach((count: number, i: number) => {
+        const offset = i * binDuration;
+        Tone.getTransport().scheduleOnce((time) => {
+          const countFraction = count / (Math.max(...bins) || 1);
+          const freq = mapPitchFractionToFrequency(countFraction);
+          const panValue = mapValueToStereoPan(timeValues[i], xLowerBound, xUpperBound);
+          pannerRef.current?.pan.setValueAtTime(panValue, time);
+          monoSynthRef.current?.triggerAttackRelease(freq, binDuration, time);
+        }, offset);
       });
-
-      const endTime = now + durationRef.current;
-      monoSynthRef.current?.triggerRelease(endTime);
-
     } else { // assume scatterplot
       const fractionGroups: Record<number, number[]> = {};
 

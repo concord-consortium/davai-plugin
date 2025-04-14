@@ -385,7 +385,7 @@ export const AssistantModel = types
                   root.sonificationStore.setSelectedGraph(graph);
                   outputMsg = `The graph "${graphName}" is ready to be sonified. Tell the user they can use the sonification controls to hear it.`;
                 } else {
-                  outputMsg = `The graph "${graphName}" is not a numeric scatter plot. Tell the user they must select a numeric scatter plot or a univariate dot plot.`;
+                  outputMsg = `The graph "${graphName}" is not able to be sonified. Tell the user they must select a numeric scatter plot or a univariate dot plot.`;
                 }
 
                 return { tool_call_id: toolCall.id, output: outputMsg };
