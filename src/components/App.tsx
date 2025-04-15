@@ -45,6 +45,10 @@ export const App = observer(() => {
     const updatedCtxInfo = await getDataContext(dataCtxName);
     const msg = `Data context ${dataCtxName} has been updated: ${JSON.stringify(updatedCtxInfo.values)}`;
     assistantStoreRef.current.sendDataCtxChangeInfo(msg);
+    if (dataCtxName === sonificationStore.selectedGraph?.dataContext) {
+      // update the graph items
+      sonificationStore.setGraphItems(dataCtxName);
+    }
   }, []);
 
   // documentation of the documentChangeNotice object here:
@@ -170,12 +174,6 @@ export const App = observer(() => {
     assistantStore.handleCancel();
   };
 
-  const handleSelectGraph = async (graph: Record<string, any>) => {
-    sonificationStore.setSelectedGraph(graph);
-    // TODO: Send a select request to CODAP to bring the selected graph tile to front.
-    // CODAP v3 does not yet support this.
-  };
-
   return (
     <div className="App">
       <header>
@@ -197,8 +195,7 @@ export const App = observer(() => {
       />
       <GraphSonification
         availableGraphs={availableGraphs}
-        selectedGraph={sonificationStore?.selectedGraph}
-        onSelectGraph={handleSelectGraph}
+        sonificationStore={sonificationStore}
       />
       <UserOptions assistantStore={assistantStore} />
       {/*

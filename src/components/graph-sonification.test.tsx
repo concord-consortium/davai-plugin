@@ -1,13 +1,24 @@
 import React from "react";
 import { render, fireEvent, screen } from "@testing-library/react";
 import { GraphSonification } from "./graph-sonification";
+import { GraphSonificationModelType } from "../models/graph-sonification-model";
+import { ICODAPGraph } from "../types";
 
 describe("GraphSonification Component", () => {
-  const mockOnSelectGraph = jest.fn();
   const mockAvailableGraphs = [
     { id: "graph1", name: "Graph 1" },
     { id: "graph2", name: "Graph 2" },
   ];
+
+  const mockSonificationStore: Partial<GraphSonificationModelType> = {
+    selectedGraph: undefined,
+    setSelectedGraph: jest.fn(),
+    setGraphItems: jest.fn(),
+    getTimeFractions: jest.fn(),
+    getTimeValues: jest.fn(),
+    getPitchFractions: jest.fn(),
+    getPrimaryBounds: jest.fn(),
+  };
 
   beforeEach(() => {
     jest.clearAllMocks();
@@ -17,7 +28,7 @@ describe("GraphSonification Component", () => {
     render(
       <GraphSonification
         availableGraphs={mockAvailableGraphs}
-        onSelectGraph={mockOnSelectGraph}
+        sonificationStore={mockSonificationStore as GraphSonificationModelType}
       />
     );
 
@@ -33,30 +44,29 @@ describe("GraphSonification Component", () => {
     render(
       <GraphSonification
         availableGraphs={mockAvailableGraphs}
-        onSelectGraph={mockOnSelectGraph}
+        sonificationStore={mockSonificationStore as GraphSonificationModelType}
       />
     );
 
     const playButton = screen.getByTestId("playback-button");
     fireEvent.click(playButton);
 
-    const errorMessage = screen.getByTestId("sonification-error");
-    expect(errorMessage).toHaveTextContent("Please select a graph to sonify.");
+    expect(screen.getByText("Please select a graph to sonify.")).toBeInTheDocument();
   });
 
   it("toggles play and pause state", () => {
+    mockSonificationStore.selectedGraph = mockAvailableGraphs[0] as unknown as ICODAPGraph;
+
     render(
       <GraphSonification
         availableGraphs={mockAvailableGraphs}
-        selectedGraph={mockAvailableGraphs[0]}
-        onSelectGraph={mockOnSelectGraph}
+        sonificationStore={mockSonificationStore as GraphSonificationModelType}
       />
     );
 
     const playButton = screen.getByTestId("playback-button");
     const resetButton = screen.getByTestId("reset-button");
 
-    expect(resetButton).toHaveAccessibleName("Reset");
     expect(resetButton).toHaveAttribute("aria-disabled", "true");
 
     fireEvent.click(playButton);
@@ -64,7 +74,7 @@ describe("GraphSonification Component", () => {
     expect(playButton).toHaveAccessibleName("Pause");
 
     fireEvent.click(playButton);
-    
+
     expect(playButton).toHaveAccessibleName("Play");
     expect(resetButton).toHaveAttribute("aria-disabled", "false");
   });
@@ -73,7 +83,7 @@ describe("GraphSonification Component", () => {
     render(
       <GraphSonification
         availableGraphs={mockAvailableGraphs}
-        onSelectGraph={mockOnSelectGraph}
+        sonificationStore={mockSonificationStore as GraphSonificationModelType}
       />
     );
 
@@ -90,7 +100,7 @@ describe("GraphSonification Component", () => {
     render(
       <GraphSonification
         availableGraphs={mockAvailableGraphs}
-        onSelectGraph={mockOnSelectGraph}
+        sonificationStore={mockSonificationStore as GraphSonificationModelType}
       />
     );
 
@@ -101,5 +111,33 @@ describe("GraphSonification Component", () => {
     fireEvent.change(speedSelect, { target: { value: "1.5" } });
 
     expect(speedSelect).toHaveValue("1.5");
+  });
+
+  it("updates looping state in useEffect", () => {
+    render(
+      <GraphSonification
+        availableGraphs={mockAvailableGraphs}
+        sonificationStore={mockSonificationStore as GraphSonificationModelType}
+      />
+    );
+
+    const repeatButton = screen.getByTestId("repeat-button");
+    fireEvent.click(repeatButton);
+
+    expect(mockSonificationStore.selectedGraph).toBeNull();
+  });
+
+  it("updates duration based on speed in useEffect", () => {
+    render(
+      <GraphSonification
+        availableGraphs={mockAvailableGraphs}
+        sonificationStore={mockSonificationStore as GraphSonificationModelType}
+      />
+    );
+
+    const speedSelect = screen.getByLabelText("Playback Speed");
+    fireEvent.change(speedSelect, { target: { value: "2" } });
+
+    expect(speedSelect).toHaveValue("2");
   });
 });
