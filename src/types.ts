@@ -96,6 +96,7 @@ export interface ICODAPGraph {
     left: number;
     top: number;
   };
+  primaryAxis?: string;
   rightSplitAttributeID?: string;
   rightSplitAttributeName?: string;
   showMeasuresForSelection?: boolean;

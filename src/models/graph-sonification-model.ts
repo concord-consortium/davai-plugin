@@ -8,26 +8,17 @@ export const GraphSonificationModel = types
     graphItems: types.maybe(types.array(types.frozen())),
   })
   .views((self) => ({
-    isYPrimary() {
-      if (!self.selectedGraph) return false;
-      const { topSplitAttributeID, rightSplitAttributeID, y2AttributeID, xAttributeID } = self.selectedGraph;
-      return !topSplitAttributeID && !rightSplitAttributeID && !y2AttributeID && !xAttributeID;
-    }
-  }))
-  .views((self) => ({
     getPrimaryBounds() {
       if (!self.selectedGraph) return undefined;
-      const isYPrimary = self.isYPrimary();
-      return isYPrimary
+      return self.selectedGraph.primaryAxis === "y"
         ? { upperBound: self.selectedGraph.yUpperBound, lowerBound: self.selectedGraph.yLowerBound }
         : { upperBound: self.selectedGraph.xUpperBound, lowerBound: self.selectedGraph.xLowerBound };
     },
     getSecondaryBounds() {
       if (!self.selectedGraph) return;
-      const isYPrimary = self.isYPrimary();
       const { selectedGraph } = self;
       const { xUpperBound, xLowerBound, yUpperBound, yLowerBound } = selectedGraph;
-      return isYPrimary
+      return self.selectedGraph.primaryAxis === "y"
         ? { upperBound: xUpperBound, lowerBound: xLowerBound }
         : { upperBound: yUpperBound, lowerBound: yLowerBound };
     }
@@ -36,13 +27,11 @@ export const GraphSonificationModel = types
   .views((self) => ({
     timeAttr() {
       if (!self.selectedGraph) return undefined;
-      const isYPrimary = self.isYPrimary();
-      return isYPrimary ? self.selectedGraph.yAttributeName : self.selectedGraph.xAttributeName;
+      return self.selectedGraph.primaryAxis === "y" ? self.selectedGraph.yAttributeName : self.selectedGraph.xAttributeName;
     },
     pitchAttr() {
       if (!self.selectedGraph) return undefined;
-      const isYPrimary = self.isYPrimary();
-      return isYPrimary ? self.selectedGraph.xAttributeName : self.selectedGraph.yAttributeName;
+      return self.selectedGraph.primaryAxis === "y" ? self.selectedGraph.xAttributeName : self.selectedGraph.yAttributeName;
     }
   }))
   .views((self => ({
