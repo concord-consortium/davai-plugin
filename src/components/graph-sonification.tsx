@@ -214,6 +214,7 @@ export const GraphSonification = observer(({availableGraphs, sonificationStore}:
       });
 
       restartTransport();
+      scheduleTones();
       animateSonification();
   };
 

@@ -18,6 +18,7 @@ import "./App.scss";
 
 const kPluginName = "DAVAI";
 const kVersion = "0.0.1";
+const kPollGraphUpdatesInterval = 5000;
 
 export const App = observer(() => {
   const appConfig = useAppConfigContext();
@@ -27,6 +28,7 @@ export const App = observer(() => {
   const [availableGraphs, setAvailableGraphs] = useState<Record<string, any>[]>([]);
 
   const assistantStoreRef = useRef(assistantStore);
+  const sonificationStoreRef = useRef(sonificationStore);
   const dimensions = { width: appConfig.dimensions.width, height: appConfig.dimensions.height };
   const subscribedDataCtxsRef = useRef<string[]>([]);
   const transcriptStore = assistantStore.transcriptStore;
@@ -45,9 +47,9 @@ export const App = observer(() => {
     const updatedCtxInfo = await getDataContext(dataCtxName);
     const msg = `Data context ${dataCtxName} has been updated: ${JSON.stringify(updatedCtxInfo.values)}`;
     assistantStoreRef.current.sendDataCtxChangeInfo(msg);
-    if (dataCtxName === sonificationStore.selectedGraph?.dataContext) {
+    if (dataCtxName === sonificationStoreRef.current.selectedGraph?.dataContext) {
       // update the graph items
-      sonificationStore.setGraphItems(dataCtxName);
+      sonificationStoreRef.current.setGraphItems(dataCtxName);
     }
   }, []);
 
@@ -106,13 +108,27 @@ export const App = observer(() => {
       });
 
       setAvailableGraphs(validGraphs);
+
+      const isSelectedGraphValid = sonificationStore.selectedGraph && validGraphs.some((graph: Record<string, any>) => graph.id === sonificationStore.selectedGraph?.id);
+      if (sonificationStore.selectedGraph && isSelectedGraphValid) {
+        // update the sonification store in case the graph's information has changed
+        const matchingGraph = validGraphs.find((graph: Record<string, any>) => graph.id === sonificationStore.selectedGraph?.id);
+        sonificationStore.setSelectedGraph(matchingGraph);
+        sonificationStore.setGraphItems(matchingGraph.dataContext);
+      } else if (sonificationStore.selectedGraph) {
+        // if the graph is no longer valid, remove its information from the store
+        sonificationStore.removeSelectedGraph();
+        sonificationStore.removeGraphItems();
+      }
     };
 
     init();
     fetchGraphs();
     selectSelf();
 
-    const interval = setInterval(fetchGraphs, 5000);
+    // since updates to graph components do not generate CODAP notifications, we need to poll to keep the list of graphs up to date
+    // and to update the sonification store with valid graph items
+    const interval = setInterval(fetchGraphs, kPollGraphUpdatesInterval);
 
     return () => {
       clearInterval(interval);

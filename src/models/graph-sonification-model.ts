@@ -5,7 +5,7 @@ import { getAllItems } from "@concord-consortium/codap-plugin-api";
 export const GraphSonificationModel = types
   .model("GraphSonificationModel", {
     selectedGraph: types.maybe(types.frozen<ICODAPGraph>()),
-    graphItems: types.optional(types.array(types.frozen()), []),
+    graphItems: types.maybe(types.array(types.frozen())),
   })
   .views((self) => ({
     isYPrimary() {
@@ -86,7 +86,7 @@ export const GraphSonificationModel = types
       const pitchRange = upperBound - lowerBound || 1;
 
       const pitchValues = validItems.map((item: CodapItem) => item.values[pitchAttr]);
-      return pitchValues.map((value: number) => (value - lowerBound) / pitchRange)
+      return pitchValues.map((value: number) => (value - lowerBound) / pitchRange);
     }
   })))
   .views((self) => ({
@@ -112,6 +112,9 @@ export const GraphSonificationModel = types
     removeSelectedGraph() {
       self.selectedGraph = undefined;
     },
+    removeGraphItems() {
+      self.graphItems = undefined;
+    }
   }))
   .actions((self) => {
     // we want to do this whenever the selected graph changes, or when we receive a data context change notification
