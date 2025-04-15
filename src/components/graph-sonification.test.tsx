@@ -124,7 +124,7 @@ describe("GraphSonification Component", () => {
     const repeatButton = screen.getByTestId("repeat-button");
     fireEvent.click(repeatButton);
 
-    expect(mockSonificationStore.selectedGraph).toBeNull();
+    expect(repeatButton).toHaveAttribute("aria-checked", "true");
   });
 
   it("updates duration based on speed in useEffect", () => {
