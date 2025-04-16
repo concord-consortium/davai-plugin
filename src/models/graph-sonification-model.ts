@@ -11,53 +11,50 @@ export const GraphSonificationModel = types
     graphItems: types.maybe(types.array(types.frozen())),
   })
   .views((self) => ({
-    validGraphs() {
+    get validGraphs() {
       return self.allGraphs?.filter((graph: ICODAPGraph) => graph.plotType === "scatterPlot") || [];
     }
   }))
   .views((self) => ({
-    getSelectedGraph() {
-      return self.allGraphs.find((graph: ICODAPGraph) => graph.id === self.selectedGraphID);
+    get selectedGraph() {
+      return self.validGraphs.find((graph: ICODAPGraph) => graph.id === self.selectedGraphID);
     }
   }))
   .views((self) => ({
-    getPrimaryBounds() {
-      const selectedGraph = self.getSelectedGraph();
+    get primaryBounds() {
+      const selectedGraph = self.selectedGraph;
       if (!selectedGraph) return undefined;
       return selectedGraph.primaryAxis === "y"
         ? { upperBound: selectedGraph.yUpperBound, lowerBound: selectedGraph.yLowerBound }
         : { upperBound: selectedGraph.xUpperBound, lowerBound: selectedGraph.xLowerBound };
     },
-    getSecondaryBounds() {
-      const selectedGraph = self.getSelectedGraph();
+    get secondaryBounds() {
+      const selectedGraph = self.selectedGraph;
       if (!selectedGraph) return undefined;
       const { xUpperBound, xLowerBound, yUpperBound, yLowerBound } = selectedGraph;
       return selectedGraph.primaryAxis === "y"
         ? { upperBound: xUpperBound, lowerBound: xLowerBound }
         : { upperBound: yUpperBound, lowerBound: yLowerBound };
-    }
-  })
-  )
-  .views((self) => ({
-    timeAttr() {
-      const selectedGraph = self.getSelectedGraph();
-      if (!selectedGraph) return undefined;
-      return selectedGraph.primaryAxis === "y" ? selectedGraph.yAttributeName : selectedGraph.xAttributeName;
     },
-    pitchAttr() {
-      const selectedGraph = self.getSelectedGraph();
-      if (!selectedGraph) return undefined;
-      return selectedGraph.primaryAxis === "y" ? selectedGraph.xAttributeName : selectedGraph.yAttributeName;
+    get timeAttr() {
+      if (!self.selectedGraph) return undefined;
+      return self.selectedGraph.primaryAxis === "y"
+        ? self.selectedGraph.yAttributeName
+        : self.selectedGraph.xAttributeName;
+    },
+    get pitchAttr() {
+      if (!self.selectedGraph) return undefined;
+      return self.selectedGraph.primaryAxis === "y"
+        ? self.selectedGraph.xAttributeName
+        : self.selectedGraph.yAttributeName;
     }
   }))
   .views((self => ({
-    getValidItems() {
-      const selectedGraph = self.getSelectedGraph();
-      if (!selectedGraph || !self.graphItems) return [];
-      const timeAttr = self.timeAttr();
-      const pitchAttr = self.pitchAttr();
+    get validItems() {
+      if (!self.selectedGraph || !self.graphItems || !self.timeAttr) return [];
+      const timeAttr = self.timeAttr;
+      const pitchAttr = self.pitchAttr;
 
-      if (!timeAttr) return [];
 
       const validItems = pitchAttr && timeAttr
         ? self.graphItems.filter((item: CodapItem) => item.values[pitchAttr] !== "" && item.values[timeAttr] !== "")
@@ -68,50 +65,36 @@ export const GraphSonificationModel = types
     })
   ))
   .views((self => ({
-    getTimeValues() {
-      const selectedGraph = self.getSelectedGraph();
-      if (!selectedGraph || !self.graphItems) return [];
+    get timeValues() {
+      if (!self.timeAttr) return [];
 
-      const validItems = self.getValidItems();
-      const timeAttr = self.timeAttr();
-      if (!timeAttr) return [];
-
-      return validItems.map((item: CodapItem) => item.values[timeAttr]);
+      const timeAttr = self.timeAttr;
+      return self.validItems.map((item: CodapItem) => item.values[timeAttr]);
     },
-    getPitchFractions() {
-      const selectedGraph = self.getSelectedGraph();
-      if (!selectedGraph || !self.graphItems) return [];
+    get pitchFractions() {
+      if (!self.pitchAttr || !self.secondaryBounds) return [];
 
-      const validItems = self.getValidItems();
-      const pitchAttr = self.pitchAttr();
-      if (!pitchAttr) return [];
-
-      const bounds = self.getSecondaryBounds();
-      if (!bounds) return [];
+      const pitchAttr = self.pitchAttr;
+      const bounds = self.secondaryBounds;
       const { upperBound, lowerBound } = bounds;
       if (!upperBound || !lowerBound) return [];
 
       const pitchRange = upperBound - lowerBound || 1;
 
-      const pitchValues = validItems.map((item: CodapItem) => item.values[pitchAttr]);
+      const pitchValues = self.validItems.map((item: CodapItem) => item.values[pitchAttr]);
       return pitchValues.map((value: number) => (value - lowerBound) / pitchRange);
     }
   })))
   .views((self) => ({
-    getTimeFractions() {
-      const selectedGraph = self.getSelectedGraph();
-      if (!selectedGraph || !self.graphItems) return [];
-      const timeAttr = self.timeAttr();
-      if (!timeAttr) return [];
+    get timeFractions() {
+      if (!self.primaryBounds) return [];
 
-      const bounds = self.getPrimaryBounds();
-      if (!bounds) return [];
+      const bounds = self.primaryBounds;
       const { upperBound, lowerBound } = bounds;
       if (!upperBound || !lowerBound) return [];
 
       const timeRange = upperBound - lowerBound || 1;
-      const timeValues = self.getTimeValues() || [];
-      return timeValues.map((value: number) => (value - lowerBound) / timeRange);
+      return self.timeValues.map((value: number) => (value - lowerBound) / timeRange);
     }
   }))
   .actions((self) => ({
@@ -137,7 +120,7 @@ export const GraphSonificationModel = types
     // 1. a new graph is selected for sonification
     // 2. we receive a data context change notification relevant to the selected graph
     const setGraphItems = flow(function* () {
-      const dataContext = self.getSelectedGraph()?.dataContext;
+      const dataContext = self.selectedGraph?.dataContext;
       if (!dataContext) return;
       const allItemsRes = yield getAllItems(dataContext);
       const allItems = allItemsRes.values;
@@ -151,7 +134,7 @@ export const GraphSonificationModel = types
       reaction(
         () => ({
           selectedGraphID: self.selectedGraphID,
-          validGraphIDs: self.validGraphs().map(g => g.id)
+          validGraphIDs: self.validGraphs.map(g => g.id)
         }),
         ({ selectedGraphID, validGraphIDs }) => {
           if (selectedGraphID != null && !validGraphIDs.includes(selectedGraphID)) {

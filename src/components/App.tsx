@@ -45,7 +45,7 @@ export const App = observer(() => {
     const updatedCtxInfo = await getDataContext(dataCtxName);
     const msg = `Data context ${dataCtxName} has been updated: ${JSON.stringify(updatedCtxInfo.values)}`;
     assistantStoreRef.current.sendDataCtxChangeInfo(msg);
-    const selectedGraph = sonificationStoreRef.current.getSelectedGraph();
+    const selectedGraph = sonificationStoreRef.current.selectedGraph;
     if (dataCtxName === selectedGraph?.dataContext) {
       // update the graph items
       sonificationStoreRef.current.setGraphItems();

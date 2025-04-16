@@ -21,8 +21,8 @@ interface IProps {
 const kDefaultDuration = 5;
 
 export const GraphSonification = observer(({sonificationStore}: IProps) => {
-  const { validGraphs, getSelectedGraph, setSelectedGraphID, setGraphItems, getTimeFractions, getTimeValues,
-    getPitchFractions, getPrimaryBounds } = sonificationStore;
+  const { validGraphs, selectedGraph, setSelectedGraphID, setGraphItems, timeFractions, timeValues,
+    pitchFractions, primaryBounds } = sonificationStore;
   const polySynthRef = useRef<Tone.PolySynth | null>(null);
   const pannerRef = useRef<Tone.Panner | null>(null);
   const frameIdRef = useRef<number | null>(null);
@@ -37,12 +37,8 @@ export const GraphSonification = observer(({sonificationStore}: IProps) => {
     ended: false
   });
 
-  const selectedGraphID = getSelectedGraph()?.id;
+  const selectedGraphID = selectedGraph?.id;
   const isAtBeginning = playState.position === 0;
-  const timeValues = getTimeValues();
-  const timeFractions = getTimeFractions();
-  const pitchFractions = getPitchFractions();
-  const primaryBounds = getPrimaryBounds();
 
   if (!pannerRef.current) {
     pannerRef.current = new Tone.Panner(0).toDestination();
@@ -271,7 +267,7 @@ export const GraphSonification = observer(({sonificationStore}: IProps) => {
   }, []);
 
   const renderGraphOptions = () => {
-    const graphOptions = validGraphs() || [];
+    const graphOptions = validGraphs || [];
 
     return graphOptions.map((graph, i) => {
       let displayName;
