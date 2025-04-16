@@ -70,6 +70,14 @@ export interface CodapItem {
 
 export type Action = "create" | "get" | "update" | "delete";
 
+export interface ICODAPComponentListItem {
+  hidden: boolean;
+  id: number;
+  name: string;
+  title: string;
+  type: "caseTable" | "graph" | "map" | "text" | "slider";
+}
+
 export interface ICODAPGraph {
   backgroundColor?: string;
   cannotClose?: boolean;

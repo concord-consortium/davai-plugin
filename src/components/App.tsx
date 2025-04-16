@@ -1,8 +1,8 @@
-import React, { useCallback, useEffect, useRef, useState } from "react";
+import React, { useCallback, useEffect, useRef } from "react";
 import * as Tone from "tone";
 import { observer } from "mobx-react-lite";
 import removeMarkdown from "remove-markdown";
-import { addDataContextChangeListener, addDataContextsListListener, ClientNotification, codapInterface, getDataContext, getListOfDataContexts, initializePlugin, IResult, selectSelf } from "@concord-consortium/codap-plugin-api";
+import { addDataContextChangeListener, addDataContextsListListener, ClientNotification, getDataContext, getListOfDataContexts, initializePlugin, selectSelf } from "@concord-consortium/codap-plugin-api";
 import { useAppConfigContext } from "../hooks/use-app-config-context";
 import { useRootStore } from "../hooks/use-root-store";
 import { useAriaLive } from "../contexts/aria-live-context";
@@ -11,7 +11,7 @@ import { ChatInputComponent } from "./chat-input";
 import { ChatTranscriptComponent } from "./chat-transcript";
 import { DAVAI_SPEAKER, DEBUG_SPEAKER, LOADING_NOTE, USER_SPEAKER, notificationsToIgnore } from "../constants";
 import { UserOptions } from "./user-options";
-import { formatJsonMessage, playSound } from "../utils/utils";
+import { formatJsonMessage, getGraphDetails, playSound } from "../utils/utils";
 import { GraphSonification } from "./graph-sonification";
 
 import "./App.scss";
@@ -25,8 +25,6 @@ export const App = observer(() => {
   const { ariaLiveText, setAriaLiveText } = useAriaLive();
   const { assistantStore, sonificationStore } = useRootStore();
   const { playProcessingTone } = useOptions();
-  const [availableGraphs, setAvailableGraphs] = useState<Record<string, any>[]>([]);
-
   const assistantStoreRef = useRef(assistantStore);
   const sonificationStoreRef = useRef(sonificationStore);
   const dimensions = { width: appConfig.dimensions.width, height: appConfig.dimensions.height };
@@ -47,9 +45,10 @@ export const App = observer(() => {
     const updatedCtxInfo = await getDataContext(dataCtxName);
     const msg = `Data context ${dataCtxName} has been updated: ${JSON.stringify(updatedCtxInfo.values)}`;
     assistantStoreRef.current.sendDataCtxChangeInfo(msg);
-    if (dataCtxName === sonificationStoreRef.current.selectedGraph?.dataContext) {
+    const selectedGraph = sonificationStoreRef.current.getSelectedGraph();
+    if (dataCtxName === selectedGraph?.dataContext) {
       // update the graph items
-      sonificationStoreRef.current.setGraphItems(dataCtxName);
+      sonificationStoreRef.current.setGraphItems();
     }
   }, []);
 
@@ -90,36 +89,8 @@ export const App = observer(() => {
     };
 
     const fetchGraphs = async () => {
-      const codapComponents = await codapInterface.sendRequest({
-        action: "get",
-        resource: "componentList"
-      }) as ClientNotification;
-      const graphs = codapComponents.values.filter((component: Record<string, any>) => {
-        return component.type === "graph";
-      });
-
-      const promises = graphs.map(async (graph: Record<string, any>) => {
-        const graphRes = await codapInterface.sendRequest({ action: "get", resource: `component[${graph.id}]` }) as IResult;
-        return graphRes.values;
-      });
-      const allGraphDetails = await Promise.all(promises);
-      const validGraphs = allGraphDetails.filter((graph: Record<string, any>) => {
-        return graph.plotType === "scatterPlot";
-      });
-
-      setAvailableGraphs(validGraphs);
-
-      const isSelectedGraphValid = sonificationStore.selectedGraph && validGraphs.some((graph: Record<string, any>) => graph.id === sonificationStore.selectedGraph?.id);
-      if (sonificationStore.selectedGraph && isSelectedGraphValid) {
-        // update the sonification store in case the graph's information has changed
-        const matchingGraph = validGraphs.find((graph: Record<string, any>) => graph.id === sonificationStore.selectedGraph?.id);
-        sonificationStore.setSelectedGraph(matchingGraph);
-        sonificationStore.setGraphItems(matchingGraph.dataContext);
-      } else if (sonificationStore.selectedGraph) {
-        // if the graph is no longer valid, remove its information from the store
-        sonificationStore.removeSelectedGraph();
-        sonificationStore.removeGraphItems();
-      }
+      const graphDetails = await getGraphDetails();
+      sonificationStore.setGraphs(graphDetails);
     };
 
     init();
@@ -210,7 +181,6 @@ export const App = observer(() => {
         onKeyboardShortcut={handleFocusShortcut}
       />
       <GraphSonification
-        availableGraphs={availableGraphs}
         sonificationStore={sonificationStore}
       />
       <UserOptions assistantStore={assistantStore} />

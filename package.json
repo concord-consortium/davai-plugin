@@ -106,6 +106,7 @@
   "dependencies": {
     "@types/dom-speech-recognition": "^0.0.4",
     "dotenv": "^16.4.5",
+    "mobx": "^6.13.7",
     "mobx-react-lite": "^4.0.7",
     "mobx-state-tree": "^7.0.0",
     "nanoid": "^5.0.9",

@@ -1,24 +1,38 @@
 import { flow, types } from "mobx-state-tree";
+import { reaction } from "mobx";
 import { CodapItem, ICODAPGraph } from "../types";
 import { getAllItems } from "@concord-consortium/codap-plugin-api";
+import { removeRoiAdornment } from "../components/graph-sonification-utils";
 
 export const GraphSonificationModel = types
   .model("GraphSonificationModel", {
-    selectedGraph: types.maybe(types.frozen<ICODAPGraph>()),
+    allGraphs: types.optional(types.array(types.frozen<ICODAPGraph>()), []),
+    selectedGraphID: types.maybe(types.number),
     graphItems: types.maybe(types.array(types.frozen())),
   })
   .views((self) => ({
+    validGraphs() {
+      return self.allGraphs?.filter((graph: ICODAPGraph) => graph.plotType === "scatterPlot") || [];
+    }
+  }))
+  .views((self) => ({
+    getSelectedGraph() {
+      return self.allGraphs.find((graph: ICODAPGraph) => graph.id === self.selectedGraphID);
+    }
+  }))
+  .views((self) => ({
     getPrimaryBounds() {
-      if (!self.selectedGraph) return undefined;
-      return self.selectedGraph.primaryAxis === "y"
-        ? { upperBound: self.selectedGraph.yUpperBound, lowerBound: self.selectedGraph.yLowerBound }
-        : { upperBound: self.selectedGraph.xUpperBound, lowerBound: self.selectedGraph.xLowerBound };
+      const selectedGraph = self.getSelectedGraph();
+      if (!selectedGraph) return undefined;
+      return selectedGraph.primaryAxis === "y"
+        ? { upperBound: selectedGraph.yUpperBound, lowerBound: selectedGraph.yLowerBound }
+        : { upperBound: selectedGraph.xUpperBound, lowerBound: selectedGraph.xLowerBound };
     },
     getSecondaryBounds() {
-      if (!self.selectedGraph) return;
-      const { selectedGraph } = self;
+      const selectedGraph = self.getSelectedGraph();
+      if (!selectedGraph) return undefined;
       const { xUpperBound, xLowerBound, yUpperBound, yLowerBound } = selectedGraph;
-      return self.selectedGraph.primaryAxis === "y"
+      return selectedGraph.primaryAxis === "y"
         ? { upperBound: xUpperBound, lowerBound: xLowerBound }
         : { upperBound: yUpperBound, lowerBound: yLowerBound };
     }
@@ -26,17 +40,20 @@ export const GraphSonificationModel = types
   )
   .views((self) => ({
     timeAttr() {
-      if (!self.selectedGraph) return undefined;
-      return self.selectedGraph.primaryAxis === "y" ? self.selectedGraph.yAttributeName : self.selectedGraph.xAttributeName;
+      const selectedGraph = self.getSelectedGraph();
+      if (!selectedGraph) return undefined;
+      return selectedGraph.primaryAxis === "y" ? selectedGraph.yAttributeName : selectedGraph.xAttributeName;
     },
     pitchAttr() {
-      if (!self.selectedGraph) return undefined;
-      return self.selectedGraph.primaryAxis === "y" ? self.selectedGraph.xAttributeName : self.selectedGraph.yAttributeName;
+      const selectedGraph = self.getSelectedGraph();
+      if (!selectedGraph) return undefined;
+      return selectedGraph.primaryAxis === "y" ? selectedGraph.xAttributeName : selectedGraph.yAttributeName;
     }
   }))
   .views((self => ({
     getValidItems() {
-      if (!self.selectedGraph || !self.graphItems) return [];
+      const selectedGraph = self.getSelectedGraph();
+      if (!selectedGraph || !self.graphItems) return [];
       const timeAttr = self.timeAttr();
       const pitchAttr = self.pitchAttr();
 
@@ -52,25 +69,27 @@ export const GraphSonificationModel = types
   ))
   .views((self => ({
     getTimeValues() {
-      if (!self.selectedGraph || !self.graphItems) return;
+      const selectedGraph = self.getSelectedGraph();
+      if (!selectedGraph || !self.graphItems) return [];
 
       const validItems = self.getValidItems();
       const timeAttr = self.timeAttr();
-      if (!timeAttr) return;
+      if (!timeAttr) return [];
 
       return validItems.map((item: CodapItem) => item.values[timeAttr]);
     },
     getPitchFractions() {
-      if (!self.selectedGraph || !self.graphItems) return;
+      const selectedGraph = self.getSelectedGraph();
+      if (!selectedGraph || !self.graphItems) return [];
 
       const validItems = self.getValidItems();
       const pitchAttr = self.pitchAttr();
-      if (!pitchAttr) return;
+      if (!pitchAttr) return [];
 
       const bounds = self.getSecondaryBounds();
-      if (!bounds) return;
+      if (!bounds) return [];
       const { upperBound, lowerBound } = bounds;
-      if (!upperBound || !lowerBound) return;
+      if (!upperBound || !lowerBound) return [];
 
       const pitchRange = upperBound - lowerBound || 1;
 
@@ -80,14 +99,15 @@ export const GraphSonificationModel = types
   })))
   .views((self) => ({
     getTimeFractions() {
-      if (!self.selectedGraph || !self.graphItems) return;
+      const selectedGraph = self.getSelectedGraph();
+      if (!selectedGraph || !self.graphItems) return [];
       const timeAttr = self.timeAttr();
-      if (!timeAttr) return;
+      if (!timeAttr) return [];
 
       const bounds = self.getPrimaryBounds();
-      if (!bounds) return;
+      if (!bounds) return [];
       const { upperBound, lowerBound } = bounds;
-      if (!upperBound || !lowerBound) return;
+      if (!upperBound || !lowerBound) return [];
 
       const timeRange = upperBound - lowerBound || 1;
       const timeValues = self.getTimeValues() || [];
@@ -95,24 +115,53 @@ export const GraphSonificationModel = types
     }
   }))
   .actions((self) => ({
-    setSelectedGraph(graph: ICODAPGraph) {
-      self.selectedGraph = graph;
+    setGraphs(graphs: ICODAPGraph[]) {
+      self.allGraphs.replace(graphs);
+    },
+    clearGraphs() {
+      self.allGraphs.replace([]);
+    },
+    setSelectedGraphID(graphID: number) {
+      // then, set the new selected graph
+      self.selectedGraphID = graphID;
     },
     removeSelectedGraph() {
-      self.selectedGraph = undefined;
+      self.selectedGraphID = undefined;
     },
-    removeGraphItems() {
+    clearGraphItems() {
       self.graphItems = undefined;
     }
   }))
   .actions((self) => {
-    // we want to do this whenever the selected graph changes, or when we receive a data context change notification
-    const setGraphItems = flow(function* (dataContext: string) {
+    // we call this function when:
+    // 1. a new graph is selected for sonification
+    // 2. we receive a data context change notification relevant to the selected graph
+    const setGraphItems = flow(function* () {
+      const dataContext = self.getSelectedGraph()?.dataContext;
+      if (!dataContext) return;
       const allItemsRes = yield getAllItems(dataContext);
       const allItems = allItemsRes.values;
       self.graphItems = allItems;
     });
     return { setGraphItems };
-  });
+  })
+  .actions((self) => ({
+    afterCreate() {
+      // clear selectedGraphID if it no longer points to a valid graph
+      reaction(
+        () => ({
+          selectedGraphID: self.selectedGraphID,
+          validGraphIDs: self.validGraphs().map(g => g.id)
+        }),
+        ({ selectedGraphID, validGraphIDs }) => {
+          if (selectedGraphID != null && !validGraphIDs.includes(selectedGraphID)) {
+            removeRoiAdornment(`${selectedGraphID}`);
+            self.removeSelectedGraph();
+            self.clearGraphItems();
+          }
+        }
+      );
+    }
+  }));
 
 export type GraphSonificationModelType = typeof GraphSonificationModel.Type;
