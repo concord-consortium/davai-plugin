@@ -1,4 +1,6 @@
+import { codapInterface, IResult } from "@concord-consortium/codap-plugin-api";
 import * as Tone from "tone";
+import { ICODAPComponentListItem } from "../types";
 
 export const timeStamp = (): string => {
   const now = new Date();
@@ -132,4 +134,16 @@ export const convertBase64ToImage = async (base64Data: string, filename = "image
     console.error("Error converting base64 to image:", error);
     throw error;
   }
+};
+
+export const getGraphComponents = async () => {
+  const response = await codapInterface.sendRequest({ action: "get", resource: "componentList" }) as IResult;
+  return response.values.filter((c: any) => c.type === "graph");
+};
+
+export const getGraphDetails = async () => {
+  const graphs = await getGraphComponents();
+  return Promise.all(graphs.map((g: ICODAPComponentListItem) =>
+    codapInterface.sendRequest({ action: "get", resource: `component[${g.id}]` }) as Promise<IResult>
+  )).then(results => results.map(r => r.values));
 };

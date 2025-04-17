@@ -4,28 +4,29 @@ import { observer } from "mobx-react-lite";
 import removeMarkdown from "remove-markdown";
 import { addDataContextChangeListener, addDataContextsListListener, ClientNotification, getDataContext, getListOfDataContexts, initializePlugin, selectSelf } from "@concord-consortium/codap-plugin-api";
 import { useAppConfigContext } from "../hooks/use-app-config-context";
-import { useAssistantStore } from "../hooks/use-assistant-store";
+import { useRootStore } from "../hooks/use-root-store";
 import { useAriaLive } from "../contexts/aria-live-context";
 import { useOptions } from "../hooks/use-options";
 import { ChatInputComponent } from "./chat-input";
 import { ChatTranscriptComponent } from "./chat-transcript";
 import { DAVAI_SPEAKER, DEBUG_SPEAKER, LOADING_NOTE, USER_SPEAKER, notificationsToIgnore } from "../constants";
 import { UserOptions } from "./user-options";
-import { formatJsonMessage, playSound } from "../utils/utils";
+import { formatJsonMessage, getGraphDetails, playSound } from "../utils/utils";
 import { GraphSonification } from "./graph-sonification";
 
 import "./App.scss";
 
 const kPluginName = "DAVAI";
 const kVersion = "0.0.1";
+const kPollGraphUpdatesInterval = 5000;
 
 export const App = observer(() => {
   const appConfig = useAppConfigContext();
   const { ariaLiveText, setAriaLiveText } = useAriaLive();
-  const assistantStore = useAssistantStore();
+  const { assistantStore, sonificationStore } = useRootStore();
   const { playProcessingTone } = useOptions();
-
   const assistantStoreRef = useRef(assistantStore);
+  const sonificationStoreRef = useRef(sonificationStore);
   const dimensions = { width: appConfig.dimensions.width, height: appConfig.dimensions.height };
   const subscribedDataCtxsRef = useRef<string[]>([]);
   const transcriptStore = assistantStore.transcriptStore;
@@ -44,6 +45,11 @@ export const App = observer(() => {
     const updatedCtxInfo = await getDataContext(dataCtxName);
     const msg = `Data context ${dataCtxName} has been updated: ${JSON.stringify(updatedCtxInfo.values)}`;
     assistantStoreRef.current.sendDataCtxChangeInfo(msg);
+    const selectedGraph = sonificationStoreRef.current.selectedGraph;
+    if (dataCtxName === selectedGraph?.dataContext) {
+      // update the graph items
+      sonificationStoreRef.current.setGraphItems();
+    }
   }, []);
 
   // documentation of the documentChangeNotice object here:
@@ -81,8 +87,23 @@ export const App = observer(() => {
         addDataContextChangeListener(ctx.name, handleDataContextChangeNotice);
       });
     };
+
+    const fetchGraphs = async () => {
+      const graphDetails = await getGraphDetails();
+      sonificationStore.setGraphs(graphDetails);
+    };
+
     init();
+    fetchGraphs();
     selectSelf();
+
+    // since updates to graph components do not generate CODAP notifications, we need to poll to keep the list of graphs up to date
+    // and to update the sonification store with valid graph items
+    const interval = setInterval(fetchGraphs, kPollGraphUpdatesInterval);
+
+    return () => {
+      clearInterval(interval);
+    };
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
@@ -140,11 +161,6 @@ export const App = observer(() => {
     assistantStore.handleCancel();
   };
 
-  const handleResetGraphToSonify = () => {
-    assistantStore.setIsSonificationPlaying(false);
-    assistantStore.setGraphToSonify("");
-  };
-
   return (
     <div className="App">
       <header>
@@ -164,12 +180,9 @@ export const App = observer(() => {
         onSubmit={handleChatInputSubmit}
         onKeyboardShortcut={handleFocusShortcut}
       />
-      { !assistantStore.showLoadingIndicator && assistantStore.graphToSonify &&
-        <GraphSonification
-          graphToSonify={assistantStore.graphToSonify}
-          onResetGraphToSonify={handleResetGraphToSonify}
-        />
-      }
+      <GraphSonification
+        sonificationStore={sonificationStore}
+      />
       <UserOptions assistantStore={assistantStore} />
       {/*
         The aria-live region is used to announce the last message from DAVAI.
