@@ -380,11 +380,11 @@ export const AssistantModel = types
                 const root = getRoot(self) as any;
                 const graphRes = yield codapInterface.sendRequest({ action: "get", resource: `component[${graphName}]` });
                 const graph = graphRes.values;
-                const isGraphNumericScatterPlot = graph.xLowerBound && graph.xUpperBound && graph.yLowerBound && graph.yUpperBound;
+                const isGraphScatterplot = graph.plotType === "scatterPlot";
                 let outputMsg = "";
 
-                if (isGraphNumericScatterPlot) {
-                  root.sonificationStore.setSelectedGraph(graph);
+                if (isGraphScatterplot) {
+                  root.sonificationStore.setSelectedGraphID(graph);
                   outputMsg = `The graph "${graphName}" is ready to be sonified. Tell the user they can use the sonification controls to hear it.`;
                 } else {
                   outputMsg = `The graph "${graphName}" is not a numeric scatter plot. Tell the user they must select a numeric scatter plot.`;

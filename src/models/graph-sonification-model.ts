@@ -21,32 +21,30 @@ export const GraphSonificationModel = types
     }
   }))
   .views((self) => ({
+    get isYPrimary() {
+      return self.selectedGraph?.primaryAxis === "y" && self.selectedGraph?.plotType !== "scatterPlot"; // for scatterplot graphs, x is always considered primary
+    }
+  }))
+  .views((self) => ({
     get primaryBounds() {
-      const selectedGraph = self.selectedGraph;
-      if (!selectedGraph) return undefined;
-      return selectedGraph.primaryAxis === "y"
-        ? { upperBound: selectedGraph.yUpperBound, lowerBound: selectedGraph.yLowerBound }
-        : { upperBound: selectedGraph.xUpperBound, lowerBound: selectedGraph.xLowerBound };
+      return self.isYPrimary
+        ? { upperBound: self.selectedGraph?.yUpperBound, lowerBound: self.selectedGraph?.yLowerBound }
+        : { upperBound: self.selectedGraph?.xUpperBound, lowerBound: self.selectedGraph?.xLowerBound };
     },
     get secondaryBounds() {
-      const selectedGraph = self.selectedGraph;
-      if (!selectedGraph) return undefined;
-      const { xUpperBound, xLowerBound, yUpperBound, yLowerBound } = selectedGraph;
-      return selectedGraph.primaryAxis === "y"
-        ? { upperBound: xUpperBound, lowerBound: xLowerBound }
-        : { upperBound: yUpperBound, lowerBound: yLowerBound };
+      return self.isYPrimary
+        ? { upperBound: self.selectedGraph?.xUpperBound, lowerBound: self.selectedGraph?.xLowerBound }
+        : { upperBound: self.selectedGraph?.yUpperBound, lowerBound: self.selectedGraph?.yLowerBound };
     },
     get timeAttr() {
-      if (!self.selectedGraph) return undefined;
-      return self.selectedGraph.primaryAxis === "y"
-        ? self.selectedGraph.yAttributeName
-        : self.selectedGraph.xAttributeName;
+      return self.isYPrimary
+        ? self.selectedGraph?.yAttributeName
+        : self.selectedGraph?.xAttributeName;
     },
     get pitchAttr() {
-      if (!self.selectedGraph) return undefined;
-      return self.selectedGraph.primaryAxis === "y"
-        ? self.selectedGraph.xAttributeName
-        : self.selectedGraph.yAttributeName;
+      return self.isYPrimary
+        ? self.selectedGraph?.xAttributeName
+        : self.selectedGraph?.yAttributeName;
     }
   }))
   .views((self => ({
@@ -72,23 +70,20 @@ export const GraphSonificationModel = types
       return self.validItems.map((item: CodapItem) => item.values[timeAttr]);
     },
     get pitchFractions() {
-      if (!self.pitchAttr || !self.secondaryBounds) return [];
+      if (!self.pitchAttr) return [];
 
-      const pitchAttr = self.pitchAttr;
       const bounds = self.secondaryBounds;
       const { upperBound, lowerBound } = bounds;
       if (!upperBound || !lowerBound) return [];
 
       const pitchRange = upperBound - lowerBound || 1;
-
+      const pitchAttr = self.pitchAttr;
       const pitchValues = self.validItems.map((item: CodapItem) => item.values[pitchAttr]);
       return pitchValues.map((value: number) => (value - lowerBound) / pitchRange);
     }
   })))
   .views((self) => ({
     get timeFractions() {
-      if (!self.primaryBounds) return [];
-
       const bounds = self.primaryBounds;
       const { upperBound, lowerBound } = bounds;
       if (!upperBound || !lowerBound) return [];
@@ -105,10 +100,9 @@ export const GraphSonificationModel = types
       self.allGraphs.replace([]);
     },
     setSelectedGraphID(graphID: number) {
-      // then, set the new selected graph
       self.selectedGraphID = graphID;
     },
-    removeSelectedGraph() {
+    removeSelectedGraphID() {
       self.selectedGraphID = undefined;
     },
     clearGraphItems() {
@@ -137,9 +131,9 @@ export const GraphSonificationModel = types
           validGraphIDs: self.validGraphs.map(g => g.id)
         }),
         ({ selectedGraphID, validGraphIDs }) => {
-          if (selectedGraphID != null && !validGraphIDs.includes(selectedGraphID)) {
+          if (selectedGraphID !== undefined && !validGraphIDs.includes(selectedGraphID)) {
             removeRoiAdornment(`${selectedGraphID}`);
-            self.removeSelectedGraph();
+            self.removeSelectedGraphID();
             self.clearGraphItems();
           }
         }
