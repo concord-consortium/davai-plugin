@@ -1,8 +1,8 @@
 import React from "react";
+import { types } from "mobx-state-tree";
 import { render, fireEvent, screen } from "@testing-library/react";
 import { GraphSonification } from "./graph-sonification";
 import { GraphSonificationModelType } from "../models/graph-sonification-model";
-import { types } from "mobx-state-tree";
 import { ICODAPGraph } from "../types";
 
 const mockSonificationModel = types
