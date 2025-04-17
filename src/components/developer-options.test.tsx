@@ -1,6 +1,6 @@
 import "openai/shims/node";
 import React from "react";
-import { fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { render, screen, waitFor } from "@testing-library/react";
 
 import { DeveloperOptionsComponent } from "./developer-options";
 import { AssistantModel } from "../models/assistant-model";

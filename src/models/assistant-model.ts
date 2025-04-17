@@ -1,4 +1,4 @@
-import { types, flow, Instance, onSnapshot } from "mobx-state-tree";
+import { types, flow, Instance, onSnapshot, getRoot } from "mobx-state-tree";
 import { OpenAI } from "openai";
 import { Message } from "openai/resources/beta/threads/messages";
 import { codapInterface, getDataContext, getListOfDataContexts } from "@concord-consortium/codap-plugin-api";
@@ -61,22 +61,12 @@ export const AssistantModel = types
     thread: types.maybe(types.frozen()),
     transcriptStore: ChatTranscriptModel,
     uploadFileAfterRun: false,
-    dataUri: "",
-    graphToSonify: types.optional(types.string, ""),
+    dataUri: ""
   })
-  .volatile((self) => ({
-    isSonificationPlaying: false
-  }))
   .actions((self) => ({
     resetAfterResponse() {
       self.isLoadingResponse = false;
       self.showLoadingIndicator = false;
-    },
-    setGraphToSonify(graphName: string) {
-      self.graphToSonify = graphName;
-    },
-    setIsSonificationPlaying(isPlaying: boolean) {
-      self.isSonificationPlaying = isPlaying;
     }
   }))
   .actions((self) => ({
@@ -385,17 +375,21 @@ export const AssistantModel = types
                   : res;
                 return { tool_call_id: toolCall.id, output: JSON.stringify(res) };
               } else if (toolCall.function.name === "sonify_graph") {
-                const { graphName } = JSON.parse(toolCall.function.arguments);
-                const graphRes = yield codapInterface.sendRequest({ action: "get", resource: `component[${graphName}]` });
+                const { graphID } = JSON.parse(toolCall.function.arguments);
+
+                const root = getRoot(self) as any;
+                const graphRes = yield codapInterface.sendRequest({ action: "get", resource: `component[${graphID}]` });
                 const graph = graphRes.values;
-                const isGraphNumericScatterPlot = graph.xLowerBound && graph.xUpperBound && graph.yLowerBound && graph.yUpperBound;
+                const isGraphScatterplot = graph.plotType === "scatterPlot";
                 let outputMsg = "";
-                if (isGraphNumericScatterPlot) {
-                  self.graphToSonify = graphName;
-                  outputMsg = `The graph "${graphName}" is ready to be sonified. It will play shortly.`;
+
+                if (isGraphScatterplot) {
+                  root.sonificationStore.setSelectedGraphID(graph.id);
+                  outputMsg = `The graph "${graph.name || graph.id}" is ready to be sonified. Tell the user they can use the sonification controls to hear it.`;
                 } else {
-                  outputMsg = `The graph "${graphName}" is not a numeric scatter plot. Tell the user they must select a numeric scatter plot.`;
+                  outputMsg = `The graph "${graph.name || graph.id}" is not a numeric scatter plot. Tell the user they must select a numeric scatter plot.`;
                 }
+
                 return { tool_call_id: toolCall.id, output: outputMsg };
               } else {
                 return { tool_call_id: toolCall.id, output: "Tool call not recognized." };
