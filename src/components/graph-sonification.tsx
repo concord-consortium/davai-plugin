@@ -228,9 +228,7 @@ export const GraphSonification = observer(({sonificationStore}: IProps) => {
   };
 
   const handleSelectGraph =  async (graphId: string) => {
-    handleReset();
     setSelectedGraphID(Number(graphId));
-    setGraphItems();
   };
 
   useEffect(() => {
@@ -241,20 +239,19 @@ export const GraphSonification = observer(({sonificationStore}: IProps) => {
     durationRef.current = kDefaultDuration / speed;
   }, [speed]);
 
-  useEffect(() => {
-    if (!selectedGraphID) {
-      // reset everything if no graph is selected
-      setPlayState({ playing: false, ended: false, position: 0 });
-      Tone.getTransport().stop();
-      Tone.getTransport().cancel();
-      Tone.getTransport().position = 0;
 
-      if (frameIdRef.current) {
-        cancelAnimationFrame(frameIdRef.current);
-        frameIdRef.current = null;
-      }
+  useEffect(() => {
+    // reset the sonification state when the selected graph changes
+    setPlayState({ playing: false, ended: false, position: 0 });
+    Tone.getTransport().stop();
+    Tone.getTransport().cancel();
+    Tone.getTransport().position = 0;
+
+    if (frameIdRef.current) {
+      cancelAnimationFrame(frameIdRef.current);
+      frameIdRef.current = null;
     }
-  }, [selectedGraphID]);
+  }, [selectedGraphID, setGraphItems]);
 
   useEffect(() => {
     return () => {

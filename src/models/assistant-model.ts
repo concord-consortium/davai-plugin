@@ -85,6 +85,11 @@ export const AssistantModel = types
       self.transcriptStore = transcriptStore;
     }
   }))
+  .actions((self) => ({
+    addMessageToCODAPNotificationQueue(msg: string) {
+      self.codapNotificationQueue.push(msg);
+    }
+  }))
   .actions((self) => {
     const initializeAssistant = flow(function* () {
       if (self.assistantId === "mock") return;
@@ -102,7 +107,6 @@ export const AssistantModel = types
           content: formatJsonMessage(self.thread)
         });
         fetchAndSendDataContexts();
-        fetchAndSendGraphs();
       } catch (err) {
         console.error("Failed to initialize assistant:", err);
         self.transcriptStore.addMessage(DEBUG_SPEAKER, {
@@ -142,23 +146,6 @@ export const AssistantModel = types
       }
     });
 
-    const fetchAndSendGraphs = flow(function* () {
-      try {
-        const components = yield codapInterface.sendRequest({action: "get", resource: "componentList"});
-        const onlyGraphs = components.values.filter((component: Record<string, any>) => component.type === "graph");
-        const componentsDetails = [];
-        for (const component of onlyGraphs) {
-          const { id } = component;
-          const details = yield codapInterface.sendRequest({action: "get", resource: `component[${id}]`});
-          componentsDetails.push(details.values);
-        }
-        self.transcriptStore.addMessage(DEBUG_SPEAKER, {description: "Graphs available for sonification", content: formatJsonMessage(componentsDetails)});
-        sendCODAPDocumentInfo(`The following graphs are available for sonification: ${JSON.stringify(componentsDetails)}`);
-      } catch (err) {
-        console.error("Failed to get graph information:", err);
-        self.transcriptStore.addMessage(DEBUG_SPEAKER, {description: "Failed to get graph information", content: formatJsonMessage(err)});
-      }
-    });
 
     const sendDataCtxChangeInfo = flow(function* (msg: string) {
       try {
@@ -536,11 +523,11 @@ export const AssistantModel = types
     afterCreate() {
       onSnapshot(self, async () => {
         const doneProcessing = !self.isLoadingResponse && !self.isCancelling && !self.isResetting;
-        if (doneProcessing && self.codapNotificationQueue.length > 0) {
+        if (self.thread?.id && doneProcessing && self.codapNotificationQueue.length > 0) {
           const allMsgs = self.codapNotificationQueue.join("\n");
           self.codapNotificationQueue.clear();
           await self.sendCODAPDocumentInfo(allMsgs);
-        } else if (doneProcessing && self.messageQueue.length > 0) {
+        } else if (self.thread?.id && doneProcessing && self.messageQueue.length > 0) {
           const allMsgs = self.messageQueue.join("\n");
           self.messageQueue.clear();
           await self.handleMessageSubmit(allMsgs);

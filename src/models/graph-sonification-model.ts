@@ -138,6 +138,17 @@ export const GraphSonificationModel = types
           }
         }
       );
+
+      reaction(
+        () => self.selectedGraphID,
+        (graphID) => {
+          if (graphID !== undefined) {
+            self.setGraphItems();
+          } else {
+            self.clearGraphItems();
+          }
+        }
+      );
     }
   }));
 
