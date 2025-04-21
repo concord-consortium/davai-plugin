@@ -198,8 +198,8 @@ export const GraphSonification = observer(({sonificationStore}: IProps) => {
       if (frameIdRef.current && !isLoopingRef.current) {
         cancelAnimationFrame(frameIdRef.current);
         frameIdRef.current = null;
-        Tone.getTransport().stop();
         handlePlayEnd();
+        Tone.getTransport().stop();
       } else {
         updateRoiAdornment(`${selectedGraphID}`, 0);
         scheduleTones();
