@@ -90,7 +90,6 @@ export const App = observer(() => {
 
     const fetchGraphs = async () => {
       const graphDetails = await getGraphDetails();
-      assistantStoreRef.current.addMessageToCODAPNotificationQueue(`Graphs in the CODAP document: ${JSON.stringify(graphDetails)}`);
       sonificationStore.setGraphs(graphDetails);
     };
 

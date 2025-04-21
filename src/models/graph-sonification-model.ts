@@ -1,23 +1,24 @@
-import { flow, types } from "mobx-state-tree";
+import { flow, getRoot, getSnapshot, SnapshotIn, types } from "mobx-state-tree";
 import { reaction } from "mobx";
-import { CodapItem, ICODAPGraph } from "../types";
+import { CodapItem } from "../types";
 import { getAllItems } from "@concord-consortium/codap-plugin-api";
 import { removeRoiAdornment } from "../components/graph-sonification-utils";
+import { CODAPGraphModel, ICODAPGraphModel } from "./codap-graph-model";
 
 export const GraphSonificationModel = types
   .model("GraphSonificationModel", {
-    allGraphs: types.optional(types.array(types.frozen<ICODAPGraph>()), []),
+    allGraphs: types.optional(types.array(CODAPGraphModel), []),
     selectedGraphID: types.maybe(types.number),
     graphItems: types.maybe(types.array(types.frozen())),
   })
   .views((self) => ({
     get validGraphs() {
-      return self.allGraphs?.filter((graph: ICODAPGraph) => graph.plotType === "scatterPlot") || [];
+      return self.allGraphs?.filter((graph: ICODAPGraphModel) => graph.plotType === "scatterPlot") || [];
     }
   }))
   .views((self) => ({
     get selectedGraph() {
-      return self.validGraphs.find((graph: ICODAPGraph) => graph.id === self.selectedGraphID);
+      return self.validGraphs.find((graph: ICODAPGraphModel) => graph.id === self.selectedGraphID);
     }
   }))
   .views((self) => ({
@@ -93,8 +94,24 @@ export const GraphSonificationModel = types
     }
   }))
   .actions((self) => ({
-    setGraphs(graphs: ICODAPGraph[]) {
-      self.allGraphs.replace(graphs);
+    setGraphs(graphs: SnapshotIn<typeof CODAPGraphModel>[]) {
+      const incomingIDs = new Set<number>();
+
+      graphs.forEach(snapshot => {
+        incomingIDs.add(snapshot.id);
+        const existing = self.allGraphs.find(g => g.id === snapshot.id);
+        if (existing) {
+          existing.updatePropsFromSnapshot(snapshot);
+        } else {
+          self.allGraphs.push(CODAPGraphModel.create(snapshot));
+        }
+      });
+
+      self.allGraphs.forEach((graph, index) => {
+        if (!incomingIDs.has(graph.id)) {
+          self.allGraphs.splice(index, 1);
+        }
+      });
     },
     clearGraphs() {
       self.allGraphs.replace([]);
@@ -134,7 +151,6 @@ export const GraphSonificationModel = types
           if (selectedGraphID !== undefined && !validGraphIDs.includes(selectedGraphID)) {
             removeRoiAdornment(`${selectedGraphID}`);
             self.removeSelectedGraphID();
-            self.clearGraphItems();
           }
         }
       );
@@ -147,6 +163,15 @@ export const GraphSonificationModel = types
           } else {
             self.clearGraphItems();
           }
+        }
+      );
+
+      reaction(
+        () => self.allGraphs.map(g => getSnapshot(g)),
+        (snapshots) => {
+          const root = getRoot(self) as any;
+          const msg = `Updated graph information: ${JSON.stringify(snapshots)}`;
+          root.assistantStore.sendCODAPDocumentInfo(msg);
         }
       );
     }
