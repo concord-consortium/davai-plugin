@@ -63,6 +63,9 @@ export const AssistantModel = types
     uploadFileAfterRun: false,
     dataUri: ""
   })
+  .volatile((self) => ({
+    toolCallRetries: new Map<string, number>(),
+  }))
   .actions((self) => ({
     resetAfterResponse() {
       self.isLoadingResponse = false;
@@ -229,79 +232,94 @@ export const AssistantModel = types
     };
 
     const pollRunState: (currentRunId: string) => Promise<any> = flow(function* (currentRunId) {
-      let runState = yield self.apiConnection.beta.threads.runs.retrieve(self.thread.id, currentRunId);
-      self.transcriptStore.addMessage(DEBUG_SPEAKER, {
-        description: "Run state status",
-        content: formatJsonMessage(runState.status),
-      });
-
-      const stopPollingStates = ["completed", "requires_action"];
-      const errorStates = ["failed", "incomplete"];
-
-      while (!stopPollingStates.includes(runState.status) && !errorStates.includes(runState.status) && !self.isCancelling) {
-        yield new Promise((resolve) => setTimeout(resolve, 2000));
-        runState = yield self.apiConnection.beta.threads.runs.retrieve(self.thread.id, currentRunId);
+      try {
+        let runState = yield self.apiConnection.beta.threads.runs.retrieve(self.thread.id, currentRunId);
         self.transcriptStore.addMessage(DEBUG_SPEAKER, {
           description: "Run state status",
           content: formatJsonMessage(runState.status),
         });
-      }
 
-      if (self.isCancelling) {
-        self.isLoadingResponse = false;
-        yield cancelRun(currentRunId);
-        return;
-      }
+        const errorStates = ["failed", "incomplete", "expired"];
 
-      if (runState.status === "requires_action") {
-        self.transcriptStore.addMessage(DEBUG_SPEAKER, {
-          description: "Run requires action",
-          content: formatJsonMessage(runState.required_action),
-        });
-        yield handleRequiredAction(runState, currentRunId);
-        yield pollRunState(currentRunId);
-      }
-
-      if (runState.status === "completed") {
-        if (self.uploadFileAfterRun && self.dataUri) {
-          const fileId = yield uploadFile();
-          yield sendFileMessage(fileId);
-          self.uploadFileAfterRun = false;
-          self.dataUri = "";
-          startRun();
-        } else {
-          const messages = yield self.apiConnection.beta.threads.messages.list(self.thread.id);
-
-          const lastMessageForRun = messages.data
-            .filter((msg: Message) => msg.run_id === currentRunId && msg.role === "assistant")
-            .pop();
-
+        while (runState.status === "in_progress" && !self.isCancelling) {
+          yield new Promise((resolve) => setTimeout(resolve, 1000));
+          runState = yield self.apiConnection.beta.threads.runs.retrieve(self.thread.id, currentRunId);
           self.transcriptStore.addMessage(DEBUG_SPEAKER, {
-            description: "Run completed, assistant response",
-            content: formatJsonMessage(lastMessageForRun),
+            description: "Run state status",
+            content: formatJsonMessage(runState.status),
           });
+        }
 
-          const lastMessageContent = lastMessageForRun?.content[0]?.text?.value;
-          if (lastMessageContent) {
-            self.transcriptStore.addMessage(DAVAI_SPEAKER, { content: lastMessageContent });
+        if (self.isCancelling) {
+          self.isLoadingResponse = false;
+          yield cancelRun(currentRunId);
+          return;
+        }
+
+        if (runState.status === "requires_action") {
+          self.transcriptStore.addMessage(DEBUG_SPEAKER, {
+            description: "Run requires action",
+            content: formatJsonMessage(runState.required_action),
+          });
+          yield handleRequiredAction(runState, currentRunId);
+          yield pollRunState(currentRunId);
+        }
+
+        if (runState.status === "completed") {
+          if (self.uploadFileAfterRun && self.dataUri) {
+            const fileId = yield uploadFile();
+            yield sendFileMessage(fileId);
+            self.uploadFileAfterRun = false;
+            self.dataUri = "";
+            startRun();
           } else {
-            self.transcriptStore.addMessage(DAVAI_SPEAKER, {
-              content: "I'm sorry, I don't have a response for that.",
+            const messages = yield self.apiConnection.beta.threads.messages.list(self.thread.id);
+
+            const lastMessageForRun = messages.data
+              .filter((msg: Message) => msg.run_id === currentRunId && msg.role === "assistant")
+              .pop();
+
+            self.transcriptStore.addMessage(DEBUG_SPEAKER, {
+              description: "Run completed, assistant response",
+              content: formatJsonMessage(lastMessageForRun),
             });
+
+            const lastMessageContent = lastMessageForRun?.content[0]?.text?.value;
+            if (lastMessageContent) {
+              self.transcriptStore.addMessage(DAVAI_SPEAKER, { content: lastMessageContent });
+            } else {
+              self.transcriptStore.addMessage(DAVAI_SPEAKER, {
+                content: "I'm sorry, I don't have a response for that.",
+              });
+            }
+            self.resetAfterResponse();
+            self.toolCallRetries.clear();
           }
         }
-      }
 
-      if (errorStates.includes(runState.status)) {
+        if (errorStates.includes(runState.status)) {
+          self.transcriptStore.addMessage(DEBUG_SPEAKER, {
+            description: "Run failed",
+            content: formatJsonMessage(runState),
+          });
+          self.transcriptStore.addMessage(DAVAI_SPEAKER, {
+            content: "I'm sorry, I encountered an error. Please try again.",
+          });
+          self.toolCallRetries.clear();
+        }
+      } catch (err) {
+        console.error("Error polling run state:", err);
         self.transcriptStore.addMessage(DEBUG_SPEAKER, {
-          description: "Run failed",
-          content: formatJsonMessage(runState),
+          description: "Error polling run state",
+          content: formatJsonMessage(err),
         });
         self.transcriptStore.addMessage(DAVAI_SPEAKER, {
           content: "I'm sorry, I encountered an error. Please try again.",
         });
+
+        self.toolCallRetries.clear();
+        self.resetAfterResponse();
       }
-      self.resetAfterResponse();
     });
 
     const uploadFile = flow(function* () {
@@ -343,48 +361,82 @@ export const AssistantModel = types
       }
     });
 
+    const handleParse = (toolCall: any, runID: string) => {
+      try {
+        return {ok: true, data: JSON.parse(toolCall.function.arguments)};
+      } catch (err) {
+        const retryKey = `${runID}${toolCall.id}`;
+        const tries = (self.toolCallRetries.get(retryKey) ?? 0) + 1;
+        self.toolCallRetries.set(toolCall.id, tries);
+        let action = tries >= 3 ? "cancel" : "retry";
+        return {ok: false, action};
+      }
+    };
+
+    const handleParseError = (toolCall: any, error: string) => {
+      return {
+          tool_call_id: toolCall.id,
+          output: error === "retry"
+            ? "The JSON is invalid; please resend a valid object."
+            : "Giving up after three attempts — cancelling this run."
+        };
+    };
+
     const handleRequiredAction = flow(function* (runState, runId) {
       try {
+        let shouldCancel = false;
+
         const toolOutputs = runState.required_action?.submit_tool_outputs.tool_calls
           ? yield Promise.all(
             runState.required_action.submit_tool_outputs.tool_calls.map(flow(function* (toolCall: any) {
-              if (toolCall.function.name === "create_request") {
-                const { action, resource, values } = JSON.parse(toolCall.function.arguments);
-                const request = { action, resource, values };
-                self.transcriptStore.addMessage(DEBUG_SPEAKER, { description: "Request sent to CODAP", content: formatJsonMessage(request) });
-                let res = yield codapInterface.sendRequest(request);
-                // Prepare for uploading of image file after run if the request is to get dataDisplay
-                const isImageSnapshotRequest = action === "get" && resource.match(/^dataDisplay/);
-                if (isImageSnapshotRequest) {
-                  self.uploadFileAfterRun = true;
-                  self.dataUri = res.values.exportDataUri;
+              const parsedResult = handleParse(toolCall, runId);
+
+              if (!parsedResult.ok) {
+                if (parsedResult.action === "cancel") {
+                  shouldCancel = true;
                 }
-                self.transcriptStore.addMessage(DEBUG_SPEAKER, { description: "Response from CODAP", content: formatJsonMessage(res) });
-                // remove any exportDataUri value that exists since it can be large and we don't need to send it to the assistant
-                res = isImageSnapshotRequest
-                  ? { ...res, values: { ...res.values, exportDataUri: undefined } }
-                  : res;
-                return { tool_call_id: toolCall.id, output: JSON.stringify(res) };
-              } else if (toolCall.function.name === "sonify_graph") {
-                const { graphID } = JSON.parse(toolCall.function.arguments);
-
-                const root = getRoot(self) as any;
-                const graphRes = yield codapInterface.sendRequest({ action: "get", resource: `component[${graphID}]` });
-                const graph = graphRes.values;
-                const isGraphScatterplot = graph.plotType === "scatterPlot";
-                let outputMsg = "";
-
-                if (isGraphScatterplot) {
-                  root.sonificationStore.setSelectedGraphID(graph.id);
-                  outputMsg = `The graph "${graph.name || graph.id}" is ready to be sonified. Tell the user they can use the sonification controls to hear it.`;
-                } else {
-                  outputMsg = `The graph "${graph.name || graph.id}" is not a numeric scatter plot. Tell the user they must select a numeric scatter plot.`;
-                }
-
-                return { tool_call_id: toolCall.id, output: outputMsg };
-              } else {
-                return { tool_call_id: toolCall.id, output: "Tool call not recognized." };
+                return handleParseError(toolCall, parsedResult.action ?? "cancel");
               }
+
+              if (toolCall.function.name === "create_request") {
+                  const { action, resource, values } = parsedResult.data;
+                  const request = { action, resource, values };
+                  self.transcriptStore.addMessage(DEBUG_SPEAKER, { description: "Request sent to CODAP", content: formatJsonMessage(request) });
+                  let res = yield codapInterface.sendRequest(request);
+                  // Prepare for uploading of image file after run if the request is to get dataDisplay
+                  const isImageSnapshotRequest = action === "get" && resource.match(/^dataDisplay/);
+                  if (isImageSnapshotRequest) {
+                    self.uploadFileAfterRun = true;
+                    self.dataUri = res.values.exportDataUri;
+                  }
+                  self.transcriptStore.addMessage(DEBUG_SPEAKER, { description: "Response from CODAP", content: formatJsonMessage(res) });
+                  // remove any exportDataUri value that exists since it can be large and we don't need to send it to the assistant
+                  res = isImageSnapshotRequest
+                    ? { ...res, values: { ...res.values, exportDataUri: undefined } }
+                    : res;
+                  return { tool_call_id: toolCall.id, output: JSON.stringify(res) };
+              }
+
+              if (toolCall.function.name === "sonify_graph") {
+                  const { graphID } = parsedResult.data;
+
+                  const root = getRoot(self) as any;
+                  const graphRes = yield codapInterface.sendRequest({ action: "get", resource: `component[${graphID}]` });
+                  const graph = graphRes.values;
+                  const isGraphScatterplot = graph.plotType === "scatterPlot";
+                  let outputMsg = "";
+
+                  if (isGraphScatterplot) {
+                    root.sonificationStore.setSelectedGraphID(graph.id);
+                    outputMsg = `The graph "${graph.name || graph.id}" is ready to be sonified. Tell the user they can use the sonification controls to hear it.`;
+                  } else {
+                    outputMsg = `The graph "${graph.name || graph.id}" is not a numeric scatter plot. Tell the user they must select a numeric scatter plot.`;
+                  }
+
+                  return { tool_call_id: toolCall.id, output: outputMsg };
+              }
+
+              return { tool_call_id: toolCall.id, output: "Tool call not recognized." };
             })
           ))
           : [];
@@ -395,6 +447,10 @@ export const AssistantModel = types
             self.thread.id, runId, { tool_outputs: toolOutputs }
           );
           self.transcriptStore.addMessage(DEBUG_SPEAKER, {description: "Tool outputs received", content: formatJsonMessage(submittedToolOutputsRes)});
+        }
+
+        if (shouldCancel) {
+          self.isCancelling = true;
         }
       } catch (err) {
         console.error(err);
