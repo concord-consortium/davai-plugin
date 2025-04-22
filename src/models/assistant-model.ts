@@ -140,8 +140,7 @@ export const AssistantModel = types
         }
       } catch (err) {
         console.error("Failed to send data context info to LLM:", err);
-        self.addDbgMsg("Failed to send data context info to d LLM", formatJsonMessage(err));
-      }
+        self.addDbgMsg("Failed to send data context info to the LLM", formatJsonMessage(err));
     });
 
     const sendCODAPDocumentInfo = flow(function* (message) {
