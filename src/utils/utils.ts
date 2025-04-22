@@ -1,4 +1,4 @@
-import { codapInterface, IResult } from "@concord-consortium/codap-plugin-api";
+import { codapInterface, IResult, getListOfDataContexts, getDataContext,  } from "@concord-consortium/codap-plugin-api";
 import * as Tone from "tone";
 import { ICODAPComponentListItem } from "../types";
 
@@ -146,4 +146,34 @@ export const getGraphDetails = async () => {
   return Promise.all(graphs.map((g: ICODAPComponentListItem) =>
     codapInterface.sendRequest({ action: "get", resource: `component[${g.id}]` }) as Promise<IResult>
   )).then(results => results.map(r => r.values));
+};
+
+export const getGraphByID = async (id: string) => {
+  const response = await codapInterface.sendRequest({ action: "get", resource: `component[${id}]` }) as IResult;
+  return response.values;
+};
+
+export const getDataContexts = async () => {
+  const contexts = await getListOfDataContexts();
+  const contextsDetails: Record<string, any> = {};
+  for (const ctx of contexts.values) {
+    const { name } = ctx;
+    const ctxDetails = await getDataContext(name);
+    contextsDetails[name] = ctxDetails.values;
+  }
+  return contextsDetails;
+};
+
+export const sendCODAPRequest = async (request: any) => {
+  const response = await codapInterface.sendRequest(request);
+  return response;
+};
+
+export const getParsedData = (toolCall: any) => {
+  try {
+    const data = JSON.parse(toolCall.function.arguments);
+    return { ok: true, data };
+  } catch {
+    return { ok: false, data: null };
+  }
 };
