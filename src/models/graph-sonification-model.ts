@@ -4,16 +4,18 @@ import { CodapItem } from "../types";
 import { getAllItems } from "@concord-consortium/codap-plugin-api";
 import { removeRoiAdornment } from "../components/graph-sonification-utils";
 import { CODAPGraphModel, ICODAPGraphModel } from "./codap-graph-model";
+import { BinModel } from "./bin-model";
 
 export const GraphSonificationModel = types
   .model("GraphSonificationModel", {
     allGraphs: types.optional(types.array(CODAPGraphModel), []),
     selectedGraphID: types.maybe(types.number),
     graphItems: types.maybe(types.array(types.frozen())),
+    binValues: BinModel
   })
   .views((self) => ({
     get validGraphs() {
-      return self.allGraphs?.filter((graph: ICODAPGraphModel) => graph.plotType === "scatterPlot") || [];
+      return self.allGraphs?.filter((graph: ICODAPGraphModel) => graph.isValidType) || [];
     }
   }))
   .views((self) => ({
@@ -54,7 +56,6 @@ export const GraphSonificationModel = types
       const timeAttr = self.timeAttr;
       const pitchAttr = self.pitchAttr;
 
-
       const validItems = pitchAttr && timeAttr
         ? self.graphItems.filter((item: CodapItem) => item.values[pitchAttr] !== "" && item.values[timeAttr] !== "")
         : self.graphItems.filter((item: CodapItem) => item.values[timeAttr] !== "");
@@ -91,7 +92,7 @@ export const GraphSonificationModel = types
 
       const timeRange = upperBound - lowerBound || 1;
       return self.timeValues.map((value: number) => (value - lowerBound) / timeRange);
-    }
+    },
   }))
   .actions((self) => ({
     setGraphs(graphs: SnapshotIn<typeof CODAPGraphModel>[]) {
@@ -172,6 +173,18 @@ export const GraphSonificationModel = types
           const root = getRoot(self) as any;
           const msg = `Updated graph information: ${JSON.stringify(snapshots)}`;
           root.assistantStore.sendCODAPDocumentInfo(msg);
+        }
+      );
+
+      reaction(
+        () => ({
+          timeValues: self.timeValues
+        }),
+        ({ timeValues }) => {
+          if (timeValues) {
+            // update binValues based on timeValues
+            self.binValues?.setValues(timeValues);
+          }
         }
       );
     }
