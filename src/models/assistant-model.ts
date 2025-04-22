@@ -245,7 +245,7 @@ export const AssistantModel = types
               .filter((msg: Message) => msg.run_id === currentRunId && msg.role === "assistant")
               .pop();
 
-            self.addDbgMsg("Run completed, assistant response", lastMessageForRun);
+            self.addDbgMsg("Run completed, assistant response", formatJsonMessage(lastMessageForRun));
 
             const msgContent = lastMessageForRun?.content[0]?.text?.value || "I'm sorry, I don't have a response for that.";
             self.addDavaiMsg(msgContent);
