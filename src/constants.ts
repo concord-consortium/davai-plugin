@@ -2,6 +2,10 @@ export const DEBUG_SPEAKER = "Debug Log";
 export const DAVAI_SPEAKER = "DAVAI";
 export const USER_SPEAKER = "User";
 
+// see: https://platform.openai.com/docs/api-reference/runs/object#runs/object-status
+export const WAIT_STATES = new Set(["queued", "in_progress"]);
+export const ERROR_STATES = new Set(["failed", "incomplete", "expired", "cancelled"]);
+
 export const GREETING = `Hello! I'm DAVAI, your Data Analysis through Voice and Artificial Intelligence partner.`;
 
 // we don't send case-level information, only info about dataContexts, collections + attributes
