@@ -178,16 +178,26 @@ export const getParsedData = (toolCall: any) => {
   }
 };
 
-export const isGraphValidType = (graph: ICODAPGraph) => {
+export function isUnivariateDotPlot(graph: ICODAPGraph): boolean {
   const {
     plotType,
     topSplitAttributeID: topId,
+    rightSplitAttributeID: rightId,
     y2AttributeID: y2Id,
     xAttributeID: xId,
-    yAttributeID: yId,
-    rightSplitAttributeID: rightId
+    yAttributeID: yId
   } = graph;
+
   const isDotPlot = plotType === "dotPlot" || plotType === "binnedDotPlot";
-  const isUnivariateDotPlot = isDotPlot && !topId && !rightId && !y2Id && ((xId && !yId) || (yId && !xId));
-  return graph.plotType === "scatterPlot" || isUnivariateDotPlot;
-};
+  const hasExactlyOneAxis = (xId && !yId) || (yId && !xId);
+
+  return !!(isDotPlot
+    && !topId
+    && !rightId
+    && !y2Id
+    && hasExactlyOneAxis);
+}
+
+export function isGraphValidType(graph: ICODAPGraph): boolean {
+  return graph.plotType === "scatterPlot" || isUnivariateDotPlot(graph);
+}

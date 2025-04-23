@@ -5,6 +5,7 @@ import { codapInterface } from "@concord-consortium/codap-plugin-api";
 import { GraphSonificationModelType } from "../models/graph-sonification-model";
 import { mapPitchFractionToFrequency, mapValueToStereoPan, updateRoiAdornment } from "./graph-sonification-utils";
 import { ErrorMessage } from "./error-message";
+import { isUnivariateDotPlot } from "../utils/utils";
 
 import PlayIcon from "../assets/play-sonification-icon.svg";
 import PauseIcon from "../assets/pause-sonification-icon.svg";
@@ -44,8 +45,8 @@ export const GraphSonification = observer(({sonificationStore}: IProps) => {
   const isAtBeginning = playState.position === 0;
 
   useEffect(() => {
-    pan.current   = new Tone.Panner(0);
-    gain.current  = new Tone.Gain(1).toDestination().connect(pan.current);
+    pan.current   = new Tone.Panner(0).toDestination();
+    gain.current  = new Tone.Gain(1).connect(pan.current);
     poly.current  = new Tone.PolySynth().connect(gain.current);
     osc.current   = new Tone.Oscillator(220, "sine").connect(gain.current);
 
@@ -114,7 +115,7 @@ export const GraphSonification = observer(({sonificationStore}: IProps) => {
         const countFraction = count / maxCount;
         const freq = mapPitchFractionToFrequency(countFraction);
         const panValue = getBinPanValue(i);
-        pan.current?.pan.setValueAtTime(panValue, time);
+        pan.current?.pan.rampTo(panValue, rampTime, time);
         osc.current?.frequency.rampTo(freq, rampTime, time);
         if (count === 0) {
           gain.current?.gain.rampTo(0, rampTime, time);
@@ -162,9 +163,9 @@ export const GraphSonification = observer(({sonificationStore}: IProps) => {
 
   const scheduleTones = useCallback(() => {
     if (!selectedGraph) return;
-    if (selectedGraph.isScatterPlot) {
+    if (selectedGraph.plotType === "scatterPlot") {
       scheduleScatter();
-    } else if (selectedGraph.isUnivariateDotPlot) {
+    } else if (isUnivariateDotPlot(selectedGraph)) {
       scheduleUnivariate();
     }
   }, [scheduleScatter, scheduleUnivariate, selectedGraph]);

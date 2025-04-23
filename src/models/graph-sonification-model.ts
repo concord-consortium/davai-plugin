@@ -5,6 +5,7 @@ import { getAllItems } from "@concord-consortium/codap-plugin-api";
 import { removeRoiAdornment } from "../components/graph-sonification-utils";
 import { CODAPGraphModel, ICODAPGraphModel } from "./codap-graph-model";
 import { BinModel } from "./bin-model";
+import { isGraphValidType } from "../utils/utils";
 
 export const GraphSonificationModel = types
   .model("GraphSonificationModel", {
@@ -15,7 +16,7 @@ export const GraphSonificationModel = types
   })
   .views((self) => ({
     get validGraphs() {
-      return self.allGraphs?.filter((graph: ICODAPGraphModel) => graph.isValidType) || [];
+      return self.allGraphs?.filter((graph: ICODAPGraphModel) => isGraphValidType(graph)) || [];
     }
   }))
   .views((self) => ({

@@ -330,9 +330,8 @@ export const AssistantModel = types
               } else if (toolCall.function.name === "sonify_graph") {
                 const root = getRoot(self) as any;
                 const graph = yield getGraphByID(parsedResult.data.graphID);
-                const isValid = isGraphValidType(graph);
 
-                if (isValid) {
+                if (isGraphValidType(graph)) {
                   root.sonificationStore.setSelectedGraphID(graph.id);
                   output = `The graph "${graph.name || graph.id}" is ready to be sonified. Tell the user they can use the sonification controls to hear it.`;
                 } else {

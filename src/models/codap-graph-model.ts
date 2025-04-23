@@ -59,28 +59,6 @@ export const CODAPGraphModel = types.model("ICODAPGraph", {
   yLowerBound: types.maybe(types.number),
   yUpperBound: types.maybe(types.number),
 })
-.views((self) => ({
-  get isUnivariateDotPlot() {
-    const {
-      plotType,
-      topSplitAttributeID: topId,
-      y2AttributeID: y2Id,
-      xAttributeID: xId,
-      yAttributeID: yId,
-      rightSplitAttributeID: rightId
-    } = self;
-    const isDotPlot = plotType === "dotPlot" || plotType === "binnedDotPlot";
-    return isDotPlot && (!topId && !rightId && !y2Id && ((xId && !yId) || (yId && !xId)));
-  },
-  get isScatterPlot() {
-    return self.plotType === "scatterPlot";
-  }
-}))
-.views((self) => ({
-  get isValidType () {
-    return self.isScatterPlot || self.isUnivariateDotPlot;
-  }
-}))
 .actions((self) => ({
   updatePropsFromSnapshot(snapshot: Partial<SnapshotIn<typeof CODAPGraphModel>>) {
     Object.keys(snapshot).forEach((key) => {
