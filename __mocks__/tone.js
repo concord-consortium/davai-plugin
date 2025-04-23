@@ -21,11 +21,10 @@ module.exports = {
     toDestination: jest.fn(),
   })),
   Gain: jest.fn(() => ({
-    toDestination: jest.fn(() => ({
-      connect: jest.fn(),
-      gain: jest.fn(() => ({
-        rampTo: jest.fn()
-      })),
+    connect: jest.fn(),
+    rampTo: jest.fn(),
+    gain: jest.fn(() => ({
+      rampTo: jest.fn()
     })),
   })),
   start: jest.fn(),
