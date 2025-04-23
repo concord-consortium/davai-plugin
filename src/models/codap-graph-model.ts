@@ -64,7 +64,7 @@ export const CODAPGraphModel = types.model("ICODAPGraph", {
     Object.keys(snapshot).forEach((key) => {
       const typedKey = key as keyof SnapshotIn<typeof CODAPGraphModel>;
       const newValue = snapshot[typedKey];
-      if (newValue !== undefined && self[typedKey] !== newValue) {
+      if (self[typedKey] !== newValue) {
         // @ts-expect-error: TypeScript may complain about dynamic assignment
         self[typedKey] = newValue;
       }

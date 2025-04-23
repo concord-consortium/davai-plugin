@@ -93,7 +93,7 @@ export interface ICODAPGraph {
   filterFormula?: string;
   hiddenCases?: any[];
   id: number;
-  legendAttributeID?: string;
+  legendAttributeID?: number;
   legendAttributeName?: string;
   name?: string;
   numberToggleLastMode?: string;
@@ -105,13 +105,13 @@ export interface ICODAPGraph {
     top: number;
   };
   primaryAxis?: string;
-  rightSplitAttributeID?: string;
+  rightSplitAttributeID?: number;
   rightSplitAttributeName?: string;
   showMeasuresForSelection?: boolean;
   strokeColor?: string;
   strokeSameAsFill?: boolean;
   title?: string;
-  topSplitAttributeID?: string;
+  topSplitAttributeID?: number;
   topSplitAttributeName?: string;
   transparent?: boolean;
   type?: string;

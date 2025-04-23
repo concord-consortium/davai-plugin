@@ -7,6 +7,7 @@ import { DAVAI_SPEAKER, GREETING } from "../constants";
 import { timeStamp } from "../utils/utils";
 import { RootStore } from "../models/root-store";
 import { GraphSonificationModel } from "../models/graph-sonification-model";
+import { BinModel } from "../models/bin-model";
 
 export const useRootStore = () => {
   const apiConnection = useOpenAIContext();
@@ -32,7 +33,10 @@ export const useRootStore = () => {
       }),
       sonificationStore: GraphSonificationModel.create({
         selectedGraph: undefined,
-      }),
+        binValues: BinModel.create({
+          values: []
+        }),
+      })
     });
   }, [apiConnection, assistantId]);
 

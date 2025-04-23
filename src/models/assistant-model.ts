@@ -3,7 +3,7 @@ import { OpenAI } from "openai";
 import { Message } from "openai/resources/beta/threads/messages";
 import { codapInterface } from "@concord-consortium/codap-plugin-api";
 import { DAVAI_SPEAKER, DEBUG_SPEAKER, WAIT_STATES, ERROR_STATES } from "../constants";
-import { convertBase64ToImage, formatJsonMessage, getGraphByID, getDataContexts, getParsedData } from "../utils/utils";
+import { convertBase64ToImage, formatJsonMessage, getGraphByID, getDataContexts, getParsedData, isGraphValidType } from "../utils/utils";
 import { requestThreadDeletion } from "../utils/openai-utils";
 import { ChatTranscriptModel } from "./chat-transcript-model";
 
@@ -331,11 +331,11 @@ export const AssistantModel = types
                 const root = getRoot(self) as any;
                 const graph = yield getGraphByID(parsedResult.data.graphID);
 
-                if (graph.plotType === "scatterPlot") {
+                if (isGraphValidType(graph)) {
                   root.sonificationStore.setSelectedGraphID(graph.id);
                   output = `The graph "${graph.name || graph.id}" is ready to be sonified. Tell the user they can use the sonification controls to hear it.`;
                 } else {
-                  output = `The graph "${graph.name || graph.id}" is not a numeric scatter plot. Tell the user they must select a numeric scatter plot.`;
+                  output = `The graph "${graph.name || graph.id}" is not a numeric scatter plot or univariate dot plot. Tell the user they must select a numeric scatter plot or univariate dot plot to proceed.`;
                 }
               } else {
                 output = `The tool call "${toolCall.function.name}" is not recognized.`;

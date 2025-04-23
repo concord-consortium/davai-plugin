@@ -1,6 +1,6 @@
 import { codapInterface, IResult, getListOfDataContexts, getDataContext,  } from "@concord-consortium/codap-plugin-api";
 import * as Tone from "tone";
-import { ICODAPComponentListItem } from "../types";
+import { ICODAPComponentListItem, ICODAPGraph } from "../types";
 
 export const timeStamp = (): string => {
   const now = new Date();
@@ -177,3 +177,27 @@ export const getParsedData = (toolCall: any) => {
     return { ok: false, data: null };
   }
 };
+
+export function isUnivariateDotPlot(graph: ICODAPGraph): boolean {
+  const {
+    plotType,
+    topSplitAttributeID: topId,
+    rightSplitAttributeID: rightId,
+    y2AttributeID: y2Id,
+    xAttributeID: xId,
+    yAttributeID: yId
+  } = graph;
+
+  const isDotPlot = plotType === "dotPlot" || plotType === "binnedDotPlot";
+  const hasExactlyOneAxis = (xId && !yId) || (yId && !xId);
+
+  return !!(isDotPlot
+    && !topId
+    && !rightId
+    && !y2Id
+    && hasExactlyOneAxis);
+}
+
+export function isGraphValidType(graph: ICODAPGraph): boolean {
+  return graph.plotType === "scatterPlot" || isUnivariateDotPlot(graph);
+}
