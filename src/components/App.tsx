@@ -17,7 +17,7 @@ import { GraphSonification } from "./graph-sonification";
 import "./App.scss";
 
 const kPluginName = "DAVAI";
-const kVersion = "0.0.1";
+const kVersion = "0.1.0";
 const kPollGraphUpdatesInterval = 5000;
 
 export const App = observer(() => {
