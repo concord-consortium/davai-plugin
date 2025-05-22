@@ -468,6 +468,10 @@ export const AssistantModel = types
           await self.handleMessageSubmit(allMsgs);
         }
       });
+
+      if (self.apiConnection) {
+        self.fetchAssistantsList();
+      }
     }
   }));
 

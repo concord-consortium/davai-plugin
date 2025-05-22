@@ -1,11 +1,26 @@
 import "openai/shims/node";
 import React from "react";
 import { render, screen, waitFor } from "@testing-library/react";
+import { types } from "mobx-state-tree";
 
 import { DeveloperOptionsComponent } from "./developer-options";
-import { AssistantModel } from "../models/assistant-model";
+import { AssistantModelType } from "../models/assistant-model";
 import { ChatTranscriptModel } from "../models/chat-transcript-model";
 import { mockAppConfig } from "../test-utils/mock-app-config";
+
+const MockAssistantModel = types
+  .model("MockAssistantModel", {
+    apiConnection: types.frozen(),
+    assistant: types.maybe(types.frozen()),
+    assistantId: types.string,
+    assistantList: types.optional(types.map(types.string), {}),
+    thread: types.maybe(types.frozen()),
+    transcriptStore: ChatTranscriptModel
+  })
+  .actions((self) => ({
+    createThread: jest.fn(),
+    deleteThread: jest.fn()
+  }));
 
 const mockTranscriptStore = ChatTranscriptModel.create({
   messages: [
@@ -18,7 +33,7 @@ const mockTranscriptStore = ChatTranscriptModel.create({
   ],
 });
 
-const mockAssistantStore = AssistantModel.create({
+const mockAssistantStore = MockAssistantModel.create({
   apiConnection: {
     apiKey: "abc123",
     dangerouslyAllowBrowser: true
@@ -30,7 +45,7 @@ const mockAssistantStore = AssistantModel.create({
   },
   thread: {},
   transcriptStore: mockTranscriptStore,
-});
+}) as unknown as AssistantModelType;
 
 jest.mock("../models/app-config-model", () => ({
   AppConfigModel: {
