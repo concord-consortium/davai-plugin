@@ -2,7 +2,8 @@ import React, { useCallback, useEffect, useRef } from "react";
 import * as Tone from "tone";
 import { observer } from "mobx-react-lite";
 import removeMarkdown from "remove-markdown";
-import { addDataContextChangeListener, addDataContextsListListener, ClientNotification, getDataContext, getListOfDataContexts, initializePlugin, selectSelf } from "@concord-consortium/codap-plugin-api";
+import { addComponentListener, addDataContextChangeListener, addDataContextsListListener, ClientNotification,
+  getDataContext, getListOfDataContexts, initializePlugin, selectSelf } from "@concord-consortium/codap-plugin-api";
 import { useAppConfigContext } from "../hooks/use-app-config-context";
 import { useRootStore } from "../hooks/use-root-store";
 import { useAriaLive } from "../contexts/aria-live-context";
@@ -18,7 +19,6 @@ import "./App.scss";
 
 const kPluginName = "DAVAI";
 const kVersion = "0.1.0";
-const kPollGraphUpdatesInterval = 5000;
 
 export const App = observer(() => {
   const appConfig = useAppConfigContext();
@@ -55,7 +55,7 @@ export const App = observer(() => {
   // documentation of the documentChangeNotice object here:
   // https://github.com/concord-consortium/codap/wiki/CODAP-Data-Interactive-Plugin-API#documentchangenotice
   const handleDocumentChangeNotice = useCallback(async (notification: ClientNotification) => {
-        if (notification.values.operation === "dataContextCountChanged") { // ignore the other notifications -- they are not useful for our purposes
+    if (notification.values.operation === "dataContextCountChanged") { // ignore the other notifications -- they are not useful for our purposes
       assistantStoreRef.current.transcriptStore.addMessage(DEBUG_SPEAKER, {
         description: "Document change notice", content: formatJsonMessage(notification)
       });
@@ -77,9 +77,21 @@ export const App = observer(() => {
     }
   }, [handleDataContextChangeNotice]);
 
+  const fetchGraphs = useCallback(async () => {
+    const graphDetails = await getGraphDetails();
+    sonificationStore.setGraphs(graphDetails);
+  }, [sonificationStore]);
+
+  const handleComponentChangeNotice = useCallback((notification: ClientNotification) => {
+    if (notification.values.type === "graph") {
+      fetchGraphs();
+    }
+  }, [fetchGraphs]);
+
   useEffect(() => {
     const init = async () => {
       await initializePlugin({pluginName: kPluginName, version: kVersion, dimensions});
+      addComponentListener(handleComponentChangeNotice);
       addDataContextsListListener(handleDocumentChangeNotice);
       const dataContexts = await getListOfDataContexts();
       dataContexts.values.forEach((ctx: Record<string, any>) => {
@@ -88,22 +100,10 @@ export const App = observer(() => {
       });
     };
 
-    const fetchGraphs = async () => {
-      const graphDetails = await getGraphDetails();
-      sonificationStore.setGraphs(graphDetails);
-    };
-
     init();
     fetchGraphs();
     selectSelf();
 
-    // since updates to graph components do not generate CODAP notifications, we need to poll to keep the list of graphs up to date
-    // and to update the sonification store with valid graph items
-    const interval = setInterval(fetchGraphs, kPollGraphUpdatesInterval);
-
-    return () => {
-      clearInterval(interval);
-    };
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
