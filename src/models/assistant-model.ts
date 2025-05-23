@@ -26,6 +26,14 @@ const OpenAIType = types.custom({
   },
 });
 
+interface IGraphAttrData {
+  legend?: Record<string, any>;
+  rightSplit?: Record<string, any>;
+  topSplit?: Record<string, any>;
+  xAxis?: Record<string, any>;
+  yAxis?: Record<string, any>;
+}
+
 /**
  * AssistantModel encapsulates the AI assistant and its interactions with the user.
  * It includes properties and methods for configuring the assistant, handling chat interactions, and maintaining the assistant's
@@ -62,9 +70,10 @@ export const AssistantModel = types
     transcriptStore: ChatTranscriptModel
   })
   .volatile(() => ({
-    updateSonificationStoreAfterRun: false,
+    dataUri: "",
+    dataContextForGraph: null as IGraphAttrData | null,
     uploadFileAfterRun: false,
-    dataUri: ""
+    updateSonificationStoreAfterRun: false,
   }))
   .actions((self) => ({
     addDavaiMsg(msg: string) {
@@ -132,7 +141,6 @@ export const AssistantModel = types
         self.addDbgMsg("Failed to get data contexts", formatJsonMessage(err));
       }
     });
-
 
     const sendDataCtxChangeInfo = flow(function* (msg: string) {
       try {
@@ -240,6 +248,7 @@ export const AssistantModel = types
             yield sendFileMessage(fileId);
             self.uploadFileAfterRun = false;
             self.dataUri = "";
+            self.dataContextForGraph = null;
             startRun();
           } else {
             const messages = yield self.apiConnection.beta.threads.messages.list(self.thread.id);
@@ -283,6 +292,67 @@ export const AssistantModel = types
       }
     });
 
+    const getAttributeData = flow(function* (graphID: string, attrID: string | null) {
+      if (!attrID) return { attributeData: null };
+
+      const response = yield Promise.resolve(codapInterface.sendRequest({
+        action: "get",
+        resource: `component[${graphID}].attribute[${attrID}]`
+      }));
+
+      const attributeData = response?.values
+        ? {
+            id: response.values.id,
+            name: response.values.name,
+            values: response.values._categoryMap.__order
+          }
+        : null;
+
+      return { attributeData };
+    });
+
+    const getGraphAttrData = flow(function* (graphID) {
+      try {
+        const graph = yield getGraphByID(graphID);
+        if (graph) {
+          const legendAttrData = yield getAttributeData(graphID, graph.legendAttributeID);
+          const rightAttrData = yield getAttributeData(graphID, graph.rightSplitAttributeID);
+          const topAttrData = yield getAttributeData(graphID, graph.topSplitAttributeID);
+          const xAttrData = yield getAttributeData(graphID, graph.xAttributeID);
+          const yAttrData = yield getAttributeData(graphID, graph.yAttributeID);
+          const y2AttrData = yield getAttributeData(graphID, graph.yAttributeIDs ? graph.yAttributeIDs[1] : null);
+
+          // Combine y-axis data if we have a second y-axis
+          const combinedYAxisData = y2AttrData.attributeData 
+            ? { attributeData: [yAttrData.attributeData, y2AttrData.attributeData] }
+            : yAttrData;
+
+          const graphAttrData = {
+            legend: legendAttrData,
+            rightSplit: rightAttrData,
+            topSplit: topAttrData,
+            xAxis: xAttrData,
+            yAxis: combinedYAxisData
+          };
+
+          if (graphAttrData) {
+            self.addDbgMsg("Data context for graph", formatJsonMessage(graphAttrData));
+            return graphAttrData;
+          } else {
+            self.addDbgMsg("No data context found for graph", formatJsonMessage(graph));
+            return null;
+          }
+        } else {
+          self.addDbgMsg("No graph found with ID", graphID);
+          return null;
+        }
+      } catch (err) {
+        console.error("Failed to get graph attribute data:", err);
+        self.addDbgMsg("Failed to get graph attribute data", formatJsonMessage(err));
+        return null;
+      }
+    });
+
     const sendFileMessage = flow(function* (fileId) {
       try {
         const res = yield self.apiConnection.beta.threads.messages.create(self.thread.id, {
@@ -297,6 +367,10 @@ export const AssistantModel = types
               image_file: {
                 file_id: fileId
               }
+            },
+            {
+              type: "text",
+              text: `The following JSON data describes key aspects of the graph in the image. Use this context to improve your interpretation and explanation of the graph. ${JSON.stringify(self.dataContextForGraph)}`
             }
           ]
         });
@@ -336,6 +410,11 @@ export const AssistantModel = types
                 if (isImageSnapshotRequest) {
                   self.uploadFileAfterRun = true;
                   self.dataUri = res.values.exportDataUri;
+                  const graphID = resource.match(/\[(\d+)\]/)?.[1];
+                  // We'll also send data for the attributes on the graph for additional context
+                  self.dataContextForGraph = yield getGraphAttrData(graphID);
+                  // TODO: Remove this console log when done with testing
+                  console.log("Attribute data for graph", self.dataContextForGraph);
                 }
                 // remove any exportDataUri value that exists since it can be large and we don't need to send it to the assistant
                 res = isImageSnapshotRequest
