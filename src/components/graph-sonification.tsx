@@ -282,7 +282,7 @@ export const GraphSonification = observer(({sonificationStore}: IProps) => {
 
   const handleSetSpeed = (newSpeed: number) => {
     const isPlaying = playState.playing;
-    const isPaused = !playState.playing && !playState.ended;
+    const isPaused = !playState.playing && !playState.ended && !isAtBeginning;
 
     const oldFraction = Tone.getTransport().seconds / durationRef.current;
     const newDuration = kDefaultDuration / newSpeed;
