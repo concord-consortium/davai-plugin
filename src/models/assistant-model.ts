@@ -26,25 +26,35 @@ const OpenAIType = types.custom({
   },
 });
 
+interface IGraphAttrData {
+  legendAttribute?: Record<string, any>;
+  rightSplitAttribute?: Record<string, any>;
+  topSplitAttribute?: Record<string, any>;
+  xAttribute?: Record<string, any>;
+  yAttribute?: Record<string, any>;
+  y2Attribute?: Record<string, any>;
+}
+
 /**
  * AssistantModel encapsulates the AI assistant and its interactions with the user.
  * It includes properties and methods for configuring the assistant, handling chat interactions, and maintaining the assistant's
  * thread and transcript.
  *
+ * @property {Object} apiConnection - The API connection object for interacting with the assistant
  * @property {Object|null} assistant - The assistant object, or `null` if not initialized.
  * @property {string} assistantId - The unique ID of the assistant being used, or `null` if not initialized.
- * @property {Object} apiConnection - The API connection object for interacting with the assistant
- * @property {Object|null} thread - The assistant's thread used for the current chat, or `null` if no thread is active.
- * @property {ChatTranscriptModel} transcriptStore - The assistant's chat transcript store for recording and managing chat messages.
- * @property {boolean} isLoadingResponse - Flag indicating whether the assistant is currently processing a response.
+ * @property {Object} assistantList - A map of available assistants, where the key is the assistant ID and the value is the assistant name.
  * @property {string[]} codapNotificationQueue - Queue of messages to be sent to the assistant. Used if CODAP generates notifications while assistant is processing a response.
+ * @property {string} dataUri - The data URI of the file to be uploaded.
+ * @property {string} dataContextForGraph - The data context for the graph being processed by the assistant.
+ * @property {boolean} isCancelling - Flag indicating whether the assistant is currently cancelling a request.
+ * @property {boolean} isLoadingResponse - Flag indicating whether the assistant is currently processing a response.
+ * @property {boolean} isResetting - Flag indicating whether the assistant is currently resetting the chat.
  * @property {string[]} messageQueue - Queue of messages to be sent to the assistant. Used if user sends messages while assistant is processing a response.
  * @property {boolean} showLoadingIndicator - Flag indicating whether to show a loading indicator to the user; this is decoupled from the assistant's internal loading state to allow for more control over UI elements.
- * @property {boolean} isCancelling - Flag indicating whether the assistant is currently cancelling a request.
- * @property {boolean} isResetting - Flag indicating whether the assistant is currently resetting the chat.
+ * @property {Object|null} thread - The assistant's thread used for the current chat, or `null` if no thread is active.
+ * @property {ChatTranscriptModel} transcriptStore - The assistant's chat transcript store for recording and managing chat messages.
  * @property {boolean} uploadFileAfterRun - Flag indicating whether to upload a file after the assistant completes a run.
- * @property {string} dataUri - The data URI of the file to be uploaded.
- * @property {string} graphToSonify - The name of the graph to sonify, if applicable.
  */
 export const AssistantModel = types
   .model("AssistantModel", {
@@ -60,9 +70,12 @@ export const AssistantModel = types
     showLoadingIndicator: types.optional(types.boolean, false),
     thread: types.maybe(types.frozen()),
     transcriptStore: ChatTranscriptModel,
-    uploadFileAfterRun: false,
-    dataUri: ""
+    uploadFileAfterRun: false
   })
+  .volatile(() => ({
+    dataUri: "",
+    dataContextForGraph: null as IGraphAttrData | null
+  }))
   .actions((self) => ({
     addDavaiMsg(msg: string) {
       self.transcriptStore.addMessage(DAVAI_SPEAKER, { content: msg });
@@ -129,7 +142,6 @@ export const AssistantModel = types
         self.addDbgMsg("Failed to get data contexts", formatJsonMessage(err));
       }
     });
-
 
     const sendDataCtxChangeInfo = flow(function* (msg: string) {
       try {
@@ -237,6 +249,7 @@ export const AssistantModel = types
             yield sendFileMessage(fileId);
             self.uploadFileAfterRun = false;
             self.dataUri = "";
+            self.dataContextForGraph = null;
             startRun();
           } else {
             const messages = yield self.apiConnection.beta.threads.messages.list(self.thread.id);
@@ -274,6 +287,54 @@ export const AssistantModel = types
       }
     });
 
+    const getAttributeData = flow(function* (graphID: string, attrID: string | null) {
+      if (!attrID) return null;
+      const response = yield Promise.resolve(codapInterface.sendRequest({
+        action: "get",
+        resource: `component[${graphID}].attribute[${attrID}]`
+      }));
+
+      return response;
+    });
+
+    const getGraphAttrData = flow(function* (graphID) {
+      try {
+        const graph = yield getGraphByID(graphID);
+        if (graph) {
+          const xAttrData = yield getAttributeData(graphID, graph.xAttributeID);
+          const yAttrData = yield getAttributeData(graphID, graph.yAttributeID);
+          const rightAttrData = yield getAttributeData(graphID, graph.rightSplitAttributeID);
+          const topAttrData = yield getAttributeData(graphID, graph.topSplitAttributeID);
+          const y2AttrData = yield getAttributeData(graphID, graph.yAttributeIDs ? graph.yAttributeIDs[1] : null);
+          const legendAttrData = yield getAttributeData(graphID, graph.legendAttributeID);
+
+          const graphAttrData = {
+            legendAttribute: legendAttrData,
+            rightSplitAttribute: rightAttrData,
+            topSplitAttribute: topAttrData,
+            xAttribute: xAttrData,
+            yAttribute: yAttrData,
+            y2Attribute: y2AttrData
+          };
+
+          if (graphAttrData) {
+            self.addDbgMsg("Data context for graph", formatJsonMessage(graphAttrData));
+            return graphAttrData;
+          } else {
+            self.addDbgMsg("No data context found for graph", formatJsonMessage(graph));
+            return null;
+          }
+        } else {
+          self.addDbgMsg("No graph found with ID", graphID);
+          return null;
+        }
+      } catch (err) {
+        console.error("Failed to get graph attribute data:", err);
+        self.addDbgMsg("Failed to get graph attribute data", formatJsonMessage(err));
+        return null;
+      }
+    });
+
     const sendFileMessage = flow(function* (fileId) {
       try {
         const res = yield self.apiConnection.beta.threads.messages.create(self.thread.id, {
@@ -288,6 +349,10 @@ export const AssistantModel = types
               image_file: {
                 file_id: fileId
               }
+            },
+            {
+              type: "text",
+              text: `The following JSON data describes key aspects of the graph in the image. Use this context to improve your interpretation and explanation of the graph. ${JSON.stringify(self.dataContextForGraph)}`
             }
           ]
         });
@@ -320,6 +385,11 @@ export const AssistantModel = types
                 if (isImageSnapshotRequest) {
                   self.uploadFileAfterRun = true;
                   self.dataUri = res.values.exportDataUri;
+                  const graphID = resource.match(/\[(\d+)\]/)?.[1];
+                  // We'll also send data for the attributes on the graph for additional context
+                  self.dataContextForGraph = yield getGraphAttrData(graphID);
+                  // TODO: Remove this console log when done with testing
+                  console.log("Attribute data for graph", self.dataContextForGraph);
                 }
                 // remove any exportDataUri value that exists since it can be large and we don't need to send it to the assistant
                 res = isImageSnapshotRequest
