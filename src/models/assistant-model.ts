@@ -3,7 +3,7 @@ import { OpenAI } from "openai";
 import { Message } from "openai/resources/beta/threads/messages";
 import { codapInterface } from "@concord-consortium/codap-plugin-api";
 import { DAVAI_SPEAKER, DEBUG_SPEAKER, WAIT_STATES, ERROR_STATES } from "../constants";
-import { convertBase64ToImage, formatJsonMessage, getGraphByID, getDataContexts, getParsedData, isGraphValidType } from "../utils/utils";
+import { convertBase64ToImage, formatJsonMessage, getGraphByID, getDataContexts, getParsedData, isGraphSonifiable } from "../utils/utils";
 import { requestThreadDeletion } from "../utils/openai-utils";
 import { ChatTranscriptModel } from "./chat-transcript-model";
 
@@ -31,20 +31,20 @@ const OpenAIType = types.custom({
  * It includes properties and methods for configuring the assistant, handling chat interactions, and maintaining the assistant's
  * thread and transcript.
  *
+ * @property {Object} apiConnection - The API connection object for interacting with the assistant
  * @property {Object|null} assistant - The assistant object, or `null` if not initialized.
  * @property {string} assistantId - The unique ID of the assistant being used, or `null` if not initialized.
- * @property {Object} apiConnection - The API connection object for interacting with the assistant
- * @property {Object|null} thread - The assistant's thread used for the current chat, or `null` if no thread is active.
- * @property {ChatTranscriptModel} transcriptStore - The assistant's chat transcript store for recording and managing chat messages.
- * @property {boolean} isLoadingResponse - Flag indicating whether the assistant is currently processing a response.
+ * @property {Object} assistantList - A map of available assistants, where the key is the assistant ID and the value is the assistant name.
  * @property {string[]} codapNotificationQueue - Queue of messages to be sent to the assistant. Used if CODAP generates notifications while assistant is processing a response.
+ * @property {string} dataUri - The data URI of the file to be uploaded.
+ * @property {boolean} isCancelling - Flag indicating whether the assistant is currently cancelling a request.
+ * @property {boolean} isLoadingResponse - Flag indicating whether the assistant is currently processing a response.
+ * @property {boolean} isResetting - Flag indicating whether the assistant is currently resetting the chat.
  * @property {string[]} messageQueue - Queue of messages to be sent to the assistant. Used if user sends messages while assistant is processing a response.
  * @property {boolean} showLoadingIndicator - Flag indicating whether to show a loading indicator to the user; this is decoupled from the assistant's internal loading state to allow for more control over UI elements.
- * @property {boolean} isCancelling - Flag indicating whether the assistant is currently cancelling a request.
- * @property {boolean} isResetting - Flag indicating whether the assistant is currently resetting the chat.
+ * @property {Object|null} thread - The assistant's thread used for the current chat, or `null` if no thread is active.
+ * @property {ChatTranscriptModel} transcriptStore - The assistant's chat transcript store for recording and managing chat messages.
  * @property {boolean} uploadFileAfterRun - Flag indicating whether to upload a file after the assistant completes a run.
- * @property {string} dataUri - The data URI of the file to be uploaded.
- * @property {string} graphToSonify - The name of the graph to sonify, if applicable.
  */
 export const AssistantModel = types
   .model("AssistantModel", {
@@ -59,10 +59,13 @@ export const AssistantModel = types
     messageQueue: types.array(types.string),
     showLoadingIndicator: types.optional(types.boolean, false),
     thread: types.maybe(types.frozen()),
-    transcriptStore: ChatTranscriptModel,
+    transcriptStore: ChatTranscriptModel
+  })
+  .volatile(() => ({
+    updateSonificationStoreAfterRun: false,
     uploadFileAfterRun: false,
     dataUri: ""
-  })
+  }))
   .actions((self) => ({
     addDavaiMsg(msg: string) {
       self.transcriptStore.addMessage(DAVAI_SPEAKER, { content: msg });
@@ -249,6 +252,12 @@ export const AssistantModel = types
 
             const msgContent = lastMessageForRun?.content[0]?.text?.value || "I'm sorry, I don't have a response for that.";
             self.addDavaiMsg(msgContent);
+
+            if (self.updateSonificationStoreAfterRun) {
+              self.updateSonificationStoreAfterRun = false;
+              const root = getRoot(self) as any;
+              root.sonificationStore.setGraphs({ selectNewest: true });
+            }
           }
         }
       } catch (err) {
@@ -307,10 +316,17 @@ export const AssistantModel = types
               let output = "";
 
               if (!parsedResult.ok) {
-                  output = "The JSON is invalid; please resend a valid object.";
+                output = "The JSON is invalid; please resend a valid object.";
               } else if (toolCall.function.name === "create_request") {
                 const { action, resource, values } = parsedResult.data;
                 const request = { action, resource, values };
+
+                // When the request is to create a graph component, we need to update the sonification
+                // store after the run.
+                if (action === "create" && resource === "component" && values.type === "graph") {
+                  self.updateSonificationStoreAfterRun = true;
+                }
+
                 self.addDbgMsg("Request sent to CODAP", formatJsonMessage(request));
                 let res = yield codapInterface.sendRequest(request);
                 self.addDbgMsg("Response from CODAP", formatJsonMessage(res));
@@ -331,7 +347,7 @@ export const AssistantModel = types
                 const root = getRoot(self) as any;
                 const graph = yield getGraphByID(parsedResult.data.graphID);
 
-                if (isGraphValidType(graph)) {
+                if (isGraphSonifiable(graph)) {
                   root.sonificationStore.setSelectedGraphID(graph.id);
                   output = `The graph "${graph.name || graph.id}" is ready to be sonified. Tell the user they can use the sonification controls to hear it.`;
                 } else {

@@ -198,6 +198,12 @@ export function isUnivariateDotPlot(graph: ICODAPGraph): boolean {
     && hasExactlyOneAxis);
 }
 
-export function isGraphValidType(graph: ICODAPGraph): boolean {
-  return graph.plotType === "scatterPlot" || isUnivariateDotPlot(graph);
+function isUnsplitScatterPlot(graph: ICODAPGraph): boolean {
+  return graph.plotType === "scatterPlot" &&
+         !graph.topSplitAttributeID &&
+         !graph.rightSplitAttributeID;
+}
+
+export function isGraphSonifiable(graph: ICODAPGraph): boolean {
+  return isUnsplitScatterPlot(graph) || isUnivariateDotPlot(graph);
 }

@@ -5,6 +5,12 @@ import { GraphSonification } from "./graph-sonification";
 import { GraphSonificationModelType } from "../models/graph-sonification-model";
 import { ICODAPGraph } from "../types";
 
+const mockAvailableGraphs = [
+  { id: 1, name: "Graph 1", plotType: "scatterPlot" },
+  { id: 2, name: "Graph 2", plotType: "scatterPlot" },
+  { id: 3, name: "Graph 3", plotType: "dotPlot"}
+];
+
 const mockSonificationModel = types
 .model("GraphSonificationModel", {
   allGraphs: types.optional(types.array(types.frozen<Partial<ICODAPGraph>>()), []),
@@ -22,8 +28,8 @@ const mockSonificationModel = types
   }
 }))
 .actions((self) => ({
-  setGraphs(graphs: ICODAPGraph[]) {
-    self.allGraphs.replace(graphs);
+  setGraphs() {
+    self.allGraphs.replace(mockAvailableGraphs);
   },
   setSelectedGraphID(graphID: number) {
     self.selectedGraphID = graphID;
@@ -37,11 +43,6 @@ const mockSonificationModel = types
 }));
 
 describe("GraphSonification Component", () => {
-  const mockAvailableGraphs = [
-    { id: 1, name: "Graph 1", plotType: "scatterPlot" },
-    { id: 2, name: "Graph 2", plotType: "scatterPlot" },
-    { id: 3, name: "Graph 3", plotType: "dotPlot"}
-  ];
 
   const mockSonificationStore = mockSonificationModel.create({
     allGraphs: mockAvailableGraphs,
@@ -51,7 +52,7 @@ describe("GraphSonification Component", () => {
   beforeEach(() => {
     jest.clearAllMocks();
     mockSonificationStore.removeSelectedGraphID();
-    mockSonificationStore.setGraphs(mockAvailableGraphs);
+    mockSonificationStore.setGraphs();
   });
 
   it("renders the component with default state", () => {

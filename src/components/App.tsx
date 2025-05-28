@@ -12,7 +12,7 @@ import { ChatInputComponent } from "./chat-input";
 import { ChatTranscriptComponent } from "./chat-transcript";
 import { DAVAI_SPEAKER, DEBUG_SPEAKER, LOADING_NOTE, USER_SPEAKER, notificationsToIgnore } from "../constants";
 import { UserOptions } from "./user-options";
-import { formatJsonMessage, getGraphDetails, playSound } from "../utils/utils";
+import { formatJsonMessage, playSound } from "../utils/utils";
 import { GraphSonification } from "./graph-sonification";
 
 import "./App.scss";
@@ -77,16 +77,11 @@ export const App = observer(() => {
     }
   }, [handleDataContextChangeNotice]);
 
-  const fetchGraphs = useCallback(async () => {
-    const graphDetails = await getGraphDetails();
-    sonificationStore.setGraphs(graphDetails);
-  }, [sonificationStore]);
-
   const handleComponentChangeNotice = useCallback((notification: ClientNotification) => {
     if (notification.values.type === "graph") {
-      fetchGraphs();
+      sonificationStore.setGraphs();
     }
-  }, [fetchGraphs]);
+  }, [sonificationStore]);
 
   useEffect(() => {
     const init = async () => {
@@ -101,7 +96,7 @@ export const App = observer(() => {
     };
 
     init();
-    fetchGraphs();
+    sonificationStore.setGraphs();
     selectSelf();
 
   // eslint-disable-next-line react-hooks/exhaustive-deps

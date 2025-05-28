@@ -5,7 +5,7 @@ import { getAllItems } from "@concord-consortium/codap-plugin-api";
 import { removeRoiAdornment } from "../components/graph-sonification-utils";
 import { CODAPGraphModel, ICODAPGraphModel } from "./codap-graph-model";
 import { BinModel } from "./bin-model";
-import { isGraphValidType } from "../utils/utils";
+import { getGraphDetails, isGraphSonifiable, sendCODAPRequest } from "../utils/utils";
 
 export const GraphSonificationModel = types
   .model("GraphSonificationModel", {
@@ -16,7 +16,7 @@ export const GraphSonificationModel = types
   })
   .views((self) => ({
     get validGraphs() {
-      return self.allGraphs?.filter((graph: ICODAPGraphModel) => isGraphValidType(graph)) || [];
+      return self.allGraphs?.filter((graph: ICODAPGraphModel) => isGraphSonifiable(graph)) || [];
     }
   }))
   .views((self) => ({
@@ -96,25 +96,6 @@ export const GraphSonificationModel = types
     },
   }))
   .actions((self) => ({
-    setGraphs(graphs: SnapshotIn<typeof CODAPGraphModel>[]) {
-      const incomingIDs = new Set<number>();
-
-      graphs.forEach(snapshot => {
-        incomingIDs.add(snapshot.id);
-        const existing = self.allGraphs.find(g => g.id === snapshot.id);
-        if (existing) {
-          existing.updatePropsFromSnapshot(snapshot);
-        } else {
-          self.allGraphs.push(CODAPGraphModel.create(snapshot));
-        }
-      });
-
-      self.allGraphs.forEach((graph, index) => {
-        if (!incomingIDs.has(graph.id)) {
-          self.allGraphs.splice(index, 1);
-        }
-      });
-    },
     clearGraphs() {
       self.allGraphs.replace([]);
     },
@@ -127,6 +108,49 @@ export const GraphSonificationModel = types
     clearGraphItems() {
       self.graphItems = undefined;
     }
+  }))
+  .actions((self) => ({
+    setGraphs: flow(function* (options?: { selectNewest?: boolean }) {
+      const graphs: SnapshotIn<typeof CODAPGraphModel>[] = yield getGraphDetails();
+      const incomingIDs = new Set<number>();
+
+      const processedGraphs = yield Promise.all(graphs.map(async snapshot => {
+        incomingIDs.add(snapshot.id);
+
+        // Make sure the graph has a valid name and title. As a fallback, use the name of the
+        // parent collection in the data context.
+        if (!snapshot.title && !snapshot.name) {
+          const response = await sendCODAPRequest({
+            action: "get",
+            resource: `dataContext[${snapshot.dataContext}]`
+          }) as any;
+          const dataContext = response.values;
+          const parentCollection = dataContext.collections[0];
+          snapshot.name = parentCollection?.name;
+          snapshot.title = parentCollection?.name;
+        }
+
+        return snapshot;
+      }));
+
+      processedGraphs.forEach((graph: SnapshotIn<typeof CODAPGraphModel>) => {
+        const existing = self.allGraphs.find(g => g.id === graph.id);
+        if (existing) {
+          existing.updatePropsFromSnapshot(graph);
+        } else {
+          self.allGraphs.push(CODAPGraphModel.create(graph));
+          if (options?.selectNewest) {
+            self.setSelectedGraphID(graph.id);
+          }
+        }
+      });
+
+      self.allGraphs.forEach((graph, index) => {
+        if (!incomingIDs.has(graph.id)) {
+          self.allGraphs.splice(index, 1);
+        }
+      });
+    })
   }))
   .actions((self) => {
     // we call this function when:
