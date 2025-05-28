@@ -88,6 +88,12 @@ export const GraphSonification = observer(({sonificationStore}: IProps) => {
   const handlePlayEnd = useCallback(() => {
     const position = Tone.getTransport().seconds;
     setPlayState({ playing: false, ended: true, position });
+    
+    // Clean up oscillator state
+    if (osc.current) {
+      osc.current.stop();
+      osc.current.mute = true;
+    }
   }, []);
 
   const scheduleUnivariate = useCallback(() => {
@@ -101,10 +107,12 @@ export const GraphSonification = observer(({sonificationStore}: IProps) => {
       return mapValueToStereoPan(binAvgForPanValue, minBinEdge, maxBinEdge);
     };
 
-    osc.current?.start();
-
-    if (osc.current) {
-      osc.current.mute = false;
+    // Start and unmute the oscillator if we're at the beginning, playing, or at the end -- not when we're paused.
+    if (isAtBeginning || playState.playing || playState.ended) {
+      osc.current?.start();
+      if (osc.current) {
+        osc.current.mute = false;
+      }
     }
 
     bins.forEach((count, i) => {
@@ -128,7 +136,7 @@ export const GraphSonification = observer(({sonificationStore}: IProps) => {
     Tone.getTransport().scheduleOnce((time) => {
       osc.current?.stop(time);
     }, durationRef.current);
-  }, [binValues, primaryBounds, selectedGraph]);
+  }, [binValues, primaryBounds, selectedGraph, playState.playing, playState.ended, isAtBeginning]);
 
   const scheduleScatter = useCallback(() => {
     if (!selectedGraph || !primaryBounds) return;
@@ -282,7 +290,7 @@ export const GraphSonification = observer(({sonificationStore}: IProps) => {
 
   const handleSetSpeed = (newSpeed: number) => {
     const isPlaying = playState.playing;
-    const isPaused = !playState.playing && !playState.ended;
+    const isPaused = !playState.playing && !playState.ended && !isAtBeginning;
 
     const oldFraction = Tone.getTransport().seconds / durationRef.current;
     const newDuration = kDefaultDuration / newSpeed;
