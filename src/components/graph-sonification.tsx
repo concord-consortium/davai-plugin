@@ -318,11 +318,12 @@ export const GraphSonification = observer(({sonificationStore}: IProps) => {
 
     return graphOptions.map((graph, i) => {
       let displayName = graph.name || graph.title || graph.dataContext;
-      const graphsWithSameName = graphOptions.filter((g) => g.name === graph.name && g.title === graph.title);
+      const graphsWithSameName = graphOptions.filter((g) => 
+        (g.name || g.title || g.dataContext) === (graph.name || graph.title || graph.dataContext)
+      );
       const displayIndex = graphsWithSameName.findIndex((g) => g.id === graph.id);
       if (graphsWithSameName.length > 1) {
         displayName += ` (${displayIndex + 1})`;
-      }
 
       return (
         <option key={i} value={graph.id}>
