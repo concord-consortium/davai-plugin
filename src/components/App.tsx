@@ -86,8 +86,10 @@ export const App = observer(() => {
   useEffect(() => {
     const init = async () => {
       await initializePlugin({pluginName: kPluginName, version: kVersion, dimensions});
-      addComponentListener(handleComponentChangeNotice);
       addDataContextsListListener(handleDocumentChangeNotice);
+      addComponentListener(handleComponentChangeNotice);
+      // This seems to be the only way we can track notifications about graph title changes
+      // since addComponentListener doesn't catch these notifications.
       codapInterface.on("notify", "*", (notification: ClientNotification) => {
         if (notification.values.operation === "titleChange" && notification.values.type === "graph") {
           handleComponentChangeNotice(notification);
