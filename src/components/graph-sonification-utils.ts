@@ -36,7 +36,7 @@ export const interpolateBins = (bins: number[], stepCount: number): number[] => 
   return result;
 };
 
-export const createRoiAdornment = async (graphId: string) => {
+export const createRoiAdornment = async (graphId: number) => {
   await codapInterface.sendRequest({
     action: "create",
     resource: `component[${graphId}].adornment`,
@@ -49,10 +49,10 @@ export const createRoiAdornment = async (graphId: string) => {
 };
 
 
-export const updateRoiAdornment = async (graphName: string, fraction: number) => {
+export const updateRoiAdornment = async (graphId: number, fraction: number) => {
   await codapInterface.sendRequest({
     action: "update",
-    resource: `component[${graphName}].adornment`,
+    resource: `component[${graphId}].adornment`,
     values: {
       type: "Region of Interest",
       primary: { "position": `${fraction * 100}%`, "extent": "0.05%" } // 0.05% consistently approximates 1 pixel
@@ -60,7 +60,7 @@ export const updateRoiAdornment = async (graphName: string, fraction: number) =>
   });
 };
 
-export const removeRoiAdornment = async (graphId: string) => {
+export const removeRoiAdornment = async (graphId: number) => {
   await codapInterface.sendRequest({
     action: "delete",
     resource: `component[${graphId}].adornment`,

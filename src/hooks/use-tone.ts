@@ -23,11 +23,9 @@ export function useTone() {
     };
   }, []);
 
-  const resetUnivariateSources = useCallback(() => {
+  const disposeUnivariateSources = useCallback(() => {
     osc.current?.dispose();
     part.current?.dispose();
-    osc.current =  new Tone.Oscillator();
-    part.current = new Tone.Part();
   }
   , []);
 
@@ -59,8 +57,7 @@ export function useTone() {
     pan,
     poly,
     part,
-    transport: Tone.getTransport(),
-    resetUnivariateSources,
+    disposeUnivariateSources,
     setTransportToStart,
     stopAndResetTransport,
     cancelAndResetTransport,

@@ -29,9 +29,9 @@ export const GraphSonification = observer(({sonificationStore}: IProps) => {
   const durationRef = useRef(kDefaultDuration);
   const frame = useRef<number | null>(null);
   const isLoopingRef = useRef(false);
-  const isNewGraph = useRef(false);
+  const shouldScheduleTones = useRef(false);
 
-  const {osc, pan, poly, part, resetUnivariateSources, cancelAndResetTransport, restartTransport} = useTone();
+  const {osc, pan, poly, part, disposeUnivariateSources, cancelAndResetTransport, restartTransport} = useTone();
   const { scheduleTones } = useSonificationScheduler({ selectedGraph, binValues, pitchFractions,
     timeFractions, timeValues, primaryBounds, osc, pan, poly, part, durationRef });
 
@@ -57,18 +57,27 @@ export const GraphSonification = observer(({sonificationStore}: IProps) => {
     };
    }, []);
 
-   useEffect(() => {
-    // reset the sonification state when the selected graph changes, or when there are updates to the data
+  const reset = useCallback(() => {
     setPlayState({ playing: false, ended: false, position: 0 });
-    updateRoiAdornment(`${selectedGraphID}`, 0);
     cancelAndResetTransport();
-    isNewGraph.current = true;
+    disposeUnivariateSources();
+    // we want to reschedule tones the next time play is pressed
+    shouldScheduleTones.current = true;
+
+    if (selectedGraphID) {
+      createRoiAdornment(selectedGraphID);
+    }
 
     if (frame.current) {
       cancelAnimationFrame(frame.current);
       frame.current = null;
     }
-  }, [selectedGraphID, timeFractions, timeValues, pitchFractions, primaryBounds, bins, minBinEdge, maxBinEdge, binWidth, cancelAndResetTransport]);
+  }, [cancelAndResetTransport, disposeUnivariateSources, selectedGraphID]);
+
+  useEffect(() => {
+    // reset the sonification state when there are updates to the data
+    reset();
+   }, [timeFractions, timeValues, pitchFractions, primaryBounds, bins, minBinEdge, maxBinEdge, binWidth, reset]);
 
   useEffect(() => { isLoopingRef.current = isLooping; }, [isLooping]);
   useEffect(() => { durationRef.current = kDefaultDuration / speed; }, [speed]);
@@ -80,11 +89,12 @@ export const GraphSonification = observer(({sonificationStore}: IProps) => {
   }, []);
 
   const animateSonification = useCallback(() => {
+    if (!selectedGraphID) return;
     const step = () => {
       const elapsed = Tone.getTransport().seconds;
       const fraction = Math.min(elapsed / durationRef.current, 1);
 
-      updateRoiAdornment(`${selectedGraphID}`, fraction);
+      updateRoiAdornment(selectedGraphID, fraction);
       setPlayState(prev => ({ ...prev, position: elapsed }));
 
       if (fraction < 1) {
@@ -97,7 +107,7 @@ export const GraphSonification = observer(({sonificationStore}: IProps) => {
         frame.current = null;
         handlePlayEnd();
       } else {
-        updateRoiAdornment(`${selectedGraphID}`, 0);
+        updateRoiAdornment(selectedGraphID, 0);
         restartTransport();
         frame.current = requestAnimationFrame(step);
       }
@@ -113,15 +123,14 @@ export const GraphSonification = observer(({sonificationStore}: IProps) => {
     }
     setShowError(false);
 
-    if (isNewGraph.current) {
+    if (shouldScheduleTones.current) {
       scheduleTones();
-      createRoiAdornment(`${selectedGraphID}`);
-      isNewGraph.current = false;
+      shouldScheduleTones.current = false;
     }
 
     if (playState.ended || isAtBeginning) {
       setPlayState({ playing: true, ended: false, position: 0 });
-      updateRoiAdornment(`${selectedGraphID}`, 0);
+      updateRoiAdornment(selectedGraphID, 0);
       restartTransport();
       animateSonification();
       return;
@@ -155,16 +164,7 @@ export const GraphSonification = observer(({sonificationStore}: IProps) => {
 
   const handleReset = () => {
     if (isAtBeginning || !selectedGraphID) return;
-
-    setPlayState({ playing: false, ended: false, position: 0 });
-    updateRoiAdornment(`${selectedGraphID}`, 0);
-    isNewGraph.current = true;
-    cancelAndResetTransport();
-    resetUnivariateSources();
-
-    if (frame.current) {
-      cancelAnimationFrame(frame.current);
-    }
+    reset();
   };
 
   const handleToggleLoop = () => {
@@ -214,7 +214,12 @@ export const GraphSonification = observer(({sonificationStore}: IProps) => {
   };
 
   const handleSelectGraph =  async (graphId: string) => {
-    setSelectedGraphID(Number(graphId));
+    const graphIdAsNum = Number(graphId);
+
+    if (graphIdAsNum !== selectedGraphID) {
+      setSelectedGraphID(graphIdAsNum);
+      reset();
+    }
   };
 
   const renderGraphOptions = () => {
@@ -239,7 +244,7 @@ export const GraphSonification = observer(({sonificationStore}: IProps) => {
           {displayName}
         </option>
       );
-      });
+    });
   };
 
   return (
