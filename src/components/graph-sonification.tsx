@@ -325,17 +325,13 @@ export const GraphSonification = observer(({sonificationStore}: IProps) => {
     const graphOptions = validGraphs || [];
 
     return graphOptions.map((graph, i) => {
-      let displayName;
-
-      if (graph.name || graph.title) {
-        displayName = graph.name || graph.title;
-      } else {
-        displayName = graph.dataContext || "";
-        const graphsWithSameName = graphOptions.filter((g) => g.dataContext === graph.dataContext && !g.name && !g.title);
-        const displayIndex = graphsWithSameName.findIndex((g) => g.id === graph.id);
-        if (graphsWithSameName.length > 1) {
-          displayName += ` (${displayIndex + 1})`;
-        }
+      let displayName = graph.name || graph.title || graph.dataContext;
+      const graphsWithSameName = graphOptions.filter((g) =>
+        (g.name || g.title || g.dataContext) === (graph.name || graph.title || graph.dataContext)
+      );
+      const displayIndex = graphsWithSameName.findIndex((g) => g.id === graph.id);
+      if (graphsWithSameName.length > 1) {
+        displayName += ` (${displayIndex + 1})`;
       }
 
       return (

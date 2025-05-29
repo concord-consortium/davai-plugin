@@ -3,7 +3,7 @@ import * as Tone from "tone";
 import { observer } from "mobx-react-lite";
 import removeMarkdown from "remove-markdown";
 import { addComponentListener, addDataContextChangeListener, addDataContextsListListener, ClientNotification,
-  getDataContext, getListOfDataContexts, initializePlugin, selectSelf } from "@concord-consortium/codap-plugin-api";
+  codapInterface, getDataContext, getListOfDataContexts, initializePlugin, selectSelf } from "@concord-consortium/codap-plugin-api";
 import { useAppConfigContext } from "../hooks/use-app-config-context";
 import { useRootStore } from "../hooks/use-root-store";
 import { useAriaLive } from "../contexts/aria-live-context";
@@ -12,7 +12,7 @@ import { ChatInputComponent } from "./chat-input";
 import { ChatTranscriptComponent } from "./chat-transcript";
 import { DAVAI_SPEAKER, DEBUG_SPEAKER, LOADING_NOTE, USER_SPEAKER, notificationsToIgnore } from "../constants";
 import { UserOptions } from "./user-options";
-import { formatJsonMessage, getGraphDetails, playSound } from "../utils/utils";
+import { formatJsonMessage, playSound } from "../utils/utils";
 import { GraphSonification } from "./graph-sonification";
 
 import "./App.scss";
@@ -77,22 +77,24 @@ export const App = observer(() => {
     }
   }, [handleDataContextChangeNotice]);
 
-  const fetchGraphs = useCallback(async () => {
-    const graphDetails = await getGraphDetails();
-    sonificationStore.setGraphs(graphDetails);
-  }, [sonificationStore]);
-
   const handleComponentChangeNotice = useCallback((notification: ClientNotification) => {
     if (notification.values.type === "graph") {
-      fetchGraphs();
+      sonificationStore.setGraphs();
     }
-  }, [fetchGraphs]);
+  }, [sonificationStore]);
 
   useEffect(() => {
     const init = async () => {
       await initializePlugin({pluginName: kPluginName, version: kVersion, dimensions});
-      addComponentListener(handleComponentChangeNotice);
       addDataContextsListListener(handleDocumentChangeNotice);
+      addComponentListener(handleComponentChangeNotice);
+      // This seems to be the only way we can track notifications about graph title changes
+      // since addComponentListener doesn't catch these notifications.
+      codapInterface.on("notify", "*", (notification: ClientNotification) => {
+        if (notification.values.operation === "titleChange" && notification.values.type === "graph") {
+          handleComponentChangeNotice(notification);
+        }
+      });
       const dataContexts = await getListOfDataContexts();
       dataContexts.values.forEach((ctx: Record<string, any>) => {
         subscribedDataCtxsRef.current.push(ctx.name);
@@ -101,7 +103,7 @@ export const App = observer(() => {
     };
 
     init();
-    fetchGraphs();
+    sonificationStore.setGraphs();
     selectSelf();
 
   // eslint-disable-next-line react-hooks/exhaustive-deps

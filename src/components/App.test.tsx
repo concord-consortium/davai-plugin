@@ -17,6 +17,7 @@ jest.mock("../hooks/use-root-store", () => ({
     },
     sonificationStore: {
       selectedGraph: { id: "graph1", name: "Graph 1" },
+      setGraphs: jest.fn(),
     }
   }))
 }));
