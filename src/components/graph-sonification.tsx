@@ -1,11 +1,11 @@
 import React, { useCallback, useEffect, useRef, useState } from "react";
 import { observer } from "mobx-react-lite";
 import * as Tone from "tone";
-import { codapInterface } from "@concord-consortium/codap-plugin-api";
 import { GraphSonificationModelType } from "../models/graph-sonification-model";
-import { mapPitchFractionToFrequency, mapValueToStereoPan, updateRoiAdornment } from "./graph-sonification-utils";
+import { createRoiAdornment, updateRoiAdornment } from "./graph-sonification-utils";
 import { ErrorMessage } from "./error-message";
-import { isUnivariateDotPlot } from "../utils/utils";
+import { useTone } from "../hooks/use-tone";
+import { useSonificationScheduler } from "../hooks/use-sonification-scheduler";
 
 import PlayIcon from "../assets/play-sonification-icon.svg";
 import PauseIcon from "../assets/pause-sonification-icon.svg";
@@ -22,15 +22,18 @@ interface IProps {
 const kDefaultDuration = 5;
 
 export const GraphSonification = observer(({sonificationStore}: IProps) => {
-  const { validGraphs, selectedGraph, setSelectedGraphID, setGraphItems, timeFractions, timeValues,
+  const { validGraphs, selectedGraph, setSelectedGraphID, timeFractions, timeValues,
     pitchFractions, primaryBounds, binValues } = sonificationStore;
-  const gain = useRef<Tone.Gain | null>(null);
-  const osc = useRef<Tone.Oscillator | null>(null);
-  const pan = useRef<Tone.Panner | null>(null);
-  const poly = useRef<Tone.PolySynth | null>(null);
+  const { bins, minBinEdge, maxBinEdge, binWidth } = binValues || {};
+
+  const durationRef = useRef(kDefaultDuration);
   const frame = useRef<number | null>(null);
   const isLoopingRef = useRef(false);
-  const durationRef = useRef(kDefaultDuration);
+  const isNewGraph = useRef(false);
+
+  const {osc, gain, pan, poly, part, resetUnivariateSources, cancelAndResetTransport, restartTransport} = useTone();
+  const { scheduleTones } = useSonificationScheduler({ selectedGraph, binValues, pitchFractions,
+    timeFractions, timeValues, primaryBounds, osc, pan, gain, poly, part, durationRef });
 
   const [showError, setShowError] = useState(false);
   const [speed, setSpeed] = useState(1);
@@ -45,11 +48,6 @@ export const GraphSonification = observer(({sonificationStore}: IProps) => {
   const isAtBeginning = playState.position === 0;
 
   useEffect(() => {
-    pan.current   = new Tone.Panner(0).toDestination();
-    gain.current  = new Tone.Gain(1).connect(pan.current);
-    poly.current  = new Tone.PolySynth().connect(gain.current);
-    osc.current   = new Tone.Oscillator(220, "sine").connect(gain.current);
-
     return () => {
       // Ensure requestAnimationFrame is cancelled if the component unmounts during playback
       if (frame.current) {
@@ -60,123 +58,26 @@ export const GraphSonification = observer(({sonificationStore}: IProps) => {
    }, []);
 
    useEffect(() => {
-    // reset the sonification state when the selected graph changes
+    // reset the sonification state when the selected graph changes, or when there are updates to the data
     setPlayState({ playing: false, ended: false, position: 0 });
-    Tone.getTransport().stop();
-    Tone.getTransport().cancel();
-    Tone.getTransport().position = 0;
-
-    if (osc.current) {
-      osc.current.stop();
-    }
+    updateRoiAdornment(`${selectedGraphID}`, 0);
+    cancelAndResetTransport();
+    isNewGraph.current = true;
 
     if (frame.current) {
       cancelAnimationFrame(frame.current);
       frame.current = null;
     }
-  }, [selectedGraphID, setGraphItems]);
+  }, [selectedGraphID, timeFractions, timeValues, pitchFractions, primaryBounds, bins, minBinEdge, maxBinEdge, binWidth, cancelAndResetTransport]);
 
   useEffect(() => { isLoopingRef.current = isLooping; }, [isLooping]);
   useEffect(() => { durationRef.current = kDefaultDuration / speed; }, [speed]);
 
-  const restartTransport = () => {
-    Tone.getTransport().seconds = 0;
-    Tone.getTransport().position = 0;
-    Tone.getTransport().start();
-  };
-
   const handlePlayEnd = useCallback(() => {
     const position = Tone.getTransport().seconds;
     setPlayState({ playing: false, ended: true, position });
-    
-    // Clean up oscillator state
-    if (osc.current) {
-      osc.current.stop();
-      osc.current.mute = true;
-    }
+    Tone.getTransport().stop();
   }, []);
-
-  const scheduleUnivariate = useCallback(() => {
-    if (!binValues || !selectedGraph || !primaryBounds) return;
-    const { bins, minBinEdge, maxBinEdge, binWidth } = binValues;
-    const binDuration = durationRef.current / bins.length;
-    const maxCount = (Math.max(...bins) || 1);
-
-    const getBinPanValue = (i: number) => {
-      const binAvgForPanValue = minBinEdge + (i + 0.5) * binWidth;
-      return mapValueToStereoPan(binAvgForPanValue, minBinEdge, maxBinEdge);
-    };
-
-    // Start and unmute the oscillator if we're at the beginning, playing, or at the end -- not when we're paused.
-    if (isAtBeginning || playState.playing || playState.ended) {
-      osc.current?.start();
-      if (osc.current) {
-        osc.current.mute = false;
-      }
-    }
-
-    bins.forEach((count, i) => {
-      const offset = i * binDuration;
-      const prevValue = i === 0 ? undefined : bins[i - 1];
-      const rampTime = count === 0 ? 0.01 : binDuration / 4;
-      Tone.getTransport().scheduleOnce((time) => {
-        const countFraction = count / maxCount;
-        const freq = mapPitchFractionToFrequency(countFraction);
-        const panValue = getBinPanValue(i);
-        pan.current?.pan.rampTo(panValue, rampTime, time);
-        osc.current?.frequency.rampTo(freq, rampTime, time);
-        if (count === 0) {
-          gain.current?.gain.rampTo(0, rampTime, time);
-        } else if (prevValue === 0) {
-          gain.current?.gain.rampTo(1, rampTime, time);
-        }
-      }, offset);
-    });
-
-    Tone.getTransport().scheduleOnce((time) => {
-      osc.current?.stop(time);
-    }, durationRef.current);
-  }, [binValues, primaryBounds, selectedGraph, playState.playing, playState.ended, isAtBeginning]);
-
-  const scheduleScatter = useCallback(() => {
-    if (!selectedGraph || !primaryBounds) return;
-
-    const fractionGroups: Record<number, number[]> = {};
-    const { lowerBound: timeLowerBound, upperBound: timeUpperBound } = primaryBounds;
-    if (!timeLowerBound || !timeUpperBound) return;
-    timeFractions.forEach((frac: number, i: number) => {
-      if (!fractionGroups[frac]) fractionGroups[frac] = [];
-      fractionGroups[frac].push(i);
-    });
-
-    const uniqueFractions = Object.keys(fractionGroups)
-      .map(parseFloat)
-      .sort((a, b) => a - b);
-
-    uniqueFractions.forEach((fraction) => {
-      const offsetSeconds = fraction * durationRef.current;
-      const indices = fractionGroups[fraction];
-
-      Tone.getTransport().scheduleOnce((time) => {
-        indices.forEach((i) => {
-          const pFrac = pitchFractions[i];
-          const freq = mapPitchFractionToFrequency(pFrac);
-          const panValue = mapValueToStereoPan(timeValues[i], timeLowerBound, timeUpperBound);
-          pan.current?.pan.setValueAtTime(panValue, time);
-          poly.current?.triggerAttackRelease(freq, "8n", time);
-        });
-      }, offsetSeconds);
-    });
-  }, [selectedGraph, primaryBounds, timeFractions, pitchFractions, timeValues]);
-
-  const scheduleTones = useCallback(() => {
-    if (!selectedGraph) return;
-    if (selectedGraph.plotType === "scatterPlot") {
-      scheduleScatter();
-    } else if (isUnivariateDotPlot(selectedGraph)) {
-      scheduleUnivariate();
-    }
-  }, [scheduleScatter, scheduleUnivariate, selectedGraph]);
 
   const animateSonification = useCallback(() => {
     const step = () => {
@@ -195,45 +96,34 @@ export const GraphSonification = observer(({sonificationStore}: IProps) => {
         cancelAnimationFrame(frame.current);
         frame.current = null;
         handlePlayEnd();
-        Tone.getTransport().stop();
       } else {
         updateRoiAdornment(`${selectedGraphID}`, 0);
-        scheduleTones();
         restartTransport();
         frame.current = requestAnimationFrame(step);
       }
     };
 
     frame.current = requestAnimationFrame(step);
-  }, [handlePlayEnd, scheduleTones, selectedGraphID]);
-
-  const prepareSonification = async () => {
-      await codapInterface.sendRequest({
-        action: "create",
-        resource: `component[${selectedGraphID}].adornment`,
-        values: {
-          type: "Region of Interest",
-          primary: { "position": "0%", "extent": "0.05%" }, // 0.05% consistently approximates 1 pixel
-          secondary: { "position": "0%", "extent": "100%" }
-        }
-      });
-
-      scheduleTones();
-      restartTransport();
-      animateSonification();
-  };
+  }, [handlePlayEnd, restartTransport, selectedGraphID]);
 
   const handlePlayPause = () => {
     if (!selectedGraphID) {
       setShowError(true);
       return;
-    } else {
-      setShowError(false);
+    }
+    setShowError(false);
+
+    if (isNewGraph.current) {
+      scheduleTones();
+      createRoiAdornment(`${selectedGraphID}`);
+      isNewGraph.current = false;
     }
 
     if (playState.ended || isAtBeginning) {
       setPlayState({ playing: true, ended: false, position: 0 });
-      prepareSonification();
+      updateRoiAdornment(`${selectedGraphID}`, 0);
+      restartTransport();
+      animateSonification();
       return;
     }
 
@@ -241,11 +131,6 @@ export const GraphSonification = observer(({sonificationStore}: IProps) => {
       const position = Tone.getTransport().seconds;
       // if we were paused, resume
       if (!prev.playing) {
-        if (osc.current) {
-          osc.current.mute = false;
-        }
-        Tone.getTransport().cancel(); // cancel scheduled events
-        scheduleTones(); // reschedule based on updated values
         Tone.getTransport().start();
         animateSonification();
         return {
@@ -255,9 +140,6 @@ export const GraphSonification = observer(({sonificationStore}: IProps) => {
         };
       }
       // otherwise, pause
-      if (osc.current) {
-        osc.current.mute = true;
-      }
       Tone.getTransport().pause();
       if (frame.current) {
         cancelAnimationFrame(frame.current);
@@ -276,8 +158,9 @@ export const GraphSonification = observer(({sonificationStore}: IProps) => {
 
     setPlayState({ playing: false, ended: false, position: 0 });
     updateRoiAdornment(`${selectedGraphID}`, 0);
-    Tone.getTransport().stop();
-    osc.current?.stop();
+    isNewGraph.current = true;
+    cancelAndResetTransport();
+    resetUnivariateSources();
 
     if (frame.current) {
       cancelAnimationFrame(frame.current);
@@ -292,13 +175,21 @@ export const GraphSonification = observer(({sonificationStore}: IProps) => {
     const isPlaying = playState.playing;
     const isPaused = !playState.playing && !playState.ended && !isAtBeginning;
 
-    const oldFraction = Tone.getTransport().seconds / durationRef.current;
+    const oldDuration = durationRef.current;
     const newDuration = kDefaultDuration / newSpeed;
 
     durationRef.current = newDuration;
     setSpeed(newSpeed);
 
+    if (isPlaying) {
+      // pause to get accurate position in next step
+      Tone.getTransport().pause();
+    }
+
     if (isPlaying || isPaused) {
+      const oldFraction = Tone.getTransport().seconds / oldDuration;
+      // now stop the transport + synced sources and cancel any scheduled events
+      Tone.getTransport().stop();
       Tone.getTransport().cancel();
 
       if (frame.current) {
@@ -313,7 +204,12 @@ export const GraphSonification = observer(({sonificationStore}: IProps) => {
         ...prev,
         position: newPositionSeconds,
       }));
-      animateSonification(); // picks up at new speed
+    }
+
+    if (isPlaying) {
+      // if we were playing, restart the transport + animation
+      Tone.getTransport().start();
+      animateSonification();
     }
   };
 
