@@ -133,3 +133,15 @@ export interface ICODAPGraph {
   yLowerBound?: number;
   yUpperBound?: number;
 }
+
+export type UnivariateNote = {
+  freqValue: number;
+  panValue: number;
+};
+
+export type ScatterNote = {
+  voices: {
+    freqValue: number;
+    panValue: number;
+  }[];
+};
