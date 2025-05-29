@@ -31,9 +31,9 @@ export const GraphSonification = observer(({sonificationStore}: IProps) => {
   const isLoopingRef = useRef(false);
   const isNewGraph = useRef(false);
 
-  const {osc, gain, pan, poly, part, resetUnivariateSources, cancelAndResetTransport, restartTransport} = useTone();
+  const {osc, pan, poly, part, resetUnivariateSources, cancelAndResetTransport, restartTransport} = useTone();
   const { scheduleTones } = useSonificationScheduler({ selectedGraph, binValues, pitchFractions,
-    timeFractions, timeValues, primaryBounds, osc, pan, gain, poly, part, durationRef });
+    timeFractions, timeValues, primaryBounds, osc, pan, poly, part, durationRef });
 
   const [showError, setShowError] = useState(false);
   const [speed, setSpeed] = useState(1);

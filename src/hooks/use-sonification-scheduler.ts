@@ -13,14 +13,13 @@ type Props = {
   primaryBounds: any;
   osc: React.MutableRefObject<Tone.Oscillator | null>;
   pan: React.MutableRefObject<Tone.Panner | null>;
-  gain: React.MutableRefObject<Tone.Gain | null>;
   poly: React.MutableRefObject<Tone.PolySynth | null>;
   part: React.MutableRefObject<Tone.Part | null>;
   durationRef: React.MutableRefObject<number>;
 };
 
 export const useSonificationScheduler = ({ selectedGraph, binValues, pitchFractions, timeFractions, timeValues, primaryBounds,
-  osc, pan, gain, poly, part, durationRef}: Props) => {
+  osc, pan, poly, part, durationRef}: Props) => {
 
   const scheduleUnivariate = useCallback(() => {
     if (!binValues || !primaryBounds) return;
@@ -86,15 +85,15 @@ export const useSonificationScheduler = ({ selectedGraph, binValues, pitchFracti
 
     if (selectedGraph.plotType === "scatterPlot") {
       scheduleScatter();
-    } else if (isUnivariateDotPlot(selectedGraph) && gain.current) {
+    } else if (isUnivariateDotPlot(selectedGraph) && pan.current) {
       // create a new oscillator to use for univariate sonification
-      osc.current = new Tone.Oscillator(220, "sine").connect(gain.current);
+      osc.current = new Tone.Oscillator(220, "sine").connect(pan.current);
       // this syncs the oscillator to the transport, so that when we call transport.start or
       // transport.stop, the oscillator will start/stop accordingly
       osc.current.sync().start(0).stop(durationRef.current);
       scheduleUnivariate();
     }
-  }, [osc, part, selectedGraph, gain, scheduleScatter, durationRef, scheduleUnivariate]);
+  }, [osc, part, selectedGraph, pan, scheduleScatter, durationRef, scheduleUnivariate]);
 
   return {
     scheduleTones

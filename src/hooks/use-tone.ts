@@ -3,7 +3,6 @@ import * as Tone from "tone";
 
 export function useTone() {
   const pan = useRef<Tone.Panner | null>(null);
-  const gain = useRef<Tone.Gain | null>(null);
   const osc = useRef<Tone.Oscillator | null>(null);
   const poly = useRef<Tone.PolySynth | null>(null);
   const part = useRef<Tone.Part | null>(null);
@@ -11,14 +10,12 @@ export function useTone() {
   useEffect(() => {
     // Setup audio graph
     pan.current = new Tone.Panner(0).toDestination();
-    gain.current = new Tone.Gain(1).connect(pan.current);
-    poly.current = new Tone.PolySynth().connect(gain.current);
+    poly.current = new Tone.PolySynth().connect(pan.current);
     osc.current = new Tone.Oscillator(); // we don't want to initialize it with a frequency yet
     part.current = new Tone.Part(); // we don't want to initialize it with any events yet
 
     return () => {
       Tone.getTransport().cancel();
-      gain.current?.dispose();
       osc.current?.dispose();
       pan.current?.dispose();
       part.current?.dispose();
@@ -59,7 +56,6 @@ export function useTone() {
 
   return {
     osc,
-    gain,
     pan,
     poly,
     part,
