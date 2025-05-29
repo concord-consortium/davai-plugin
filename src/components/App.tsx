@@ -3,7 +3,7 @@ import * as Tone from "tone";
 import { observer } from "mobx-react-lite";
 import removeMarkdown from "remove-markdown";
 import { addComponentListener, addDataContextChangeListener, addDataContextsListListener, ClientNotification,
-  getDataContext, getListOfDataContexts, initializePlugin, selectSelf } from "@concord-consortium/codap-plugin-api";
+  codapInterface, getDataContext, getListOfDataContexts, initializePlugin, selectSelf } from "@concord-consortium/codap-plugin-api";
 import { useAppConfigContext } from "../hooks/use-app-config-context";
 import { useRootStore } from "../hooks/use-root-store";
 import { useAriaLive } from "../contexts/aria-live-context";
@@ -88,6 +88,11 @@ export const App = observer(() => {
       await initializePlugin({pluginName: kPluginName, version: kVersion, dimensions});
       addComponentListener(handleComponentChangeNotice);
       addDataContextsListListener(handleDocumentChangeNotice);
+      codapInterface.on("notify", "*", (notification: ClientNotification) => {
+        if (notification.values.operation === "titleChange" && notification.values.type === "graph") {
+          handleComponentChangeNotice(notification);
+        }
+      });
       const dataContexts = await getListOfDataContexts();
       dataContexts.values.forEach((ctx: Record<string, any>) => {
         subscribedDataCtxsRef.current.push(ctx.name);
