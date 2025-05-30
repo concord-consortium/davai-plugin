@@ -6,6 +6,7 @@ import { DAVAI_SPEAKER, DEBUG_SPEAKER, WAIT_STATES, ERROR_STATES } from "../cons
 import { convertBase64ToImage, formatJsonMessage, getGraphByID, getDataContexts, getParsedData, isGraphSonifiable } from "../utils/utils";
 import { requestThreadDeletion } from "../utils/openai-utils";
 import { ChatTranscriptModel } from "./chat-transcript-model";
+import { openAiModel } from "../utils/langchain-utils";
 
 const OpenAIType = types.custom({
   name: "OpenAIType",
@@ -72,6 +73,9 @@ export const AssistantModel = types
     },
     addDbgMsg (description: string, content: any) {
       self.transcriptStore.addMessage(DEBUG_SPEAKER, { description, content });
+    },
+    setShowLoadingIndicator(show: boolean) {
+      self.showLoadingIndicator = show;
     }
   }))
   .actions((self) => ({
@@ -90,24 +94,28 @@ export const AssistantModel = types
   .actions((self) => ({
     addMessageToCODAPNotificationQueue(msg: string) {
       self.codapNotificationQueue.push(msg);
+    },
+    initializeAssistant() {
+      if (self.assistantId === "mock") return;
+      self.assistant = openAiModel;
     }
   }))
   .actions((self) => {
-    const initializeAssistant = flow(function* () {
-      if (self.assistantId === "mock") return;
+    // const initializeAssistant = flow(function* () {
+    //   if (self.assistantId === "mock") return;
 
-      try {
-        if (!self.apiConnection) throw new Error("API connection is not initialized");
-        self.assistant  = yield self.apiConnection.beta.assistants.retrieve(self.assistantId);
-        self.thread = yield self.apiConnection.beta.threads.create();
-        self.addDbgMsg("You are chatting with assistant", formatJsonMessage(self.assistant));
-        self.addDbgMsg("New thread created", formatJsonMessage(self.thread));
-        fetchAndSendDataContexts();
-      } catch (err) {
-        console.error("Failed to initialize assistant:", err);
-        self.addDbgMsg("Failed to initialize assistant", formatJsonMessage(err));
-      }
-    });
+    //   try {
+    //     if (!self.apiConnection) throw new Error("API connection is not initialized");
+    //     self.assistant  = yield self.apiConnection.beta.assistants.retrieve(self.assistantId);
+    //     self.thread = yield self.apiConnection.beta.threads.create();
+    //     self.addDbgMsg("You are chatting with assistant", formatJsonMessage(self.assistant));
+    //     self.addDbgMsg("New thread created", formatJsonMessage(self.thread));
+    //     fetchAndSendDataContexts();
+    //   } catch (err) {
+    //     console.error("Failed to initialize assistant:", err);
+    //     self.addDbgMsg("Failed to initialize assistant", formatJsonMessage(err));
+    //   }
+    // });
 
     const fetchAssistantsList = flow(function* () {
       try{
@@ -468,7 +476,7 @@ export const AssistantModel = types
       }
     });
 
-    return { createThread, deleteThread, initializeAssistant, fetchAssistantsList, handleMessageSubmit, handleCancel, sendDataCtxChangeInfo, sendCODAPDocumentInfo };
+    return { createThread, deleteThread, fetchAssistantsList, handleMessageSubmit, handleCancel, sendDataCtxChangeInfo, sendCODAPDocumentInfo };
   })
   .actions((self) => ({
     afterCreate() {

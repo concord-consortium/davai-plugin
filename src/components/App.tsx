@@ -154,7 +154,11 @@ export const App = observer(() => {
     if (appConfig.isAssistantMocked) {
       assistantStore.handleMessageSubmitMockAssistant();
     } else {
-      assistantStore.handleMessageSubmit(messageText);
+      // assistantStore.handleMessageSubmit(messageText);
+      assistantStore.assistant.setShowLoadingIndicator(true);
+      const response = await assistantStore.assistant.invoke([{ role: "user", content: messageText }]);
+      assistantStore.addDavaiMsg(response);
+      assistantStore.assistant.setShowLoadingIndicator(false);
     }
   };
 
