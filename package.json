@@ -104,8 +104,11 @@
     "webpack-dev-server": "^4.15.0"
   },
   "dependencies": {
+    "@langchain/google-genai": "^0.2.10",
+    "@langchain/openai": "^0.5.11",
     "@types/dom-speech-recognition": "^0.0.4",
     "dotenv": "^16.4.5",
+    "langchain": "^0.3.27",
     "mobx": "^6.13.7",
     "mobx-react-lite": "^4.0.7",
     "mobx-state-tree": "^7.0.0",
