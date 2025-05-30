@@ -41,8 +41,8 @@ export const DeveloperOptionsComponent = observer(({assistantStore, createToggle
     // First make sure the user is OK with that.
     const id = e.target.value;
 
-    const threadDeleted = await handleDeleteThread();
-    if (!threadDeleted) return;
+    //const threadDeleted = await handleDeleteThread();
+    //if (!threadDeleted) return;
 
     if (id === "mock") {
       assistantStore.transcriptStore.clearTranscript();
@@ -63,7 +63,7 @@ export const DeveloperOptionsComponent = observer(({assistantStore, createToggle
       {createToggleOption("showDebugLog", "Show Debug Log")}
       <div className="user-option">
         <label htmlFor="assistant-select" data-testid="assistant-select-label">
-          Select an Assistant:
+          Select a Model:
         </label>
         <select
           id="assistant-select"
@@ -71,8 +71,10 @@ export const DeveloperOptionsComponent = observer(({assistantStore, createToggle
           value={selectedAssistant}
           onChange={handleSelectAssistant}
         >
-          <option value="mock">Mock Assistant</option>
-          {Array.from(assistantStore.assistantList?.entries() || []).map(([assistantId, assistantName]) => (
+          {/* <option value="mock">Mock Assistant</option> */}
+          <option value="openai">OpenAI</option>
+          <option value="gemini">Gemini</option>
+          {/* {Array.from(assistantStore.assistantList?.entries() || []).map(([assistantId, assistantName]) => (
             <option
               aria-selected={assistantStore.assistantId === assistantId}
               key={assistantId}
@@ -80,7 +82,7 @@ export const DeveloperOptionsComponent = observer(({assistantStore, createToggle
             >
               {assistantName}
             </option>
-          ))}
+          ))} */}
         </select>
       </div>
       <div className="user-option">

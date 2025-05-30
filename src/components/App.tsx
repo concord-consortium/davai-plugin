@@ -14,6 +14,7 @@ import { DAVAI_SPEAKER, DEBUG_SPEAKER, LOADING_NOTE, USER_SPEAKER, notifications
 import { UserOptions } from "./user-options";
 import { formatJsonMessage, playSound } from "../utils/utils";
 import { GraphSonification } from "./graph-sonification";
+import { geminiModel, openAiModel } from "../utils/langchain-utils";
 
 import "./App.scss";
 
@@ -110,7 +111,7 @@ export const App = observer(() => {
   }, []);
 
   useEffect(() => {
-    assistantStore.initializeAssistant();
+    // assistantStore.initializeAssistant();
     assistantStoreRef.current = assistantStore;
   }, [assistantStore, appConfig.assistantId]);
 
@@ -155,10 +156,11 @@ export const App = observer(() => {
       assistantStore.handleMessageSubmitMockAssistant();
     } else {
       // assistantStore.handleMessageSubmit(messageText);
-      assistantStore.assistant.setShowLoadingIndicator(true);
-      const response = await assistantStore.assistant.invoke([{ role: "user", content: messageText }]);
-      assistantStore.addDavaiMsg(response);
-      assistantStore.assistant.setShowLoadingIndicator(false);
+      // assistantStore.assistant.setShowLoadingIndicator(true);
+      const llm = appConfig.assistantId === "gemini" ? geminiModel : openAiModel;
+      const response = await llm.invoke([{ role: "user", content: messageText }]);
+      assistantStore.addDavaiMsg(response.content as string);
+      // assistantStore.assistant.setShowLoadingIndicator(false);
     }
   };
 
@@ -179,7 +181,7 @@ export const App = observer(() => {
         isLoading={assistantStore.showLoadingIndicator}
       />
       <ChatInputComponent
-        disabled={(!assistantStore.thread && !appConfig.isAssistantMocked) || assistantStore.showLoadingIndicator}
+        disabled={assistantStore.showLoadingIndicator}
         isLoading={assistantStore.showLoadingIndicator}
         onCancel={handleCancel}
         onSubmit={handleChatInputSubmit}
