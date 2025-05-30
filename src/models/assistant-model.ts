@@ -411,10 +411,8 @@ export const AssistantModel = types
                   self.uploadFileAfterRun = true;
                   self.dataUri = res.values.exportDataUri;
                   const graphID = resource.match(/\[(\d+)\]/)?.[1];
-                  // We'll also send data for the attributes on the graph for additional context
+                  // We also send data for the attributes on the graph for additional context
                   self.dataContextForGraph = yield getGraphAttrData(graphID);
-                  // TODO: Remove this console log when done with testing
-                  console.log("Attribute data for graph", self.dataContextForGraph);
                 }
                 // remove any exportDataUri value that exists since it can be large and we don't need to send it to the assistant
                 res = isImageSnapshotRequest
