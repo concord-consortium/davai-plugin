@@ -70,8 +70,8 @@ export const AssistantModel = types
     transcriptStore: ChatTranscriptModel
   })
   .volatile(() => ({
-    dataUri: "",
     dataContextForGraph: null as IGraphAttrData | null,
+    dataUri: "",
     uploadFileAfterRun: false,
     updateSonificationStoreAfterRun: false,
   }))
@@ -335,13 +335,8 @@ export const AssistantModel = types
             yAxis: combinedYAxisData
           };
 
-          if (graphAttrData) {
-            self.addDbgMsg("Data context for graph", formatJsonMessage(graphAttrData));
-            return graphAttrData;
-          } else {
-            self.addDbgMsg("No data context found for graph", formatJsonMessage(graph));
-            return null;
-          }
+          self.addDbgMsg("Data context for graph", formatJsonMessage(graphAttrData));
+          return graphAttrData;
         } else {
           self.addDbgMsg("No graph found with ID", graphID);
           return null;
@@ -410,9 +405,15 @@ export const AssistantModel = types
                 if (isImageSnapshotRequest) {
                   self.uploadFileAfterRun = true;
                   self.dataUri = res.values.exportDataUri;
-                  const graphID = resource.match(/\[(\d+)\]/)?.[1];
-                  // We also send data for the attributes on the graph for additional context
-                  self.dataContextForGraph = yield getGraphAttrData(graphID);
+                  const graphIdMatch = resource.match(/\[(\d+)\]/);
+                  const graphID = graphIdMatch?.[1];
+                  if (graphID) {
+                    // Send data for the attributes on the graph for additional context
+                    self.dataContextForGraph = yield getGraphAttrData(graphID);
+                  } else {
+                    self.addDbgMsg("Could not extract graphID from resource string", resource);
+                    self.dataContextForGraph = null;
+                  }
                 }
                 // remove any exportDataUri value that exists since it can be large and we don't need to send it to the assistant
                 res = isImageSnapshotRequest
