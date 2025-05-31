@@ -12,8 +12,9 @@ import { ChatInputComponent } from "./chat-input";
 import { ChatTranscriptComponent } from "./chat-transcript";
 import { DAVAI_SPEAKER, DEBUG_SPEAKER, LOADING_NOTE, USER_SPEAKER, notificationsToIgnore } from "../constants";
 import { UserOptions } from "./user-options";
-import { formatJsonMessage, playSound } from "../utils/utils";
+import { formatJsonMessage, getGraphDetails, isGraphSonifiable, playSound } from "../utils/utils";
 import { GraphSonification } from "./graph-sonification";
+import { ICODAPGraph } from "../types";
 
 import "./App.scss";
 
@@ -77,9 +78,22 @@ export const App = observer(() => {
     }
   }, [handleDataContextChangeNotice]);
 
-  const handleComponentChangeNotice = useCallback((notification: ClientNotification) => {
+  const handleComponentChangeNotice = useCallback(async (notification: ClientNotification) => {
     if (notification.values.type === "graph") {
       sonificationStore.setGraphs();
+
+      // If this is an attribute change and the graph is sonifiable, automatically set it as selected.
+      if (notification.values.operation === "attributeChange") {
+        try {
+          const graphs = await getGraphDetails();
+          const graph = graphs.find((g: ICODAPGraph) => g.id === notification.values.id);
+          if (graph && isGraphSonifiable(graph)) {
+            sonificationStore.setSelectedGraphID(graph.id);
+          }
+        } catch (error) {
+          console.error("Failed to fetch graph details for auto-selection:", error);
+        }
+      }
     }
   }, [sonificationStore]);
 
