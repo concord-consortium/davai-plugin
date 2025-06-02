@@ -17,11 +17,13 @@
   "description": "",
   "dependencies": {
     "@langchain/google-genai": "^0.2.10",
+    "@langchain/langgraph": "^0.2.74",
     "@langchain/openai": "^0.5.11",
     "cors": "^2.8.5",
     "dotenv": "^16.5.0",
     "express": "^5.1.0",
     "jsdom": "^26.1.0",
+    "langchain": "^0.3.27",
     "uuid": "^11.1.0",
     "zod": "^3.25.48"
   },

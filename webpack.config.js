@@ -151,9 +151,9 @@ module.exports = (env, argv) => {
         publicPath: DEPLOY_PATH
       })] : []),
       new CleanWebpackPlugin(),
-      // new webpack.DefinePlugin({
-      //   'process.env': JSON.stringify(process.env),
-      // }),
+      new webpack.DefinePlugin({
+        'process.env': JSON.stringify(process.env),
+      }),
     ]
   };
 };
