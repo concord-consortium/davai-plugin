@@ -32,7 +32,6 @@ export const useRootStore = () => {
         transcriptStore: newTranscriptStore,
       }),
       sonificationStore: GraphSonificationModel.create({
-        selectedGraph: undefined,
         binValues: BinModel.create({
           values: []
         }),

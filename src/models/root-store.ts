@@ -9,8 +9,25 @@ export const RootStore = types.model("RootStore", {
 
 export function createRootStore() {
   return RootStore.create({
-    assistantStore: {},
-    sonificationStore: {}
+    assistantStore: AssistantModel.create({
+      transcriptStore: {},
+      dataContexts: [],
+      selectedDataContext: "",
+      selectedDataContextInfo: {},
+      dataContextItems: [],
+      dataContextNames: [],
+      dataContextAttributes: [],
+      dataContextAttributeValues: [],
+      dataContextAttributeTypes: [],
+      dataContextAttributeNames: [],
+      dataContextAttributeDescriptions: []
+    }),
+    sonificationStore: GraphSonificationModel.create({
+      allGraphs: [],
+      selectedGraphID: undefined,
+      graphItems: undefined,
+      binValues: {}
+    })
   });
 }
 

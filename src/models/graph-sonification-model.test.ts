@@ -66,7 +66,7 @@ describe("GraphSonificationModel", () => {
         selectedGraphID: undefined,
         graphItems: undefined,
         binValues: {
-          bins: [],
+          values: [],
           minBinEdge: 0,
           maxBinEdge: 0,
           binWidth: 0

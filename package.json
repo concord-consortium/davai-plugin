@@ -4,6 +4,7 @@
   "description": "Data Analysis through Voice and Artificial Intelligence",
   "main": "index.js",
   "browserslist": "> 0.2%, last 5 versions, Firefox ESR, not dead, not ie > 0",
+  "proxy": "http://localhost:5000",
   "scripts": {
     "start": "webpack serve --no-https",
     "start:secure": "webpack serve",
@@ -108,7 +109,6 @@
     "@langchain/openai": "^0.5.11",
     "@types/dom-speech-recognition": "^0.0.4",
     "dotenv": "^16.4.5",
-    "langchain": "^0.3.27",
     "mobx": "^6.13.7",
     "mobx-react-lite": "^4.0.7",
     "mobx-state-tree": "^7.0.0",
@@ -119,6 +119,7 @@
     "react-markdown": "^9.0.1",
     "remove-markdown": "^0.6.0",
     "tone": "^15.0.4",
-    "tslib": "^2.5.2"
+    "tslib": "^2.5.2",
+    "uuid": "^11.1.0"
   }
 }

@@ -26,7 +26,7 @@ const mockTranscriptStore = ChatTranscriptModel.create({
   messages: [
     {
       speaker: "DAVAI",
-      content: "Hello. How can I help you today?",
+      messageContent: { content: "Hello. How can I help you today?" },
       timestamp: "2021-07-01T12:00:00Z",
       id: "msg_1",
     },
@@ -70,14 +70,14 @@ describe("test developer options component", () => {
     expect(developerOptions).toBeInTheDocument();
 
     const selectAssistantOptionLabel = screen.getByTestId("assistant-select-label");
-    expect(selectAssistantOptionLabel).toHaveTextContent("Select an Assistant");
+    expect(selectAssistantOptionLabel).toHaveTextContent("Select a Model");
     const selectAssistantOption = screen.getByTestId("assistant-select");
     expect(selectAssistantOption).toBeInTheDocument();
     await waitFor(() => {
-      expect(selectAssistantOption).toHaveValue("asst_abc123");
+      expect(selectAssistantOption).toHaveValue("openai");
     });
     await waitFor(() => {
-      expect(selectAssistantOption).toHaveTextContent("Jest Mock Assistant");
+      expect(selectAssistantOption).toHaveTextContent("OpenAIGemini");
     });
 
     const deleteThreadButton = screen.getByTestId("delete-thread-button");

@@ -14,7 +14,7 @@ import { DAVAI_SPEAKER, DEBUG_SPEAKER, LOADING_NOTE, USER_SPEAKER, notifications
 import { UserOptions } from "./user-options";
 import { formatJsonMessage, playSound } from "../utils/utils";
 import { GraphSonification } from "./graph-sonification";
-import { geminiModel, openAiModel } from "../utils/langchain-utils";
+import { nanoid } from "nanoid";
 
 import "./App.scss";
 
@@ -31,6 +31,35 @@ export const App = observer(() => {
   const dimensions = { width: appConfig.dimensions.width, height: appConfig.dimensions.height };
   const subscribedDataCtxsRef = useRef<string[]>([]);
   const transcriptStore = assistantStore.transcriptStore;
+  const threadId = useRef(nanoid());
+
+  const sendInitialContext = useCallback(async () => {
+    try {
+      const dataContexts = await getListOfDataContexts();
+      const contextMessage = {
+        role: "user",
+        content: `This is a system message containing information about the CODAP document. Data contexts: \n${JSON.stringify(dataContexts.values, null, 2)}`
+      };
+
+      const response = await fetch("http://localhost:5000/api/message", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json"
+        },
+        body: JSON.stringify({
+          assistantId: appConfig.assistantId,
+          message: contextMessage.content,
+          threadId: threadId.current
+        })
+      });
+  
+      if (!response.ok) {
+        throw new Error(`Server error: ${response.status}`);
+      }
+    } catch (error) {
+      console.error("Error sending initial context:", error);
+    }
+  }, [appConfig.assistantId]);
 
   const handleDataContextChangeNotice = useCallback(async (notification: ClientNotification) => {
     if (notificationsToIgnore.includes(notification.values.operation)) return;
@@ -112,8 +141,10 @@ export const App = observer(() => {
 
   useEffect(() => {
     // assistantStore.initializeAssistant();
+    // Call sendInitialContext when the component mounts or assistantId changes
+    sendInitialContext();
     assistantStoreRef.current = assistantStore;
-  }, [assistantStore, appConfig.assistantId]);
+  }, [assistantStore, appConfig.assistantId, sendInitialContext]);
 
   useEffect(() => {
     const { messages } = transcriptStore;
@@ -155,11 +186,88 @@ export const App = observer(() => {
     if (appConfig.isAssistantMocked) {
       assistantStore.handleMessageSubmitMockAssistant();
     } else {
-      // assistantStore.handleMessageSubmit(messageText);
       // assistantStore.assistant.setShowLoadingIndicator(true);
-      const llm = appConfig.assistantId === "gemini" ? geminiModel : openAiModel;
-      const response = await llm.invoke([{ role: "user", content: messageText }]);
-      assistantStore.addDavaiMsg(response.content as string);
+      const response = await fetch("http://localhost:5000/api/message", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json"
+        },
+        body: JSON.stringify({
+          assistantId: appConfig.assistantId,
+          message: messageText,
+          threadId: threadId.current
+        })
+      });
+
+      if (!response.ok) {
+        throw new Error(`Server error: ${response.status}`);
+      }
+
+      const data = await response.json();
+
+      // If the response is of type CODAP request, we need to make the request via the CODAP API, then pass
+      // the response back to the server to be sent to the LLM.
+      if (data.type && data.type === "CODAP_REQUEST") {
+        try {
+          const codapRequest = data.request;
+          const codapResponse = await codapInterface.sendRequest(codapRequest);
+
+          const finalResponse = await fetch("http://localhost:5000/api/message", {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json"
+            },
+            body: JSON.stringify({
+              assistantId: appConfig.assistantId,
+              message: {
+                role: "tool",
+                tool_call_id: data.tool_call_id,
+                content: JSON.stringify({
+                  status: "success",
+                  request: codapRequest.request,
+                  response: codapResponse
+                })
+              },
+              threadId: threadId.current,
+              isToolResponse: true
+            })
+          });
+
+          if (!finalResponse.ok) {
+            throw new Error(`Server error: ${finalResponse.status}`);
+          }
+
+          const finalData = await finalResponse.json();
+          assistantStore.addDavaiMsg(finalData.response);
+        } catch (error: any) {
+          console.error("Error handling CODAP request:", error);
+
+          const errorResponse = await fetch("http://localhost:5000/api/message", {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json"
+            },
+            body: JSON.stringify({
+              assistantId: appConfig.assistantId,
+              message: {
+                role: "tool",
+                tool_call_id: data.tool_call_id,
+                content: JSON.stringify({
+                  status: "error",
+                  error: error.message
+                })
+              },
+              threadId: threadId.current,
+              isToolResponse: true
+            })
+          });
+          console.error("Error sending initial context:", errorResponse);
+        }
+      } else {
+        // If the response is a regular message, we just add it to the transcript as before.
+        assistantStore.addDavaiMsg(data.response);
+      }
+      // assistantStore.addDavaiMsg(data.response);
       // assistantStore.assistant.setShowLoadingIndicator(false);
     }
   };

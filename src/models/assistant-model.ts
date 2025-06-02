@@ -6,7 +6,6 @@ import { DAVAI_SPEAKER, DEBUG_SPEAKER, WAIT_STATES, ERROR_STATES } from "../cons
 import { convertBase64ToImage, formatJsonMessage, getGraphByID, getDataContexts, getParsedData, isGraphSonifiable } from "../utils/utils";
 import { requestThreadDeletion } from "../utils/openai-utils";
 import { ChatTranscriptModel } from "./chat-transcript-model";
-import { openAiModel } from "../utils/langchain-utils";
 
 const OpenAIType = types.custom({
   name: "OpenAIType",
@@ -97,7 +96,7 @@ export const AssistantModel = types
     },
     initializeAssistant() {
       if (self.assistantId === "mock") return;
-      self.assistant = openAiModel;
+      self.assistant = {};
     }
   }))
   .actions((self) => {
