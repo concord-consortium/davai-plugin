@@ -3,14 +3,19 @@ import { useCallback } from "react";
 import * as Tone from "tone";
 import { interpolateBins, mapPitchFractionToFrequency, mapValueToStereoPan } from "../components/graph-sonification-utils";
 import { isUnivariateDotPlot } from "../utils/utils";
+import { ICODAPGraph } from "../types";
+import { IBinModel } from "../models/bin-model";
 
 type Props = {
-  selectedGraph: any;
-  binValues: any;
+  selectedGraph: ICODAPGraph | undefined;
+  binValues: IBinModel | undefined;
   pitchFractions: number[];
   timeFractions: number[];
   timeValues: number[];
-  primaryBounds: any;
+  primaryBounds: {
+    upperBound: number | undefined;
+    lowerBound: number | undefined;
+  };
   osc: React.MutableRefObject<Tone.Oscillator | null>;
   pan: React.MutableRefObject<Tone.Panner | null>;
   poly: React.MutableRefObject<Tone.PolySynth | null>;
