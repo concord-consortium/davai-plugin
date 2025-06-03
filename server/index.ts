@@ -6,12 +6,11 @@ import { ChatOpenAI } from "@langchain/openai";
 import { ChatGoogleGenerativeAI } from "@langchain/google-genai";
 import { ChatPromptTemplate } from "@langchain/core/prompts";
 import { MemoryVectorStore } from "langchain/vectorstores/memory";
-import { DynamicStructuredTool } from "langchain/tools";
 import { Document } from "@langchain/core/documents";
-import { z } from "zod";
 import { instructions } from "./instructions.js";
 import { codapApiDoc } from "./codap-api-documentation.js";
 import { processMarkdownDoc, setupVectorStore } from "./utils/rag-utils.js";
+import { tools } from "./utils/tool-utils.js";
 
 dotenv.config();
 const app = express();
@@ -22,39 +21,6 @@ app.use(express.json());
 
 // Process the CODAP Plugin API documentation content and add it to the prompt template.
 const processedCodapApiDoc = await processMarkdownDoc(codapApiDoc);
-
-// Define the tool functions
-const createRequestTool = new DynamicStructuredTool({
-  name: "create_request",
-  description: "Create a request to send to the CODAP Data Interactive API",
-  schema: z.object({
-    action: z.string().describe("The action to perform"),
-    resource: z.string().describe("The resource to act upon"),
-    values: z.object({}).optional().describe("The values to pass to the action")
-  }),
-  func: async ({ action, resource, values }) => {
-    return JSON.stringify({
-      type: "CODAP_REQUEST",
-      request: { action, resource, values }
-    });
-  }
-});
-
-const sonifyGraphTool = new DynamicStructuredTool({
-  name: "sonify_graph",
-  description: "Sonify the graph requested by the user",
-  schema: z.object({
-    graphID: z.number().describe("The id of the graph to sonify")
-  }),
-  func: async ({ graphID }) => {
-    return JSON.stringify({
-      type: "SONIFICATION_REQUEST",
-      request: { graphID }
-    });
-  }
-});
-
-const tools = [createRequestTool, sonifyGraphTool];
 
 const openAiModel = new ChatOpenAI({
   model: "gpt-4o-mini",
@@ -150,16 +116,6 @@ const callModel = async (state: any, modelConfig: any) => {
 
   return { messages: response };
 };
-
-// This version does not include an initial prompt
-// const callModel = async (state: any, modelConfig: any) => {
-//   const { assistantId } = modelConfig.configurable;
-//   // Shouldn't we strip out the assistantId?
-//   // const callConfig = { configurable: { thread_id: _config.thread_id } };
-//   const llm = assistantId === "gemini" ? geminiModel : openAiModel;
-//   const response = await llm.invoke(state.messages, modelConfig);
-//   return { messages: response };
-// };
 
 const workflow = new StateGraph(MessagesAnnotation)
   .addNode("model", callModel)

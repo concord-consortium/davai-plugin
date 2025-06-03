@@ -31,13 +31,13 @@ export const App = observer(() => {
   const dimensions = { width: appConfig.dimensions.width, height: appConfig.dimensions.height };
   const subscribedDataCtxsRef = useRef<string[]>([]);
   const transcriptStore = assistantStore.transcriptStore;
-  const threadId = useRef(nanoid());
+  const threadId = useRef<string | null>(null);
 
   const sendInitialContext = useCallback(async () => {
     try {
       const dataContexts = await getListOfDataContexts();
       const contextMessage = {
-        role: "user",
+        role: "system",
         content: `This is a system message containing information about the CODAP document. Data contexts: \n${JSON.stringify(dataContexts.values, null, 2)}`
       };
 
@@ -48,6 +48,7 @@ export const App = observer(() => {
         },
         body: JSON.stringify({
           assistantId: appConfig.assistantId,
+          isSystemMessage: true,
           message: contextMessage.content,
           threadId: threadId.current
         })
@@ -142,6 +143,8 @@ export const App = observer(() => {
   useEffect(() => {
     // assistantStore.initializeAssistant();
     // Call sendInitialContext when the component mounts or assistantId changes
+    threadId.current = nanoid();
+    console.log(`Thread ID: ${threadId.current}`);
     sendInitialContext();
     assistantStoreRef.current = assistantStore;
   }, [assistantStore, appConfig.assistantId, sendInitialContext]);
