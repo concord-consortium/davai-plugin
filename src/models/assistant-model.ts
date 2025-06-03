@@ -321,17 +321,12 @@ export const AssistantModel = types
           const yAttrData = yield getAttributeData(graphID, graph.yAttributeID);
           const y2AttrData = yield getAttributeData(graphID, graph.y2AttributeID);
 
-          // Combine y-axis data if we have a second y-axis
-          const combinedYAxisData = y2AttrData.attributeData 
-            ? { attributeData: [yAttrData.attributeData, y2AttrData.attributeData] }
-            : yAttrData;
-
           const graphAttrData: IGraphAttrData = {
             legend: { attributeData: legendAttrData },
             rightSplit: { attributeData: rightAttrData },
             topSplit: { attributeData: topAttrData },
             xAxis: { attributeData: xAttrData },
-            yAxis: { attributeData: combinedYAxisData },
+            yAxis: { attributeData: yAttrData },
             y2Axis: { attributeData: y2AttrData }
           };
 
