@@ -131,6 +131,7 @@ export const GraphSonification = observer(({sonificationStore}: IProps) => {
     if (playState.ended || isAtBeginning) {
       setPlayState({ playing: true, ended: false, position: 0 });
       updateRoiAdornment(selectedGraphID, 0);
+      scheduleTones();
       restartTransport();
       animateSonification();
       return;
