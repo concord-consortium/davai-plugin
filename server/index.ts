@@ -55,13 +55,12 @@ const geminiModel = new ChatGoogleGenerativeAI({
 // ]);
 
 const promptTemplate = ChatPromptTemplate.fromMessages([
-  ["system", instructions],
-  ["system", "Here is the relevant CODAP API documentation:\n{context}"],
+  ["system", `${instructions}\n\nIMPORTANT: Here are the current data contexts in the CODAP document:\n{dataContexts}\n\nPlease use this information when responding to user queries about data contexts and datasets in the CODAP document.\n\nHere is the relevant CODAP API documentation:\n{context}`],
   ["placeholder", "{messages}"],
 ]);
 
 const callModel = async (state: any, modelConfig: any) => {
-  const { assistantId } = modelConfig.configurable;
+  const { assistantId, dataContexts } = modelConfig.configurable;
   const llm = assistantId === "gemini" ? geminiModel : openAiModel;
 
   // Get the last user message to use as the query
@@ -76,10 +75,7 @@ const callModel = async (state: any, modelConfig: any) => {
 
   // Retrieve relevant documents using the appropriate embeddings
   const vectorStore = await setupVectorStore(processedCodapApiDoc, assistantId, vectorStoreCache);
-  // console.log("Vector store created/retrieved");
-  
   const relevantDocs = await vectorStore.similaritySearch(lastUserMessage, 3);
-  // console.log("Relevant docs found:", relevantDocs.length);
   
   // Clean the context to ensure it doesn't contain any template variables
   const context = relevantDocs
@@ -92,12 +88,12 @@ const callModel = async (state: any, modelConfig: any) => {
       });
     })
     .join("\n\n");
-  // console.log("Context created:", context);
 
   // Create the prompt with the retrieved context
   const prompt = await promptTemplate.invoke({
     context,
-    messages: state.messages
+    messages: state.messages,
+    dataContexts
   });
 
   const response = await llm.invoke(prompt);
@@ -127,8 +123,8 @@ const langApp = workflow.compile({ checkpointer: memory });
 
 // This is the main endpoint for use by the client app.
 app.post("/api/message", async (req, res) => {
-  const { assistantId, message, threadId, isSystemMessage, isToolResponse } = req.body;
-  const config = { configurable: { thread_id: threadId, assistantId } };
+  const { assistantId, dataContexts, message, threadId, isSystemMessage, isToolResponse } = req.body;
+  const config = { configurable: { thread_id: threadId, assistantId, dataContexts } };
 
   try {
     // isToolResponse should only be true if the message from the client is the response to a CODAP API request that
@@ -149,8 +145,7 @@ app.post("/api/message", async (req, res) => {
       res.json({ response: output.messages[output.messages.length - 1].content });
     } else {
       console.log("Processing regular message");
-      const input = isSystemMessage ? [{ role: "system", content: message }] : [{ role: "user", content: message }];
-      console.log("Input messages:", input);
+      const input = isSystemMessage ? [message] : [{ role: "user", content: message }];
       const output = await langApp.invoke({ messages: input }, config);
       const lastMessage = output.messages[output.messages.length - 1];
       const functionCall = (lastMessage && "tool_calls" in lastMessage && Array.isArray((lastMessage as any).tool_calls))

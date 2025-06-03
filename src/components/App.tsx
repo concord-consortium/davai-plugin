@@ -36,11 +36,6 @@ export const App = observer(() => {
   const sendInitialContext = useCallback(async () => {
     try {
       const dataContexts = await getListOfDataContexts();
-      const contextMessage = {
-        role: "system",
-        content: `This is a system message containing information about the CODAP document. Data contexts: \n${JSON.stringify(dataContexts.values, null, 2)}`
-      };
-
       const response = await fetch("http://localhost:5000/api/message", {
         method: "POST",
         headers: {
@@ -48,9 +43,9 @@ export const App = observer(() => {
         },
         body: JSON.stringify({
           assistantId: appConfig.assistantId,
-          isSystemMessage: true,
-          message: contextMessage.content,
-          threadId: threadId.current
+          message: "Hello",
+          threadId: threadId.current,
+          dataContexts: JSON.stringify(dataContexts.values)
         })
       });
   
@@ -144,7 +139,6 @@ export const App = observer(() => {
     // assistantStore.initializeAssistant();
     // Call sendInitialContext when the component mounts or assistantId changes
     threadId.current = nanoid();
-    console.log(`Thread ID: ${threadId.current}`);
     sendInitialContext();
     assistantStoreRef.current = assistantStore;
   }, [assistantStore, appConfig.assistantId, sendInitialContext]);
@@ -190,6 +184,7 @@ export const App = observer(() => {
       assistantStore.handleMessageSubmitMockAssistant();
     } else {
       // assistantStore.assistant.setShowLoadingIndicator(true);
+      const dataContexts = await getListOfDataContexts();
       const response = await fetch("http://localhost:5000/api/message", {
         method: "POST",
         headers: {
@@ -198,7 +193,8 @@ export const App = observer(() => {
         body: JSON.stringify({
           assistantId: appConfig.assistantId,
           message: messageText,
-          threadId: threadId.current
+          threadId: threadId.current,
+          dataContexts: JSON.stringify(dataContexts.values)
         })
       });
 

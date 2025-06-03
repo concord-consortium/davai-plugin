@@ -82,7 +82,7 @@ const getEmbeddingsModel = (assistantId: string) => {
   return new OpenAIEmbeddings({
     openAIApiKey: process.env.OPENAI_API_KEY,
   });
-}
+};
 
 export const setupVectorStore = async (documents: Document[], assistantId: string, vectorStoreCache: any) => {
   if (vectorStoreCache[assistantId]) {
@@ -94,4 +94,4 @@ export const setupVectorStore = async (documents: Document[], assistantId: strin
   
   vectorStoreCache[assistantId] = vectorStore;
   return vectorStore;
-}
+};
