@@ -11,5 +11,5 @@
     "allowJs": true,
     "sourceMap": true
   },
-  "include": ["index.ts", "instructions.ts"]
+  "include": ["index.ts"]
 }
