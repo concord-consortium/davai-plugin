@@ -80,7 +80,7 @@ export const App = observer(() => {
 
   const handleComponentChangeNotice = useCallback(async (notification: ClientNotification) => {
     if (notification.values.type === "graph") {
-      sonificationStore.setGraphs();
+      await sonificationStore.setGraphs();
 
       // If this is an attribute change and the graph is sonifiable, automatically set it as selected.
       if (notification.values.operation === "attributeChange") {
