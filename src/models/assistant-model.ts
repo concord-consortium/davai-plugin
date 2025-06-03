@@ -32,6 +32,7 @@ interface IGraphAttrData {
   topSplit?: Record<string, any>;
   xAxis?: Record<string, any>;
   yAxis?: Record<string, any>;
+  y2Axis?: Record<string, any>;
 }
 
 /**
@@ -325,7 +326,7 @@ export const AssistantModel = types
             ? { attributeData: [yAttrData.attributeData, y2AttrData.attributeData] }
             : yAttrData;
 
-          const graphAttrData = {
+          const graphAttrData: IGraphAttrData = {
             legend: { attributeData: legendAttrData },
             rightSplit: { attributeData: rightAttrData },
             topSplit: { attributeData: topAttrData },
