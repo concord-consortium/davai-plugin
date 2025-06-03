@@ -300,15 +300,13 @@ export const AssistantModel = types
         resource: `component[${graphID}].attribute[${attrID}]`
       }));
 
-      const attributeData = response?.values
+      return response?.values
         ? {
             id: response.values.id,
             name: response.values.name,
             values: response.values._categoryMap.__order
           }
         : null;
-
-      return { attributeData };
     });
 
     const getGraphAttrData = flow(function* (graphID) {
@@ -320,7 +318,7 @@ export const AssistantModel = types
           const topAttrData = yield getAttributeData(graphID, graph.topSplitAttributeID);
           const xAttrData = yield getAttributeData(graphID, graph.xAttributeID);
           const yAttrData = yield getAttributeData(graphID, graph.yAttributeID);
-          const y2AttrData = yield getAttributeData(graphID, graph.yAttributeIDs ? graph.yAttributeIDs[1] : null);
+          const y2AttrData = yield getAttributeData(graphID, graph.y2AttributeID);
 
           // Combine y-axis data if we have a second y-axis
           const combinedYAxisData = y2AttrData.attributeData 
@@ -328,11 +326,12 @@ export const AssistantModel = types
             : yAttrData;
 
           const graphAttrData = {
-            legend: legendAttrData,
-            rightSplit: rightAttrData,
-            topSplit: topAttrData,
-            xAxis: xAttrData,
-            yAxis: combinedYAxisData
+            legend: { attributeData: legendAttrData },
+            rightSplit: { attributeData: rightAttrData },
+            topSplit: { attributeData: topAttrData },
+            xAxis: { attributeData: xAttrData },
+            yAxis: { attributeData: combinedYAxisData },
+            y2Axis: { attributeData: y2AttrData }
           };
 
           self.addDbgMsg("Data context for graph", formatJsonMessage(graphAttrData));
