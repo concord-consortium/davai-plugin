@@ -12,8 +12,9 @@ import { ChatInputComponent } from "./chat-input";
 import { ChatTranscriptComponent } from "./chat-transcript";
 import { DAVAI_SPEAKER, DEBUG_SPEAKER, LOADING_NOTE, USER_SPEAKER, notificationsToIgnore } from "../constants";
 import { UserOptions } from "./user-options";
-import { formatJsonMessage, playSound } from "../utils/utils";
+import { formatJsonMessage, getGraphDetails, isGraphSonifiable, playSound } from "../utils/utils";
 import { GraphSonification } from "./graph-sonification";
+import { ICODAPGraph } from "../types";
 
 import "./App.scss";
 
@@ -30,6 +31,7 @@ export const App = observer(() => {
   const dimensions = { width: appConfig.dimensions.width, height: appConfig.dimensions.height };
   const subscribedDataCtxsRef = useRef<string[]>([]);
   const transcriptStore = assistantStore.transcriptStore;
+  const newlyCreatedGraphRef = useRef<number | null>(null);
 
   const handleDataContextChangeNotice = useCallback(async (notification: ClientNotification) => {
     if (notificationsToIgnore.includes(notification.values.operation)) return;
@@ -77,9 +79,33 @@ export const App = observer(() => {
     }
   }, [handleDataContextChangeNotice]);
 
-  const handleComponentChangeNotice = useCallback((notification: ClientNotification) => {
+  const handleComponentChangeNotice = useCallback(async (notification: ClientNotification) => {
     if (notification.values.type === "graph") {
-      sonificationStore.setGraphs();
+      const prevGraphIDs = sonificationStore.allGraphs.map(g => g.id);
+      await sonificationStore.setGraphs();
+
+      const newGraphIDs = sonificationStore.allGraphs.map(g => g.id);
+
+      if (notification.values.operation === "create") {
+        const newGraphID = newGraphIDs.find(id => !prevGraphIDs.includes(id));
+        if (newGraphID !== undefined) {
+          newlyCreatedGraphRef.current = newGraphID;
+        }
+      }
+
+      // If this is an attribute change on a newly-added graph, and the graph is sonifiable, automatically set it as selected.
+      if (notification.values.operation === "attributeChange" && newlyCreatedGraphRef.current !== null) {
+        try {
+          const graphs = await getGraphDetails();
+          const graph = graphs.find((g: ICODAPGraph) => g.id === notification.values.id);
+          if (graph && isGraphSonifiable(graph) && graph.id === newlyCreatedGraphRef.current) {
+            sonificationStore.setSelectedGraphID(graph.id);
+            newlyCreatedGraphRef.current = null;
+          }
+        } catch (error) {
+          console.error("Failed to fetch graph details for auto-selection:", error);
+        }
+      }
     }
   }, [sonificationStore]);
 
