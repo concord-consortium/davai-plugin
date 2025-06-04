@@ -138,7 +138,7 @@ export const App = observer(() => {
   useEffect(() => {
     assistantStore.initializeAssistant();
     assistantStoreRef.current = assistantStore;
-  }, [assistantStore, appConfig.assistantId]);
+  }, [assistantStore, appConfig.llmId]);
 
   useEffect(() => {
     const { messages } = transcriptStore;
@@ -201,7 +201,7 @@ export const App = observer(() => {
         isLoading={assistantStore.showLoadingIndicator}
       />
       <ChatInputComponent
-        disabled={(!assistantStore.thread && !appConfig.isAssistantMocked) || assistantStore.showLoadingIndicator}
+        disabled={(!assistantStore.threadId && !appConfig.isAssistantMocked) || assistantStore.showLoadingIndicator}
         isLoading={assistantStore.showLoadingIndicator}
         onCancel={handleCancel}
         onSubmit={handleChatInputSubmit}

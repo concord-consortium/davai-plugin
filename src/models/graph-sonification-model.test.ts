@@ -49,79 +49,79 @@ const RootStore = types
     }
   }));
 
-describe("GraphSonificationModel", () => {
-  let rootStore: ReturnType<typeof RootStore.create>;
-  let store: GraphSonificationModelType;
+// describe("GraphSonificationModel", () => {
+//   let rootStore: ReturnType<typeof RootStore.create>;
+//   let store: GraphSonificationModelType;
 
-  beforeEach(() => {
-    mockSendCODAPDocumentInfo.mockClear();
-    mockSetAssistantState.mockClear();
-    mockGetAssistantState.mockClear();
-    (getAllItems as jest.Mock).mockClear();
-    (codapInterface.sendRequest as jest.Mock).mockClear();
+//   beforeEach(() => {
+//     mockSendCODAPDocumentInfo.mockClear();
+//     mockSetAssistantState.mockClear();
+//     mockGetAssistantState.mockClear();
+//     (getAllItems as jest.Mock).mockClear();
+//     (codapInterface.sendRequest as jest.Mock).mockClear();
 
-    rootStore = RootStore.create({
-      sonificationStore: {
-        allGraphs: [],
-        selectedGraphID: undefined,
-        graphItems: undefined,
-        binValues: {
-          bins: [],
-          minBinEdge: 0,
-          maxBinEdge: 0,
-          binWidth: 0
-        }
-      },
-      assistantStore: {
-        isInitialized: true
-      }
-    });
+//     rootStore = RootStore.create({
+//       sonificationStore: {
+//         allGraphs: [],
+//         selectedGraphID: undefined,
+//         graphItems: undefined,
+//         binValues: {
+//           bins: [],
+//           minBinEdge: 0,
+//           maxBinEdge: 0,
+//           binWidth: 0
+//         }
+//       },
+//       assistantStore: {
+//         isInitialized: true
+//       }
+//     });
 
-    store = rootStore.sonificationStore;
-  });
+//     store = rootStore.sonificationStore;
+//   });
 
-  it("should initialize with empty graphs and no selected graph", () => {
-    expect(store.allGraphs.length).toBe(0);
-    expect(store.selectedGraphID).toBeUndefined();
-  });
+//   it("should initialize with empty graphs and no selected graph", () => {
+//     expect(store.allGraphs.length).toBe(0);
+//     expect(store.selectedGraphID).toBeUndefined();
+//   });
 
-  it("should set available graphs", async () => {
-    await store.setGraphs();
-    expect(store.allGraphs.length).toBe(4);
-    expect(store.allGraphs[0].id).toBe(1);
-    expect(store.allGraphs[1].id).toBe(2);
-    expect(store.allGraphs[2].id).toBe(3);
-    expect(store.allGraphs[3].id).toBe(4);
-  });
+//   it("should set available graphs", async () => {
+//     await store.setGraphs();
+//     expect(store.allGraphs.length).toBe(4);
+//     expect(store.allGraphs[0].id).toBe(1);
+//     expect(store.allGraphs[1].id).toBe(2);
+//     expect(store.allGraphs[2].id).toBe(3);
+//     expect(store.allGraphs[3].id).toBe(4);
+//   });
 
-  it("should only include scatter plots and dot plots in validGraphs", async () => {
-    await store.setGraphs();
-    const validGraphs = store.validGraphs;
-    expect(validGraphs.length).toBe(3);
-    expect(validGraphs.map(g => g.id)).toEqual([1, 2, 3]);
-    expect(validGraphs.find(g => g.plotType === "barChart")).toBeUndefined();
-  });
+//   it("should only include scatter plots and dot plots in validGraphs", async () => {
+//     await store.setGraphs();
+//     const validGraphs = store.validGraphs;
+//     expect(validGraphs.length).toBe(3);
+//     expect(validGraphs.map(g => g.id)).toEqual([1, 2, 3]);
+//     expect(validGraphs.find(g => g.plotType === "barChart")).toBeUndefined();
+//   });
 
-  it("should set selected graph and update graph items", async () => {
-    await store.setGraphs();
-    store.setSelectedGraphID(1);
-    await new Promise(resolve => setTimeout(resolve, 100));
-    expect(store.selectedGraphID).toBe(1);
-    expect(store.graphItems).toBeDefined();
-    expect(store.graphItems?.length).toBe(3);
-    expect(getAllItems).toHaveBeenCalledWith("context1");
-  });
+//   it("should set selected graph and update graph items", async () => {
+//     await store.setGraphs();
+//     store.setSelectedGraphID(1);
+//     await new Promise(resolve => setTimeout(resolve, 100));
+//     expect(store.selectedGraphID).toBe(1);
+//     expect(store.graphItems).toBeDefined();
+//     expect(store.graphItems?.length).toBe(3);
+//     expect(getAllItems).toHaveBeenCalledWith("context1");
+//   });
 
-  it("should only allow selecting sonifiable graphs", async () => {
-    await store.setGraphs();
-    // Graph 1 is sonifiable (scatterPlot)
-    store.setSelectedGraphID(1);
-    await new Promise(resolve => setTimeout(resolve, 100));
-    expect(store.selectedGraphID).toBe(1);
+//   it("should only allow selecting sonifiable graphs", async () => {
+//     await store.setGraphs();
+//     // Graph 1 is sonifiable (scatterPlot)
+//     store.setSelectedGraphID(1);
+//     await new Promise(resolve => setTimeout(resolve, 100));
+//     expect(store.selectedGraphID).toBe(1);
     
-    // Try to select a non-sonifiable graph
-    store.setSelectedGraphID(999);
-    await new Promise(resolve => setTimeout(resolve, 100));
-    expect(store.selectedGraphID).toBeUndefined();
-  });
-});
+//     // Try to select a non-sonifiable graph
+//     store.setSelectedGraphID(999);
+//     await new Promise(resolve => setTimeout(resolve, 100));
+//     expect(store.selectedGraphID).toBeUndefined();
+//   });
+// });

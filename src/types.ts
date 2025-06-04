@@ -9,6 +9,8 @@ export type AppConfig = {
     keyboardShortcut: string;
   };
   assistantId: string;
+  llmId?: string;
+  llmList: Record<string, string>[];
   dimensions: {
     height: number;
     width: number;

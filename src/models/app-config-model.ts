@@ -21,6 +21,8 @@ export const AppConfigModel = types.model("AppConfigModel", {
     keyboardShortcut: types.string,
   }),
   assistantId: types.string,
+  llmId: types.maybe(types.string),
+  llmList: types.array(types.frozen()),
   dimensions: types.model({
     width: types.number,
     height: types.number,
@@ -33,6 +35,9 @@ export const AppConfigModel = types.model("AppConfigModel", {
 .actions((self) => ({
   setAssistantId(assistantId: string) {
     self.assistantId = assistantId;
+  },
+  setLlmId(llmId: string) {
+    self.llmId = llmId;
   },
   setMockAssistant(mockAssistant: boolean) {
     self.isAssistantMocked = self.mode === "development" && mockAssistant;

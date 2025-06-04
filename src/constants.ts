@@ -33,3 +33,9 @@ export const kDefaultOptions = {
   readAloudEnabled: false,
   showDebugLog: false,
 };
+
+export const LLM_LIST: Record<string, string> = {
+  "gpt-4o-mini": "OpenAI",
+  "gemini-2.0-flash": "Google",
+  "mock": "Mock Assistant"
+};

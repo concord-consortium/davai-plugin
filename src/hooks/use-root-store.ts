@@ -1,6 +1,5 @@
 import { useMemo } from "react";
 import { AssistantModel } from "../models/assistant-model";
-import { useOpenAIContext } from "./use-openai-context";
 import { useAppConfigContext } from "./use-app-config-context";
 import { ChatTranscriptModel } from "../models/chat-transcript-model";
 import { DAVAI_SPEAKER, GREETING } from "../constants";
@@ -10,7 +9,6 @@ import { GraphSonificationModel } from "../models/graph-sonification-model";
 import { BinModel } from "../models/bin-model";
 
 export const useRootStore = () => {
-  const apiConnection = useOpenAIContext();
   const appConfig = useAppConfigContext();
   const assistantId = appConfig.assistantId;
   const rootStore = useMemo(() => {
@@ -27,18 +25,17 @@ export const useRootStore = () => {
 
     return RootStore.create({
       assistantStore: AssistantModel.create({
-        apiConnection,
-        assistantId,
+        llmId: assistantId,
         transcriptStore: newTranscriptStore,
       }),
       sonificationStore: GraphSonificationModel.create({
-        selectedGraph: undefined,
+        // selectedGraph: undefined,
         binValues: BinModel.create({
           values: []
         }),
       })
     });
-  }, [apiConnection, assistantId]);
+  }, [assistantId]);
 
   return rootStore;
 };
