@@ -3,7 +3,7 @@
     "keyboardShortcut": "ctrl+?"
   },
   "assistantId": "asst_xmAX5oxByssXrkBymMbcsVEm",
-  "llmId": "gpt-4o-mini",
+  "llmId": "{\"id\": \"gpt-4o-mini\", \"provider\": \"OpenAI\"}",
   "llmList": [
     {
       "id": "mock",
