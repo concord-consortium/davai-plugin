@@ -128,6 +128,9 @@ export const App = observer(() => {
       });
     };
 
+    // first, initialize the assistant with the current LLM
+    assistantStore.initializeAssistant(appConfig.llmId);
+    assistantStoreRef.current = assistantStore;
     init();
     sonificationStore.setGraphs();
     selectSelf();
@@ -139,7 +142,8 @@ export const App = observer(() => {
     // re-initialize the assistant with the new LLM
     assistantStore.initializeAssistant(appConfig.llmId);
     assistantStoreRef.current = assistantStore;
-  }, [assistantStore, appConfig.llmId]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [appConfig.llmId]);
 
   useEffect(() => {
     const { messages } = transcriptStore;

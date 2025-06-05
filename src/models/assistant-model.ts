@@ -112,10 +112,10 @@ export const AssistantModel = types
   }))
   .actions((self) => {
     const initializeAssistant = flow(function* (llmId: string) {
-      if (self.llmId === "mock") return;
-
       try {
         self.setLlmId(llmId);
+        if (self.llmId === "mock") return;
+
         self.setThreadId(nanoid());
         self.addDbgMsg("Assistant initialized", `Assistant ID: ${llmId}, Thread ID: ${self.threadId}`);
         yield fetchAndSendDataContexts();
