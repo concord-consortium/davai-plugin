@@ -20,8 +20,7 @@ export const AppConfigModel = types.model("AppConfigModel", {
   accessibility: types.model({
     keyboardShortcut: types.string,
   }),
-  assistantId: types.string,
-  llmId: types.maybe(types.string),
+  llmId: types.string,
   llmList: types.array(types.frozen()),
   dimensions: types.model({
     width: types.number,
@@ -29,18 +28,15 @@ export const AppConfigModel = types.model("AppConfigModel", {
   }),
   mode: types.enumeration<AppMode>("Mode", AppModeValues),
 })
-.volatile((self) => ({
-  isAssistantMocked: self.assistantId === "mock",
+.views((self) => ({
+  get isAssistantMocked() {
+    const llmData = JSON.parse(self.llmId || "");
+    return llmData.id === "mock";
+  }
 }))
 .actions((self) => ({
-  setAssistantId(assistantId: string) {
-    self.assistantId = assistantId;
-  },
   setLlmId(llmId: string) {
     self.llmId = llmId;
-  },
-  setMockAssistant(mockAssistant: boolean) {
-    self.isAssistantMocked = self.mode === "development" && mockAssistant;
   }
 }));
 

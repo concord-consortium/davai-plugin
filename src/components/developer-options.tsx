@@ -13,7 +13,7 @@ interface IProps {
 
 export const DeveloperOptionsComponent = observer(({assistantStore, createToggleOption}: IProps) => {
   const appConfig = useAppConfigContext();
-  const selectedAssistant = assistantStore.llmId ? assistantStore.llmId : "mock";
+  const selectedAssistant = appConfig.llmId;
   const isDevMode = getUrlParam("mode") === "development" || appConfig.mode === "development";
 
   const handleCreateThread = async () => {
@@ -39,21 +39,19 @@ export const DeveloperOptionsComponent = observer(({assistantStore, createToggle
   const handleSelectLlm = async (e: React.ChangeEvent<HTMLSelectElement>) => {
     // If we switch LLMs, we delete the current thread and clear the transcript.
     // First make sure the user is OK with that.
-    const id = e.target.value;
+    const llm = e.target.value;
+    const llmObj = JSON.parse(llm);
 
     const threadDeleted = await handleDeleteThread();
     if (!threadDeleted) return;
 
-    if (id === "mock") {
-      assistantStore.transcriptStore.clearTranscript();
+
+    // todo: move stringified llmIds to constants
+    if (llmObj.id === "mock") {
       assistantStore.transcriptStore.addMessage(DAVAI_SPEAKER, {content: GREETING});
-      appConfig.setMockAssistant(true);
-      appConfig.setAssistantId(id);
-      return;
     }
 
-    appConfig.setMockAssistant(false);
-    appConfig.setAssistantId(id);
+    appConfig.setLlmId(llm);
   };
 
   return (
@@ -71,16 +69,13 @@ export const DeveloperOptionsComponent = observer(({assistantStore, createToggle
           value={selectedAssistant}
           onChange={handleSelectLlm}
         >
-          {/* <option value="openai">OpenAI</option>
-          <option value="gemini">Gemini</option> */}
-          <option value="mock">Mock Assistant</option>
           {appConfig.llmList.map((llm) => (
             <option
-              aria-selected={assistantStore.llmId === llm.id}
+              aria-selected={appConfig.llmId === JSON.stringify(llm)}
               key={llm.id}
               value={JSON.stringify(llm)}
             >
-              {llm.provider}: {llm.id}
+              {llm.id === "mock" ? "Mock Assistant" : `${llm.provider}: ${llm.id}`}
             </option>
           ))}
         </select>

@@ -1,6 +1,5 @@
 import { useMemo } from "react";
 import { AssistantModel } from "../models/assistant-model";
-import { useAppConfigContext } from "./use-app-config-context";
 import { ChatTranscriptModel } from "../models/chat-transcript-model";
 import { DAVAI_SPEAKER, GREETING } from "../constants";
 import { timeStamp } from "../utils/utils";
@@ -9,8 +8,6 @@ import { GraphSonificationModel } from "../models/graph-sonification-model";
 import { BinModel } from "../models/bin-model";
 
 export const useRootStore = () => {
-  const appConfig = useAppConfigContext();
-  const assistantId = appConfig.assistantId;
   const rootStore = useMemo(() => {
     const newTranscriptStore = ChatTranscriptModel.create({
       messages: [
@@ -25,7 +22,6 @@ export const useRootStore = () => {
 
     return RootStore.create({
       assistantStore: AssistantModel.create({
-        llmId: assistantId,
         transcriptStore: newTranscriptStore,
       }),
       sonificationStore: GraphSonificationModel.create({
@@ -35,7 +31,7 @@ export const useRootStore = () => {
         }),
       })
     });
-  }, [assistantId]);
+  }, []);
 
   return rootStore;
 };

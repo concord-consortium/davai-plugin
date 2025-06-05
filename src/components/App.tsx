@@ -136,7 +136,8 @@ export const App = observer(() => {
   }, []);
 
   useEffect(() => {
-    assistantStore.initializeAssistant();
+    // re-initialize the assistant with the new LLM
+    assistantStore.initializeAssistant(appConfig.llmId);
     assistantStoreRef.current = assistantStore;
   }, [assistantStore, appConfig.llmId]);
 

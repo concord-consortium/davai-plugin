@@ -6,6 +6,10 @@
   "llmId": "gpt-4o-mini",
   "llmList": [
     {
+      "id": "mock",
+      "provider": "Mock"
+    },
+    {
       "id": "gemini-2.0-flash",
       "provider": "Google"
     },
@@ -18,6 +22,5 @@
     "height": 680,
     "width": 380
   },
-  "mockAssistant": false,
   "mode": "production"
 }

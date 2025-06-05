@@ -62,7 +62,6 @@ export const AssistantModel = types
     isCancelling: types.optional(types.boolean, false),
     isLoadingResponse: types.optional(types.boolean, false),
     isResetting: types.optional(types.boolean, false),
-    llmId: types.frozen(),
     llmList: types.optional(types.map(types.string), {}),
     messageQueue: types.array(types.string),
     showLoadingIndicator: types.optional(types.boolean, false),
@@ -74,6 +73,7 @@ export const AssistantModel = types
     dataUri: "",
     uploadFileAfterRun: false,
     updateSonificationStoreAfterRun: false,
+    llmId: "mock" as string,  // Set explicitly via setLlmId
   }))
   .actions((self) => ({
     addDavaiMsg(msg: string) {
@@ -84,6 +84,12 @@ export const AssistantModel = types
     },
     setShowLoadingIndicator(show: boolean) {
       self.showLoadingIndicator = show;
+    },
+    setLlmId(llmId: string) {
+      self.llmId = llmId;
+    },
+    setThreadId(threadId: string) {
+      self.threadId = threadId;
     }
   }))
   .actions((self) => ({
@@ -105,20 +111,19 @@ export const AssistantModel = types
     }
   }))
   .actions((self) => {
-    const initializeAssistant = flow(function* () {
+    const initializeAssistant = flow(function* (llmId: string) {
       if (self.llmId === "mock") return;
 
       try {
-        self.threadId = nanoid();
-        
-        self.addDbgMsg("Assistant initialized", `Assistant ID: ${self.llmId}, Thread ID: ${self.threadId}`);
+        self.setLlmId(llmId);
+        self.setThreadId(nanoid());
+        self.addDbgMsg("Assistant initialized", `Assistant ID: ${llmId}, Thread ID: ${self.threadId}`);
         yield fetchAndSendDataContexts();
       } catch (err) {
         console.error("Failed to initialize assistant:", err);
         self.addDbgMsg("Failed to initialize assistant", formatJsonMessage(err));
       }
     });
-
 
     const fetchAndSendDataContexts = flow(function* () {
       try {
@@ -157,17 +162,17 @@ export const AssistantModel = types
               "Content-Type": "application/json",
             },
             body: JSON.stringify({
-              assistantId: self.llmId,
+              llmId: self.llmId,
               threadId: self.threadId,
               message: `This is a system message containing information about the CODAP document. ${message}`,
               isSystemMessage: false //true
             }),
           });
-    
+
           if (!response.ok) {
             throw new Error(`Failed to send system message: ${response.statusText}`);
           }
-    
+
           const data = yield response.json();
           self.addDbgMsg("CODAP document info received by LLM", formatJsonMessage(data));
         }
@@ -182,11 +187,9 @@ export const AssistantModel = types
       try {
         const { action, resource, values } = data.request;
         const request = { action, resource, values };
-    
         self.addDbgMsg("Request sent to CODAP", formatJsonMessage(request));
         let res = yield codapInterface.sendRequest(request);
         self.addDbgMsg("Response from CODAP", formatJsonMessage(res));
-    
         // Handle image snapshot requests
         const isImageSnapshotRequest = action === "get" && resource.match(/^dataDisplay/);
         if (isImageSnapshotRequest) {
@@ -200,7 +203,7 @@ export const AssistantModel = types
           // Remove exportDataUri from response
           res = { ...res, values: { ...res.values, exportDataUri: undefined } };
         }
-    
+
         return JSON.stringify(res);
       } catch (err) {
         console.error("Failed to handle tool call:", err);
@@ -208,7 +211,7 @@ export const AssistantModel = types
         return JSON.stringify({ status: "error", error: err instanceof Error ? err.message : String(err) });
       }
     });
-  
+
     const sendToolResponse = flow(function* (toolCallId: string, content: string) {
       try {
         const response = yield fetch("http://localhost:5000/api/message", {
@@ -217,7 +220,7 @@ export const AssistantModel = types
             "Content-Type": "application/json",
           },
           body: JSON.stringify({
-            assistantId: self.llmId,
+            llmId: self.llmId,
             threadId: self.threadId,
             isToolResponse: true,
             message: {
@@ -226,11 +229,11 @@ export const AssistantModel = types
             }
           }),
         });
-  
+
         if (!response.ok) {
           throw new Error(`Failed to send tool response: ${response.statusText}`);
         }
-  
+
         const data = yield response.json();
         self.addDavaiMsg(data.response);
       } catch (err) {
@@ -249,10 +252,10 @@ export const AssistantModel = types
           self.messageQueue.push(messageText);
         } else {
           self.isLoadingResponse = true;
-          
+
           // Get current data contexts for the message
           const dataContexts = yield getDataContexts();
-          
+
           // Send message to LangChain server
           const response = yield fetch("http://localhost:5000/api/message", {
             method: "POST",
@@ -260,21 +263,21 @@ export const AssistantModel = types
               "Content-Type": "application/json",
             },
             body: JSON.stringify({
-              assistantId: self.llmId,
+              llmId: self.llmId,
               threadId: self.threadId,
               message: messageText,
               dataContexts,
               isSystemMessage: false
             }),
           });
-    
+
           if (!response.ok) {
             throw new Error(`Failed to send message: ${response.statusText}`);
           }
-    
+
           const data: IMessageResponse = yield response.json();
           self.addDbgMsg("Message received by server", formatJsonMessage(data));
-    
+
           // Handle the response
           if (data.type === "CODAP_REQUEST" && data.tool_call_id && data.request) {
             // Handle tool call response
