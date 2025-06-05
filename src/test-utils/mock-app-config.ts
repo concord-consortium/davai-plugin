@@ -4,7 +4,12 @@ export const mockAppConfig = {
   accessibility: {
     keyboardShortcut: "ctrl+?"
   },
-  assistantId: "asst_abc123",
+  llmId: "{ id: \"mock\", name: \"Mock LLM\" }",
+  llmList: [
+    { id: "mock", provider: "Mock" },
+    { id: "gemini-2.0-flash", provider: "Google" },
+    { id: "gpt-4o-mini", provider: "OpenAI" }
+  ],
   dimensions: {
     height: 680,
     width: 380

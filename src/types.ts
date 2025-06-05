@@ -8,7 +8,6 @@ export type AppConfig = {
   accessibility: {
     keyboardShortcut: string;
   };
-  assistantId: string;
   llmId?: string;
   llmList: Record<string, string>[];
   dimensions: {

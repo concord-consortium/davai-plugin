@@ -2,8 +2,7 @@
   "accessibility": {
     "keyboardShortcut": "ctrl+?"
   },
-  "assistantId": "asst_xmAX5oxByssXrkBymMbcsVEm",
-  "llmId": "{\"id\": \"gpt-4o-mini\", \"provider\": \"OpenAI\"}",
+  "llmId": "{\"id\":\"gpt-4o-mini\",\"provider\":\"OpenAI\"}",
   "llmList": [
     {
       "id": "mock",

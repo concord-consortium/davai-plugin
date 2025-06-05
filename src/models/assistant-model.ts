@@ -48,7 +48,6 @@ interface IMessageResponse {
  * @property {boolean} isLoadingResponse - Flag indicating whether the assistant is currently processing a response.
  * @property {boolean} isResetting - Flag indicating whether the assistant is currently resetting the chat.
  * @property {string} llmId - The unique ID string of the LLM being used, or `null` if not initialized.
- * @property {Object} llmList - A map of available LLMs. The key is the LLM ID and the value is the type (Gemini, OpenAI, etc.).
  * @property {string[]} messageQueue - Queue of messages to be sent to the assistant. Used if user sends messages while assistant is processing a response.
  * @property {boolean} showLoadingIndicator - Flag indicating whether to show a loading indicator to the user; this is decoupled from the assistant's internal loading state to allow for more control over UI elements.
  * @property {Object|null} thread - The assistant's thread used for the current chat, or `null` if no thread is active.
@@ -62,11 +61,10 @@ export const AssistantModel = types
     isCancelling: types.optional(types.boolean, false),
     isLoadingResponse: types.optional(types.boolean, false),
     isResetting: types.optional(types.boolean, false),
-    llmList: types.optional(types.map(types.string), {}),
     messageQueue: types.array(types.string),
     showLoadingIndicator: types.optional(types.boolean, false),
     threadId: types.maybe(types.string),
-    transcriptStore: ChatTranscriptModel
+    transcriptStore: ChatTranscriptModel,
   })
   .volatile(() => ({
     dataContextForGraph: null as IGraphAttrData | null,
@@ -74,6 +72,12 @@ export const AssistantModel = types
     uploadFileAfterRun: false,
     updateSonificationStoreAfterRun: false,
     llmId: "mock" as string,  // Set explicitly via setLlmId
+  }))
+  .views((self) => ({
+    get isAssistantMocked() {
+      const llmData = JSON.parse(self.llmId || "");
+      return llmData.id === "mock";
+    }
   }))
   .actions((self) => ({
     addDavaiMsg(msg: string) {
@@ -114,7 +118,6 @@ export const AssistantModel = types
     const initializeAssistant = flow(function* (llmId: string) {
       try {
         self.setLlmId(llmId);
-        if (self.llmId === "mock") return;
 
         self.setThreadId(nanoid());
         self.addDbgMsg("Assistant initialized", `Assistant ID: ${llmId}, Thread ID: ${self.threadId}`);
@@ -150,7 +153,8 @@ export const AssistantModel = types
     });
 
     const sendCODAPDocumentInfo = flow(function* (message) {
-      console.log("self.llmId", self.llmId);
+      if (self.isAssistantMocked) return;
+  
       try {
         self.addDbgMsg("Sending CODAP document info to LLM", message);
         if (!self.threadId) {
@@ -213,6 +217,8 @@ export const AssistantModel = types
     });
 
     const sendToolResponse = flow(function* (toolCallId: string, content: string) {
+      if (self.isAssistantMocked) return;
+
       try {
         const response = yield fetch("http://localhost:5000/api/message", {
           method: "POST",
@@ -243,7 +249,6 @@ export const AssistantModel = types
     });
 
     const handleMessageSubmit = flow(function* (messageText: string) {
-      console.log("self.llmId", self.llmId);
       try {
         self.setShowLoadingIndicator(true);
         if (self.isCancelling || self.isResetting) {

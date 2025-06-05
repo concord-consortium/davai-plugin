@@ -13,7 +13,7 @@ interface IProps {
 
 export const DeveloperOptionsComponent = observer(({assistantStore, createToggleOption}: IProps) => {
   const appConfig = useAppConfigContext();
-  const selectedAssistant = appConfig.llmId;
+  const selectedLlm = appConfig.llmId;
   const isDevMode = getUrlParam("mode") === "development" || appConfig.mode === "development";
 
   const handleCreateThread = async () => {
@@ -48,6 +48,7 @@ export const DeveloperOptionsComponent = observer(({assistantStore, createToggle
 
     // todo: move stringified llmIds to constants
     if (llmObj.id === "mock") {
+      assistantStore.transcriptStore.clearTranscript();
       assistantStore.transcriptStore.addMessage(DAVAI_SPEAKER, {content: GREETING});
     }
 
@@ -60,13 +61,13 @@ export const DeveloperOptionsComponent = observer(({assistantStore, createToggle
       <h3 id="dev-options-heading">Developer Options</h3>
       {createToggleOption("showDebugLog", "Show Debug Log")}
       <div className="user-option">
-        <label htmlFor="assistant-select" data-testid="assistant-select-label">
-          Select an Assistant:
+        <label htmlFor="llm-select" data-testid="llm-select-label">
+          Select an LLM:
         </label>
         <select
-          id="assistant-select"
-          data-testid="assistant-select"
-          value={selectedAssistant}
+          id="llm-select"
+          data-testid="llm-select"
+          value={selectedLlm}
           onChange={handleSelectLlm}
         >
           {appConfig.llmList.map((llm) => (
@@ -75,7 +76,7 @@ export const DeveloperOptionsComponent = observer(({assistantStore, createToggle
               key={llm.id}
               value={JSON.stringify(llm)}
             >
-              {llm.id === "mock" ? "Mock Assistant" : `${llm.provider}: ${llm.id}`}
+              {llm.id === "mock" ? "Mock LLM" : `${llm.provider}: ${llm.id}`}
             </option>
           ))}
         </select>

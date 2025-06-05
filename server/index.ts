@@ -22,18 +22,6 @@ let vectorStoreCache: { [key: string]: MemoryVectorStore } = {};
 // Process the CODAP Plugin API documentation content and add it to the prompt template.
 const processedCodapApiDoc = await processMarkdownDoc(codapApiDoc);
 
-// const openAiModel = new ChatOpenAI({
-//   model: "gpt-4o-mini",
-//   temperature: 0,
-//   apiKey: process.env.OPENAI_API_KEY,
-// });
-
-// const geminiModel = new ChatGoogleGenerativeAI({
-//   model: "gemini-2.0-flash",
-//   temperature: 0,
-//   apiKey: process.env.GOOGLE_API_KEY,
-// });
-
 const createModelInstance = (llm: string) => {
   const llmObj = JSON.parse(llm);
   const { id, provider} = llmObj;
@@ -62,9 +50,8 @@ const promptTemplate = ChatPromptTemplate.fromMessages([
 
 const callModel = async (state: any, modelConfig: any) => {
   const { llmId } = modelConfig.configurable;
-  const llm = createModelInstance(llmId); // llmId === "gemini" ? geminiModel : openAiModel;
+  const llm = createModelInstance(llmId);
   const llmRealId = JSON.parse(llmId).id;
-  console.log(`Using LLM: ${llmId}`);
 
   // Get the last user message to use as the query
   const lastUserMessage = state.messages
@@ -121,7 +108,6 @@ const langApp = workflow.compile({ checkpointer: memory });
 // This is the main endpoint for use by the client app. We may want to add more, e.g. another for tool calls, etc.
 app.post("/api/message", async (req, res) => {
   const { llmId, message, threadId, isSystemMessage } = req.body;
-  console.log("llmId", llmId);
   const config = { configurable: { thread_id: threadId, llmId } };
 
   try {

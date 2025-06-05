@@ -8,7 +8,7 @@ import { AppConfigContext } from "./app-config-context";
 export const loadAppConfig = (): AppConfig => {
   const defaultConfig = appConfigJson as AppConfig;
   const urlParamMode = getUrlParam("mode");
-  const llmId = getUrlParam("assistantId");
+  const llmId = getUrlParam("llmId");
   const configOverrides: Partial<AppConfig> = {
     mode: isAppMode(urlParamMode) ? urlParamMode : defaultConfig.mode,
     llmId: llmId || defaultConfig.llmId,
