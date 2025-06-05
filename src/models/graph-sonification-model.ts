@@ -175,7 +175,7 @@ export const GraphSonificationModel = types
         }),
         ({ selectedGraphID, validGraphIDs }) => {
           if (selectedGraphID !== undefined && !validGraphIDs.includes(selectedGraphID)) {
-            removeRoiAdornment(`${selectedGraphID}`);
+            removeRoiAdornment(selectedGraphID);
             self.removeSelectedGraphID();
           }
         }
