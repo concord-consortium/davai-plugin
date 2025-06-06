@@ -154,34 +154,46 @@ export const AssistantModel = types
 
     const sendCODAPDocumentInfo = flow(function* (message) {
       if (self.isAssistantMocked) return;
-  
+
       try {
         self.addDbgMsg("Sending CODAP document info to LLM", message);
         if (!self.threadId) {
           self.codapNotificationQueue.push(message);
         } else {
+          // Extract data contexts from the message if it's in the expected format
+          let dataContexts;
+          if (message.startsWith("Data contexts: ")) {
+            try {
+              dataContexts = JSON.parse(message.substring("Data contexts: ".length));
+            } catch (err) {
+              console.error("Failed to parse data contexts:", err);
+            }
+          }
+
+          const requestBody = {
+            llmId: self.llmId,
+            threadId: self.threadId,
+            message: `This is a system message containing information about the CODAP document.`,
+            isSystemMessage: false,
+            dataContexts
+          };
+    
           const response = yield fetch("http://localhost:5000/api/message", {
             method: "POST",
             headers: {
               "Content-Type": "application/json",
             },
-            body: JSON.stringify({
-              llmId: self.llmId,
-              threadId: self.threadId,
-              message: `This is a system message containing information about the CODAP document. ${message}`,
-              isSystemMessage: false //true
-            }),
+            body: JSON.stringify(requestBody),
           });
-
+    
           if (!response.ok) {
             throw new Error(`Failed to send system message: ${response.statusText}`);
           }
-
+    
           const data = yield response.json();
           self.addDbgMsg("CODAP document info received by LLM", formatJsonMessage(data));
         }
-      }
-      catch (err) {
+      } catch (err) {
         console.error("Failed to send system message:", err);
         self.addDbgMsg("Failed to send CODAP document information to LLM", formatJsonMessage(err));
       }
