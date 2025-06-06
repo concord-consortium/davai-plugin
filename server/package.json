@@ -17,6 +17,7 @@
   "description": "",
   "dependencies": {
     "@langchain/community": "^0.3.45",
+    "@langchain/core": "^0.3.57",
     "@langchain/google-genai": "^0.2.10",
     "@langchain/langgraph": "^0.2.74",
     "@langchain/openai": "^0.5.11",
