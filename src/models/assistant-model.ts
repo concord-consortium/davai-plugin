@@ -172,7 +172,7 @@ export const AssistantModel = types
               dataContexts: extracted.dataContexts
             };
       
-            const response = yield fetch("http://localhost:5000/api/message", {
+            const response = yield fetch(`${process.env.LANGCHAIN_SERVER_URL}/api/message`, {
               method: "POST",
               headers: {
                 "Content-Type": "application/json",
@@ -229,7 +229,7 @@ export const AssistantModel = types
       if (self.isAssistantMocked) return;
 
       try {
-        const response = yield fetch("http://localhost:5000/api/message", {
+        const response = yield fetch(`${process.env.LANGCHAIN_SERVER_URL}/api/message`, {
           method: "POST",
           headers: {
             "Content-Type": "application/json",
@@ -271,7 +271,7 @@ export const AssistantModel = types
           const dataContexts = yield getDataContexts();
 
           // Send message to LangChain server
-          const response = yield fetch("http://localhost:5000/api/message", {
+          const response = yield fetch(`${process.env.LANGCHAIN_SERVER_URL}/api/message`, {
             method: "POST",
             headers: {
               "Content-Type": "application/json",
