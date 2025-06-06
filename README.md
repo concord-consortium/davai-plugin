@@ -1,12 +1,19 @@
 # Data Analysis through Voice and Artificial Intelligence
 
+The Data Analysis through Voice and Artificial Intelligence (DAVAI) CODAP plugin is an interface between CODAP, the user, and an external LLM that helps the user understand and work with datasets in a CODAP document. Currently, its main focus in on helping blind or low-vision users work with graphs.
+
 ## Development
+
+The code consists of a React-based client app (in `/src`) and a Node-based server app (in `/server`). For development, you will currently need to run the server locally and add a `LANGCHAIN_SERVER_URL` to the root `.env` file. The value should be the local server app's URL (usually `http://localhost:5000`).
 
 ### Initial steps
 
 1. Clone this repo and `cd` into it
 2. Run `npm install` to pull dependencies
 3. Run `npm start` to run `webpack-dev-server` in development mode with hot module replacement
+4. In a separate terminal, `cd` into the `/server` directory
+5. Run `npm install` to pull dependencies
+6. Run `npm start` to start the server app
 
 ## Testing the plugin in CODAP
 
@@ -26,7 +33,7 @@ In the project directory, you can run:
 
 ### `npm start`
 
-Runs the app in the development mode.<br>
+Runs the client app in the development mode.<br>
 Open [http://localhost:3000](http://localhost:3000) to view it in the browser.
 
 The page will reload if you make edits.<br>
