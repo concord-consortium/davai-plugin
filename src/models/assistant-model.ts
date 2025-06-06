@@ -35,6 +35,9 @@ interface IMessageResponse {
   type: "CODAP_REQUEST" | "MESSAGE";
 }
 
+const serverUrl = process.env.LANGCHAIN_SERVER_URL || "http://localhost:5000/";
+const msgEndpoint = `${serverUrl}api/message`;
+
 /**
  * AssistantModel encapsulates the AI assistant and its interactions with the user.
  * It includes properties and methods for configuring the assistant, handling chat interactions, and maintaining the assistant's
@@ -156,10 +159,11 @@ export const AssistantModel = types
         if (!self.threadId) {
           self.codapNotificationQueue.push(message);
         } else {
-          const response = yield fetch("http://localhost:5000/api/message", {
+          const response = yield fetch(msgEndpoint, {
             method: "POST",
             headers: {
               "Content-Type": "application/json",
+              "Authorization": "super-secret-token-123"
             },
             body: JSON.stringify({
               llmId: self.llmId,
@@ -214,10 +218,11 @@ export const AssistantModel = types
 
     const sendToolResponse = flow(function* (toolCallId: string, content: string) {
       try {
-        const response = yield fetch("http://localhost:5000/api/message", {
+        const response = yield fetch(msgEndpoint, {
           method: "POST",
           headers: {
             "Content-Type": "application/json",
+            "Authorization": "super-secret-token-123"
           },
           body: JSON.stringify({
             llmId: self.llmId,
@@ -257,10 +262,11 @@ export const AssistantModel = types
           const dataContexts = yield getDataContexts();
 
           // Send message to LangChain server
-          const response = yield fetch("http://localhost:5000/api/message", {
+          const response = yield fetch(msgEndpoint, {
             method: "POST",
             headers: {
               "Content-Type": "application/json",
+              "Authorization": "super-secret-token-123"
             },
             body: JSON.stringify({
               llmId: self.llmId,

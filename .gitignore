@@ -7,6 +7,9 @@
 # production
 /build
 /dist
+/server/deploy
+/server/dist
+lambda.zip
 
 # OS
 .DS_Store

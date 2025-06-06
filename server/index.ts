@@ -15,6 +15,13 @@ dotenv.config();
 const app = express();
 const port = 5000;
 app.use(json());
+app.use((req: any, res: any, next: any) => {
+  const token = req.headers.authorization;
+  if (token !== process.env.DAVAI_API_SECRET) {
+    return res.status(401).json({ error: "Unauthorized" });
+  }
+  next();
+});
 
 // Initialize the vector store cache to avoid re-creating it for each request.
 let vectorStoreCache: { [key: string]: MemoryVectorStore } = {};
@@ -74,7 +81,7 @@ const callModel = async (state: any, modelConfig: any) => {
   // Retrieve relevant documents using the appropriate embeddings
   const vectorStore = await setupVectorStore(processedCodapApiDoc, llmRealId, vectorStoreCache);
   const relevantDocs = await vectorStore.similaritySearch(lastUserMessage, 3);
-  
+
   // Clean the context to ensure it doesn't contain any template variables
   const context = relevantDocs
     .map((doc: Document) => {
@@ -98,7 +105,7 @@ const callModel = async (state: any, modelConfig: any) => {
   // If the response is a function call, parse it
   if (response?.tool_calls?.[0]) {
     const functionCall = response.tool_calls[0];
-    return { 
+    return {
       messages: response,
       function_call: {
         name: functionCall.id,
@@ -119,7 +126,7 @@ const memory = new MemorySaver();
 const langApp = workflow.compile({ checkpointer: memory });
 
 // This is the main endpoint for use by the client app. We may want to add more, e.g. another for tool calls, etc.
-app.post("/api/message", async (req, res) => {
+app.post("/api/message", async (req: any, res: any) => {
   const { llmId, message, threadId, isSystemMessage } = req.body;
   console.log("llmId", llmId);
   const config = { configurable: { thread_id: threadId, llmId } };
@@ -140,3 +147,5 @@ app.post("/api/message", async (req, res) => {
 app.listen(port, () => {
   console.log(`LangChain server listening on http://localhost:${port}`);
 });
+
+// export default app;
