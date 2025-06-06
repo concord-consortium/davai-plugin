@@ -9,99 +9,13 @@ import { Document } from "@langchain/core/documents";
 import { instructions } from "./instructions.js";
 import { codapApiDoc } from "./codap-api-documentation.js";
 import { processMarkdownDoc, setupVectorStore } from "./utils/rag-utils.js";
+import { processDataContexts } from "./utils/data-context-utils.js";
 
 dotenv.config();
 
 const app = express();
 const port = 5000;
 app.use(json());
-
-const CHUNK_SIZE = 4000;
-
-function chunkDataContexts(contexts: any[]): any[][] {
-  const chunks: any[][] = [];
-  let currentChunk: any[] = [];
-  let currentSize = 0;
-
-  for (const context of contexts) {
-    const contextStr = JSON.stringify(context);
-    // Conservative token estimate (3 chars ≈ 1 token)
-    const estimatedTokens = contextStr.length / 3;
-
-    if (currentSize + estimatedTokens > CHUNK_SIZE) {
-      if (currentChunk.length > 0) {
-        chunks.push(currentChunk);
-        currentChunk = [];
-        currentSize = 0;
-      }
-      // If a single context is too large, split it into smaller pieces
-      if (estimatedTokens > CHUNK_SIZE) {
-        const subContexts = splitLargeContext(context);
-        chunks.push(...subContexts);
-        continue;
-      }
-    }
-    currentChunk.push(context);
-    currentSize += estimatedTokens;
-  }
-
-  if (currentChunk.length > 0) {
-    chunks.push(currentChunk);
-  }
-
-  return chunks;
-}
-
-function splitLargeContext(context: any): any[][] {
-  const chunks: any[][] = [];
-  
-  // Get the collections array from the context
-  const collections = context.context?.collections;
-  if (!collections || !Array.isArray(collections) || collections.length === 0) {
-    console.log("No collections found, sending whole context");
-    chunks.push([context]);
-    return chunks;
-  }
-
-  // Get the first collection
-  const firstCollection = collections[0];
-  
-  // Get the attributes from the collection
-  const attributes = firstCollection.attrs;
-  if (!attributes || !Array.isArray(attributes)) {
-    console.log("No attributes found in collection, sending whole context");
-    chunks.push([context]);
-    return chunks;
-  }
-
-  // Calculate how many attributes we can fit in each chunk
-  // We'll aim for 3500 tokens per chunk to leave room for metadata
-  const attrsPerChunk = Math.floor(3500 / (JSON.stringify(attributes[0]).length / 3));
-  console.log(`Splitting ${attributes.length} attributes into chunks of ${attrsPerChunk} attributes each`);
-
-  // Split the attributes into chunks
-  for (let i = 0; i < attributes.length; i += attrsPerChunk) {
-    const chunkAttrs = attributes.slice(i, i + attrsPerChunk);
-    const chunk = [{
-      name: context.name,
-      context: {
-        ...context.context,
-        collections: [{
-          ...firstCollection,
-          attrs: chunkAttrs
-        }]
-      }
-    }];
-
-    // Log the size of each chunk
-    const chunkSize = JSON.stringify(chunk).length / 3;
-    console.log(`Chunk ${i / attrsPerChunk + 1} size: ${chunkSize} tokens`);
-    
-    chunks.push(chunk);
-  }
-
-  return chunks;
-}
 
 // Initialize the vector store cache to avoid re-creating it for each request.
 let vectorStoreCache: { [key: string]: MemoryVectorStore } = {};
@@ -199,47 +113,8 @@ app.post("/api/message", async (req, res) => {
 
     // If we have data contexts, process them first
     if (dataContexts && typeof dataContexts === "object") {
-      console.log("Processing data contexts");
-      
-      const contextsArray = Object.entries(dataContexts).map(([name, context]) => {
-        const contextSize = JSON.stringify(context).length / 3;
-        console.log(`Processing context ${name}, size: ${contextSize} tokens`);
-        return {
-          name,
-          context: context as Record<string, any>
-        };
-      });
-      
-      const chunks = chunkDataContexts(contextsArray);
-      console.log(`Created ${chunks.length} chunks`);
-      
-      // Process chunks and add them as user messages
-      for (let i = 0; i < chunks.length; i++) {
-        const chunk = chunks[i];
-        const chunkStr = JSON.stringify(chunk);
-        const chunkSize = chunkStr.length / 3;
-        console.log(`Processing chunk ${i + 1}/${chunks.length}, size: ${chunkSize} tokens`);
-        
-        // For chunks that are still too large, split them further
-        if (chunkSize > 7000) {
-          console.log(`Chunk ${i + 1} too large (${chunkSize} tokens), splitting further...`);
-          const subChunks = splitLargeContext(chunk[0]);
-          for (const subChunk of subChunks) {
-            const subChunkStr = JSON.stringify(subChunk);
-            const subChunkSize = subChunkStr.length / 3;
-            console.log(`Sub-chunk size: ${subChunkSize} tokens`);
-            messages.push({ 
-              role: "user", 
-              content: `Data context sub-chunk: ${subChunkStr}` 
-            });
-          }
-        } else {
-          messages.push({ 
-            role: "user", 
-            content: `Data contexts chunk ${i + 1}/${chunks.length}: ${chunkStr}` 
-          });
-        }
-      }
+      // console.log("Processing data contexts");
+      messages.push(...processDataContexts(dataContexts));
     }
 
     // Add the user's message
@@ -248,7 +123,7 @@ app.post("/api/message", async (req, res) => {
       content: message 
     });
 
-    console.log("Final messages array:", messages.map(m => ({ role: m.role, contentLength: m.content.length })));
+    // console.log("Final messages array:", messages.map(m => ({ role: m.role, contentLength: m.content.length })));
 
     const output = await langApp.invoke({ messages }, config);
     const lastMessage = output.messages[output.messages.length - 1];
