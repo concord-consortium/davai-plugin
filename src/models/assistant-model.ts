@@ -1,9 +1,10 @@
 import { types, flow, Instance } from "mobx-state-tree";
+import { nanoid } from "nanoid";
 import { codapInterface } from "@concord-consortium/codap-plugin-api";
 import { DAVAI_SPEAKER, DEBUG_SPEAKER } from "../constants";
 import { formatJsonMessage, getDataContexts } from "../utils/utils";
 import { ChatTranscriptModel } from "./chat-transcript-model";
-import { nanoid } from "nanoid";
+import { extractDataContexts } from "../utils/data-context-utils";
 
 interface IGraphAttrData {
   legend?: Record<string, any>;
@@ -154,44 +155,40 @@ export const AssistantModel = types
 
     const sendCODAPDocumentInfo = flow(function* (message) {
       if (self.isAssistantMocked) return;
-
+    
       try {
         self.addDbgMsg("Sending CODAP document info to LLM", message);
         if (!self.threadId) {
           self.codapNotificationQueue.push(message);
         } else {
-          // Extract data contexts from the message if it's in the expected format
-          let dataContexts;
-          if (message.startsWith("Data contexts: ")) {
-            try {
-              dataContexts = JSON.parse(message.substring("Data contexts: ".length));
-            } catch (err) {
-              console.error("Failed to parse data contexts:", err);
+          const extracted = extractDataContexts(message);
+          
+          if (extracted) {
+            const requestBody = {
+              llmId: self.llmId,
+              threadId: self.threadId,
+              message: "This is a system message containing information about the CODAP document.",
+              isSystemMessage: false,
+              dataContexts: extracted.dataContexts
+            };
+      
+            const response = yield fetch("http://localhost:5000/api/message", {
+              method: "POST",
+              headers: {
+                "Content-Type": "application/json",
+              },
+              body: JSON.stringify(requestBody),
+            });
+      
+            if (!response.ok) {
+              throw new Error(`Failed to send system message: ${response.statusText}`);
             }
+      
+            const data = yield response.json();
+            self.addDbgMsg("CODAP document info received by LLM", formatJsonMessage(data));
+          } else {
+            self.addDbgMsg("Could not extract data contexts from message", message);
           }
-
-          const requestBody = {
-            llmId: self.llmId,
-            threadId: self.threadId,
-            message: `This is a system message containing information about the CODAP document.`,
-            isSystemMessage: false,
-            dataContexts
-          };
-    
-          const response = yield fetch("http://localhost:5000/api/message", {
-            method: "POST",
-            headers: {
-              "Content-Type": "application/json",
-            },
-            body: JSON.stringify(requestBody),
-          });
-    
-          if (!response.ok) {
-            throw new Error(`Failed to send system message: ${response.statusText}`);
-          }
-    
-          const data = yield response.json();
-          self.addDbgMsg("CODAP document info received by LLM", formatJsonMessage(data));
         }
       } catch (err) {
         console.error("Failed to send system message:", err);

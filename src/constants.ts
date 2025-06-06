@@ -39,3 +39,10 @@ export const LLM_LIST: Record<string, string> = {
   "gemini-2.0-flash": "Google",
   "mock": "Mock Assistant"
 };
+
+export const DATA_CONTEXT_MESSAGES = {
+  INITIAL: "Data contexts: {contexts}",
+  UPDATED: "Data context {name} has been updated: {context}",
+  CREATED: "New data context {name} created: {context}",
+  REMOVED: "Data context {name} has been removed"
+} as const;
