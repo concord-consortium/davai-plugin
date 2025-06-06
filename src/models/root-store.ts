@@ -9,8 +9,8 @@ export const RootStore = types.model("RootStore", {
 
 export function createRootStore() {
   return RootStore.create({
-    assistantStore: {},
-    sonificationStore: {}
+    assistantStore: AssistantModel.create(),
+    sonificationStore: GraphSonificationModel.create()
   });
 }
 
