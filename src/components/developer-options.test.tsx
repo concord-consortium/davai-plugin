@@ -54,6 +54,7 @@ describe("test developer options component", () => {
     render(<DeveloperOptionsComponent
       createToggleOption={() => <div />}
       assistantStore={mockAssistantStore}
+      onInitializeAssistant={jest.fn()}
     />);
 
     const developerOptions = screen.getByTestId("developer-options");
