@@ -7,32 +7,32 @@ import { IUserOptions } from "../types";
 import { observer } from "mobx-react-lite";
 
 interface IProps {
-  createToggleOption: (option: keyof IUserOptions, optionLabel: string) => React.JSX.Element;
   assistantStore: AssistantModelType;
+  createToggleOption: (option: keyof IUserOptions, optionLabel: string) => React.JSX.Element;
+  onInitializeAssistant: () => void;
 }
 
-export const DeveloperOptionsComponent = observer(({assistantStore, createToggleOption}: IProps) => {
+export const DeveloperOptionsComponent = observer(({assistantStore, createToggleOption, onInitializeAssistant}: IProps) => {
   const appConfig = useAppConfigContext();
   const selectedLlm = appConfig.llmId;
   const isDevMode = getUrlParam("mode") === "development" || appConfig.mode === "development";
 
   const handleCreateThread = async () => {
-    // if (assistantStore.thread || appConfig.isAssistantMocked) return;
-    // const confirmCreate = window.confirm("Are you sure you want to create a new thread? If you do, you will lose any existing chat history.");
-    // if (!confirmCreate) return;
+    if (assistantStore.threadId || appConfig.isAssistantMocked) return;
+    if (appConfig.isAssistantMocked) return;
+    const confirmCreate = window.confirm("Are you sure you want to create a new thread? If you do, you will lose any existing chat history.");
+    if (!confirmCreate) return;
 
-    // assistantStore.transcriptStore.clearTranscript();
-    // assistantStore.transcriptStore.addMessage(DAVAI_SPEAKER, {content: GREETING});
-
-    // await assistantStore.createThread();
+    assistantStore.transcriptStore.clearTranscript();
+    assistantStore.transcriptStore.addMessage(DAVAI_SPEAKER, {content: GREETING});
+    onInitializeAssistant();
   };
 
   const handleDeleteThread = async () => {
-    if (!assistantStore.threadId) return;
+    if (!assistantStore.threadId || appConfig.isAssistantMocked) return;
     const confirmDelete = window.confirm("Are you sure you want to delete the current thread? If you do, you will not be able to continue this chat.");
     if (!confirmDelete) return false;
 
-    // await assistantStore.deleteThread();
     return true;
   };
 
@@ -40,18 +40,11 @@ export const DeveloperOptionsComponent = observer(({assistantStore, createToggle
     // If we switch LLMs, we delete the current thread and clear the transcript.
     // First make sure the user is OK with that.
     const llm = e.target.value;
-    const llmObj = JSON.parse(llm);
-
     const threadDeleted = await handleDeleteThread();
     if (!threadDeleted) return;
 
-
-    // todo: move stringified llmIds to constants
-    if (llmObj.id === "mock") {
-      assistantStore.transcriptStore.clearTranscript();
-      assistantStore.transcriptStore.addMessage(DAVAI_SPEAKER, {content: GREETING});
-    }
-
+    assistantStore.transcriptStore.clearTranscript();
+    assistantStore.transcriptStore.addMessage(DAVAI_SPEAKER, {content: GREETING});
     appConfig.setLlmId(llm);
   };
 

@@ -482,79 +482,76 @@ export const AssistantModel = types
     //   }
     // });
 
-    // const cancelRun = flow(function* (runId: string) {
-    //   try {
-    //     const cancelRes = yield self.apiConnection.beta.threads.runs.cancel(self.thread.id, runId);
-    //     self.addDbgMsg(`Cancel request received`, formatJsonMessage(cancelRes));
-    //     pollCancel(runId);
-    //   } catch (err: any) {
-    //     const errorMessage =
-    //       err instanceof Error
-    //         ? err.message
-    //         : typeof err === "string"
-    //         ? err
-    //         : JSON.stringify(err);
-    //     if (errorMessage.includes("Cannot cancel run with status 'cancelled'")) {
-    //       self.isCancelling = false;
-    //       return;
-    //     } else {
-    //       console.error("Failed to cancel run:", errorMessage);
-    //       self.addDbgMsg("Failed to cancel run", formatJsonMessage(errorMessage));
-    //     }
-    //     self.isCancelling = false;
-    //   }
-    // });
+    const cancelRun = flow(function* (runId: string) {
+      try {
+        // const cancelRes = yield self.apiConnection.beta.threads.runs.cancel(self.threadId, runId);
+        // for now, mock the cancel response
+        const cancelRes = yield Promise.resolve({
+          status: "cancelled",
+          run_id: runId,
+          thread_id: self.threadId,
+          message: "Run cancelled successfully"
+        });
+        self.addDbgMsg(`Cancel request received`, formatJsonMessage(cancelRes));
+      } catch (err: any) {
+        const errorMessage =
+          err instanceof Error
+            ? err.message
+            : typeof err === "string"
+            ? err
+            : JSON.stringify(err);
+        if (errorMessage.includes("Cannot cancel run with status 'cancelled'")) {
+          self.isCancelling = false;
+          return;
+        } else {
+          console.error("Failed to cancel run:", errorMessage);
+          self.addDbgMsg("Failed to cancel run", formatJsonMessage(errorMessage));
+        }
+        self.isCancelling = false;
+      }
+    });
 
-    // const resetThread = flow(function* () {
-    //   try {
-    //     self.isResetting = true;
-    //     const threadId = self.thread.id;
-    //     const allThreadMessages = yield self.apiConnection.beta.threads.messages.list(threadId);
-    //     yield deleteThread();
-    //     yield createThread();
-    //     yield fetchAndSendDataContexts();
-    //     self.addDbgMsg("Sending thread history to LLM", formatJsonMessage(allThreadMessages));
-    //     yield self.apiConnection.beta.threads.messages.create(self.thread.id, {
-    //       role: "user",
-    //       content: `This is a system message containing the previous conversation history. ${allThreadMessages}`,
-    //     });
-    //     self.isResetting = false;
-    //   } catch (err) {
-    //     console.error("Failed to reset thread:", err);
-    //     self.addDbgMsg("Failed to reset thread", formatJsonMessage(err));
-    //     self.isCancelling = false;
-    //     self.isResetting = false;
-    //   }
-    // });
+    const resetThread = flow(function* () {
+      try {
+        self.isResetting = true;
+        // const allThreadMessages = yield self.apiConnection.beta.threads.messages.list(self.threadId);
+        // const allThreadMessages = self.transcriptStore.getAllMessages();
+        const allThreadMessages = self.transcriptStore.messages.map(msg => {
+          return `${msg.speaker}: ${msg.messageContent.content}`;
+        }).join("\n");
+        yield createThread();
+        yield fetchAndSendDataContexts();
+        self.addDbgMsg("Sending thread history to LLM", formatJsonMessage(allThreadMessages));
+        // yield self.apiConnection.beta.threads.messages.create(self.threadId, {
+        //   role: "user",
+        //   content: `This is a system message containing the previous conversation history. ${allThreadMessages}`,
+        // });
+        self.isResetting = false;
+      } catch (err) {
+        console.error("Failed to reset thread:", err);
+        self.addDbgMsg("Failed to reset thread", formatJsonMessage(err));
+        self.isCancelling = false;
+        self.isResetting = false;
+      }
+    });
 
-    // const createThread = flow(function* () {
-    //   try {
-    //     const newThread = yield self.apiConnection.beta.threads.create();
-    //     self.thread = newThread;
-    //   } catch (err) {
-    //     console.error("Error creating thread:", err);
-    //   }
-    // });
+    const createThread = flow(function* () {
+      try {
+        // const newThread = yield self.apiConnection.beta.threads.create();
+        const newThread = yield Promise.resolve({
+          id: nanoid(),
+          name: "New Thread",
+          created_at: new Date().toISOString(),
+          updated_at: new Date().toISOString()
+        });
+        console.log("New thread created:", newThread);
+        self.threadId = nanoid();
+      } catch (err) {
+        console.error("Error creating thread:", err);
+      }
+    });
 
-    // const deleteThread = flow(function* () {
-    //   try {
-    //     if (!self.thread) {
-    //       console.warn("No thread to delete.");
-    //       return;
-    //     }
-
-    //     const threadId = self.thread.id;
-    //     yield requestThreadDeletion(threadId);
-    //     self.addDbgMsg("Thread deleted", `Thread with ID ${threadId} deleted`);
-    //     self.thread = undefined;
-
-    //   } catch (err) {
-    //     console.error("Error deleting thread:", err);
-    //   }
-    // });
-
-    // return { createThread, deleteThread, initializeAssistant, fetchAssistantsList, handleMessageSubmit, handleCancel, sendDataCtxChangeInfo, sendCODAPDocumentInfo };
-    return { initializeAssistant, handleMessageSubmit, handleCancel, sendDataCtxChangeInfo, sendCODAPDocumentInfo };
+    return { cancelRun, createThread, initializeAssistant, handleMessageSubmit, handleCancel, resetThread, sendDataCtxChangeInfo, sendCODAPDocumentInfo };
   })
   .actions((self) => ({
     // afterCreate() {
