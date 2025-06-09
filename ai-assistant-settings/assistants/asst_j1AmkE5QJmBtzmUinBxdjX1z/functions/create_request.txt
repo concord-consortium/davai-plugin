@@ -1,0 +1,27 @@
+{
+  "name": "create_request",
+  "description": "Create a request to send to the CODAP Data Interactive API",
+  "parameters": {
+    "type": "object",
+    "properties": {
+      "action": {
+        "type": "string",
+        "description": "The action to perform"
+      },
+      "resource": {
+        "type": "string",
+        "description": "The resource to act upon"
+      },
+      "values": {
+        "type": "object",
+        "description": "The values to pass to the action"
+      }
+    },
+    "additionalProperties": false,
+    "required": [
+      "action",
+      "resource"
+    ]
+  },
+  "strict": false
+}
