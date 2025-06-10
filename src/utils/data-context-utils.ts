@@ -16,6 +16,14 @@ interface ExtractedDataContext {
   type: "create" | "initial" | "remove" | "update";
 }
 
+/**
+ * Extracts a structured data context from a given message string.
+ *
+ * @param message - The message string to extract data contexts from.
+ *   Example: "Data context {name} has been updated: {context}"
+ * @returns An object containing the extracted data contexts and type if the message matches
+ *   patterns defined in DATA_CONTEXT_MESSAGES, or null if no match is found.
+ */
 export const extractDataContexts = (message: string): ExtractedDataContext | null => {
   try {
     // Check for initial data contexts
