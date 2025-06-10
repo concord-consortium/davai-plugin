@@ -102,9 +102,12 @@ const workflow = new StateGraph(MessagesAnnotation)
 const memory = new MemorySaver();
 const langApp = workflow.compile({ checkpointer: memory });
 
+// Track active message processing
+const activeMessages = new Map<string, AbortController>();
+
 // This is the main endpoint for use by the client app. We may want to add more, e.g. another for tool calls, etc.
 app.post("/default/davaiServer/message", async (req, res) => {
-  const { llmId, message, threadId, dataContexts } = req.body;
+  const { llmId, message, threadId, dataContexts, messageId } = req.body;
   const config = { configurable: { thread_id: threadId, llmId } };
 
   try {
@@ -112,7 +115,6 @@ app.post("/default/davaiServer/message", async (req, res) => {
 
     // If we have data contexts, process them first
     if (dataContexts && typeof dataContexts === "object") {
-      // console.log("Processing data contexts");
       messages.push(...processDataContexts(dataContexts));
     }
 
@@ -122,16 +124,46 @@ app.post("/default/davaiServer/message", async (req, res) => {
       content: message,
     });
 
-    // console.log("Final messages array:", messages.map(m => ({ role: m.role, contentLength: m.content.length })));
+    // Create an AbortController for this request. This lets us to cancel the request if needed.
+    const controller = new AbortController();
+    activeMessages.set(messageId, controller);
+    console.log("Active messages:", activeMessages);
 
-    const output = await langApp.invoke({ messages }, config);
+    const output = await langApp.invoke(
+      { messages }, 
+      { 
+        ...config,
+        signal: controller.signal 
+      }
+    );
     const lastMessage = output.messages[output.messages.length - 1];
+
+    // Clean up the controller
+    activeMessages.delete(messageId);
 
     res.json({ response: lastMessage.content });
   } catch (err: any) {
-    console.error("Error in /api/message:", err);
-    console.error("Error stack:", err.stack);
-    res.status(500).json({ error: "LangChain Error", details: err.message });
+    if (err.message === "Aborted") {
+      res.status(499).json({ error: "Message processing cancelled" });
+    } else {
+      console.error("Error in /api/message:", err);
+      console.error("Error stack:", err.stack);
+      res.status(500).json({ error: "LangChain Error", details: err.message });
+    }
+    activeMessages.delete(messageId);
+  }
+});
+
+// Add endpoint for cancelling message processing
+app.post("/api/cancel", async (req, res) => {
+  const { messageId } = req.body;  
+  const controller = activeMessages.get(messageId);
+  if (controller) {
+    controller.abort();
+    activeMessages.delete(messageId);
+    res.json({ status: "cancelled", message: "Message processing cancelled successfully" });
+  } else {
+    res.status(404).json({ error: "Message not found or already completed" });
   }
 });
 
