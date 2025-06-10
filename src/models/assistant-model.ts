@@ -73,6 +73,7 @@ export const AssistantModel = types
     uploadFileAfterRun: false,
     updateSonificationStoreAfterRun: false,
     llmId: "mock" as string,  // Set explicitly via setLlmId
+    currentMessageId: null as string | null,
   }))
   .views((self) => ({
     get isAssistantMocked() {
@@ -270,6 +271,10 @@ export const AssistantModel = types
           // Get current data contexts for the message
           const dataContexts = yield getDataContexts();
 
+          // Generate a unique message ID for this request. This lets us cancel the message if needed.
+          const messageId = nanoid();
+          self.currentMessageId = messageId;
+
           // Send message to LangChain server
           const response = yield fetch(`${process.env.LANGCHAIN_SERVER_URL}/api/message`, {
             method: "POST",
@@ -281,7 +286,8 @@ export const AssistantModel = types
               threadId: self.threadId,
               message: messageText,
               dataContexts,
-              isSystemMessage: false
+              isSystemMessage: false,
+              messageId
             }),
           });
 
@@ -309,10 +315,14 @@ export const AssistantModel = types
       } finally {
         self.isLoadingResponse = false;
         self.setShowLoadingIndicator(false);
+        self.currentMessageId = null;
       }
     });
 
     const handleCancel = () => {
+      if (self.currentMessageId) {
+        cancelRun(self.currentMessageId);
+      }
       self.isCancelling = true;
       self.setShowLoadingIndicator(false);
       self.addDavaiMsg("I've cancelled processing your message.");
@@ -484,14 +494,21 @@ export const AssistantModel = types
 
     const cancelRun = flow(function* (runId: string) {
       try {
-        // const cancelRes = yield self.apiConnection.beta.threads.runs.cancel(self.threadId, runId);
-        // for now, mock the cancel response
-        const cancelRes = yield Promise.resolve({
-          status: "cancelled",
-          run_id: runId,
-          thread_id: self.threadId,
-          message: "Run cancelled successfully"
+        const response = yield fetch(`${process.env.LANGCHAIN_SERVER_URL}/api/cancel`, {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({
+            messageId: runId
+          })
         });
+
+        if (!response.ok) {
+          throw new Error(`Failed to cancel run: ${response.statusText}`);
+        }
+
+        const cancelRes = yield response.json();
         self.addDbgMsg(`Cancel request received`, formatJsonMessage(cancelRes));
       } catch (err: any) {
         const errorMessage =
@@ -500,7 +517,7 @@ export const AssistantModel = types
             : typeof err === "string"
             ? err
             : JSON.stringify(err);
-        if (errorMessage.includes("Cannot cancel run with status 'cancelled'")) {
+        if (errorMessage.includes("Message not found or already completed")) {
           self.isCancelling = false;
           return;
         } else {
