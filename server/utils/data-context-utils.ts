@@ -62,41 +62,33 @@ const splitLargeContext = (context: IDataContextChunk): IDataContextChunk[][] =>
     return chunks;
   }
 
-  // Get the first collection
-  const firstCollection = collections[0];
-  
-  // Get the attributes from the collection
-  const attributes = firstCollection.attrs;
-  if (!attributes || !Array.isArray(attributes)) {
-    // console.log("No attributes found in collection, sending whole context");
-    chunks.push([context]);
-    return chunks;
-  }
+  for (const collection of collections) {
+    const attributes = collection.attrs;
+    if (!attributes || !Array.isArray(attributes)) {
+      chunks.push([context]);
+      continue;
+    }
 
-  // Calculate how many attributes we can fit in each chunk
-  // We'll aim for 3500 tokens per chunk to leave room for metadata
-  const attrsPerChunk = Math.floor(3500 / (JSON.stringify(attributes[0]).length / CHARS_PER_TOKEN));
-  // console.log(`Splitting ${attributes.length} attributes into chunks of ${attrsPerChunk} attributes each`);
+    // Calculate how many attributes we can fit in each chunk
+    const attrsPerChunk = Math.max(1, Math.floor(3500 / (JSON.stringify(attributes[0]).length / CHARS_PER_TOKEN)));
 
-  // Split the attributes into chunks
-  for (let i = 0; i < attributes.length; i += attrsPerChunk) {
-    const chunkAttrs = attributes.slice(i, i + attrsPerChunk);
-    const chunk = [{
-      name: context.name,
-      context: {
-        ...context.context,
-        collections: [{
-          ...firstCollection,
-          attrs: chunkAttrs
-        }]
-      }
-    }];
+    // Split the attributes into chunks
+    for (let i = 0; i < attributes.length; i += attrsPerChunk) {
+      const chunkAttrs = attributes.slice(i, i + attrsPerChunk);
+      const chunk = [{
+        name: context.name,
+        context: {
+          ...context.context,
+          collections: [{
+            ...collection,
+            attrs: chunkAttrs
+          }]
+        }
+      }];
 
-    // Log the size of each chunk
-    // const chunkSize = JSON.stringify(chunk).length / CHARS_PER_TOKEN;
-    // console.log(`Chunk ${i / attrsPerChunk + 1} size: ${chunkSize} tokens`);
-    
-    chunks.push(chunk);
+      // Add the chunk to the list of chunks
+      chunks.push(chunk);
+    }
   }
 
   return chunks;
