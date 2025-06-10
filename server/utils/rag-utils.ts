@@ -85,10 +85,6 @@ const getEmbeddingsModel = (assistantId: string) => {
 };
 
 export const setupVectorStore = async (documents: Document[], assistantId: string, vectorStoreCache: any) => {
-  if (vectorStoreCache[assistantId]) {
-    return vectorStoreCache[assistantId];
-  }
-
   const embeddings = getEmbeddingsModel(assistantId);
   const vectorStore = await MemoryVectorStore.fromDocuments(documents, embeddings);
   

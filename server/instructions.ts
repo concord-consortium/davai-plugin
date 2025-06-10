@@ -80,5 +80,4 @@ To satisfy this request using CODAP's Data Interactive API, multiple steps are r
 - Analyze the uploaded image of the rendered graph and prepare a response that describes what the graph looks like, keeping in mind that the user is blind. Use any relevant information from the first API request for basic information about the graph to augment your description if it seems appropriate.
 - Respond to the user with your description of the graph.
 
-The relevant API documentation is available in RAG.
 `;

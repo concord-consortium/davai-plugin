@@ -23,9 +23,15 @@ let vectorStoreCache: { [key: string]: MemoryVectorStore } = {};
 // Process the CODAP Plugin API documentation content and add it to the prompt template.
 const processedCodapApiDoc = await processMarkdownDoc(codapApiDoc);
 
+const promptTemplate = ChatPromptTemplate.fromMessages([
+  ["system", `${instructions}\n\nHere is the relevant CODAP API documentation:\n{context}`],
+  ["placeholder", "{messages}"],
+]);
+
 const createModelInstance = (llm: string) => {
   const llmObj = JSON.parse(llm);
   const { id, provider} = llmObj;
+
   if (provider === "OpenAI") {
     return new ChatOpenAI({
       model: id,
@@ -33,6 +39,7 @@ const createModelInstance = (llm: string) => {
       apiKey: process.env.OPENAI_API_KEY,
     });
   }
+
   if (provider === "Google") {
     return new ChatGoogleGenerativeAI({
       model: id,
@@ -40,18 +47,22 @@ const createModelInstance = (llm: string) => {
       apiKey: process.env.GOOGLE_API_KEY,
     });
   }
-  throw new Error(`Unsupported LLM provider: ${provider}`);
 
+  throw new Error(`Unsupported LLM provider: ${provider}`);
 };
 
-const promptTemplate = ChatPromptTemplate.fromMessages([
-  ["system", `${instructions}\n\nHere is the relevant CODAP API documentation:\n{context}`],
-  ["placeholder", "{messages}"],
-]);
+let activeLLMInstance: Record<string, any> | undefined = undefined;
+
+const getOrCreateModelInstance = (llmId: string): Record<string, any> => {
+  if (!activeLLMInstance) {
+    activeLLMInstance = createModelInstance(llmId);
+  }
+  return activeLLMInstance;
+};
 
 const callModel = async (state: any, modelConfig: any) => {
   const { llmId } = modelConfig.configurable;
-  const llm = createModelInstance(llmId);
+  const llm = getOrCreateModelInstance(llmId);
   const llmRealId = JSON.parse(llmId).id;
 
   // Get the last user message to use as the query
@@ -60,7 +71,7 @@ const callModel = async (state: any, modelConfig: any) => {
     .pop()?.content || state.messages[0]?.content;
 
   // Retrieve relevant documents using the appropriate embeddings
-  const vectorStore = await setupVectorStore(processedCodapApiDoc, llmRealId, vectorStoreCache);
+  const vectorStore = vectorStoreCache[llmRealId] ?? await setupVectorStore(processedCodapApiDoc, llmRealId, vectorStoreCache);
   const relevantDocs = await vectorStore.similaritySearch(lastUserMessage, 3);
   
   // Clean the context to ensure it doesn't contain any template variables
