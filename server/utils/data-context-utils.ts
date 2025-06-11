@@ -1,8 +1,8 @@
-const CHUNK_SIZE = 4000;
+const MAX_TOKENS_PER_CHUNK = 4000;
 const CHARS_PER_TOKEN = 3; // Conservative token estimate (3 chars ≈ 1 token)
 
 export interface IDataContextChunk {
-  context: Record<string, any>;
+  context: string;
   name: string;
 }
 
@@ -23,7 +23,7 @@ export const chunkDataContexts = (contexts: IDataContextChunk[]): IDataContextCh
     const contextStr = JSON.stringify(context);
     const estimatedTokens = contextStr.length / CHARS_PER_TOKEN;
 
-    if (currentSize + estimatedTokens > CHUNK_SIZE) {
+    if (currentSize + estimatedTokens > MAX_TOKENS_PER_CHUNK) {
       if (currentChunk.length > 0) {
         chunks.push(currentChunk);
         currentChunk = [];
@@ -31,7 +31,7 @@ export const chunkDataContexts = (contexts: IDataContextChunk[]): IDataContextCh
       }
 
       // If a single context is too large, split it into smaller pieces
-      if (estimatedTokens > CHUNK_SIZE) {
+      if (estimatedTokens > MAX_TOKENS_PER_CHUNK) {
         const subContexts = splitLargeContext(context);
         chunks.push(...subContexts);
         continue;
@@ -53,42 +53,22 @@ export const chunkDataContexts = (contexts: IDataContextChunk[]): IDataContextCh
  */
 export const splitLargeContext = (context: IDataContextChunk): IDataContextChunk[][] => {
   const chunks: IDataContextChunk[][] = [];
-  
-  // Get the collections array from the context
-  const collections = context.context?.collections;
-  if (!collections || !Array.isArray(collections) || collections.length === 0) {
-    // console.log("No collections found, sending whole context");
-    chunks.push([context]);
-    return chunks;
+  const contextStr = JSON.stringify(context);
+  const estimatedTokens = contextStr.length / CHARS_PER_TOKEN;
+  if (estimatedTokens <= MAX_TOKENS_PER_CHUNK) {
+    // If the context is small enough, just return it as a single chunk
+    return [[context]];
   }
+  // console.log(`Context ${context.name} is too large (${estimatedTokens} tokens), splitting...`);
 
-  for (const collection of collections) {
-    const attributes = collection.attrs;
-    if (!attributes || !Array.isArray(attributes)) {
-      chunks.push([context]);
-      continue;
-    }
-
-    // Calculate how many attributes we can fit in each chunk
-    const attrsPerChunk = Math.max(1, Math.floor(3500 / (JSON.stringify(attributes[0]).length / CHARS_PER_TOKEN)));
-
-    // Split the attributes into chunks
-    for (let i = 0; i < attributes.length; i += attrsPerChunk) {
-      const chunkAttrs = attributes.slice(i, i + attrsPerChunk);
-      const chunk = [{
-        name: context.name,
-        context: {
-          ...context.context,
-          collections: [{
-            ...collection,
-            attrs: chunkAttrs
-          }]
-        }
-      }];
-
-      // Add the chunk to the list of chunks
-      chunks.push(chunk);
-    }
+  // split the context into smaller pieces that are under CHUNK_SIZE
+  for ( let i = 0; i < contextStr.length; i += MAX_TOKENS_PER_CHUNK * CHARS_PER_TOKEN) {
+    const subContextStr = contextStr.slice(i, i + MAX_TOKENS_PER_CHUNK * CHARS_PER_TOKEN);
+    const subContext: IDataContextChunk = {
+      name: context.name,
+      context: subContextStr
+    };
+    chunks.push([subContext]);
   }
 
   return chunks;
@@ -106,7 +86,7 @@ export const processDataContexts = (dataContexts: Record<string, any>): IProcess
 
     return {
       name,
-      context: context as Record<string, any>
+      context: context ? JSON.stringify(context) : ""
     };
   });
   
@@ -117,28 +97,13 @@ export const processDataContexts = (dataContexts: Record<string, any>): IProcess
   for (let i = 0; i < chunks.length; i++) {
     const chunk = chunks[i];
     const chunkStr = JSON.stringify(chunk);
-    const chunkSize = chunkStr.length / CHARS_PER_TOKEN;
+    // const chunkSize = chunkStr.length / CHARS_PER_TOKEN;
     // console.log(`Processing chunk ${i + 1}/${chunks.length}, size: ${chunkSize} tokens`);
-    
-    // For chunks that are still too large, split them further
-    if (chunkSize > 7000) {
-      // console.log(`Chunk ${i + 1} too large (${chunkSize} tokens), splitting further...`);
-      const subChunks = splitLargeContext(chunk[0]);
-      for (const subChunk of subChunks) {
-        const subChunkStr = JSON.stringify(subChunk);
-        // const subChunkSize = subChunkStr.length / CHARS_PER_TOKEN;
-        // console.log(`Sub-chunk size: ${subChunkSize} tokens`);
-        messages.push({ 
-          role: "user", 
-          content: `Data context sub-chunk: ${subChunkStr}` 
-        });
-      }
-    } else {
-      messages.push({ 
-        role: "user", 
-        content: `Data contexts chunk ${i + 1}/${chunks.length}: ${chunkStr}` 
-      });
-    }
+
+    messages.push({ 
+      role: "user", 
+      content: `Data contexts chunk ${i + 1}/${chunks.length}: ${chunkStr}` 
+    });
   }
 
   return messages;
