@@ -20,17 +20,26 @@ app.use(json());
 // Initialize the vector store cache to avoid re-creating it for each request.
 let vectorStoreCache: { [key: string]: MemoryVectorStore } = {};
 
-// Process the CODAP Plugin API documentation content and add it to the prompt template.
-const processedCodapApiDoc = await processMarkdownDoc(codapApiDoc);
+let processedCodapApiDoc: Document<Record<string, any>>[] = [];
+let promptTemplate: ChatPromptTemplate;
 
-const promptTemplate = ChatPromptTemplate.fromMessages([
-  ["system", `${instructions}\n\nHere is the relevant CODAP API documentation:\n{context}`],
-  ["placeholder", "{messages}"],
-]);
+export const initializeApp = async () => {
+  console.log("Initializing application...");
 
-const createModelInstance = (llm: string) => {
+  // Process the CODAP Plugin API documentation content
+  processedCodapApiDoc = await processMarkdownDoc(codapApiDoc);
+
+  promptTemplate = ChatPromptTemplate.fromMessages([
+    ["system", `${instructions}\n\nHere is the relevant CODAP API documentation:\n{context}`],
+    ["placeholder", "{messages}"],
+  ]);
+
+  console.log("Application initialized successfully.");
+};
+
+export const createModelInstance = (llm: string) => {
   const llmObj = JSON.parse(llm);
-  const { id, provider} = llmObj;
+  const { id, provider } = llmObj;
 
   if (provider === "OpenAI") {
     return new ChatOpenAI({
@@ -73,7 +82,7 @@ const callModel = async (state: any, modelConfig: any) => {
   // Retrieve relevant documents using the appropriate embeddings
   const vectorStore = vectorStoreCache[llmRealId] ?? await setupVectorStore(processedCodapApiDoc, llmRealId, vectorStoreCache);
   const relevantDocs = await vectorStore.similaritySearch(lastUserMessage, 3);
-  
+
   // Clean the context to ensure it doesn't contain any template variables
   const context = relevantDocs
     .map((doc: Document) => {
@@ -87,19 +96,19 @@ const callModel = async (state: any, modelConfig: any) => {
 
   const prompt = await promptTemplate.invoke({
     context,
-    messages: state.messages
+    messages: state.messages,
   });
 
   const response = await llm.invoke(prompt);
 
   if (response?.tool_calls?.[0]) {
     const functionCall = response.tool_calls[0];
-    return { 
+    return {
       messages: response,
       function_call: {
         name: functionCall.id,
-        arguments: functionCall.args
-      }
+        arguments: functionCall.args,
+      },
     };
   }
 
@@ -129,9 +138,9 @@ app.post("/api/message", async (req, res) => {
     }
 
     // Add the user's message
-    messages.push({ 
-      role: "user", 
-      content: message 
+    messages.push({
+      role: "user",
+      content: message,
     });
 
     // console.log("Final messages array:", messages.map(m => ({ role: m.role, contentLength: m.content.length })));
@@ -147,6 +156,18 @@ app.post("/api/message", async (req, res) => {
   }
 });
 
-app.listen(port, () => {
-  console.log(`LangChain server listening on http://localhost:${port}`);
-});
+// Start the server after initialization when the file is run directly.
+if (require.main === module) {
+  initializeApp()
+    .then(() => {
+      app.listen(port, () => {
+        console.log(`LangChain server listening on http://localhost:${port}`);
+      });
+    })
+    .catch((err) => {
+      console.error("Failed to initialize application:", err);
+      process.exit(1);
+    });
+}
+
+export default app;

@@ -5,7 +5,7 @@ import { OpenAIEmbeddings } from "@langchain/openai";
 import { GoogleGenerativeAIEmbeddings } from "@langchain/google-genai";
 
 // This is used to ensure the CODAP Plugin API documentation Markdown is properly formatted.
-const escapeCurlyBraces = (text: string): string => {
+export const escapeCurlyBraces = (text: string): string => {
   // First, handle JSON code blocks by replacing their braces with a temporary marker
   text = text.replace(/```json\n([\s\S]*?)\n```/g, (match) => {
     return match
@@ -72,7 +72,7 @@ export const processMarkdownDoc = async (markdownContent: string) => {
   return processedChunks.flat();
 };
 
-const getEmbeddingsModel = (assistantId: string) => {
+export const getEmbeddingsModel = (assistantId: string) => {
   if (assistantId === "gemini") {
     return new GoogleGenerativeAIEmbeddings({
       modelName: "embedding-001",

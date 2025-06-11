@@ -14,7 +14,7 @@ export interface IProcessedChunk {
 /**
  * Splits a large data context into smaller chunks based on token size
  */
-const chunkDataContexts = (contexts: IDataContextChunk[]): IDataContextChunk[][] => {
+export const chunkDataContexts = (contexts: IDataContextChunk[]): IDataContextChunk[][] => {
   const chunks: IDataContextChunk[][] = [];
   let currentChunk: IDataContextChunk[] = [];
   let currentSize = 0;
@@ -51,7 +51,7 @@ const chunkDataContexts = (contexts: IDataContextChunk[]): IDataContextChunk[][]
 /**
  * Splits a single large context into smaller chunks based on its attributes
  */
-const splitLargeContext = (context: IDataContextChunk): IDataContextChunk[][] => {
+export const splitLargeContext = (context: IDataContextChunk): IDataContextChunk[][] => {
   const chunks: IDataContextChunk[][] = [];
   
   // Get the collections array from the context
