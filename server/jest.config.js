@@ -14,7 +14,7 @@ export default {
   moduleNameMapper: {
     "^(\\.{1,2}/.*)\\.js$": "$1"
   },
-  preset: "ts-jest/presets/default-esm",
+  preset: "ts-jest/presets/js-with-ts",
   testEnvironment: "node",
   testRegex: "(/__tests__/.*|(\\.|/)(test|spec))\\.(jsx?|tsx?)$",
   testPathIgnorePatterns: ["/node_modules/"],
