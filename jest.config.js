@@ -1,4 +1,5 @@
 const transpileModules = [
+  "@langchain",
   "react-markdown",
   "tone",
   "bail",
@@ -10,6 +11,7 @@ const transpileModules = [
   "hast-util-whitespace",
   "html-url-attributes",
   "is-plain-obj",
+  "langchain",
   "mdast-util-from-markdown",
   "mdast-util-to-string",
   "mdast-util-to-hast",
