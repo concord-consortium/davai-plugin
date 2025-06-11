@@ -10,10 +10,8 @@ import { mockAppConfig } from "../test-utils/mock-app-config";
 
 const MockAssistantModel = types
   .model("MockAssistantModel", {
-    apiConnection: types.frozen(),
-    assistant: types.maybe(types.frozen()),
-    assistantId: types.string,
-    assistantList: types.optional(types.map(types.string), {}),
+    llmId: types.string,
+    llmList: types.optional(types.map(types.string), {}),
     thread: types.maybe(types.frozen()),
     transcriptStore: ChatTranscriptModel
   })
@@ -26,7 +24,7 @@ const mockTranscriptStore = ChatTranscriptModel.create({
   messages: [
     {
       speaker: "DAVAI",
-      content: "Hello. How can I help you today?",
+      messageContent: { content: "Hello. How can I help you today?" },
       timestamp: "2021-07-01T12:00:00Z",
       id: "msg_1",
     },
@@ -34,15 +32,7 @@ const mockTranscriptStore = ChatTranscriptModel.create({
 });
 
 const mockAssistantStore = MockAssistantModel.create({
-  apiConnection: {
-    apiKey: "abc123",
-    dangerouslyAllowBrowser: true
-  },
-  assistant: {},
-  assistantId: "asst_abc123",
-  assistantList: {
-    asst_abc123: "Jest Mock Assistant",
-  },
+  llmId: "{\"id\":\"gpt-4o-mini\",\"provider\":\"OpenAI\"}",
   thread: {},
   transcriptStore: mockTranscriptStore,
 }) as unknown as AssistantModelType;
@@ -69,25 +59,26 @@ describe("test developer options component", () => {
     const developerOptions = screen.getByTestId("developer-options");
     expect(developerOptions).toBeInTheDocument();
 
-    const selectAssistantOptionLabel = screen.getByTestId("assistant-select-label");
-    expect(selectAssistantOptionLabel).toHaveTextContent("Select an Assistant");
-    const selectAssistantOption = screen.getByTestId("assistant-select");
-    expect(selectAssistantOption).toBeInTheDocument();
+    const selectLlmOptionLabel = screen.getByTestId("llm-select-label");
+    expect(selectLlmOptionLabel).toHaveTextContent("Select an LLM");
+    const selectLlmOption = screen.getByTestId("llm-select");
+    expect(selectLlmOption).toBeInTheDocument();
     await waitFor(() => {
-      expect(selectAssistantOption).toHaveValue("asst_abc123");
+      expect(selectLlmOption).toHaveValue('{"id":"mock","provider":"Mock"}');
     });
     await waitFor(() => {
-      expect(selectAssistantOption).toHaveTextContent("Jest Mock Assistant");
+      expect(selectLlmOption).toHaveTextContent("Mock LLM");
     });
 
-    const deleteThreadButton = screen.getByTestId("delete-thread-button");
-    expect(deleteThreadButton).toBeInTheDocument();
-    expect(deleteThreadButton).toBeEnabled();
-    expect(deleteThreadButton).toHaveTextContent("Delete Thread");
+    // TODO: Reinstate these test once thread management is fully implemented.
+    // const deleteThreadButton = screen.getByTestId("delete-thread-button");
+    // expect(deleteThreadButton).toBeInTheDocument();
+    // expect(deleteThreadButton).toBeEnabled();
+    // expect(deleteThreadButton).toHaveTextContent("Delete Thread");
 
-    const newThreadButton = screen.getByTestId("new-thread-button");
-    expect(newThreadButton).toBeInTheDocument();
-    expect(newThreadButton).toHaveAttribute("aria-disabled", "true");
-    expect(newThreadButton).toHaveTextContent("New Thread");
+    // const newThreadButton = screen.getByTestId("new-thread-button");
+    // expect(newThreadButton).toBeInTheDocument();
+    // expect(newThreadButton).toHaveAttribute("aria-disabled", "true");
+    // expect(newThreadButton).toHaveTextContent("New Thread");
   });
 });

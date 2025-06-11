@@ -69,7 +69,8 @@ describe("GraphSonificationModel", () => {
           bins: [],
           minBinEdge: 0,
           maxBinEdge: 0,
-          binWidth: 0
+          binWidth: 0,
+          values: []
         }
       },
       assistantStore: {
