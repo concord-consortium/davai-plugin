@@ -9,6 +9,7 @@
   },
   "scripts": {
     "start": "node --loader ts-node/esm index.ts",
+    "build": "tsc",
     "test": "jest",
     "test:coverage": "jest --coverage"
   },

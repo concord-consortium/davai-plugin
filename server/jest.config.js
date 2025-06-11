@@ -11,9 +11,9 @@ const transpileModules = [
 export default {
   coveragePathIgnorePatterns: ["/node_modules/"],
   moduleFileExtensions: ["ts", "js", "json"],
-  moduleNameMapper: {
-    "^(\\.{1,2}/.*)\\.js$": "$1"
-  },
+  // moduleNameMapper: {
+  //   "^(\\.{1,2}/.*)\\.js$": "$1"
+  // },
   preset: "ts-jest/presets/js-with-ts",
   testEnvironment: "node",
   testRegex: "(/__tests__/.*|(\\.|/)(test|spec))\\.(jsx?|tsx?)$",
