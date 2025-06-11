@@ -36,6 +36,11 @@ jobs:
       - name: Install Dependencies
         run: npm ci
         working-directory: ./server
+      - name: Check node_modules and jest bin
+        run: |
+          ls -la node_modules/.bin
+          node_modules/.bin/jest --version
+        working-directory: ./server
       - name: Run Tests
         run: npm run test:coverage -- --runInBand
         working-directory: ./server
