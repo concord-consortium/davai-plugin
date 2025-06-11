@@ -1,7 +1,9 @@
 const transpileModules = [
+  "@langchain",
   "dotenv",
   "express",
   "jsdom",
+  "langchain",
   "nanoid",
   "zod"
 ];
