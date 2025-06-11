@@ -22,6 +22,27 @@ jobs:
         with:
           flags: jest
           token: ${{ secrets.CODECOV_TOKEN }}
+
+  build_server_test:
+    name: Build and Run Server Jest Tests
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: ./server
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+      - name: Install Dependencies
+        run: npm ci
+      - name: Build
+        run: npm run build
+      - name: Run Tests
+        run: npm run test:coverage -- --runInBand
+      - name: Upload coverage to Codecov
+        uses: codecov/codecov-action@v4
+        with:
+          flags: jest
+          token: ${{ secrets.CODECOV_TOKEN }}
   cypress:
     runs-on: ubuntu-latest
     strategy:

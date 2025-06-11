@@ -9,7 +9,8 @@
   },
   "scripts": {
     "start": "node --loader ts-node/esm index.ts",
-    "test": "jest"
+    "test": "jest",
+    "test:coverage": "jest --coverage"
   },
   "keywords": [],
   "author": "",
