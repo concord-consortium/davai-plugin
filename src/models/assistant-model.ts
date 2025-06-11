@@ -36,6 +36,9 @@ interface IMessageResponse {
   type: "CODAP_REQUEST" | "MESSAGE";
 }
 
+const serverUrl = process.env.LANGCHAIN_SERVER_URL || "http://localhost:5000/";
+const msgEndpoint = `${serverUrl}api/message`;
+
 /**
  * AssistantModel encapsulates the AI assistant and its interactions with the user.
  * It includes properties and methods for configuring the assistant, handling chat interactions, and maintaining the assistant's
@@ -155,14 +158,14 @@ export const AssistantModel = types
 
     const sendCODAPDocumentInfo = flow(function* (message) {
       if (self.isAssistantMocked) return;
-    
+
       try {
         self.addDbgMsg("Sending CODAP document info to LLM", message);
         if (!self.threadId) {
           self.codapNotificationQueue.push(message);
         } else {
           const extracted = extractDataContexts(message);
-          
+
           if (extracted) {
             const requestBody = {
               llmId: self.llmId,
@@ -171,19 +174,19 @@ export const AssistantModel = types
               isSystemMessage: false,
               dataContexts: extracted.dataContexts
             };
-      
-            const response = yield fetch(`${process.env.LANGCHAIN_SERVER_URL}/api/message`, {
+
+            const response = yield fetch(msgEndpoint, {
               method: "POST",
               headers: {
                 "Content-Type": "application/json",
               },
               body: JSON.stringify(requestBody),
             });
-      
+
             if (!response.ok) {
               throw new Error(`Failed to send system message: ${response.statusText}`);
             }
-      
+
             const data = yield response.json();
             self.addDbgMsg("CODAP document info received by LLM", formatJsonMessage(data));
           } else {
@@ -229,7 +232,7 @@ export const AssistantModel = types
       if (self.isAssistantMocked) return;
 
       try {
-        const response = yield fetch(`${process.env.LANGCHAIN_SERVER_URL}/api/message`, {
+        const response = yield fetch(msgEndpoint, {
           method: "POST",
           headers: {
             "Content-Type": "application/json",
@@ -271,7 +274,7 @@ export const AssistantModel = types
           const dataContexts = yield getDataContexts();
 
           // Send message to LangChain server
-          const response = yield fetch(`${process.env.LANGCHAIN_SERVER_URL}/api/message`, {
+          const response = yield fetch(msgEndpoint, {
             method: "POST",
             headers: {
               "Content-Type": "application/json",
