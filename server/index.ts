@@ -18,6 +18,11 @@ app.use(json());
 
 // Middleware to check for the API secret in the request headers
 app.use((req: any, res: any, next: any) => {
+  // Skip authentication for OPTIONS preflight requests
+  if (req.method === "OPTIONS") {
+    return next();
+  }
+
   const token = req.headers.authorization;
   if (token !== process.env.DAVAI_API_SECRET) {
     return res.status(401).json({ error: "Unauthorized" });

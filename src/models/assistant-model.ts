@@ -179,6 +179,7 @@ export const AssistantModel = types
               method: "POST",
               headers: {
                 "Content-Type": "application/json",
+                "Authorization": "super-secret-token-123"
               },
               body: JSON.stringify(requestBody),
             });
@@ -236,6 +237,7 @@ export const AssistantModel = types
           method: "POST",
           headers: {
             "Content-Type": "application/json",
+            "Authorization": "super-secret-token-123"
           },
           body: JSON.stringify({
             llmId: self.llmId,
@@ -278,6 +280,7 @@ export const AssistantModel = types
             method: "POST",
             headers: {
               "Content-Type": "application/json",
+              "Authorization": "super-secret-token-123"
             },
             body: JSON.stringify({
               llmId: self.llmId,
