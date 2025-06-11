@@ -37,7 +37,7 @@ interface IMessageResponse {
 }
 
 const serverUrl = process.env.LANGCHAIN_SERVER_URL || "http://localhost:5000/";
-const msgEndpoint = `${serverUrl}api/message`;
+const msgEndpoint = `${serverUrl}/message`;
 
 /**
  * AssistantModel encapsulates the AI assistant and its interactions with the user.

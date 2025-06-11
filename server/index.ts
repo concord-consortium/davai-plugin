@@ -18,11 +18,6 @@ app.use(json());
 
 // Middleware to check for the API secret in the request headers
 app.use((req: any, res: any, next: any) => {
-  // Skip authentication for OPTIONS preflight requests
-  if (req.method === "OPTIONS") {
-    return next();
-  }
-
   const token = req.headers.authorization;
   if (token !== process.env.DAVAI_API_SECRET) {
     return res.status(401).json({ error: "Unauthorized" });
@@ -108,7 +103,7 @@ const memory = new MemorySaver();
 const langApp = workflow.compile({ checkpointer: memory });
 
 // This is the main endpoint for use by the client app. We may want to add more, e.g. another for tool calls, etc.
-app.post("/api/message", async (req, res) => {
+app.post("/default/davaiServer/message", async (req, res) => {
   const { llmId, message, threadId, dataContexts } = req.body;
   const config = { configurable: { thread_id: threadId, llmId } };
 
