@@ -42,7 +42,7 @@ afterAll(() => {
 describe("escapeCurlyBraces", () => {
   it("should escape curly braces in text", () => {
     const input = "This is a test with {curly braces} and {{double braces}}.";
-    const expected = "This is a test with {{{{curly braces}}}} and {{{{{{double braces}}}}}}.";
+    const expected = "This is a test with {{curly braces}} and {{{{double braces}}}}.";
     expect(escapeCurlyBraces(input)).toBe(expected);
   });
 });
@@ -72,7 +72,7 @@ describe("processMarkdownDoc", () => {
     const processedDoc = await processMarkdownDoc(markdownContent);
     expect(processedDoc.length).toBe(6);
     expect(processedDoc[0].pageContent).toContain("# Title");
-    expect(processedDoc[5].pageContent).toContain("## Sub Title\n\nThis is a test document with {{{{curly braces}}}}.");
+    expect(processedDoc[5].pageContent).toContain("## Sub Title\n\nThis is a test document with {{curly braces}}.");
   });
 });
 

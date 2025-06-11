@@ -6,38 +6,14 @@ import { GoogleGenerativeAIEmbeddings } from "@langchain/google-genai";
 
 // This is used to ensure the CODAP Plugin API documentation Markdown is properly formatted.
 export const escapeCurlyBraces = (text: string): string => {
-  // First, handle JSON code blocks by replacing their braces with a temporary marker
-  text = text.replace(/```json\n([\s\S]*?)\n```/g, (match) => {
-    return match
-      .replace(/{/g, "[[OPEN_BRACE]]")
-      .replace(/}/g, "[[CLOSE_BRACE]]");
-  });
+  // Escape curly braces in JSON code blocks
+  text = text.replace(/```json\n([\s\S]*?)\n```/g, (match) =>
+    match.replace(/{/g, "{{").replace(/}/g, "}}")
+  );
 
-  // Handle any existing escaped braces
-  text = text.replace(/\\{/g, "{{").replace(/\\}/g, "}}");
-  
-  // Handle comments with braces
-  text = text.replace(/\/\*.*?\*\//g, (match) => {
-    return match.replace(/{/g, "{{").replace(/}/g, "}}");
-  });
-  
-  // Handle inline code blocks with braces
-  text = text.replace(/`.*?`/g, (match) => {
-    return match.replace(/{/g, "{{").replace(/}/g, "}}");
-  });
-  
-  // Handle JSON-like objects that aren't part of template variables
-  text = text.replace(/(?<!\\){([^{}]*?)(?<!\\)}/g, "{{$1}}");
-  
-  // Handle any remaining single braces
-  text = text.replace(/(?<!\\){/g, "{{");
-  text = text.replace(/(?<!\\)}/g, "}}");
+  // Escape curly braces in other parts of the text
+  text = text.replace(/(?<!\\){/g, "{{").replace(/(?<!\\)}/g, "}}");
 
-  // Restore the JSON code blocks
-  text = text
-    .replace(/\[\[OPEN_BRACE\]\]/g, "{")
-    .replace(/\[\[CLOSE_BRACE\]\]/g, "}");
-  
   return text;
 };
 

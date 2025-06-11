@@ -7,19 +7,19 @@ const transpileModules = [
 ];
 
 export default {
-  preset: "ts-jest/presets/js-with-ts",
-  testEnvironment: "jsdom",
-  transform: {
-    "^.+\\.(js)$": "babel-jest"
-  },
-  testRegex: "(/__tests__/.*|(\\.|/)(test|spec))\\.(jsx?|tsx?)$",
-  testPathIgnorePatterns: ["/node_modules/"],
   coveragePathIgnorePatterns: ["/node_modules/"],
-  transformIgnorePatterns: [
-    `/node_modules/(?!${transpileModules.join("|")}/)`
-  ],
+  moduleFileExtensions: ["ts", "js", "json"],
   moduleNameMapper: {
     "^(\\.{1,2}/.*)\\.js$": "$1"
   },
-  moduleFileExtensions: ["ts", "js", "json"]
+  preset: "ts-jest/presets/default-esm",
+  testEnvironment: "node",
+  testRegex: "(/__tests__/.*|(\\.|/)(test|spec))\\.(jsx?|tsx?)$",
+  testPathIgnorePatterns: ["/node_modules/"],
+  transform: {
+    "^.+\\.(js)$": "babel-jest"
+  },
+  transformIgnorePatterns: [
+    `/node_modules/(?!${transpileModules.join("|")}/)`
+  ],
 };

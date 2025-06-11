@@ -1,15 +1,14 @@
 import express, { json } from "express";
 import * as dotenv from "dotenv";
 import { START, END, MemorySaver, MessagesAnnotation, StateGraph } from "@langchain/langgraph";
-import { ChatOpenAI } from "@langchain/openai";
-import { ChatGoogleGenerativeAI } from "@langchain/google-genai";
 import { ChatPromptTemplate } from "@langchain/core/prompts";
 import { MemoryVectorStore } from "langchain/vectorstores/memory";
 import { Document } from "@langchain/core/documents";
 import { instructions } from "./instructions.js";
 import { codapApiDoc } from "./codap-api-documentation.js";
-import { processMarkdownDoc, setupVectorStore } from "./utils/rag-utils.js";
+import { escapeCurlyBraces, processMarkdownDoc, setupVectorStore } from "./utils/rag-utils.js";
 import { processDataContexts } from "./utils/data-context-utils.js";
+import { createModelInstance } from "./utils/llm-utils.js";
 
 dotenv.config();
 
@@ -37,29 +36,6 @@ export const initializeApp = async () => {
   console.log("Application initialized successfully.");
 };
 
-export const createModelInstance = (llm: string) => {
-  const llmObj = JSON.parse(llm);
-  const { id, provider } = llmObj;
-
-  if (provider === "OpenAI") {
-    return new ChatOpenAI({
-      model: id,
-      temperature: 0,
-      apiKey: process.env.OPENAI_API_KEY,
-    });
-  }
-
-  if (provider === "Google") {
-    return new ChatGoogleGenerativeAI({
-      model: id,
-      temperature: 0,
-      apiKey: process.env.GOOGLE_API_KEY,
-    });
-  }
-
-  throw new Error(`Unsupported LLM provider: ${provider}`);
-};
-
 let activeLLMInstance: Record<string, any> | undefined = undefined;
 
 const getOrCreateModelInstance = (llmId: string): Record<string, any> => {
@@ -85,13 +61,7 @@ const callModel = async (state: any, modelConfig: any) => {
 
   // Clean the context to ensure it doesn't contain any template variables
   const context = relevantDocs
-    .map((doc: Document) => {
-      return doc.pageContent.replace(/```json\n([\s\S]*?)\n```/g, (match) => {
-        return match
-          .replace(/{/g, "{{")
-          .replace(/}/g, "}}");
-      });
-    })
+    .map((doc: Document) => escapeCurlyBraces(doc.pageContent))
     .join("\n\n");
 
   const prompt = await promptTemplate.invoke({
@@ -156,18 +126,16 @@ app.post("/api/message", async (req, res) => {
   }
 });
 
-// Start the server after initialization when the file is run directly.
-if (require.main === module) {
-  initializeApp()
-    .then(() => {
-      app.listen(port, () => {
-        console.log(`LangChain server listening on http://localhost:${port}`);
-      });
-    })
-    .catch((err) => {
-      console.error("Failed to initialize application:", err);
-      process.exit(1);
+
+initializeApp()
+  .then(() => {
+    app.listen(port, () => {
+      console.log(`LangChain server listening on http://localhost:${port}`);
     });
-}
+  })
+  .catch((err) => {
+    console.error("Failed to initialize application:", err);
+    process.exit(1);
+  });
 
 export default app;

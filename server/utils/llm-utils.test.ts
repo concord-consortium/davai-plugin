@@ -2,11 +2,7 @@ import { TextEncoder } from "util";
 import { ReadableStream } from "web-streams-polyfill";
 global.TextEncoder = TextEncoder;
 global.ReadableStream = ReadableStream as any;
-import { createModelInstance } from "./index";
-
-jest.mock("./instructions.js", () => ({
-  instructions: "Mocked instructions for the CODAP Plugin API.",
-}));
+import { createModelInstance } from "./llm-utils";
 
 jest.mock("@langchain/openai", () => ({
   ChatOpenAI: jest.fn(() => ({
@@ -34,30 +30,12 @@ jest.mock("@langchain/google-genai", () => ({
   })),
 }));
 
-jest.mock("./utils/rag-utils", () => ({
-  ...jest.requireActual("./utils/rag-utils"),
+jest.mock("./rag-utils", () => ({
+  ...jest.requireActual("./rag-utils"),
   getEmbeddingsModel: jest.fn(() => ({
     embedQuery: jest.fn(),
     embedDocuments: jest.fn(),
   })),
-}));
-
-jest.mock("./index", () => ({
-  ...jest.requireActual("./index"),
-  initializeApp: jest.fn(() => Promise.resolve()),
-  processMarkdownDoc: jest.fn(() => Promise.resolve("Mocked processed document")),
-}));
-
-jest.mock("langchain/vectorstores/memory", () => ({
-  MemoryVectorStore: {
-    fromDocuments: jest.fn(() => ({
-      addDocuments: jest.fn(),
-      similaritySearch: jest.fn(() => [
-        { pageContent: "Relevant content 1", metadata: {} },
-        { pageContent: "Relevant content 2", metadata: {} },
-      ]),
-    })),
-  },
 }));
 
 afterAll(() => {
