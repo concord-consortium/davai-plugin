@@ -8,7 +8,7 @@ import { DATA_CONTEXT_MESSAGES } from "../constants";
  * @param dataset - The dataset to be trimmed.
  * @returns A new dataset with some unnecessary items removed.
  */
-const trimDataset = (dataset: any): any => {
+export const trimDataset = (dataset: any): any => {
   const newDataset = structuredClone(dataset);
 
   for (const contextKey of Object.keys(newDataset)) {
@@ -30,7 +30,6 @@ const trimDataset = (dataset: any): any => {
 
   return newDataset;
 };
-
 
 export const formatDataContextMessage = (
   type: keyof typeof DATA_CONTEXT_MESSAGES,
@@ -101,7 +100,9 @@ export const extractDataContexts = (message: string): IExtractedDataContext | nu
     }
 
     // Check for removed data context
-    if (message === DATA_CONTEXT_MESSAGES.REMOVED.replace("{name}", "")) {
+    const removePrefix = DATA_CONTEXT_MESSAGES.REMOVED.split("{name}")[0];
+    const removeSuffix = DATA_CONTEXT_MESSAGES.REMOVED.split("{name}")[1];
+    if (message.startsWith(removePrefix) && message.endsWith(removeSuffix)) {
       const name = message.substring(
         DATA_CONTEXT_MESSAGES.REMOVED.split("{name}")[0].length,
         message.length - DATA_CONTEXT_MESSAGES.REMOVED.split("{name}")[1].length
