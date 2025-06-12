@@ -18,8 +18,7 @@ export const DeveloperOptionsComponent = observer(({assistantStore, createToggle
   const isDevMode = getUrlParam("mode") === "development" || appConfig.mode === "development";
 
   const handleCreateThread = async () => {
-    if (assistantStore.threadId || appConfig.isAssistantMocked) return;
-    if (appConfig.isAssistantMocked) return;
+    if (!assistantStore.threadId || appConfig.isAssistantMocked) return;
     const confirmCreate = window.confirm("Are you sure you want to create a new thread? If you do, you will lose any existing chat history.");
     if (!confirmCreate) return false;
 
