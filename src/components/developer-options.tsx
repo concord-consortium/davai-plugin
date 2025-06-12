@@ -25,6 +25,7 @@ export const DeveloperOptionsComponent = observer(({assistantStore, createToggle
     assistantStore.transcriptStore.clearTranscript();
     assistantStore.transcriptStore.addMessage(DAVAI_SPEAKER, {content: GREETING});
     onInitializeAssistant();
+    return true;
   };
 
   const handleSelectLlm = async (e: React.ChangeEvent<HTMLSelectElement>) => {
