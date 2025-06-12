@@ -1,14 +1,13 @@
-const MAX_TOKENS_PER_CHUNK = 4000;
-const CHARS_PER_TOKEN = 3; // Conservative token estimate (3 chars ≈ 1 token)
+import { CHARS_PER_TOKEN, MAX_TOKENS_PER_CHUNK } from "../constants.js";
 
 export interface IDataContextChunk {
   context: string;
   name: string;
 }
 
-export interface IProcessedChunk {
+export interface IProcessedChunk extends Record<string, unknown> {
   content: string;
-  role: "user";
+  role: "user" | "assistant" | "system";
 }
 
 /**
@@ -100,9 +99,9 @@ export const processDataContexts = (dataContexts: Record<string, any>): IProcess
     // const chunkSize = chunkStr.length / CHARS_PER_TOKEN;
     // console.log(`Processing chunk ${i + 1}/${chunks.length}, size: ${chunkSize} tokens`);
 
-    messages.push({ 
-      role: "user", 
-      content: `Data contexts chunk ${i + 1}/${chunks.length}: ${chunkStr}` 
+    messages.push({
+      content: `CODAP document data contexts chunk ${i + 1}/${chunks.length}: ${chunkStr}`,
+      role: "system"
     });
   }
 

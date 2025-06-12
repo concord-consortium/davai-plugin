@@ -158,18 +158,16 @@ export const AssistantModel = types
       if (self.isAssistantMocked) return;
 
       try {
-        self.addDbgMsg("Sending CODAP document info to LLM", message);
+        const extracted = extractDataContexts(message);
+        self.addDbgMsg("Sending CODAP document info to LLM", extracted ? formatJsonMessage(extracted) : message);
         if (!self.threadId) {
           self.codapNotificationQueue.push(message);
         } else {
-          const extracted = extractDataContexts(message);
-
           if (extracted) {
             const requestBody = {
               llmId: self.llmId,
               threadId: self.threadId,
-              message: "This is a system message containing information about the CODAP document.",
-              isSystemMessage: false,
+              isSystemMessage: true,
               dataContexts: extracted.dataContexts
             };
 
@@ -257,9 +255,6 @@ export const AssistantModel = types
         } else {
           self.isLoadingResponse = true;
 
-          // Get current data contexts for the message
-          const dataContexts = yield getDataContexts();
-
           // Generate a unique message ID for this request. This lets us cancel the message if needed.
           const messageId = nanoid();
           self.currentMessageId = messageId;
@@ -268,7 +263,6 @@ export const AssistantModel = types
             llmId: self.llmId,
             threadId: self.threadId,
             message: messageText,
-            dataContexts,
             isSystemMessage: false,
             messageId
           };
