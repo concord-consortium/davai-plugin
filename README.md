@@ -76,10 +76,10 @@ Default configuration setting values are defined in the `app-config.json` file. 
   Settings related to accessibility in the UI:
   - **`keyboardShortcut`** (string): Custom keystroke for placing focus in the main text input field (e.g., `ctrl+?`).
 
-### AssistantId
+### llmId
 
-- **`assistantId`** (string)
-  The unique ID of an existing assistant to use, or "mock" for a mocked assistant.
+- **`llmId`** (string)  
+  The unique ID of an LLM to use, or "mock" for a mocked LLM.
 
 ### Dimensions
 
