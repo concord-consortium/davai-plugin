@@ -21,7 +21,7 @@ app.use(json());
 // Initialize the vector store cache to avoid re-creating it for each request.
 let vectorStoreCache: { [key: string]: MemoryVectorStore } = {};
 
-function tokenCounter(messages: BaseMessage[]): number {
+const tokenCounter = (messages: BaseMessage[]): number => {
   let count = 0;
   for (const msg of messages) {
     // Don't count system messages towards the token limit.
@@ -30,7 +30,7 @@ function tokenCounter(messages: BaseMessage[]): number {
     count += msg.content.length;
   }
   return count / CHARS_PER_TOKEN;
-}
+};
 
 // The trimmer is used to limit the number of tokens in the conversation history.
 const trimmer = trimMessages({
