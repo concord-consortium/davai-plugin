@@ -141,8 +141,6 @@ export const App = observer(() => {
       });
     };
 
-    // first, initialize the assistant with the current LLM
-    handleInitializeAssistant();
     init();
     sonificationStore.setGraphs();
     selectSelf();
@@ -151,7 +149,7 @@ export const App = observer(() => {
   }, []);
 
   useEffect(() => {
-    // If the LLM ID changes, re-initialize the assistant with the new LLM.
+    // Initialize the assistant on mount and when the LLM ID changes.
     handleInitializeAssistant();
   }, [appConfig.llmId, handleInitializeAssistant]);
 
