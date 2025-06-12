@@ -10,9 +10,10 @@ import "./user-options.scss";
 
 interface IProps {
   assistantStore: AssistantModelType;
+  onInitializeAssistant: () => void;
 }
 
-export const UserOptions: React.FC<IProps> = ({assistantStore}) => {
+export const UserOptions: React.FC<IProps> = ({assistantStore, onInitializeAssistant}) => {
   const { options, toggleOption } = useOptions();
 
   const createToggleOption = (option: keyof IUserOptions, optionLabel: string) => {
@@ -44,7 +45,11 @@ export const UserOptions: React.FC<IProps> = ({assistantStore}) => {
         {createToggleOption("playProcessingTone", "Play loading tone")}
       </div>
       <KeyboardShortcutControls/>
-      <DeveloperOptionsComponent createToggleOption={createToggleOption} assistantStore={assistantStore}/>
+      <DeveloperOptionsComponent
+        assistantStore={assistantStore}
+        createToggleOption={createToggleOption}
+        onInitializeAssistant={onInitializeAssistant}
+      />
     </div>
   );
 };

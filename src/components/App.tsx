@@ -15,6 +15,7 @@ import { UserOptions } from "./user-options";
 import { formatJsonMessage, getGraphDetails, isGraphSonifiable, playSound } from "../utils/utils";
 import { GraphSonification } from "./graph-sonification";
 import { ICODAPGraph } from "../types";
+import { formatDataContextMessage } from "../utils/data-context-utils";
 
 import "./App.scss";
 
@@ -45,7 +46,10 @@ export const App = observer(() => {
     // the dataContext name isn't otherwise available in the notification object
     const dataCtxName = notification.resource.replace("dataContextChangeNotice[", "").replace("]", "");
     const updatedCtxInfo = await getDataContext(dataCtxName);
-    const msg = `Data context ${dataCtxName} has been updated: ${JSON.stringify(updatedCtxInfo.values)}`;
+    const msg = formatDataContextMessage("UPDATED", {
+      name: dataCtxName,
+      context: updatedCtxInfo.values
+    });
     assistantStoreRef.current.sendDataCtxChangeInfo(msg);
     const selectedGraph = sonificationStoreRef.current.selectedGraph;
     if (dataCtxName === selectedGraph?.dataContext) {
@@ -68,7 +72,10 @@ export const App = observer(() => {
         const newCtxName = ctxNames.filter((ctx: string) => !subscribedDataCtxsRef.current.includes(ctx))[0];
         addDataContextChangeListener(newCtxName, handleDataContextChangeNotice);
         const newCtxInfo = await getDataContext(newCtxName);
-        const msg = `New data context ${newCtxName} created: ${JSON.stringify(newCtxInfo)}`;
+        const msg = formatDataContextMessage("CREATED", {
+          name: newCtxName,
+          context: newCtxInfo
+        });
         assistantStoreRef.current.sendDataCtxChangeInfo(msg);
       } else {
         const removedCtx = subscribedDataCtxsRef.current.filter((ctx: string) => !ctxNames.includes(ctx))[0];
@@ -109,6 +116,12 @@ export const App = observer(() => {
     }
   }, [sonificationStore]);
 
+  const handleInitializeAssistant = useCallback(() => {
+    assistantStore.initializeAssistant(appConfig.llmId);
+    assistantStoreRef.current = assistantStore;
+  }, [appConfig.llmId, assistantStore]);
+
+
   useEffect(() => {
     const init = async () => {
       await initializePlugin({pluginName: kPluginName, version: kVersion, dimensions});
@@ -136,9 +149,9 @@ export const App = observer(() => {
   }, []);
 
   useEffect(() => {
-    assistantStore.initializeAssistant();
-    assistantStoreRef.current = assistantStore;
-  }, [assistantStore, appConfig.assistantId]);
+    // Initialize the assistant on mount and when the LLM ID changes.
+    handleInitializeAssistant();
+  }, [appConfig.llmId, handleInitializeAssistant]);
 
   useEffect(() => {
     const { messages } = transcriptStore;
@@ -201,7 +214,7 @@ export const App = observer(() => {
         isLoading={assistantStore.showLoadingIndicator}
       />
       <ChatInputComponent
-        disabled={(!assistantStore.thread && !appConfig.isAssistantMocked) || assistantStore.showLoadingIndicator}
+        disabled={(!assistantStore.threadId && !appConfig.isAssistantMocked) || assistantStore.showLoadingIndicator}
         isLoading={assistantStore.showLoadingIndicator}
         onCancel={handleCancel}
         onSubmit={handleChatInputSubmit}
@@ -210,7 +223,7 @@ export const App = observer(() => {
       <GraphSonification
         sonificationStore={sonificationStore}
       />
-      <UserOptions assistantStore={assistantStore} />
+      <UserOptions assistantStore={assistantStore} onInitializeAssistant={handleInitializeAssistant} />
       {/*
         The aria-live region is used to announce the last message from DAVAI.
         The region is updated whenever a new message is added to the transcript,
