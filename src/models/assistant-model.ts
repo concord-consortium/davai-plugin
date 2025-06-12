@@ -36,9 +36,6 @@ interface IMessageResponse {
   type: "CODAP_REQUEST" | "MESSAGE";
 }
 
-const serverUrl = process.env.LANGCHAIN_SERVER_URL || "http://localhost:5000/";
-const msgEndpoint = `${serverUrl}message`;
-
 /**
  * AssistantModel encapsulates the AI assistant and its interactions with the user.
  * It includes properties and methods for configuring the assistant, handling chat interactions, and maintaining the assistant's
@@ -175,14 +172,7 @@ export const AssistantModel = types
               dataContexts: extracted.dataContexts
             };
 
-            const response = yield fetch(msgEndpoint, {
-              method: "POST",
-              headers: {
-                "Content-Type": "application/json",
-                "Authorization": "super-secret-token-123"
-              },
-              body: JSON.stringify(requestBody),
-            });
+            const response = yield postMessage(requestBody);
 
             if (!response.ok) {
               throw new Error(`Failed to send system message: ${response.statusText}`);
@@ -233,22 +223,16 @@ export const AssistantModel = types
       if (self.isAssistantMocked) return;
 
       try {
-        const response = yield fetch(msgEndpoint, {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-            "Authorization": "super-secret-token-123"
-          },
-          body: JSON.stringify({
-            llmId: self.llmId,
-            threadId: self.threadId,
-            isToolResponse: true,
-            message: {
-              tool_call_id: toolCallId,
-              content
-            }
-          }),
-        });
+        const reqBody = {
+          llmId: self.llmId,
+          threadId: self.threadId,
+          isToolResponse: true,
+          message: {
+            tool_call_id: toolCallId,
+            content
+          }
+        };
+        const response = yield postMessage(reqBody);
 
         if (!response.ok) {
           throw new Error(`Failed to send tool response: ${response.statusText}`);
@@ -275,21 +259,15 @@ export const AssistantModel = types
           // Get current data contexts for the message
           const dataContexts = yield getDataContexts();
 
+          const reqBody = {
+            llmId: self.llmId,
+            threadId: self.threadId,
+            message: messageText,
+            dataContexts,
+            isSystemMessage: false
+          }
           // Send message to LangChain server
-          const response = yield fetch(msgEndpoint, {
-            method: "POST",
-            headers: {
-              "Content-Type": "application/json",
-              "Authorization": "super-secret-token-123"
-            },
-            body: JSON.stringify({
-              llmId: self.llmId,
-              threadId: self.threadId,
-              message: messageText,
-              dataContexts,
-              isSystemMessage: false
-            }),
-          });
+          const response = yield postMessage(reqBody);
 
           if (!response.ok) {
             throw new Error(`Failed to send message: ${response.statusText}`);
