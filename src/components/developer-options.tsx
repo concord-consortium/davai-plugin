@@ -21,27 +21,19 @@ export const DeveloperOptionsComponent = observer(({assistantStore, createToggle
     if (assistantStore.threadId || appConfig.isAssistantMocked) return;
     if (appConfig.isAssistantMocked) return;
     const confirmCreate = window.confirm("Are you sure you want to create a new thread? If you do, you will lose any existing chat history.");
-    if (!confirmCreate) return;
+    if (!confirmCreate) return false;
 
     assistantStore.transcriptStore.clearTranscript();
     assistantStore.transcriptStore.addMessage(DAVAI_SPEAKER, {content: GREETING});
     onInitializeAssistant();
   };
 
-  const handleDeleteThread = async () => {
-    if (!assistantStore.threadId || appConfig.isAssistantMocked) return;
-    const confirmDelete = window.confirm("Are you sure you want to delete the current thread? If you do, you will not be able to continue this chat.");
-    if (!confirmDelete) return false;
-
-    return true;
-  };
-
   const handleSelectLlm = async (e: React.ChangeEvent<HTMLSelectElement>) => {
-    // If we switch LLMs, we delete the current thread and clear the transcript.
+    // If we switch LLMs, we create a new thread and clear the transcript.
     // First make sure the user is OK with that.
     const llm = e.target.value;
-    const threadDeleted = await handleDeleteThread();
-    if (!threadDeleted) return;
+    const newThreadConfirmed = await handleCreateThread();
+    if (!newThreadConfirmed) return;
 
     assistantStore.transcriptStore.clearTranscript();
     assistantStore.transcriptStore.addMessage(DAVAI_SPEAKER, {content: GREETING});
@@ -73,15 +65,6 @@ export const DeveloperOptionsComponent = observer(({assistantStore, createToggle
             </option>
           ))}
         </select>
-      </div>
-      <div className="user-option">
-        <button
-          data-testid="delete-thread-button"
-          aria-disabled={!assistantStore.threadId}
-          onClick={handleDeleteThread}
-        >
-          Delete Thread
-        </button>
       </div>
       <div className="user-option">
         <button
