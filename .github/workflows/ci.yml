@@ -16,6 +16,7 @@ jobs:
         env:
           REACT_APP_OPENAI_BASE_URL: ${{ secrets.REACT_APP_OPENAI_BASE_URL }}
           LANGCHAIN_SERVER_URL: ${{ secrets.LANGCHAIN_SERVER_URL }}
+          AUTH_TOKEN: ${{ secrets.AUTH_TOKEN }}
       - name: Run Tests
         run: npm run test:coverage -- --runInBand
       - name: Upload coverage to Codecov
@@ -105,6 +106,7 @@ jobs:
         env:
           REACT_APP_OPENAI_BASE_URL: ${{ secrets.REACT_APP_OPENAI_BASE_URL }}
           LANGCHAIN_SERVER_URL: ${{ secrets.LANGCHAIN_SERVER_URL }}
+          AUTH_TOKEN: ${{ secrets.AUTH_TOKEN }}
         with:
           bucket: models-resources
           prefix: davai-plugin
