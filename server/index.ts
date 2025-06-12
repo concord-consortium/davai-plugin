@@ -1,6 +1,7 @@
 import express, { json } from "express";
 import * as dotenv from "dotenv";
 import { START, END, MemorySaver, MessagesAnnotation, StateGraph } from "@langchain/langgraph";
+import { BaseMessage, SystemMessage, trimMessages } from "@langchain/core/messages";
 import { ChatPromptTemplate } from "@langchain/core/prompts";
 import { MemoryVectorStore } from "langchain/vectorstores/memory";
 import { Document } from "@langchain/core/documents";
@@ -9,6 +10,7 @@ import { codapApiDoc } from "./codap-api-documentation.js";
 import { escapeCurlyBraces, processMarkdownDoc, setupVectorStore } from "./utils/rag-utils.js";
 import { processDataContexts } from "./utils/data-context-utils.js";
 import { createModelInstance } from "./utils/llm-utils.js";
+import { CHARS_PER_TOKEN, MAX_TOKENS_PER_CHUNK } from "./constants.js";
 
 dotenv.config();
 
@@ -18,6 +20,26 @@ app.use(json());
 
 // Initialize the vector store cache to avoid re-creating it for each request.
 let vectorStoreCache: { [key: string]: MemoryVectorStore } = {};
+
+function tokenCounter(messages: BaseMessage[]): number {
+  let count = 0;
+  for (const msg of messages) {
+    // Don't count system messages towards the token limit.
+    if (msg instanceof SystemMessage) continue;
+
+    count += msg.content.length;
+  }
+  return count / CHARS_PER_TOKEN;
+}
+
+// The trimmer is used to limit the number of tokens in the conversation history.
+const trimmer = trimMessages({
+  maxTokens: MAX_TOKENS_PER_CHUNK,
+  strategy: "last",
+  tokenCounter,
+  includeSystem: true,
+  allowPartial: true,
+});
 
 let processedCodapApiDoc: Document<Record<string, any>>[] = [];
 let promptTemplate: ChatPromptTemplate;
@@ -55,6 +77,9 @@ const callModel = async (state: any, modelConfig: any) => {
     .filter((msg: any) => msg.role === "user")
     .pop()?.content || state.messages[0]?.content;
 
+  // Use the trimmer to ensure we don't send too much to the model
+  const trimmedMessages = await trimmer.invoke(state.messages);
+
   // Retrieve relevant documents using the appropriate embeddings
   const vectorStore = vectorStoreCache[llmRealId] ?? await setupVectorStore(processedCodapApiDoc, llmRealId, vectorStoreCache);
   const relevantDocs = await vectorStore.similaritySearch(lastUserMessage, 3);
@@ -66,7 +91,7 @@ const callModel = async (state: any, modelConfig: any) => {
 
   const prompt = await promptTemplate.invoke({
     context,
-    messages: state.messages,
+    messages: trimmedMessages,
   });
 
   const response = await llm.invoke(prompt);
@@ -104,21 +129,20 @@ app.post("/api/message", async (req, res) => {
   try {
     const messages = [];
 
-    // If we have data contexts, process them first
+    // If we have data contexts, process them before adding.
     if (dataContexts && typeof dataContexts === "object") {
       messages.push(...processDataContexts(dataContexts));
+    } else {
+      // Add the user's message
+      messages.push({
+        role: "user",
+        content: message,
+      });
     }
-
-    // Add the user's message
-    messages.push({
-      role: "user",
-      content: message,
-    });
 
     // Create an AbortController for this request. This lets us to cancel the request if needed.
     const controller = new AbortController();
     activeMessages.set(messageId, controller);
-    console.log("Active messages:", activeMessages);
 
     const output = await langApp.invoke(
       { messages }, 
@@ -145,7 +169,7 @@ app.post("/api/message", async (req, res) => {
   }
 });
 
-// Add endpoint for cancelling message processing
+// Endpoint for cancelling message processing
 app.post("/api/cancel", async (req, res) => {
   const { messageId } = req.body;  
   const controller = activeMessages.get(messageId);
