@@ -1,4 +1,3 @@
-import { MarkdownTextSplitter, RecursiveCharacterTextSplitter } from "langchain/text_splitter";
 import { MemoryVectorStore } from "langchain/vectorstores/memory";
 import { Document } from "@langchain/core/documents";
 import { OpenAIEmbeddings } from "@langchain/openai";
@@ -17,35 +16,51 @@ export const escapeCurlyBraces = (text: string): string => {
   return text;
 };
 
-// Splits by markdown headers
-const markdownSplitter = new MarkdownTextSplitter({
-  chunkSize: 1000,
-  chunkOverlap: 200,
-});
+// Split CODAP API documentation into logical chunks by major sections
+export const chunkCodapDocumentation = (markdownContent: string): Document[] => {
+  const documents: Document[] = [];
+  const lines = markdownContent.split("\n");
 
-// For any chunks that are too large, use recursive character splitter
-const recursiveSplitter = new RecursiveCharacterTextSplitter({
-  chunkSize: 500,
-  chunkOverlap: 50,
-  separators: ["\n\n", "\n", ".", "!", "?", ",", " ", ""],
-});
+  // Define the main sections we want to chunk by (H3 headers)
+  const sectionStarts: { [key: string]: number } = {};
+  const sectionOrder: string[] = [];
 
-export const processMarkdownDoc = async (markdownContent: string) => {
-  const escapedInstructions = escapeCurlyBraces(markdownContent);
-  const markdownChunks = await markdownSplitter.createDocuments([escapedInstructions]);
+  // Find all H3 headers and their line numbers
+  lines.forEach((line, index) => {
+    const h3Match = line.match(/^### (.+)$/);
+    if (h3Match) {
+      const sectionName = h3Match[1].trim();
+      sectionStarts[sectionName] = index;
+      sectionOrder.push(sectionName);
+    }
+  });
 
-  const processedChunks = await Promise.all(
-    markdownChunks.map(async (chunk) => {
-      // If chunk is too large, split it further
-      if (chunk.pageContent.length > 1000) {
-        const subChunks = await recursiveSplitter.createDocuments([chunk.pageContent]);
-        return subChunks;
+    // Create documents for each major section
+  sectionOrder.forEach((sectionName, index) => {
+    const startLine = sectionStarts[sectionName];
+    const endLine = index < sectionOrder.length - 1
+      ? sectionStarts[sectionOrder[index + 1]]
+      : lines.length;
+
+    const sectionContent = lines.slice(startLine, endLine).join("\n");
+
+    documents.push(new Document({
+      pageContent: escapeCurlyBraces(sectionContent.trim()),
+      metadata: {
+        section: sectionName,
+        type: "codap-api-section",
+        startLine: startLine + 1,
+        endLine
       }
-      return [chunk];
-    })
-  );
+    }));
+  });
 
-  return processedChunks.flat();
+  return documents;
+};
+
+// Process CODAP documentation into chunked documents
+export const processCodapDocumentation = async (markdownContent: string): Promise<Document[]> => {
+  return chunkCodapDocumentation(markdownContent);
 };
 
 export const getEmbeddingsModel = (assistantId: string) => {
@@ -63,7 +78,7 @@ export const getEmbeddingsModel = (assistantId: string) => {
 export const setupVectorStore = async (documents: Document[], assistantId: string, vectorStoreCache: any) => {
   const embeddings = getEmbeddingsModel(assistantId);
   const vectorStore = await MemoryVectorStore.fromDocuments(documents, embeddings);
-  
+
   vectorStoreCache[assistantId] = vectorStore;
   return vectorStore;
 };
