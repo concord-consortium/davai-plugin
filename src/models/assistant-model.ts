@@ -229,7 +229,7 @@ export const AssistantModel = types
       if (self.isAssistantMocked) return;
 
       try {
-        const response = yield fetch(`${process.env.LANGCHAIN_SERVER_URL}/api/message`, {
+        const response = yield fetch(`${process.env.LANGCHAIN_SERVER_URL}/api/tool`, {
           method: "POST",
           headers: {
             "Content-Type": "application/json",
@@ -291,6 +291,7 @@ export const AssistantModel = types
           }
 
           const data: IMessageResponse = yield response.json();
+          console.log("Response from server:", data);
           self.addDbgMsg("Message received by server", formatJsonMessage(data));
 
           // Handle the response

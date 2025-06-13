@@ -1,7 +1,7 @@
 import express, { json } from "express";
 import * as dotenv from "dotenv";
 import { START, END, MemorySaver, MessagesAnnotation, StateGraph } from "@langchain/langgraph";
-import { BaseMessage, SystemMessage, trimMessages } from "@langchain/core/messages";
+import { BaseMessage, SystemMessage, ToolMessage, trimMessages } from "@langchain/core/messages";
 import { ChatPromptTemplate } from "@langchain/core/prompts";
 import { MemoryVectorStore } from "langchain/vectorstores/memory";
 import { Document } from "@langchain/core/documents";
@@ -11,6 +11,7 @@ import { escapeCurlyBraces, processMarkdownDoc, setupVectorStore } from "./utils
 import { processDataContexts } from "./utils/data-context-utils.js";
 import { createModelInstance } from "./utils/llm-utils.js";
 import { CHARS_PER_TOKEN, MAX_TOKENS_PER_CHUNK } from "./constants.js";
+import { tools } from "./tools.js";
 
 dotenv.config();
 
@@ -50,8 +51,13 @@ export const initializeApp = async () => {
   // Process the CODAP Plugin API documentation content
   processedCodapApiDoc = await processMarkdownDoc(codapApiDoc);
 
+  // promptTemplate = ChatPromptTemplate.fromMessages([
+  //   ["system", `${instructions}\n\nHere is the relevant CODAP API documentation:\n{context}`],
+  //   ["placeholder", "{messages}"],
+  // ]);
+
   promptTemplate = ChatPromptTemplate.fromMessages([
-    ["system", `${instructions}\n\nHere is the relevant CODAP API documentation:\n{context}`],
+    ["system", `${instructions} Here is the relevant CODAP API documentation:\n ${escapeCurlyBraces(codapApiDoc)}`],
     ["placeholder", "{messages}"],
   ]);
 
@@ -82,7 +88,9 @@ const callModel = async (state: any, modelConfig: any) => {
 
   // Retrieve relevant documents using the appropriate embeddings
   const vectorStore = vectorStoreCache[llmRealId] ?? await setupVectorStore(processedCodapApiDoc, llmRealId, vectorStoreCache);
-  const relevantDocs = await vectorStore.similaritySearch(lastUserMessage, 3);
+  const relevantDocs = await vectorStore.similaritySearch(lastUserMessage, 10);
+
+  console.log("Relevant documents:", relevantDocs);
 
   // Clean the context to ensure it doesn't contain any template variables
   const context = relevantDocs
@@ -121,9 +129,70 @@ const langApp = workflow.compile({ checkpointer: memory });
 // Track active message processing
 const activeMessages = new Map<string, AbortController>();
 
+app.post("/api/tool", async (req, res) => {
+  const { llmId, message, threadId, isToolResponse } = req.body;
+  const config = { configurable: { thread_id: threadId, llmId } };
+  const MAX_TRIES = 5;
+  let tries = 0;
+
+  try {
+    const messages = [];
+
+    // isToolResponse should only be true if the message from the client is the response to a CODAP API request that
+    // the client made in response to a CODAP_REQUEST message from the LLM.
+    if (isToolResponse) {
+      console.log("Processing tool response", message);
+      const toolResponse = new ToolMessage({
+        content: message.content,
+        tool_call_id: message.tool_call_id,
+      });
+
+      messages.push(toolResponse);
+
+      const toolResponseOutput = await langApp.invoke({ messages }, config);
+
+      console.log("Tool response output:", toolResponseOutput);
+
+      // if there's a new tool call in the response, we need to handle it
+      const functionCall = (toolResponseOutput.messages[toolResponseOutput.messages.length - 1] as any).tool_calls?.[0];
+      if (functionCall) {
+        tries++;
+        if (tries > MAX_TRIES) {
+          const tool = tools.find(t => t.name === functionCall.name);
+          if (!tool) {
+            throw new Error(`Tool ${functionCall.name} not found`);
+          }
+          const toolResult = await tool.func(functionCall.args);
+          console.log("Tool result:", toolResult);
+          const parsedResult = JSON.parse(toolResult);
+          const response = {
+            type: "CODAP_REQUEST",
+            request: parsedResult,
+            tool_call_id: functionCall.id
+          };
+          console.log("Tool response:", response);
+          res.json(response);
+        } else {
+          res.json({ response: "too many tries" });
+        }
+      } else {
+        res.json({ response: toolResponseOutput.messages[toolResponseOutput.messages.length - 1].content });
+      }
+    }
+  } catch (err: any) {
+    if (err.message === "Aborted") {
+      res.status(499).json({ error: "Message processing cancelled" });
+    } else {
+      console.error("Error in /api/message:", err);
+      console.error("Error stack:", err.stack);
+      res.status(500).json({ error: "LangChain Error", details: err.message });
+    }
+  }
+});
+
 // This is the main endpoint for use by the client app. We may want to add more, e.g. another for tool calls, etc.
 app.post("/api/message", async (req, res) => {
-  const { llmId, message, threadId, dataContexts, messageId } = req.body;
+  const { llmId, message, threadId, dataContexts, messageId, isToolResponse } = req.body;
   const config = { configurable: { thread_id: threadId, llmId } };
 
   try {
@@ -152,11 +221,38 @@ app.post("/api/message", async (req, res) => {
       }
     );
     const lastMessage = output.messages[output.messages.length - 1];
+    console.log("Last message:", lastMessage);
 
     // Clean up the controller
     activeMessages.delete(messageId);
 
-    res.json({ response: lastMessage.content });
+    const functionCall = (lastMessage && "tool_calls" in lastMessage && Array.isArray((lastMessage as any).tool_calls))
+        ? (lastMessage as any).tool_calls[0]
+        : undefined;
+      
+    console.log("functionCall:", functionCall);
+
+    if (functionCall) {
+      const tool = tools.find(t => t.name === functionCall.name);
+      if (!tool) {
+        throw new Error(`Tool ${functionCall.name} not found`);
+      }
+
+      const toolResult = await tool.func(functionCall.args);
+      console.log("Tool result:", toolResult);
+      const parsedResult = JSON.parse(toolResult);
+      const response = { 
+        type: "CODAP_REQUEST",
+        request: parsedResult,
+        tool_call_id: functionCall.id
+      };
+
+      console.log("Tool response:", response);
+
+      res.json(response);
+    } else {
+      res.json({ response: lastMessage.content });
+    }
   } catch (err: any) {
     if (err.message === "Aborted") {
       res.status(499).json({ error: "Message processing cancelled" });
