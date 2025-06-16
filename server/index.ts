@@ -11,7 +11,7 @@ import { escapeCurlyBraces } from "./utils/rag-utils.js";
 import { processCodapData } from "./utils/data-context-utils.js";
 import { createModelInstance } from "./utils/llm-utils.js";
 import { CHARS_PER_TOKEN, MAX_TOKENS_PER_CHUNK } from "./constants.js";
-import { toolCallResponse } from "./tools.js";
+import { toolCallResponse, tools } from "./tools.js";
 
 dotenv.config();
 
