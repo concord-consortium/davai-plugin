@@ -27,7 +27,7 @@ export const chunkCodapDocumentation = (markdownContent: string): Document[] => 
 
   // Find all H3 headers and their line numbers
   lines.forEach((line, index) => {
-    const h3Match = line.match(/^### (.+)$/);
+    const h3Match = line.match(/^\s*### (.+)$/);
     if (h3Match) {
       const sectionName = h3Match[1].trim();
       sectionStarts[sectionName] = index;
@@ -35,7 +35,7 @@ export const chunkCodapDocumentation = (markdownContent: string): Document[] => 
     }
   });
 
-    // Create documents for each major section
+  // Create documents for each major section
   sectionOrder.forEach((sectionName, index) => {
     const startLine = sectionStarts[sectionName];
     const endLine = index < sectionOrder.length - 1
@@ -56,11 +56,6 @@ export const chunkCodapDocumentation = (markdownContent: string): Document[] => 
   });
 
   return documents;
-};
-
-// Process CODAP documentation into chunked documents
-export const processCodapDocumentation = async (markdownContent: string): Promise<Document[]> => {
-  return chunkCodapDocumentation(markdownContent);
 };
 
 export const getEmbeddingsModel = (assistantId: string) => {

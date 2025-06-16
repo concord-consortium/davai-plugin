@@ -7,7 +7,7 @@ import { MemoryVectorStore } from "langchain/vectorstores/memory";
 import { Document } from "@langchain/core/documents";
 import { instructions } from "./text/instructions.js";
 import { codapApiDoc } from "./text/codap-api-documentation.js";
-import { escapeCurlyBraces, processCodapDocumentation, setupVectorStore } from "./utils/rag-utils.js";
+import { escapeCurlyBraces, chunkCodapDocumentation, setupVectorStore } from "./utils/rag-utils.js";
 import { processDataContexts } from "./utils/data-context-utils.js";
 import { createModelInstance } from "./utils/llm-utils.js";
 import { CHARS_PER_TOKEN, MAX_TOKENS_PER_CHUNK } from "./constants.js";
@@ -53,7 +53,7 @@ export const initializeApp = async () => {
     ["placeholder", "{messages}"],
   ]);
 
-  processedCodapApiDoc = await processCodapDocumentation(codapApiDoc);
+  processedCodapApiDoc = chunkCodapDocumentation(codapApiDoc);
 
   // promptTemplate = ChatPromptTemplate.fromMessages([
   //   ["system", `${instructions} Here is the relevant CODAP API documentation:\n ${escapeCurlyBraces(codapApiDoc)}`],

@@ -2,9 +2,7 @@ import { TextEncoder } from "util";
 import { ReadableStream } from "web-streams-polyfill";
 global.TextEncoder = TextEncoder;
 global.ReadableStream = ReadableStream as any;
-import { escapeCurlyBraces, getEmbeddingsModel, processMarkdownDoc,
-  setupVectorStore } from "./rag-utils";
-
+import { escapeCurlyBraces, getEmbeddingsModel, chunkCodapDocumentation, setupVectorStore } from "./rag-utils";
 
 jest.mock("langchain/vectorstores/memory", () => ({
   MemoryVectorStore: {
@@ -32,6 +30,12 @@ jest.mock("@langchain/google-genai", () => ({
     embedDocuments: jest.fn(),
     modelName: "mock-google-model",
   })),
+}));
+
+jest.mock("@langchain/core/documents", () => ({
+  Document: jest.fn(function (this: any, args: any) {
+    Object.assign(this, args);
+  }),
 }));
 
 afterAll(() => {
@@ -66,21 +70,58 @@ describe("getEmbeddingsModel", () => {
   });
 });
 
-describe("processMarkdownDoc", () => {
-  it("should process markdown document correctly", async () => {
-    const markdownContent = "# Title\n\n" + "hello ".repeat(500) + "\n\n## Sub Title\n\nThis is a test document with {curly braces}.";
-    const processedDoc = await processMarkdownDoc(markdownContent);
-    expect(processedDoc.length).toBe(6);
-    expect(processedDoc[0].pageContent).toContain("# Title");
-    expect(processedDoc[5].pageContent).toContain("## Sub Title\n\nThis is a test document with {{curly braces}}.");
-  });
-});
-
 describe("setupVectorStore", () => {
   it("should setup vector store with documents", async () => {
     const documents = [{ metadata: {}, pageContent: "Test content" }];
     const vectorStore = await setupVectorStore(documents, "openai", {});
     expect(vectorStore).toHaveProperty("addDocuments");
     expect(vectorStore).toHaveProperty("similaritySearch");
+  });
+
+  describe("chunkCodapDocumentation", () => {
+    it("should split markdown into documents by H3 headers", () => {
+      const markdown = `
+      # CODAP API
+
+      Some intro text.
+
+      ### Section One
+      Content for section one.
+
+      ### Section Two
+      Content for section two.
+      More content.
+
+      ### Section Three
+      Content for section three.
+      `;
+
+      const docs = chunkCodapDocumentation(markdown);
+
+      expect(docs).toHaveLength(3);
+
+      expect(docs[0].metadata.section).toBe("Section One");
+      expect(docs[0].pageContent).toContain("Section One");
+      expect(docs[0].metadata.startLine).toBeGreaterThan(0);
+      expect(docs[0].metadata.type).toBe("codap-api-section");
+
+      expect(docs[1].metadata.section).toBe("Section Two");
+      expect(docs[1].pageContent).toContain("section two");
+      expect(docs[1].metadata.type).toBe("codap-api-section");
+
+      expect(docs[2].metadata.section).toBe("Section Three");
+      expect(docs[2].pageContent).toContain("section three");
+      expect(docs[2].metadata.type).toBe("codap-api-section");
+    });
+
+    it("should escape curly braces in section content", () => {
+      const markdown = `
+  ### Section A
+  This {should} be escaped.
+      `.trim();
+
+      const docs = chunkCodapDocumentation(markdown);
+      expect(docs[0].pageContent).toContain("{{should}}");
+    });
   });
 });
