@@ -9,7 +9,8 @@
     "strict": true,
     "outDir": "dist",
     "allowJs": true,
-    "sourceMap": true
+    "sourceMap": true,
+    "types": ["jest"]
   },
   "include": ["*.ts"]
 }
