@@ -12,5 +12,6 @@
     "sourceMap": true,
     "types": ["jest"]
   },
-  "include": ["*.ts", "text/codap-api-documentation.ts", "text/instructions.ts"]
+  "include": ["**/*.ts", "text/codap-api-documentation.ts", "text/instructions.ts"],
+  "exclude": ["node_modules", "dist"]
 }
