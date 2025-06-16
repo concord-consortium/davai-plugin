@@ -11,7 +11,7 @@ import { escapeCurlyBraces } from "./utils/rag-utils.js";
 import { processDataContexts } from "./utils/data-context-utils.js";
 import { createModelInstance } from "./utils/llm-utils.js";
 import { CHARS_PER_TOKEN, MAX_TOKENS_PER_CHUNK } from "./constants.js";
-import { toolCallResponse } from "./tools.js";
+import { toolCallResponse, tools } from "./tools.js";
 
 dotenv.config();
 
@@ -68,7 +68,7 @@ let activeLLMInstance: Record<string, any> | undefined = undefined;
 
 const getOrCreateModelInstance = (llmId: string): Record<string, any> => {
   if (!activeLLMInstance) {
-    activeLLMInstance = createModelInstance(llmId);
+    activeLLMInstance = createModelInstance(llmId).bindTools(tools);
   }
   return activeLLMInstance;
 };
