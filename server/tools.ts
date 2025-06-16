@@ -19,9 +19,9 @@ export const createRequestTool = tool(
       const request = { action, resource, values };
       return JSON.stringify(request);
     } catch (error) {
-      return JSON.stringify({ 
-        status: "error", 
-        error: error instanceof Error ? error.message : String(error) 
+      return JSON.stringify({
+        status: "error",
+        error: error instanceof Error ? error.message : String(error)
       });
     }
   },
@@ -32,23 +32,44 @@ export const createRequestTool = tool(
   }
 );
 
-// export const sonify_graph = {
-//   "name": "sonify_graph",
-//   "description": "Sonify the graph requested by the user",
-//   "strict": true,
-//   "parameters": {
-//     "type": "object",
-//     "properties": {
-//       "graphID": {
-//         "type": "number",
-//         "description": "The id of the graph to sonify"
-//       }
-//     },
-//     "additionalProperties": false,
-//     "required": [
-//       "graphID"
-//     ]
-//   }
-// };
+const sonifyGraphSchema = z.object({
+  graphID: z.number().describe("The id of the graph to sonify")
+});
 
-export const tools = [createRequestTool];
+export const sonifyGraphTool = tool(
+  async ({ graphID }: { graphID: number }) => {
+    try {
+      return JSON.stringify({ graphID });
+    } catch (error) {
+      return JSON.stringify({
+        status: "error",
+        error: error instanceof Error ? error.message : String(error)
+      });
+    }
+  },
+  {
+    name: "sonify_graph",
+    description: "Sonify the graph requested by the user",
+    schema: sonifyGraphSchema
+  }
+);
+
+export const tools = [createRequestTool, sonifyGraphTool];
+
+export const toolCallResponse = async (toolCall: any) => {
+  const definedTool = tools.find(t => t.name === toolCall.name);
+
+  if (!definedTool) {
+    throw new Error(`Tool ${toolCall.name} not found`);
+  }
+
+  const toolResult = await definedTool.func(toolCall.args);
+  const parsedResult = JSON.parse(toolResult);
+
+  return {
+    request: parsedResult,
+    status: "requires_action",
+    tool_call_id: toolCall.id,
+    type: definedTool.name
+  };
+};

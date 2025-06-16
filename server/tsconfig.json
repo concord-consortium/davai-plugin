@@ -9,7 +9,8 @@
     "strict": true,
     "outDir": "dist",
     "allowJs": true,
-    "sourceMap": true
+    "sourceMap": true,
+    "types": ["jest"]
   },
   "include": ["*.ts", "text/codap-api-documentation.ts", "text/instructions.ts"]
 }

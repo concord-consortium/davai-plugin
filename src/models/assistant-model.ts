@@ -1,8 +1,8 @@
-import { types, flow, Instance } from "mobx-state-tree";
+import { types, flow, Instance, getRoot } from "mobx-state-tree";
 import { nanoid } from "nanoid";
 import { codapInterface } from "@concord-consortium/codap-plugin-api";
 import { DAVAI_SPEAKER, DEBUG_SPEAKER } from "../constants";
-import { formatJsonMessage, getDataContexts } from "../utils/utils";
+import { formatJsonMessage, getDataContexts, getGraphByID, isGraphSonifiable } from "../utils/utils";
 import { ChatTranscriptModel } from "./chat-transcript-model";
 import { extractDataContexts } from "../utils/data-context-utils";
 
@@ -18,11 +18,12 @@ interface IGraphAttrData {
 interface IToolCallData {
   request: {
     action: string;
+    graphID?: string;
     resource: string;
     values?: any;
   };
   tool_call_id: string;
-  type: "CODAP_REQUEST";
+  type: string;
 }
 
 interface IMessageResponse {
@@ -32,6 +33,7 @@ interface IMessageResponse {
     values?: any;
   };
   response?: string;
+  status?: string;
   tool_call_id?: string;
   type: "CODAP_REQUEST" | "MESSAGE";
 }
@@ -156,14 +158,14 @@ export const AssistantModel = types
 
     const sendCODAPDocumentInfo = flow(function* (message) {
       if (self.isAssistantMocked) return;
-    
+
       try {
         const extracted = extractDataContexts(message);
         self.addDbgMsg("Sending CODAP document info to LLM", extracted ? formatJsonMessage(extracted) : message);
         if (!self.threadId) {
           self.codapNotificationQueue.push(message);
         } else {
-          
+
           if (extracted) {
             const requestBody = {
               llmId: self.llmId,
@@ -171,20 +173,20 @@ export const AssistantModel = types
               isSystemMessage: true,
               dataContexts: extracted.dataContexts
             };
-      
-            const response = yield fetch(`${process.env.LANGCHAIN_SERVER_URL}/api/message`, {
+
+            const dataContextResponse = yield fetch(`${process.env.LANGCHAIN_SERVER_URL}/api/message`, {
               method: "POST",
               headers: {
                 "Content-Type": "application/json",
               },
               body: JSON.stringify(requestBody),
             });
-      
-            if (!response.ok) {
-              throw new Error(`Failed to send system message: ${response.statusText}`);
+
+            if (!dataContextResponse.ok) {
+              throw new Error(`Failed to send system message: ${dataContextResponse.statusText}`);
             }
-      
-            const data = yield response.json();
+
+            const data = yield dataContextResponse.json();
             self.addDbgMsg("CODAP document info received by LLM", formatJsonMessage(data));
           } else {
             self.addDbgMsg("Could not extract data contexts from message", message);
@@ -198,38 +200,68 @@ export const AssistantModel = types
 
     const handleToolCall = flow(function* (data: IToolCallData) {
       try {
-        const { action, resource, values } = data.request;
-        const request = { action, resource, values };
-        self.addDbgMsg("Request sent to CODAP", formatJsonMessage(request));
-        let res = yield codapInterface.sendRequest(request);
-        self.addDbgMsg("Response from CODAP", formatJsonMessage(res));
-        // Handle image snapshot requests
-        const isImageSnapshotRequest = action === "get" && resource.match(/^dataDisplay/);
-        if (isImageSnapshotRequest) {
-          self.uploadFileAfterRun = true;
-          self.dataUri = res.values.exportDataUri;
-          //const graphIdMatch = resource.match(/\[(\d+)\]/);
-          // = graphIdMatch?.[1];
-          // if (graphID) {
-          //   self.dataContextForGraph = yield getGraphAttrData(graphID);
-          // }
-          // Remove exportDataUri from response
-          res = { ...res, values: { ...res.values, exportDataUri: undefined } };
-        }
+        if (data.type === "create_request") {
+          const { action, resource, values } = data.request;
+          const request = { action, resource, values };
 
-        return JSON.stringify(res);
+          // When the request is to create a graph component, we need to update the sonification
+          // store after the run.
+          if (action === "create" && resource === "component" && values.type === "graph") {
+            self.updateSonificationStoreAfterRun = true;
+          }
+
+          self.addDbgMsg("Request sent to CODAP", formatJsonMessage(request));
+          let res = yield codapInterface.sendRequest(request);
+          self.addDbgMsg("Response from CODAP", formatJsonMessage(res));
+
+          // Prepare for uploading of image file after run if the request is to get dataDisplay
+          const isImageSnapshotRequest = action === "get" && resource.match(/^dataDisplay/);
+          if (isImageSnapshotRequest) {
+            self.uploadFileAfterRun = true;
+            self.dataUri = res.values.exportDataUri;
+            const graphIdMatch = resource.match(/\[(\d+)\]/);
+            const graphID = graphIdMatch?.[1];
+            if (graphID) {
+              // Send data for the attributes on the graph for additional context
+              self.dataContextForGraph = yield getGraphAttrData(graphID);
+            } else {
+              self.addDbgMsg("Could not extract graphID from resource string", resource);
+              self.dataContextForGraph = null;
+            }
+            // remove any exportDataUri value that exists since it can be large and we don't need to send it to the assistant
+            res = isImageSnapshotRequest
+              ? { ...res, values: { ...res.values, exportDataUri: undefined } }
+              : res;
+          }
+
+          return JSON.stringify(res);
+
+        } else if (data.type === "sonify_graph") {
+          const root = getRoot(self) as any;
+          if (typeof data.request.graphID === "undefined") {
+            throw new Error("graphID is undefined");
+          }
+          const graph = yield getGraphByID(String(data.request.graphID));
+
+          if (isGraphSonifiable(graph)) {
+            root.sonificationStore.setSelectedGraphID(graph.id);
+            return `The graph "${graph.name || graph.id}" is ready to be sonified. Tell the user they can use the sonification controls to hear it.`;
+          } else {
+            return `The graph "${graph.name || graph.id}" is not a numeric scatter plot or univariate dot plot. Tell the user they must select a numeric scatter plot or univariate dot plot to proceed.`;
+          }
+        }
       } catch (err) {
-        console.error("Failed to handle tool call:", err);
-        self.addDbgMsg("Failed to handle tool call", formatJsonMessage(err));
-        return JSON.stringify({ status: "error", error: err instanceof Error ? err.message : String(err) });
-      }
+          console.error("Failed to handle tool call:", err);
+          self.addDbgMsg("Failed to handle tool call", formatJsonMessage(err));
+          return JSON.stringify({ status: "error", error: err instanceof Error ? err.message : String(err) });
+        }
     });
 
-    const sendToolResponse = flow(function* (toolCallId: string, content: string) {
+    const sendToolOutputToLlm = flow(function* (toolCallId: string, content: string) {
       if (self.isAssistantMocked) return;
 
       try {
-        const response = yield fetch(`${process.env.LANGCHAIN_SERVER_URL}/api/tool`, {
+        const toolOutputResponse = yield fetch(`${process.env.LANGCHAIN_SERVER_URL}/api/tool`, {
           method: "POST",
           headers: {
             "Content-Type": "application/json",
@@ -237,7 +269,6 @@ export const AssistantModel = types
           body: JSON.stringify({
             llmId: self.llmId,
             threadId: self.threadId,
-            isToolResponse: true,
             message: {
               tool_call_id: toolCallId,
               content
@@ -245,15 +276,15 @@ export const AssistantModel = types
           }),
         });
 
-        if (!response.ok) {
-          throw new Error(`Failed to send tool response: ${response.statusText}`);
+        if (!toolOutputResponse.ok) {
+          throw new Error(`Failed to send tool response: ${toolOutputResponse.statusText}`);
         }
 
-        const data = yield response.json();
-        self.addDavaiMsg(data.response);
+        return yield toolOutputResponse.json();
       } catch (err) {
         console.error("Failed to send tool response:", err);
         self.addDbgMsg("Failed to send tool response", formatJsonMessage(err));
+        throw err;
       }
     });
 
@@ -271,8 +302,7 @@ export const AssistantModel = types
           const messageId = nanoid();
           self.currentMessageId = messageId;
 
-          // Send message to LangChain server
-          const response = yield fetch(`${process.env.LANGCHAIN_SERVER_URL}/api/message`, {
+          const messageResponse = yield fetch(`${process.env.LANGCHAIN_SERVER_URL}/api/message`, {
             method: "POST",
             headers: {
               "Content-Type": "application/json",
@@ -286,22 +316,26 @@ export const AssistantModel = types
             }),
           });
 
-          if (!response.ok) {
-            throw new Error(`Failed to send message: ${response.statusText}`);
+          if (!messageResponse.ok) {
+            throw new Error(`Failed to send message: ${messageResponse.statusText}`);
           }
 
-          const data: IMessageResponse = yield response.json();
-          console.log("Response from server:", data);
+          let data: IMessageResponse = yield messageResponse.json();
           self.addDbgMsg("Message received by server", formatJsonMessage(data));
 
-          // Handle the response
-          if (data.type === "CODAP_REQUEST" && data.tool_call_id && data.request) {
-            // Handle tool call response
-            const toolResponse = yield handleToolCall(data as IToolCallData);
+          // Keep processing tool calls until we get a final response
+          while (data?.status === "requires_action" && data?.tool_call_id) {
+            const toolOutput = yield handleToolCall(data as IToolCallData);
+
             // Send tool response back to server
-            yield sendToolResponse(data.tool_call_id, toolResponse);
-          } else if (data.response) {
-            // Regular message response
+            const toolResponseResult = yield sendToolOutputToLlm(data.tool_call_id, toolOutput);
+
+            // Get the next response in the chain
+            data = toolResponseResult;
+          }
+
+          // Once we're out of the tool call chain, handle the final response.
+          if (data.response) {
             self.addDavaiMsg(data.response);
           }
         }
@@ -338,55 +372,55 @@ export const AssistantModel = types
     //   }
     // });
 
-    // const getAttributeData = flow(function* (graphID: string, attrID: string | null) {
-    //   if (!attrID) return { attributeData: null };
+    const getAttributeData = flow(function* (graphID: string, attrID: string | null) {
+      if (!attrID) return { attributeData: null };
 
-    //   const response = yield Promise.resolve(codapInterface.sendRequest({
-    //     action: "get",
-    //     resource: `component[${graphID}].attribute[${attrID}]`
-    //   }));
+      const response = yield Promise.resolve(codapInterface.sendRequest({
+        action: "get",
+        resource: `component[${graphID}].attribute[${attrID}]`
+      }));
 
-    //   return response?.values
-    //     ? {
-    //         id: response.values.id,
-    //         name: response.values.name,
-    //         values: response.values._categoryMap.__order
-    //       }
-    //     : null;
-    // });
+      return response?.values
+        ? {
+            id: response.values.id,
+            name: response.values.name,
+            values: response.values._categoryMap.__order
+          }
+        : null;
+    });
 
-    // const getGraphAttrData = flow(function* (graphID) {
-    //   try {
-    //     const graph = yield getGraphByID(graphID);
-    //     if (graph) {
-    //       const legendAttrData = yield getAttributeData(graphID, graph.legendAttributeID);
-    //       const rightAttrData = yield getAttributeData(graphID, graph.rightSplitAttributeID);
-    //       const topAttrData = yield getAttributeData(graphID, graph.topSplitAttributeID);
-    //       const xAttrData = yield getAttributeData(graphID, graph.xAttributeID);
-    //       const yAttrData = yield getAttributeData(graphID, graph.yAttributeID);
-    //       const y2AttrData = yield getAttributeData(graphID, graph.y2AttributeID);
+    const getGraphAttrData = flow(function* (graphID) {
+      try {
+        const graph = yield getGraphByID(graphID);
+        if (graph) {
+          const legendAttrData = yield getAttributeData(graphID, graph.legendAttributeID);
+          const rightAttrData = yield getAttributeData(graphID, graph.rightSplitAttributeID);
+          const topAttrData = yield getAttributeData(graphID, graph.topSplitAttributeID);
+          const xAttrData = yield getAttributeData(graphID, graph.xAttributeID);
+          const yAttrData = yield getAttributeData(graphID, graph.yAttributeID);
+          const y2AttrData = yield getAttributeData(graphID, graph.y2AttributeID);
 
-    //       const graphAttrData: IGraphAttrData = {
-    //         legend: { attributeData: legendAttrData },
-    //         rightSplit: { attributeData: rightAttrData },
-    //         topSplit: { attributeData: topAttrData },
-    //         xAxis: { attributeData: xAttrData },
-    //         yAxis: { attributeData: yAttrData },
-    //         y2Axis: { attributeData: y2AttrData }
-    //       };
+          const graphAttrData: IGraphAttrData = {
+            legend: { attributeData: legendAttrData },
+            rightSplit: { attributeData: rightAttrData },
+            topSplit: { attributeData: topAttrData },
+            xAxis: { attributeData: xAttrData },
+            yAxis: { attributeData: yAttrData },
+            y2Axis: { attributeData: y2AttrData }
+          };
 
-    //       self.addDbgMsg("Data context for graph", formatJsonMessage(graphAttrData));
-    //       return graphAttrData;
-    //     } else {
-    //       self.addDbgMsg("No graph found with ID", graphID);
-    //       return null;
-    //     }
-    //   } catch (err) {
-    //     console.error("Failed to get graph attribute data:", err);
-    //     self.addDbgMsg("Failed to get graph attribute data", formatJsonMessage(err));
-    //     return null;
-    //   }
-    // });
+          self.addDbgMsg("Data context for graph", formatJsonMessage(graphAttrData));
+          return graphAttrData;
+        } else {
+          self.addDbgMsg("No graph found with ID", graphID);
+          return null;
+        }
+      } catch (err) {
+        console.error("Failed to get graph attribute data:", err);
+        self.addDbgMsg("Failed to get graph attribute data", formatJsonMessage(err));
+        return null;
+      }
+    });
 
     // const sendFileMessage = flow(function* (fileId) {
     //   try {
@@ -490,7 +524,7 @@ export const AssistantModel = types
 
     const cancelRun = flow(function* (runId: string) {
       try {
-        const response = yield fetch(`${process.env.LANGCHAIN_SERVER_URL}/api/cancel`, {
+        const cancelResponse = yield fetch(`${process.env.LANGCHAIN_SERVER_URL}/api/cancel`, {
           method: "POST",
           headers: {
             "Content-Type": "application/json",
@@ -500,11 +534,11 @@ export const AssistantModel = types
           })
         });
 
-        if (!response.ok) {
-          throw new Error(`Failed to cancel run: ${response.statusText}`);
+        if (!cancelResponse.ok) {
+          throw new Error(`Failed to cancel run: ${cancelResponse.statusText}`);
         }
 
-        const cancelRes = yield response.json();
+        const cancelRes = yield cancelResponse.json();
         self.addDbgMsg(`Cancel request received`, formatJsonMessage(cancelRes));
       } catch (err: any) {
         const errorMessage =
