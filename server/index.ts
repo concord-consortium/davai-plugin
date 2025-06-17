@@ -67,13 +67,13 @@ export const initializeApp = async () => {
   console.log("Application initialized successfully.");
 };
 
-let activeLLMInstance: Record<string, any> | undefined = undefined;
+let llmInstances: Record<string, any> = {};
 
 const getOrCreateModelInstance = (llmId: string): Record<string, any> => {
-  if (!activeLLMInstance) {
-    activeLLMInstance = createModelInstance(llmId);
+  if (!llmInstances[llmId]) {
+    llmInstances[llmId] = createModelInstance(llmId);
   }
-  return activeLLMInstance;
+  return llmInstances[llmId];
 };
 
 const callModel = async (state: any, modelConfig: any) => {

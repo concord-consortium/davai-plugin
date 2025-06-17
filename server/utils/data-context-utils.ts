@@ -99,9 +99,11 @@ export const processDataContexts = (dataContexts: Record<string, any>): IProcess
     // const chunkSize = chunkStr.length / CHARS_PER_TOKEN;
     // console.log(`Processing chunk ${i + 1}/${chunks.length}, size: ${chunkSize} tokens`);
 
+    // Ideally, this would be "system" message, but Gemini doesn't seem to accept more than one system message per session,
+    // and these messages get sent separately from the initial system message.
     messages.push({
       content: `CODAP document data contexts chunk ${i + 1}/${chunks.length}: ${chunkStr}`,
-      role: "system"
+      role: "user"
     });
   }
 
