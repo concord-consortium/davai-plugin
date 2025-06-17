@@ -9,7 +9,6 @@ jest.mock("../hooks/use-root-store", () => ({
   useRootStore: jest.fn(() => ({
     assistantStore: {
       initializeAssistant: jest.fn(),
-      fetchAssistantsList: jest.fn(),
       transcriptStore: {
         messages: [],
         addMessage: jest.fn(),
