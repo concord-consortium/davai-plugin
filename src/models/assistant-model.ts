@@ -5,6 +5,7 @@ import { DAVAI_SPEAKER, DEBUG_SPEAKER } from "../constants";
 import { formatJsonMessage, getDataContexts } from "../utils/utils";
 import { ChatTranscriptModel } from "./chat-transcript-model";
 import { extractDataContexts } from "../utils/data-context-utils";
+import { postMessage } from "../utils/llm-utils";
 
 interface IGraphAttrData {
   legend?: Record<string, any>;
@@ -171,7 +172,7 @@ export const AssistantModel = types
               dataContexts: extracted.dataContexts
             };
 
-            const response = yield postMessage(requestBody);
+            const response = yield postMessage(requestBody, "message");
 
             if (!response.ok) {
               throw new Error(`Failed to send system message: ${response.statusText}`);
@@ -231,7 +232,7 @@ export const AssistantModel = types
             content
           }
         };
-        const response = yield postMessage(reqBody);
+        const response = yield postMessage(reqBody, "message");
 
         if (!response.ok) {
           throw new Error(`Failed to send tool response: ${response.statusText}`);
@@ -268,7 +269,7 @@ export const AssistantModel = types
           };
 
           // Send message to LangChain server
-          const response = yield postMessage(reqBody);
+          const response = yield postMessage(reqBody, "message");
 
           if (!response.ok) {
             throw new Error(`Failed to send message: ${response.statusText}`);
@@ -473,21 +474,16 @@ export const AssistantModel = types
 
     const cancelRun = flow(function* (runId: string) {
       try {
-        const response = yield fetch(`${process.env.LANGCHAIN_SERVER_URL}/api/cancel`, {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-          },
-          body: JSON.stringify({
-            messageId: runId
-          })
-        });
+        const reqBody = { messageId: runId };
+        const response = yield postMessage(reqBody, "cancel");
 
         if (!response.ok) {
           throw new Error(`Failed to cancel run: ${response.statusText}`);
         }
 
         const cancelRes = yield response.json();
+        self.isCancelling = false;
+        self.setShowLoadingIndicator(false);
         self.addDbgMsg(`Cancel request received`, formatJsonMessage(cancelRes));
       } catch (err: any) {
         const errorMessage =

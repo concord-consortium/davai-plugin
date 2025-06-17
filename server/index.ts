@@ -15,7 +15,7 @@ import { CHARS_PER_TOKEN, MAX_TOKENS_PER_CHUNK } from "./constants.js";
 dotenv.config();
 
 const app = express();
-const port = 5000;
+const port = 3000;
 app.use(json());
 
 // Middleware to check for the API secret in the request headers
@@ -179,7 +179,7 @@ app.post("/default/davaiServer/message", async (req, res) => {
 });
 
 // Endpoint for cancelling message processing
-app.post("/api/cancel", async (req, res) => {
+app.post("/default/davaiServer/cancel", async (req, res) => {
   const { messageId } = req.body;  
   const controller = activeMessages.get(messageId);
   if (controller) {
