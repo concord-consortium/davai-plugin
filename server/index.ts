@@ -1,13 +1,11 @@
 import express, { json } from "express";
 import * as dotenv from "dotenv";
 import { START, END, MemorySaver, MessagesAnnotation, StateGraph } from "@langchain/langgraph";
-import { BaseMessage, HumanMessage, SystemMessage, ToolMessage, trimMessages } from "@langchain/core/messages";
+import { BaseMessage, SystemMessage, ToolMessage, trimMessages } from "@langchain/core/messages";
 import { ChatPromptTemplate } from "@langchain/core/prompts";
-import { MemoryVectorStore } from "langchain/vectorstores/memory";
-import { Document } from "@langchain/core/documents";
 import { instructions } from "./text/instructions.js";
 import { codapApiDoc } from "./text/codap-api-documentation.js";
-import { escapeCurlyBraces, chunkCodapDocumentation, setupVectorStore } from "./utils/rag-utils.js";
+import { escapeCurlyBraces } from "./utils/rag-utils.js";
 import { processDataContexts } from "./utils/data-context-utils.js";
 import { createModelInstance } from "./utils/llm-utils.js";
 import { CHARS_PER_TOKEN, MAX_TOKENS_PER_CHUNK } from "./constants.js";
@@ -18,9 +16,6 @@ dotenv.config();
 const app = express();
 const port = 3000;
 app.use(json());
-
-// Initialize the vector store cache to avoid re-creating it for each request.
-let vectorStoreCache: { [key: string]: MemoryVectorStore } = {};
 
 const tokenCounter = (messages: BaseMessage[]): number => {
   let count = 0;
@@ -42,23 +37,15 @@ const trimmer = trimMessages({
   allowPartial: true,
 });
 
-let processedCodapApiDoc: Document[] = [];
 let promptTemplate: ChatPromptTemplate;
 
 export const initializeApp = async () => {
   console.log("Initializing application...");
 
   promptTemplate = ChatPromptTemplate.fromMessages([
-    ["system", `${instructions}`],
+    ["system", `${instructions} Here is the relevant CODAP API documentation:\n ${escapeCurlyBraces(codapApiDoc)}`],
     ["placeholder", "{messages}"],
   ]);
-
-  processedCodapApiDoc = chunkCodapDocumentation(codapApiDoc);
-
-  // promptTemplate = ChatPromptTemplate.fromMessages([
-  //   ["system", `${instructions} Here is the relevant CODAP API documentation:\n ${escapeCurlyBraces(codapApiDoc)}`],
-  //   ["placeholder", "{messages}"],
-  // ]);
 
   console.log("Application initialized successfully.");
 };
@@ -75,27 +62,11 @@ const getOrCreateModelInstance = (llmId: string): Record<string, any> => {
 const callModel = async (state: any, modelConfig: any) => {
   const { llmId } = modelConfig.configurable;
   const llm = getOrCreateModelInstance(llmId);
-  const llmRealId = JSON.parse(llmId).id;
-  let context = "";
-
-  // Get the last user message to use as the query
-  const lastUserMessage = state.messages
-    .filter((msg: any) => msg instanceof HumanMessage)
-    .pop()?.content;
 
   // Use the trimmer to ensure we don't send too much to the model
   const trimmedMessages = await trimmer.invoke(state.messages);
 
-  // Retrieve relevant documents using the appropriate embeddings
-  const vectorStore = vectorStoreCache[llmRealId] ?? await setupVectorStore(processedCodapApiDoc, llmRealId, vectorStoreCache);
-  if (lastUserMessage) {
-    const retriever = vectorStore.asRetriever({ k: 5, searchType: "mmr" });
-    const relevantDocs = await retriever.invoke(lastUserMessage);
-    context = relevantDocs.map(d => escapeCurlyBraces(d.pageContent)).join("\n\n");
-  }
-
   const prompt = await promptTemplate.invoke({
-    context,
     messages: trimmedMessages,
   });
 
@@ -193,7 +164,6 @@ app.post("/api/message", async (req, res) => {
       }
     );
     const lastMessage = output.messages[output.messages.length - 1];
-    console.log("Last message:", lastMessage);
 
     // Clean up the controller
     activeMessages.delete(messageId);
