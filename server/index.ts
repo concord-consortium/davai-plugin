@@ -3,11 +3,9 @@ import * as dotenv from "dotenv";
 import { START, END, MemorySaver, MessagesAnnotation, StateGraph } from "@langchain/langgraph";
 import { BaseMessage, HumanMessage, SystemMessage, ToolMessage, trimMessages } from "@langchain/core/messages";
 import { ChatPromptTemplate } from "@langchain/core/prompts";
-import { MemoryVectorStore } from "langchain/vectorstores/memory";
-import { Document } from "@langchain/core/documents";
 import { instructions } from "./text/instructions.js";
 import { codapApiDoc } from "./text/codap-api-documentation.js";
-import { escapeCurlyBraces, chunkCodapDocumentation, setupVectorStore } from "./utils/rag-utils.js";
+import { escapeCurlyBraces } from "./utils/rag-utils.js";
 import { processDataContexts } from "./utils/data-context-utils.js";
 import { createModelInstance } from "./utils/llm-utils.js";
 import { CHARS_PER_TOKEN, MAX_TOKENS_PER_CHUNK } from "./constants.js";
@@ -20,18 +18,30 @@ const port = 3000;
 app.use(json());
 
 // Initialize the vector store cache to avoid re-creating it for each request.
-let vectorStoreCache: { [key: string]: MemoryVectorStore } = {};
+// let vectorStoreCache: { [key: string]: MemoryVectorStore } = {};
 
-const tokenCounter = (messages: BaseMessage[]): number => {
-  let count = 0;
-  for (const msg of messages) {
-    // Don't count system messages towards the token limit.
+const tokenCounter = (messages: BaseMessage[]) => {
+let count = 0;
+
+for (const msg of messages) {
     if (msg instanceof SystemMessage) continue;
 
-    count += msg.content.length;
+    const c = msg.content;
+
+    if (typeof c === "string") {
+      count += c.length;
+    } else if (Array.isArray(c)) {
+      // count only the text blocks; ignore images
+      for (const block of c) {
+        if (block.type === "text") count += block.text.length;
+      }
+    } else if (c) {
+      // object (e.g. tool/function payload) – rough estimate
+      count += JSON.stringify(c).length;
+    }                                     // else undefined → add 0
   }
   return count / CHARS_PER_TOKEN;
-};
+  };
 
 // The trimmer is used to limit the number of tokens in the conversation history.
 const trimmer = trimMessages({
@@ -42,23 +52,23 @@ const trimmer = trimMessages({
   allowPartial: true,
 });
 
-let processedCodapApiDoc: Document[] = [];
+// let processedCodapApiDoc: Document[] = [];
 let promptTemplate: ChatPromptTemplate;
 
 export const initializeApp = async () => {
   console.log("Initializing application...");
 
-  promptTemplate = ChatPromptTemplate.fromMessages([
-    ["system", `${instructions}`],
-    ["placeholder", "{messages}"],
-  ]);
-
-  processedCodapApiDoc = chunkCodapDocumentation(codapApiDoc);
-
   // promptTemplate = ChatPromptTemplate.fromMessages([
-  //   ["system", `${instructions} Here is the relevant CODAP API documentation:\n ${escapeCurlyBraces(codapApiDoc)}`],
+  //   ["system", `${instructions}`],
   //   ["placeholder", "{messages}"],
   // ]);
+
+  // processedCodapApiDoc = chunkCodapDocumentation(codapApiDoc);
+
+  promptTemplate = ChatPromptTemplate.fromMessages([
+    ["system", `${instructions} Here is the relevant CODAP API documentation:\n ${escapeCurlyBraces(codapApiDoc)}`],
+    ["placeholder", "{messages}"],
+  ]);
 
   console.log("Application initialized successfully.");
 };
@@ -74,43 +84,16 @@ const getOrCreateModelInstance = (llmId: string): Record<string, any> => {
 
 const callModel = async (state: any, modelConfig: any) => {
   const { llmId } = modelConfig.configurable;
-  const llm = getOrCreateModelInstance(llmId);
-  const llmRealId = JSON.parse(llmId).id;
-  let context = "";
-
-  // Get the last user message to use as the query
-  const lastUserMessage = state.messages
-    .filter((msg: any) => msg instanceof HumanMessage)
-    .pop()?.content;
+    const llm = getOrCreateModelInstance(llmId);
 
   // Use the trimmer to ensure we don't send too much to the model
   const trimmedMessages = await trimmer.invoke(state.messages);
 
-  // Retrieve relevant documents using the appropriate embeddings
-  const vectorStore = vectorStoreCache[llmRealId] ?? await setupVectorStore(processedCodapApiDoc, llmRealId, vectorStoreCache);
-  if (lastUserMessage) {
-    const retriever = vectorStore.asRetriever({ k: 5, searchType: "mmr" });
-    const relevantDocs = await retriever.invoke(lastUserMessage);
-    context = relevantDocs.map(d => escapeCurlyBraces(d.pageContent)).join("\n\n");
-  }
-
-  const prompt = await promptTemplate.invoke({
-    context,
-    messages: trimmedMessages,
-  });
+    const prompt = await promptTemplate.invoke({
+      messages: trimmedMessages,
+    });
 
   const response = await llm.invoke(prompt);
-
-  if (response?.tool_calls?.[0]) {
-    const functionCall = response.tool_calls[0];
-    return {
-      messages: response,
-      function_call: {
-        name: functionCall.id,
-        arguments: functionCall.args,
-      },
-    };
-  }
 
   return { messages: response };
 };
@@ -132,12 +115,30 @@ app.post("/api/tool", async (req, res) => {
 
   try {
     const messages = [];
-    const toolResponse = new ToolMessage({
-      content: message.content,
+    let toolMessageContent: string;
+    let humanMessage;
+
+    // `message.content` will be an array if previously the user asked to describe a graph
+    // ToolMessage doesn't support sending images back to the model
+    // So we stub the response to the tool call, and follow up with HumanMessage
+    if (Array.isArray(message.content)) {
+      // stub tool response
+      toolMessageContent = "ok";
+      humanMessage = new HumanMessage({ content: message.content });
+    } else {
+      toolMessageContent = message.content;
+    }
+
+    const toolMessage = new ToolMessage({
+      content: toolMessageContent,
       tool_call_id: message.tool_call_id,
     });
 
-    messages.push(toolResponse);
+    messages.push(toolMessage);
+
+    if (humanMessage) {
+      messages.push(humanMessage);
+    }
 
     const toolResponseOutput = await langApp.invoke({ messages }, config);
 
@@ -189,11 +190,10 @@ app.post("/api/message", async (req, res) => {
       { messages },
       {
         ...config,
-        signal: controller.signal
+      signal: controller.signal
       }
     );
     const lastMessage = output.messages[output.messages.length - 1];
-    console.log("Last message:", lastMessage);
 
     // Clean up the controller
     activeMessages.delete(messageId);

@@ -423,7 +423,6 @@ The selectionList object is just an array of case ids.
   legendAttributeName: /* {String} An attribute name within the data context */
   enableNumberToggle: /* {Boolean} whether the numberToggle display should be presented in this graph */
   numberToggleLastMode: /* {Boolean} whether numberToggle display should be in "last mode" */
-  exportDataUri: /* {String} Optional. Not used in creating or updating a graph, but is returned when getting a graph. A data URI string that corresponds to an image of the graph. */
 }
 ```
 
@@ -520,7 +519,7 @@ Note that setting the dimensions is required for a webView component.
 }
 ```
 
-### Data Display
+###I Image of component (Data Display)
 
 #### **Resource Selector Patterns + Supported Actions**
 
@@ -537,6 +536,7 @@ Note that setting the dimensions is required for a webView component.
 
 #### Notes
 -   Only available for components of type `"graph"`.
+-   Use the resource string to define the Id of the component you want; do not include any 'values' object.
 -   The returned `exportDataUri` can be embedded directly as an image (e.g., in an `<img>` tag or downloaded).
 
 ### Globals
