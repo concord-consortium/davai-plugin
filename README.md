@@ -4,7 +4,7 @@ The Data Analysis through Voice and Artificial Intelligence (DAVAI) CODAP plugin
 
 ## Development
 
-The code consists of a React-based client app (in `/src`) and a Node-based server app (in `/server`). For development, you will currently need to run the server locally and add a `LANGCHAIN_SERVER_URL` to the root `.env` file. The value should be the local server app's URL (usually `http://localhost:5000`).
+The code consists of a React-based client app (in `/src`) and a Node-based server app (in `/server`).
 
 ### Initial steps
 
@@ -68,34 +68,34 @@ You don’t have to ever use `eject`. The curated feature set is suitable for sm
 
 Configuration settings control various aspects of the application's behavior and appearance. Access to the configuration settings is provided by `AppConfigContext` via the `useAppConfigContext` hook.
 
-Default configuration setting values are defined in the `app-config.json` file. Currently, only the `mode` setting can be overridden by URL parameter (e.g. `?mode=development`). Support for overriding some of the other settings with URL parameters may be added in the future. 
+Default configuration setting values are defined in the `app-config.json` file. Currently, only the `mode` setting can be overridden by URL parameter (e.g. `?mode=development`). Support for overriding some of the other settings with URL parameters may be added in the future.
 
 ### Accessibility
 
-- **`accessibility`** (Object)  
+- **`accessibility`** (Object)
   Settings related to accessibility in the UI:
   - **`keyboardShortcut`** (string): Custom keystroke for placing focus in the main text input field (e.g., `ctrl+?`).
 
 ### AssistantId
 
-- **`assistantId`** (string)  
+- **`assistantId`** (string)
   The unique ID of an existing assistant to use, or "mock" for a mocked assistant.
 
 ### Dimensions
 
-- **`dimensions`** (Object)  
+- **`dimensions`** (Object)
   Dimensions of the application's component within CODAP:
   - **`width`** (number): The width of the application (in pixels).
   - **`height`** (number): The height of the application (in pixels).
 
 ### Mock Assistant
 
-- **`mockAssistant`** (boolean)  
+- **`mockAssistant`** (boolean)
   A flag indicating whether to mock AI interactions.
 
 ### Mode
 
-- **`mode`** (string)  
+- **`mode`** (string)
   The mode in which the application runs. Possible values:
   - `"development"`: Enables additional UI for debugging and artifact maintenance.
   - `"production"`: Standard runtime mode for end users.
