@@ -8,7 +8,7 @@ import { Document } from "@langchain/core/documents";
 import { instructions } from "./instructions.js";
 import { codapApiDoc } from "./codap-api-documentation.js";
 import { escapeCurlyBraces, processMarkdownDoc, setupVectorStore } from "./utils/rag-utils.js";
-import { processDataContexts } from "./utils/data-context-utils.js";
+import { processCodapData } from "./utils/data-context-utils.js";
 import { createModelInstance } from "./utils/llm-utils.js";
 import { CHARS_PER_TOKEN, MAX_TOKENS_PER_CHUNK } from "./constants.js";
 
@@ -132,15 +132,15 @@ const activeMessages = new Map<string, AbortController>();
 
 // This is the main endpoint for use by the client app. We may want to add more, e.g. another for tool calls, etc.
 app.post("/default/davaiServer/message", async (req, res) => {
-  const { llmId, message, threadId, dataContexts, messageId } = req.body;
+  const { llmId, message, threadId, codapData, messageId } = req.body;
   const config = { configurable: { thread_id: threadId, llmId } };
 
   try {
     const messages = [];
 
     // If we have data contexts, process them before adding.
-    if (dataContexts && typeof dataContexts === "object") {
-      messages.push(...processDataContexts(dataContexts));
+    if (codapData && typeof codapData === "object") {
+      messages.push(...processCodapData(codapData));
     } else {
       // Add the user's message
       messages.push({

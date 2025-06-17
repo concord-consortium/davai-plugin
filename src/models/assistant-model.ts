@@ -168,8 +168,7 @@ export const AssistantModel = types
             const requestBody = {
               llmId: self.llmId,
               threadId: self.threadId,
-              isSystemMessage: true,
-              dataContexts: extracted.dataContexts
+              codapData: extracted.codapData
             };
 
             const response = yield postMessage(requestBody, "message");
