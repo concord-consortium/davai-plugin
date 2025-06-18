@@ -1,4 +1,4 @@
-import { types, flow, Instance, getRoot } from "mobx-state-tree";
+import { types, flow, Instance, getRoot, onSnapshot } from "mobx-state-tree";
 import { nanoid } from "nanoid";
 import { codapInterface } from "@concord-consortium/codap-plugin-api";
 import { DAVAI_SPEAKER, DEBUG_SPEAKER } from "../constants";
@@ -146,6 +146,17 @@ export const AssistantModel = types
     const sendDataCtxChangeInfo = flow(function* (msg: string) {
       try {
         if (self.isLoadingResponse || self.isCancelling || self.isResetting) {
+          // If the last message in the queue has the same prefix as the current message
+          // (e.g., "Data context Coasters has been updated: {dataContextData}"), remove the last message from
+          // the queue since it is no longer up to date and will be wasting valuable space.
+          if (self.codapNotificationQueue.length > 0) {
+            const getPrefix = (msgStr: string) => msgStr.split(":", 1)[0].trim();
+            const currentPrefix = getPrefix(msg);
+            const lastPrefix = getPrefix(self.codapNotificationQueue[self.codapNotificationQueue.length - 1]);
+            if (currentPrefix === lastPrefix) {
+              self.codapNotificationQueue.pop();
+            }
+          }
           self.codapNotificationQueue.push(msg);
         } else {
           yield sendCODAPDocumentInfo(msg);
@@ -163,9 +174,11 @@ export const AssistantModel = types
         const extracted = extractDataContexts(message);
         self.addDbgMsg("Sending CODAP document info to LLM", extracted ? formatJsonMessage(extracted) : message);
         if (!self.threadId) {
+          console.warn("Thread ID is not set, queuing CODAP document info message:", message);
           self.codapNotificationQueue.push(message);
         } else {
           if (extracted) {
+            self.isLoadingResponse = true;
             const requestBody = {
               llmId: self.llmId,
               threadId: self.threadId,
@@ -180,6 +193,7 @@ export const AssistantModel = types
 
             const data = yield dataContextResponse.json();
             self.addDbgMsg("CODAP document info received by LLM", formatJsonMessage(data));
+            self.isLoadingResponse = false;
           } else {
             self.addDbgMsg("Could not extract data contexts from message", message);
           }
@@ -578,20 +592,20 @@ export const AssistantModel = types
     return { cancelRun, createThread, initializeAssistant, handleMessageSubmit, handleCancel, sendDataCtxChangeInfo, sendCODAPDocumentInfo };
   })
   .actions((self) => ({
-    // afterCreate() {
-    //   onSnapshot(self, async () => {
-    //     const doneProcessing = !self.isLoadingResponse && !self.isCancelling && !self.isResetting;
-    //     if (self.threadId && doneProcessing && self.codapNotificationQueue.length > 0) {
-    //       const allMsgs = self.codapNotificationQueue.join("\n");
-    //       self.codapNotificationQueue.clear();
-    //       await self.sendCODAPDocumentInfo(allMsgs);
-    //     } else if (self.threadId && doneProcessing && self.messageQueue.length > 0) {
-    //       const allMsgs = self.messageQueue.join("\n");
-    //       self.messageQueue.clear();
-    //       await self.handleMessageSubmit(allMsgs);
-    //     }
-    //   });
-    // }
+    afterCreate() {
+      onSnapshot(self, async () => {
+        const doneProcessing = !self.isLoadingResponse && !self.isCancelling && !self.isResetting;
+        if (self.threadId && doneProcessing && self.codapNotificationQueue.length > 0) {
+          const allMsgs = self.codapNotificationQueue.join("\n");
+          self.codapNotificationQueue.clear();
+          await self.sendCODAPDocumentInfo(allMsgs);
+        } else if (self.threadId && doneProcessing && self.messageQueue.length > 0) {
+          const allMsgs = self.messageQueue.join("\n");
+          self.messageQueue.clear();
+          await self.handleMessageSubmit(allMsgs);
+        }
+      });
+    }
   }));
 
 export interface AssistantModelType extends Instance<typeof AssistantModel> {}

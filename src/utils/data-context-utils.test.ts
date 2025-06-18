@@ -118,4 +118,13 @@ describe("extractDataContexts", () => {
     const result = extractDataContexts(message);
     expect(result).toBeNull();
   });
+
+  it("should return combined data contexts", () => {
+    const message = "Data contexts updated: {contexts}\nNew data context {name} created: {}";
+    const result = extractDataContexts(message);
+    expect(result).toEqual({
+      codapData: {" ": {}},
+      type: "combined"
+    });
+  });
 });

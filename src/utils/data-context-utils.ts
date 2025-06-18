@@ -11,6 +11,20 @@ import { DATA_CONTEXT_MESSAGES } from "../constants";
 export const trimDataset = (dataset: any): any => {
   const newDataset = structuredClone(dataset);
 
+  // Handle case where `collections` is on the root object
+  if (Array.isArray(newDataset.collections)) {
+    for (const collection of newDataset.collections) {
+      if (!Array.isArray(collection.attrs)) continue;
+
+      for (const attr of collection.attrs) {
+        if (attr._categoryMap) {
+          delete attr._categoryMap;
+        }
+      }
+    }
+  }
+
+  // Handle case where `collections` is nested under context keys
   for (const contextKey of Object.keys(newDataset)) {
     const context = newDataset[contextKey];
     const collections = context?.collections;
@@ -44,7 +58,7 @@ export const formatDataContextMessage = (
 
 interface IExtractedDataContext {
   codapData: Record<string, any>;
-  type: "create" | "initial" | "remove" | "update";
+  type: "combined" | "create" | "initial" | "remove" | "update";
 }
 
 /**
@@ -56,6 +70,42 @@ interface IExtractedDataContext {
  *   patterns defined in DATA_CONTEXT_MESSAGES, or null if no match is found.
  */
 export const extractDataContexts = (message: string): IExtractedDataContext | null => {
+  try {
+    // When the assistant model's `codapNotificationQueue` is populated, it may contain multiple messages. The assistant model
+    // combines these messages into a single string, separated by newlines, to send together in one request to the LLM instead
+    // of making multiple requests. We need to handle this case by splitting the `message` string on newlines and then combining
+    // the extracted data from each message.
+    const messages = message.split("\n").filter(msg => msg.trim());
+
+    if (messages.length > 1) {
+      const results = messages.map(msg => extractSingleDataContext(msg)).filter(result => result !== null);
+      if (results.length === 0) return null;
+
+      const combinedCodapData = results.reduce((acc, result) => {
+        return { ...acc, ...result.codapData };
+      }, {});
+      
+      return { codapData: combinedCodapData, type: "combined" };
+    }
+
+    // Single message case
+    return extractSingleDataContext(message);
+
+  } catch (err) {
+    console.error("Failed to extract data contexts:", err);
+    return null;
+  }
+};
+
+/**
+ * Extracts a single structured data context from a single data context message string.
+ *
+ * @param message - The message string to extract data contexts from.
+ *   Example: "Data context {name} has been updated: {context}"
+ * @returns An object containing the extracted data contexts and type if the message matches
+ *   patterns defined in DATA_CONTEXT_MESSAGES, or null if no match is found.
+ */
+export const extractSingleDataContext = (message: string): IExtractedDataContext | null => {
   try {
     // Check for initial data contexts
     if (message.startsWith(DATA_CONTEXT_MESSAGES.INITIAL.split("{contexts}")[0])) {
