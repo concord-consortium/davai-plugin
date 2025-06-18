@@ -168,7 +168,7 @@ app.post("/default/davaiServer/message", async (req, res) => {
     res.json({ response: lastMessage.content });
   } catch (err: any) {
     if (err.message === "Aborted") {
-      res.status(499).json({ error: "Message processing cancelled" });
+      res.status(500).json({ error: "Message processing cancelled" });
     } else {
       console.error("Error in /api/message:", err);
       console.error("Error stack:", err.stack);

@@ -502,47 +502,43 @@ export const AssistantModel = types
       }
     });
 
-    const resetThread = flow(function* () {
-      try {
-        self.isResetting = true;
-        // const allThreadMessages = yield self.apiConnection.beta.threads.messages.list(self.threadId);
-        // const allThreadMessages = self.transcriptStore.getAllMessages();
-        const allThreadMessages = self.transcriptStore.messages.map(msg => {
-          return `${msg.speaker}: ${msg.messageContent.content}`;
-        }).join("\n");
-        yield createThread();
-        yield fetchAndSendDataContexts();
-        self.addDbgMsg("Sending thread history to LLM", formatJsonMessage(allThreadMessages));
-        // yield self.apiConnection.beta.threads.messages.create(self.threadId, {
-        //   role: "user",
-        //   content: `This is a system message containing the previous conversation history. ${allThreadMessages}`,
-        // });
-        self.isResetting = false;
-      } catch (err) {
-        console.error("Failed to reset thread:", err);
-        self.addDbgMsg("Failed to reset thread", formatJsonMessage(err));
-        self.isCancelling = false;
-        self.isResetting = false;
-      }
-    });
+    // const resetThread = flow(function* () {
+    //   try {
+    //     self.isResetting = true;
+    //     if (self.currentMessageId) {
+    //       self.isCancelling = true;
+    //       yield cancelRun(self.currentMessageId);
+    //     }
+    //     const allThreadMessages = self.transcriptStore.messages.map(msg => {
+    //       return `${msg.speaker}: ${msg.messageContent.content}`;
+    //     }).join("\n");
+    //     yield createThread();
+    //     yield fetchAndSendDataContexts();
+    //     self.addDbgMsg("Sending thread history to LLM", formatJsonMessage(allThreadMessages));
+    //     self.isResetting = false;
+    //   } catch (err) {
+    //     console.error("Failed to reset thread:", err);
+    //     self.addDbgMsg("Failed to reset thread", formatJsonMessage(err));
+    //     self.isCancelling = false;
+    //     self.isResetting = false;
+    //   }
+    // });
 
     const createThread = flow(function* () {
       try {
-        // const newThread = yield self.apiConnection.beta.threads.create();
-        const newThread = yield Promise.resolve({
-          id: nanoid(),
-          name: "New Thread",
-          created_at: new Date().toISOString(),
-          updated_at: new Date().toISOString()
-        });
-        console.log("New thread created:", newThread);
+        if (self.currentMessageId) {
+          self.isCancelling = true;
+          yield cancelRun(self.currentMessageId);
+        }
+        self.isLoadingResponse = false;
+        self.isCancelling = false;
         self.threadId = nanoid();
       } catch (err) {
         console.error("Error creating thread:", err);
       }
     });
 
-    return { cancelRun, createThread, initializeAssistant, handleMessageSubmit, handleCancel, resetThread, sendDataCtxChangeInfo, sendCODAPDocumentInfo };
+    return { cancelRun, createThread, initializeAssistant, handleMessageSubmit, handleCancel, sendDataCtxChangeInfo, sendCODAPDocumentInfo };
   })
   .actions((self) => ({
     // afterCreate() {
