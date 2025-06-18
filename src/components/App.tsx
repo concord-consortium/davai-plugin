@@ -139,10 +139,10 @@ export const App = observer(() => {
         subscribedDataCtxsRef.current.push(ctx.name);
         addDataContextChangeListener(ctx.name, handleDataContextChangeNotice);
       });
+      await sonificationStore.setGraphs();
     };
 
     init();
-    sonificationStore.setGraphs();
     selectSelf();
 
   // eslint-disable-next-line react-hooks/exhaustive-deps

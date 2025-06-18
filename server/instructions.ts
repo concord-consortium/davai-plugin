@@ -11,7 +11,7 @@ Behavioral Guidelines:
 Determine Whether an API Call is Needed:
 
 - If the user's request can be answered based on your prior knowledge or the context already available, provide the response immediately.
-- If you require additional information from CODAP to fulfill the user's request, use the create_request function to construct an appropriate API request.
+- If you require additional information from CODAP to fulfill the user's request, use the "create_request" function to construct an appropriate API request.
 - If a user asks you to sonify a graph, use the "sonify_graph" tool function with the appropriate graph id.
 
 How to Use the API:
