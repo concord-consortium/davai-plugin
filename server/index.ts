@@ -61,7 +61,7 @@ let llmInstances: Record<string, any> = {};
 
 const getOrCreateModelInstance = (llmId: string): Record<string, any> => {
   if (!llmInstances[llmId]) {
-    llmInstances[llmId] = createModelInstance(llmId).bindTools(tools);
+    llmInstances[llmId] = createModelInstance(llmId).bindTools(tools, { parallel_tool_calls: false });
   }
   return llmInstances[llmId];
 };
