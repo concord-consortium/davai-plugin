@@ -2,10 +2,8 @@ import { types, flow, Instance, getRoot } from "mobx-state-tree";
 import { nanoid } from "nanoid";
 import { codapInterface } from "@concord-consortium/codap-plugin-api";
 import { DAVAI_SPEAKER, DEBUG_SPEAKER } from "../constants";
-import { formatJsonMessage, getDataContexts, getGraphByID, isGraphSonifiable } from "../utils/utils";
+import { formatJsonMessage, getGraphByID, isGraphSonifiable } from "../utils/utils";
 import { ChatTranscriptModel } from "./chat-transcript-model";
-import { extractDataContexts } from "../utils/data-context-utils";
-import { postMessage } from "../utils/llm-utils";
 
 interface IGraphAttrData {
   legend?: Record<string, any>;
@@ -120,40 +118,13 @@ export const AssistantModel = types
     }
   }))
   .actions((self) => {
-    const initializeAssistant = flow(function* (llmId: string) {
+    const initializeAssistant = (() => {
       try {
-        self.setLlmId(llmId);
-
         self.setThreadId(nanoid());
-        self.addDbgMsg("Assistant initialized", `Assistant ID: ${llmId}, Thread ID: ${self.threadId}`);
-        yield fetchAndSendDataContexts();
+        self.addDbgMsg("Assistant initialized", `Assistant ID: ${self.llmId}, Thread ID: ${self.threadId}`);
       } catch (err) {
         console.error("Failed to initialize assistant:", err);
         self.addDbgMsg("Failed to initialize assistant", formatJsonMessage(err));
-      }
-    });
-
-    const fetchAndSendDataContexts = flow(function* () {
-      try {
-        const contexts = yield getDataContexts();
-        self.addDbgMsg("Data contexts information", formatJsonMessage(contexts));
-        sendCODAPDocumentInfo(`Data contexts: ${JSON.stringify(contexts)}`);
-      } catch (err) {
-        console.error("Failed to get data contexts:", err);
-        self.addDbgMsg("Failed to get data contexts", formatJsonMessage(err));
-      }
-    });
-
-    const sendDataCtxChangeInfo = flow(function* (msg: string) {
-      try {
-        if (self.isLoadingResponse || self.isCancelling || self.isResetting) {
-          self.codapNotificationQueue.push(msg);
-        } else {
-          yield sendCODAPDocumentInfo(msg);
-        }
-      } catch (err) {
-        console.error("Failed to send data context info to LLM:", err);
-        self.addDbgMsg("Failed to send data context info to the LLM", formatJsonMessage(err));
       }
     });
 
@@ -161,33 +132,34 @@ export const AssistantModel = types
       if (self.isAssistantMocked) return;
 
       try {
-        const extracted = extractDataContexts(message);
-        self.addDbgMsg("Sending CODAP document info to LLM", extracted ? formatJsonMessage(extracted) : message);
+        self.addDbgMsg("Sending CODAP document info to vector store", message);
         if (!self.threadId) {
           self.codapNotificationQueue.push(message);
         } else {
-          if (extracted) {
-            const requestBody = {
-              llmId: self.llmId,
-              threadId: self.threadId,
-              codapData: extracted.codapData
-            };
+          // Send document state to dedicated document endpoint (no LLM calls)
+          const requestBody = {
+            threadId: self.threadId,
+            documentState: message
+          };
 
-            const dataContextResponse = yield postMessage(requestBody, "message");
+          const documentResponse = yield fetch(`${process.env.LANGCHAIN_SERVER_URL}/document`, {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+            },
+            body: JSON.stringify(requestBody),
+          });
 
-            if (!dataContextResponse.ok) {
-              throw new Error(`Failed to send system message: ${dataContextResponse.statusText}`);
-            }
-
-            const data = yield dataContextResponse.json();
-            self.addDbgMsg("CODAP document info received by LLM", formatJsonMessage(data));
-          } else {
-            self.addDbgMsg("Could not extract data contexts from message", message);
+          if (!documentResponse.ok) {
+            throw new Error(`Failed to update document: ${documentResponse.statusText}`);
           }
+
+          const data = yield documentResponse.json();
+          self.addDbgMsg("CODAP document updated in vector store", formatJsonMessage(data));
         }
       } catch (err) {
-        console.error("Failed to send system message:", err);
-        self.addDbgMsg("Failed to send CODAP document information to LLM", formatJsonMessage(err));
+        console.error("Failed to update document:", err);
+        self.addDbgMsg("Failed to update CODAP document in vector store", formatJsonMessage(err));
       }
     });
 
@@ -255,13 +227,12 @@ export const AssistantModel = types
 
       try {
         const reqBody = {
-          llmId: self.llmId,
-          threadId: self.threadId,
-          isToolResponse: true,
-          message: {
-            tool_call_id: toolCallId,
-            content
-          }
+            llmId: self.llmId,
+            threadId: self.threadId,
+            message: {
+              tool_call_id: toolCallId,
+              content
+            }
         };
         const toolOutputResponse = yield postMessage(reqBody, "tool");
 
@@ -292,11 +263,11 @@ export const AssistantModel = types
           self.currentMessageId = messageId;
 
           const reqBody = {
-            llmId: self.llmId,
-            threadId: self.threadId,
-            message: messageText,
-            isSystemMessage: false,
-            messageId
+              llmId: self.llmId,
+              threadId: self.threadId,
+              message: messageText,
+              isSystemMessage: false,
+              messageId
           };
 
           // Send message to LangChain server
@@ -343,20 +314,6 @@ export const AssistantModel = types
       self.setShowLoadingIndicator(false);
       self.addDavaiMsg("I've cancelled processing your message.");
     };
-
-    // const uploadFile = flow(function* () {
-    //   try {
-    //     const fileFromDataUri = yield convertBase64ToImage(self.dataUri);
-    //     const uploadedFile = yield self.apiConnection?.files.create({
-    //       file: fileFromDataUri,
-    //       purpose: "vision"
-    //     });
-    //     return uploadedFile.id;
-    //   } catch (err) {
-    //     console.error("Failed to upload image:", err);
-    //     self.addDbgMsg("Failed to upload image", formatJsonMessage(err));
-    //   }
-    // });
 
     const getAttributeData = flow(function* (graphID: string, attrID: string | null) {
       if (!attrID) return { attributeData: null };
@@ -408,106 +365,6 @@ export const AssistantModel = types
       }
     });
 
-    // const sendFileMessage = flow(function* (fileId) {
-    //   try {
-    //     const res = yield self.apiConnection.beta.threads.messages.create(self.thread.id, {
-    //       role: "user",
-    //       content: [
-    //         {
-    //           type: "text",
-    //           text: "This is an image of a graph. Describe it for the user."
-    //         },
-    //         {
-    //           type: "image_file",
-    //           image_file: {
-    //             file_id: fileId
-    //           }
-    //         },
-    //         {
-    //           type: "text",
-    //           text: `The following JSON data describes key aspects of the graph in the image. Use this context to improve your interpretation and explanation of the graph. ${JSON.stringify(self.dataContextForGraph)}`
-    //         }
-    //       ]
-    //     });
-    //     self.addDbgMsg("Image uploaded", formatJsonMessage(res));
-    //   } catch (err) {
-    //     console.error("Failed to send file message:", err);
-    //     self.addDbgMsg("Failed to send file message", formatJsonMessage(err));
-    //   }
-    // });
-
-    // const handleRequiredAction = flow(function* (runState, runId) {
-    //   try {
-    //     const toolOutputs = runState.required_action?.submit_tool_outputs.tool_calls
-    //       ? yield Promise.all(
-    //         runState.required_action.submit_tool_outputs.tool_calls.map(flow(function* (toolCall: any) {
-    //           const parsedResult = getParsedData(toolCall);
-    //           let output = "";
-
-    //           if (!parsedResult.ok) {
-    //             output = "The JSON is invalid; please resend a valid object.";
-    //           } else if (toolCall.function.name === "create_request") {
-    //             const { action, resource, values } = parsedResult.data;
-    //             const request = { action, resource, values };
-
-    //             // When the request is to create a graph component, we need to update the sonification
-    //             // store after the run.
-    //             if (action === "create" && resource === "component" && values.type === "graph") {
-    //               self.updateSonificationStoreAfterRun = true;
-    //             }
-
-    //             self.addDbgMsg("Request sent to CODAP", formatJsonMessage(request));
-    //             let res = yield codapInterface.sendRequest(request);
-    //             self.addDbgMsg("Response from CODAP", formatJsonMessage(res));
-
-    //             // Prepare for uploading of image file after run if the request is to get dataDisplay
-    //             const isImageSnapshotRequest = action === "get" && resource.match(/^dataDisplay/);
-    //             if (isImageSnapshotRequest) {
-    //               self.uploadFileAfterRun = true;
-    //               self.dataUri = res.values.exportDataUri;
-    //               const graphIdMatch = resource.match(/\[(\d+)\]/);
-    //               const graphID = graphIdMatch?.[1];
-    //               if (graphID) {
-    //                 // Send data for the attributes on the graph for additional context
-    //                 // self.dataContextForGraph = yield getGraphAttrData(graphID);
-    //               } else {
-    //                 self.addDbgMsg("Could not extract graphID from resource string", resource);
-    //                 self.dataContextForGraph = null;
-    //               }
-    //             }
-    //             // remove any exportDataUri value that exists since it can be large and we don't need to send it to the assistant
-    //             res = isImageSnapshotRequest
-    //               ? { ...res, values: { ...res.values, exportDataUri: undefined } }
-    //               : res;
-
-    //             output = JSON.stringify(res);
-    //           } else if (toolCall.function.name === "sonify_graph") {
-    //             const root = getRoot(self) as any;
-    //             const graph = yield getGraphByID(parsedResult.data.graphID);
-
-    //             if (isGraphSonifiable(graph)) {
-    //               root.sonificationStore.setSelectedGraphID(graph.id);
-    //               output = `The graph "${graph.name || graph.id}" is ready to be sonified. Tell the user they can use the sonification controls to hear it.`;
-    //             } else {
-    //               output = `The graph "${graph.name || graph.id}" is not a numeric scatter plot or univariate dot plot. Tell the user they must select a numeric scatter plot or univariate dot plot to proceed.`;
-    //             }
-    //           } else {
-    //             output = `The tool call "${toolCall.function.name}" is not recognized.`;
-    //           }
-
-    //           return { tool_call_id: toolCall.id, output };
-    //         })
-    //       ))
-    //       : [];
-
-    //     self.addDbgMsg("Tool outputs being submitted", formatJsonMessage(toolOutputs));
-    //     yield self.apiConnection.beta.threads.runs.submitToolOutputs(self.thread.id, runId, { tool_outputs: toolOutputs });
-    //   } catch (err) {
-    //     console.error(err);
-    //     self.addDbgMsg("Error taking required action", formatJsonMessage(err));
-    //   }
-    // });
-
     const cancelRun = flow(function* (runId: string) {
       try {
         const reqBody = { messageId: runId };
@@ -539,43 +396,23 @@ export const AssistantModel = types
       }
     });
 
-    // const resetThread = flow(function* () {
-    //   try {
-    //     self.isResetting = true;
-    //     if (self.currentMessageId) {
-    //       self.isCancelling = true;
-    //       yield cancelRun(self.currentMessageId);
-    //     }
-    //     const allThreadMessages = self.transcriptStore.messages.map(msg => {
-    //       return `${msg.speaker}: ${msg.messageContent.content}`;
-    //     }).join("\n");
-    //     yield createThread();
-    //     yield fetchAndSendDataContexts();
-    //     self.addDbgMsg("Sending thread history to LLM", formatJsonMessage(allThreadMessages));
-    //     self.isResetting = false;
-    //   } catch (err) {
-    //     console.error("Failed to reset thread:", err);
-    //     self.addDbgMsg("Failed to reset thread", formatJsonMessage(err));
-    //     self.isCancelling = false;
-    //     self.isResetting = false;
-    //   }
-    // });
-
     const createThread = flow(function* () {
       try {
-        if (self.currentMessageId) {
-          self.isCancelling = true;
-          yield cancelRun(self.currentMessageId);
-        }
-        self.isLoadingResponse = false;
-        self.isCancelling = false;
+        // const newThread = yield self.apiConnection.beta.threads.create();
+        const newThread = yield Promise.resolve({
+          id: nanoid(),
+          name: "New Thread",
+          created_at: new Date().toISOString(),
+          updated_at: new Date().toISOString()
+        });
+        console.log("New thread created:", newThread);
         self.threadId = nanoid();
       } catch (err) {
         console.error("Error creating thread:", err);
       }
     });
 
-    return { cancelRun, createThread, initializeAssistant, handleMessageSubmit, handleCancel, sendDataCtxChangeInfo, sendCODAPDocumentInfo };
+    return { cancelRun, createThread, initializeAssistant, handleMessageSubmit, handleCancel, sendCODAPDocumentInfo };
   })
   .actions((self) => ({
     // afterCreate() {

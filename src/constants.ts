@@ -48,3 +48,33 @@ export const DATA_CONTEXT_MESSAGES = {
   REMOVED: "Data context {name} has been removed",
   UPDATED: "Data context {name} has been updated: {context}"
 } as const;
+
+export const defaultAppConfig = {
+  accessibility: {
+    "keyboardShortcut": "ctrl+?"
+  },
+  llmId: "{\"id\":\"gpt-4o-mini\",\"provider\":\"OpenAI\"}",
+  llmList: [
+    {
+      "id": "mock",
+      "provider": "Mock"
+    },
+    {
+      "id": "gemini-2.0-flash",
+      "provider": "Google"
+    },
+    {
+      "id": "gemini-1.5-flash",
+      "provider": "Google"
+    },
+    {
+      "id": "gpt-4o-mini",
+      "provider": "OpenAI"
+    }
+  ],
+  dimensions: {
+    "height": 680,
+    "width": 380
+  },
+  mode: "production" as const
+};

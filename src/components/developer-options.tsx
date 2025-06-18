@@ -1,6 +1,6 @@
 import React from "react";
 import { AssistantModelType } from "../models/assistant-model";
-import { useAppConfigContext } from "../hooks/use-app-config-context";
+import { useAppConfig } from "../hooks/use-app-config-context";
 import { getUrlParam } from "../utils/utils";
 import { DAVAI_SPEAKER, GREETING } from "../constants";
 import { IUserOptions } from "../types";
@@ -13,12 +13,12 @@ interface IProps {
 }
 
 export const DeveloperOptionsComponent = observer(({assistantStore, createToggleOption, onInitializeAssistant}: IProps) => {
-  const appConfig = useAppConfigContext();
+  const { appConfig, isAssistantMocked, llmId, llmList, setLlmId } = useAppConfig();
   const selectedLlm = appConfig.llmId;
   const isDevMode = getUrlParam("mode") === "development" || appConfig.mode === "development";
 
   const handleCreateThread = async () => {
-    if (!assistantStore.threadId || appConfig.isAssistantMocked) return;
+    if (!assistantStore.threadId || isAssistantMocked) return;
     const confirmCreate = window.confirm("Are you sure you want to create a new thread? If you do, you will lose any existing chat history.");
     if (!confirmCreate) return false;
 
@@ -35,9 +35,7 @@ export const DeveloperOptionsComponent = observer(({assistantStore, createToggle
     const newThreadConfirmed = await handleCreateThread();
     if (!newThreadConfirmed) return;
 
-    assistantStore.transcriptStore.clearTranscript();
-    assistantStore.transcriptStore.addMessage(DAVAI_SPEAKER, {content: GREETING});
-    appConfig.setLlmId(llm);
+    setLlmId(llm);
   };
 
   return (
@@ -55,9 +53,9 @@ export const DeveloperOptionsComponent = observer(({assistantStore, createToggle
           value={selectedLlm}
           onChange={handleSelectLlm}
         >
-          {appConfig.llmList.map((llm) => (
+          {llmList.map((llm: any) => (
             <option
-              aria-selected={appConfig.llmId === JSON.stringify(llm)}
+              aria-selected={llmId === JSON.stringify(llm)}
               key={llm.id}
               value={JSON.stringify(llm)}
             >
@@ -69,7 +67,7 @@ export const DeveloperOptionsComponent = observer(({assistantStore, createToggle
       <div className="user-option">
         <button
           data-testid="new-thread-button"
-          aria-disabled={!!assistantStore.threadId || appConfig.isAssistantMocked}
+          aria-disabled={!!assistantStore.threadId || isAssistantMocked}
           onClick={handleCreateThread}
         >
           New Thread

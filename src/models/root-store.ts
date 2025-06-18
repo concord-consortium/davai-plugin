@@ -1,17 +1,10 @@
 import { types, Instance } from "mobx-state-tree";
 import { AssistantModel } from "./assistant-model";
-import { GraphSonificationModel } from "./graph-sonification-model";
+import { CODAPDocumentModel } from "./codap-document-model";
 
 export const RootStore = types.model("RootStore", {
   assistantStore: AssistantModel,
-  sonificationStore: GraphSonificationModel,
+  documentStore: CODAPDocumentModel,
 });
-
-export function createRootStore() {
-  return RootStore.create({
-    assistantStore: AssistantModel.create(),
-    sonificationStore: GraphSonificationModel.create()
-  });
-}
 
 export interface IRootStore extends Instance<typeof RootStore> {}

@@ -1,5 +1,5 @@
 import React, { createContext, useEffect, useState } from "react";
-import { useAppConfigContext } from "../hooks/use-app-config-context";
+import { useAppConfig } from "../hooks/use-app-config-context";
 import { getUrlParam } from "../utils/utils";
 import { IUserOptions } from "../types";
 import { kDefaultOptions } from "../constants";
@@ -15,7 +15,7 @@ export const UserOptionsContext = createContext<IOptionsContext>({
 });
 
 export const UserOptionsProvider = ({ children }: {children: React.ReactNode}) => {
-  const appConfig = useAppConfigContext();
+  const { appConfig } = useAppConfig();
   const [options, setOptions] = useState(kDefaultOptions);
 
   useEffect(() => {

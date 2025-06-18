@@ -9,7 +9,7 @@ export type AppConfig = {
     keyboardShortcut: string;
   };
   llmId?: string;
-  llmList: Record<string, string>[];
+  llmList: { id: string; provider: string; }[];
   dimensions: {
     height: number;
     width: number;

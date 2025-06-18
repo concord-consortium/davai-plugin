@@ -1,12 +1,16 @@
 import React from "react";
 import { AppConfigContext } from "../contexts/app-config-context";
-import { AppConfigModel } from "../models/app-config-model";
 import { mockAppConfig } from "./mock-app-config";
 
 export const MockAppConfigProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
-  const mockAppConfigValue = AppConfigModel.create(mockAppConfig);
+  const mockContextValue = {
+    appConfig: mockAppConfig,
+    setAppConfig: () => { /* no-op for testing */ },
+    isAssistantMocked: true,
+  };
+
   return (
-    <AppConfigContext.Provider value={mockAppConfigValue}>
+    <AppConfigContext.Provider value={mockContextValue}>
       {children}
     </AppConfigContext.Provider>
   );

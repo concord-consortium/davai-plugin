@@ -6,8 +6,13 @@ import { timeStamp } from "../utils/utils";
 import { RootStore } from "../models/root-store";
 import { GraphSonificationModel } from "../models/graph-sonification-model";
 import { BinModel } from "../models/bin-model";
+import { CODAPDocumentModel } from "../models/codap-document-model";
+import { useAppConfig } from "./use-app-config-context";
+
 
 export const useRootStore = () => {
+  const { appConfig } = useAppConfig();
+
   const rootStore = useMemo(() => {
     const newTranscriptStore = ChatTranscriptModel.create({
       messages: [
@@ -22,16 +27,17 @@ export const useRootStore = () => {
 
     return RootStore.create({
       assistantStore: AssistantModel.create({
+        llmId: appConfig.llmId,
         transcriptStore: newTranscriptStore,
       }),
-      sonificationStore: GraphSonificationModel.create({
-        // selectedGraph: undefined,
+      documentStore: CODAPDocumentModel.create({
+        graphStore: GraphSonificationModel.create({
         binValues: BinModel.create({
           values: []
         }),
-      })
+      })})
     });
-  }, []);
+  }, [appConfig.llmId]);
 
   return rootStore;
 };

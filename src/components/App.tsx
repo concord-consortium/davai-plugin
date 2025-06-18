@@ -2,20 +2,18 @@ import React, { useCallback, useEffect, useRef } from "react";
 import * as Tone from "tone";
 import { observer } from "mobx-react-lite";
 import removeMarkdown from "remove-markdown";
-import { addComponentListener, addDataContextChangeListener, addDataContextsListListener, ClientNotification,
-  codapInterface, getDataContext, getListOfDataContexts, initializePlugin, selectSelf } from "@concord-consortium/codap-plugin-api";
-import { useAppConfigContext } from "../hooks/use-app-config-context";
+import { addComponentListener, addDataContextsListListener, ClientNotification,
+  codapInterface, initializePlugin, selectSelf } from "@concord-consortium/codap-plugin-api";
+import { useAppConfig } from "../hooks/use-app-config-context";
 import { useRootStore } from "../hooks/use-root-store";
 import { useAriaLive } from "../contexts/aria-live-context";
 import { useOptions } from "../hooks/use-options";
 import { ChatInputComponent } from "./chat-input";
 import { ChatTranscriptComponent } from "./chat-transcript";
-import { DAVAI_SPEAKER, DEBUG_SPEAKER, LOADING_NOTE, USER_SPEAKER, notificationsToIgnore } from "../constants";
+import { DAVAI_SPEAKER, DEBUG_SPEAKER, LOADING_NOTE, USER_SPEAKER } from "../constants";
 import { UserOptions } from "./user-options";
-import { formatJsonMessage, getGraphDetails, isGraphSonifiable, playSound } from "../utils/utils";
+import { formatJsonMessage, playSound } from "../utils/utils";
 import { GraphSonification } from "./graph-sonification";
-import { ICODAPGraph } from "../types";
-import { formatDataContextMessage } from "../utils/data-context-utils";
 
 import "./App.scss";
 
@@ -23,40 +21,14 @@ const kPluginName = "DAVAI";
 const kVersion = "0.1.0";
 
 export const App = observer(() => {
-  const appConfig = useAppConfigContext();
+  const { isAssistantMocked, dimensions } = useAppConfig();
   const { ariaLiveText, setAriaLiveText } = useAriaLive();
-  const { assistantStore, sonificationStore } = useRootStore();
+  const { assistantStore, documentStore } = useRootStore();
+  const sonificationStore = documentStore.graphStore;
   const { playProcessingTone } = useOptions();
   const assistantStoreRef = useRef(assistantStore);
-  const sonificationStoreRef = useRef(sonificationStore);
-  const dimensions = { width: appConfig.dimensions.width, height: appConfig.dimensions.height };
-  const subscribedDataCtxsRef = useRef<string[]>([]);
+  const documentStoreRef = useRef(documentStore);
   const transcriptStore = assistantStore.transcriptStore;
-  const newlyCreatedGraphRef = useRef<number | null>(null);
-
-  const handleDataContextChangeNotice = useCallback(async (notification: ClientNotification) => {
-    if (notificationsToIgnore.includes(notification.values.operation)) return;
-
-    assistantStoreRef.current.transcriptStore.addMessage(DEBUG_SPEAKER, {
-      description: "Data context change notice",
-      content: formatJsonMessage(notification)
-    });
-
-    // resource is in the form of "dataContextChangeNotice[<dataContextName>]";
-    // the dataContext name isn't otherwise available in the notification object
-    const dataCtxName = notification.resource.replace("dataContextChangeNotice[", "").replace("]", "");
-    const updatedCtxInfo = await getDataContext(dataCtxName);
-    const msg = formatDataContextMessage("UPDATED", {
-      name: dataCtxName,
-      context: updatedCtxInfo.values
-    });
-    assistantStoreRef.current.sendDataCtxChangeInfo(msg);
-    const selectedGraph = sonificationStoreRef.current.selectedGraph;
-    if (dataCtxName === selectedGraph?.dataContext) {
-      // update the graph items
-      sonificationStoreRef.current.setGraphItems();
-    }
-  }, []);
 
   // documentation of the documentChangeNotice object here:
   // https://github.com/concord-consortium/codap/wiki/CODAP-Data-Interactive-Plugin-API#documentchangenotice
@@ -65,66 +37,25 @@ export const App = observer(() => {
       assistantStoreRef.current.transcriptStore.addMessage(DEBUG_SPEAKER, {
         description: "Document change notice", content: formatJsonMessage(notification)
       });
-      const ctxNames = (await getListOfDataContexts()).values.map((ctx: Record<string, any>) => ctx.name);
-      const wasNewCtxCreated = ctxNames.length > subscribedDataCtxsRef.current.length;
-      if (wasNewCtxCreated) {
-        // if we have a new data context, we need to add a listener for it
-        const newCtxName = ctxNames.filter((ctx: string) => !subscribedDataCtxsRef.current.includes(ctx))[0];
-        addDataContextChangeListener(newCtxName, handleDataContextChangeNotice);
-        const newCtxInfo = await getDataContext(newCtxName);
-        const msg = formatDataContextMessage("CREATED", {
-          name: newCtxName,
-          context: newCtxInfo
-        });
-        assistantStoreRef.current.sendDataCtxChangeInfo(msg);
-      } else {
-        const removedCtx = subscribedDataCtxsRef.current.filter((ctx: string) => !ctxNames.includes(ctx))[0];
-        const msg = `Data context ${removedCtx} has been removed`;
-        assistantStoreRef.current.sendDataCtxChangeInfo(msg);
-      }
-      subscribedDataCtxsRef.current = ctxNames;
+      await documentStoreRef.current.initializeDataContexts();
+      const documentSummary = documentStoreRef.current.getDocumentSummary();
+      assistantStoreRef.current.sendCODAPDocumentInfo(documentSummary);
     }
-  }, [handleDataContextChangeNotice]);
+  }, []);
 
   const handleComponentChangeNotice = useCallback(async (notification: ClientNotification) => {
-    if (notification.values.type === "graph") {
-      const prevGraphIDs = sonificationStore.allGraphs.map(g => g.id);
-      await sonificationStore.setGraphs();
-
-      const newGraphIDs = sonificationStore.allGraphs.map(g => g.id);
-
-      if (notification.values.operation === "create") {
-        const newGraphID = newGraphIDs.find(id => !prevGraphIDs.includes(id));
-        if (newGraphID !== undefined) {
-          newlyCreatedGraphRef.current = newGraphID;
-        }
-      }
-
-      // If this is an attribute change on a newly-added graph, and the graph is sonifiable, automatically set it as selected.
-      if (notification.values.operation === "attributeChange" && newlyCreatedGraphRef.current !== null) {
-        try {
-          const graphs = await getGraphDetails();
-          const graph = graphs.find((g: ICODAPGraph) => g.id === notification.values.id);
-          if (graph && isGraphSonifiable(graph) && graph.id === newlyCreatedGraphRef.current) {
-            sonificationStore.setSelectedGraphID(graph.id);
-            newlyCreatedGraphRef.current = null;
-          }
-        } catch (error) {
-          console.error("Failed to fetch graph details for auto-selection:", error);
-        }
-      }
-    }
-  }, [sonificationStore]);
-
-  const handleInitializeAssistant = useCallback(() => {
-    assistantStore.initializeAssistant(appConfig.llmId);
-    assistantStoreRef.current = assistantStore;
-  }, [appConfig.llmId, assistantStore]);
-
+    documentStoreRef.current.updateComponent(notification);
+  }, []);
 
   useEffect(() => {
     const init = async () => {
       await initializePlugin({pluginName: kPluginName, version: kVersion, dimensions});
+      await documentStoreRef.current.initializeDocument();
+      const documentSummary = documentStoreRef.current.getDocumentSummary();
+      assistantStoreRef.current.initializeAssistant();
+      assistantStoreRef.current.sendCODAPDocumentInfo(documentSummary);
+
+
       addDataContextsListListener(handleDocumentChangeNotice);
       addComponentListener(handleComponentChangeNotice);
       // This seems to be the only way we can track notifications about graph title changes
@@ -134,24 +65,13 @@ export const App = observer(() => {
           handleComponentChangeNotice(notification);
         }
       });
-      const dataContexts = await getListOfDataContexts();
-      dataContexts.values.forEach((ctx: Record<string, any>) => {
-        subscribedDataCtxsRef.current.push(ctx.name);
-        addDataContextChangeListener(ctx.name, handleDataContextChangeNotice);
-      });
     };
 
     init();
-    sonificationStore.setGraphs();
     selectSelf();
 
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
-
-  useEffect(() => {
-    // Initialize the assistant on mount and when the LLM ID changes.
-    handleInitializeAssistant();
-  }, [appConfig.llmId, handleInitializeAssistant]);
 
   useEffect(() => {
     const { messages } = transcriptStore;
@@ -190,7 +110,7 @@ export const App = observer(() => {
     Tone.start();
     transcriptStore.addMessage(USER_SPEAKER, {content: messageText});
 
-    if (appConfig.isAssistantMocked) {
+    if (isAssistantMocked) {
       assistantStore.handleMessageSubmitMockAssistant();
     } else {
       assistantStore.handleMessageSubmit(messageText);
@@ -199,6 +119,10 @@ export const App = observer(() => {
 
   const handleCancel = () => {
     assistantStore.handleCancel();
+  };
+
+  const handleInitializeAssistant = () => {
+    assistantStore.initializeAssistant();
   };
 
   return (
@@ -214,7 +138,7 @@ export const App = observer(() => {
         isLoading={assistantStore.showLoadingIndicator}
       />
       <ChatInputComponent
-        disabled={(!assistantStore.threadId && !appConfig.isAssistantMocked) || assistantStore.showLoadingIndicator}
+        disabled={(!assistantStore.threadId && !isAssistantMocked) || assistantStore.showLoadingIndicator}
         isLoading={assistantStore.showLoadingIndicator}
         onCancel={handleCancel}
         onSubmit={handleChatInputSubmit}
