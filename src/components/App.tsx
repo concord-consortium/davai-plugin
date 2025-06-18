@@ -116,6 +116,12 @@ export const App = observer(() => {
     }
   }, [sonificationStore]);
 
+  const handleInitializeAssistant = useCallback(() => {
+    assistantStore.initializeAssistant(appConfig.llmId);
+    assistantStoreRef.current = assistantStore;
+  }, [appConfig.llmId, assistantStore]);
+
+
   useEffect(() => {
     const init = async () => {
       await initializePlugin({pluginName: kPluginName, version: kVersion, dimensions});
@@ -135,9 +141,6 @@ export const App = observer(() => {
       });
     };
 
-    // first, initialize the assistant with the current LLM
-    assistantStore.initializeAssistant(appConfig.llmId);
-    assistantStoreRef.current = assistantStore;
     init();
     sonificationStore.setGraphs();
     selectSelf();
@@ -146,11 +149,9 @@ export const App = observer(() => {
   }, []);
 
   useEffect(() => {
-    // re-initialize the assistant with the new LLM
-    assistantStore.initializeAssistant(appConfig.llmId);
-    assistantStoreRef.current = assistantStore;
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [appConfig.llmId]);
+    // Initialize the assistant on mount and when the LLM ID changes.
+    handleInitializeAssistant();
+  }, [appConfig.llmId, handleInitializeAssistant]);
 
   useEffect(() => {
     const { messages } = transcriptStore;
@@ -222,7 +223,7 @@ export const App = observer(() => {
       <GraphSonification
         sonificationStore={sonificationStore}
       />
-      <UserOptions assistantStore={assistantStore} />
+      <UserOptions assistantStore={assistantStore} onInitializeAssistant={handleInitializeAssistant} />
       {/*
         The aria-live region is used to announce the last message from DAVAI.
         The region is updated whenever a new message is added to the transcript,

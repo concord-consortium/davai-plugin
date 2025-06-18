@@ -37,12 +37,14 @@ export const kDefaultOptions = {
 export const LLM_LIST: Record<string, string> = {
   "gpt-4o-mini": "OpenAI",
   "gemini-2.0-flash": "Google",
+  "gemini-1.5-flash": "Google",
   "mock": "Mock Assistant"
 };
 
 export const DATA_CONTEXT_MESSAGES = {
-  INITIAL: "Data contexts: {contexts}",
-  UPDATED: "Data context {name} has been updated: {context}",
   CREATED: "New data context {name} created: {context}",
-  REMOVED: "Data context {name} has been removed"
+  GRAPH: "Updated graph information: {graph}",
+  INITIAL: "Data contexts: {contexts}",
+  REMOVED: "Data context {name} has been removed",
+  UPDATED: "Data context {name} has been updated: {context}"
 } as const;

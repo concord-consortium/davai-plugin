@@ -47,7 +47,7 @@ describe("UserOptions Component", () => {
   });
 
   it("renders the component with all sections", () => {
-    render(<UserOptions assistantStore={mockAssistantStore} />);
+    render(<UserOptions assistantStore={mockAssistantStore} onInitializeAssistant={jest.fn()} />);
 
     expect(screen.getByText("Options")).toBeInTheDocument();
     expect(screen.getByText("Loading Indicators")).toBeInTheDocument();
@@ -57,7 +57,7 @@ describe("UserOptions Component", () => {
   });
 
   it("renders toggle options with correct labels and states", () => {
-    render(<UserOptions assistantStore={mockAssistantStore} />);
+    render(<UserOptions assistantStore={mockAssistantStore} onInitializeAssistant={jest.fn()} />);
 
     const playMessageToggle = screen.getByTestId("playProcessingMessage-toggle");
     const playToneToggle = screen.getByTestId("playProcessingTone-toggle");
@@ -70,7 +70,7 @@ describe("UserOptions Component", () => {
   });
 
   it("calls toggleOption when a toggle is clicked", () => {
-    render(<UserOptions assistantStore={mockAssistantStore} />);
+    render(<UserOptions assistantStore={mockAssistantStore} onInitializeAssistant={jest.fn()} />);
 
     const playMessageToggle = screen.getByTestId("playProcessingMessage-toggle");
     fireEvent.click(playMessageToggle);

@@ -1,5 +1,4 @@
-const serverUrl = process.env.LANGCHAIN_SERVER_URL || "http://localhost:5000/";
-const msgEndpoint = `${serverUrl}message`;
+const serverUrl = process.env.LANGCHAIN_SERVER_URL || "http://localhost:3000/";
 
 export const requestThreadDeletion = async (threadId: string): Promise<Response> => {
   const response = await fetch(`${process.env.REACT_APP_OPENAI_BASE_URL}threads/${threadId}`, {
@@ -14,8 +13,8 @@ export const requestThreadDeletion = async (threadId: string): Promise<Response>
   return response;
 };
 
-export async function postMessage(req: Record<string, any>) {
-  await fetch(msgEndpoint, {
+export async function postMessage(req: Record<string, any>, msgEndpoint: string) {
+  return await fetch(`${serverUrl}default/davaiServer/${msgEndpoint}`, {
     method: "POST",
     headers: {
       "Content-Type": "application/json",

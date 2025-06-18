@@ -1,19 +1,21 @@
 import express, { json } from "express";
 import * as dotenv from "dotenv";
 import { START, END, MemorySaver, MessagesAnnotation, StateGraph } from "@langchain/langgraph";
+import { BaseMessage, SystemMessage, trimMessages } from "@langchain/core/messages";
 import { ChatPromptTemplate } from "@langchain/core/prompts";
 import { MemoryVectorStore } from "langchain/vectorstores/memory";
 import { Document } from "@langchain/core/documents";
 import { instructions } from "./instructions.js";
 import { codapApiDoc } from "./codap-api-documentation.js";
 import { escapeCurlyBraces, processMarkdownDoc, setupVectorStore } from "./utils/rag-utils.js";
-import { processDataContexts } from "./utils/data-context-utils.js";
+import { processCodapData } from "./utils/data-context-utils.js";
 import { createModelInstance } from "./utils/llm-utils.js";
+import { CHARS_PER_TOKEN, MAX_TOKENS_PER_CHUNK } from "./constants.js";
 
 dotenv.config();
 
 const app = express();
-const port = 5000;
+const port = 3000;
 app.use(json());
 
 // Middleware to check for the API secret in the request headers
@@ -27,6 +29,26 @@ app.use((req: any, res: any, next: any) => {
 
 // Initialize the vector store cache to avoid re-creating it for each request.
 let vectorStoreCache: { [key: string]: MemoryVectorStore } = {};
+
+const tokenCounter = (messages: BaseMessage[]): number => {
+  let count = 0;
+  for (const msg of messages) {
+    // Don't count system messages towards the token limit.
+    if (msg instanceof SystemMessage) continue;
+
+    count += msg.content.length;
+  }
+  return count / CHARS_PER_TOKEN;
+};
+
+// The trimmer is used to limit the number of tokens in the conversation history.
+const trimmer = trimMessages({
+  maxTokens: MAX_TOKENS_PER_CHUNK,
+  strategy: "last",
+  tokenCounter,
+  includeSystem: true,
+  allowPartial: true,
+});
 
 let processedCodapApiDoc: Document<Record<string, any>>[] = [];
 let promptTemplate: ChatPromptTemplate;
@@ -45,13 +67,13 @@ export const initializeApp = async () => {
   console.log("Application initialized successfully.");
 };
 
-let activeLLMInstance: Record<string, any> | undefined = undefined;
+let llmInstances: Record<string, any> = {};
 
 const getOrCreateModelInstance = (llmId: string): Record<string, any> => {
-  if (!activeLLMInstance) {
-    activeLLMInstance = createModelInstance(llmId);
+  if (!llmInstances[llmId]) {
+    llmInstances[llmId] = createModelInstance(llmId);
   }
-  return activeLLMInstance;
+  return llmInstances[llmId];
 };
 
 const callModel = async (state: any, modelConfig: any) => {
@@ -64,6 +86,9 @@ const callModel = async (state: any, modelConfig: any) => {
     .filter((msg: any) => msg.role === "user")
     .pop()?.content || state.messages[0]?.content;
 
+  // Use the trimmer to ensure we don't send too much to the model
+  const trimmedMessages = await trimmer.invoke(state.messages);
+
   // Retrieve relevant documents using the appropriate embeddings
   const vectorStore = vectorStoreCache[llmRealId] ?? await setupVectorStore(processedCodapApiDoc, llmRealId, vectorStoreCache);
   const relevantDocs = await vectorStore.similaritySearch(lastUserMessage, 3);
@@ -75,7 +100,7 @@ const callModel = async (state: any, modelConfig: any) => {
 
   const prompt = await promptTemplate.invoke({
     context,
-    messages: state.messages,
+    messages: trimmedMessages,
   });
 
   const response = await llm.invoke(prompt);
@@ -102,36 +127,67 @@ const workflow = new StateGraph(MessagesAnnotation)
 const memory = new MemorySaver();
 const langApp = workflow.compile({ checkpointer: memory });
 
+// Track active message processing
+const activeMessages = new Map<string, AbortController>();
+
 // This is the main endpoint for use by the client app. We may want to add more, e.g. another for tool calls, etc.
 app.post("/default/davaiServer/message", async (req, res) => {
-  const { llmId, message, threadId, dataContexts } = req.body;
+  const { llmId, message, threadId, codapData, messageId } = req.body;
   const config = { configurable: { thread_id: threadId, llmId } };
 
   try {
     const messages = [];
 
-    // If we have data contexts, process them first
-    if (dataContexts && typeof dataContexts === "object") {
-      // console.log("Processing data contexts");
-      messages.push(...processDataContexts(dataContexts));
+    // If we have data contexts, process them before adding.
+    if (codapData && typeof codapData === "object") {
+      messages.push(...processCodapData(codapData));
+    } else {
+      // Add the user's message
+      messages.push({
+        role: "user",
+        content: message,
+      });
     }
 
-    // Add the user's message
-    messages.push({
-      role: "user",
-      content: message,
-    });
+    // Create an AbortController for this request. This lets us to cancel the request if needed.
+    const controller = new AbortController();
+    activeMessages.set(messageId, controller);
 
-    // console.log("Final messages array:", messages.map(m => ({ role: m.role, contentLength: m.content.length })));
-
-    const output = await langApp.invoke({ messages }, config);
+    const output = await langApp.invoke(
+      { messages }, 
+      { 
+        ...config,
+        signal: controller.signal 
+      }
+    );
     const lastMessage = output.messages[output.messages.length - 1];
+
+    // Clean up the controller
+    activeMessages.delete(messageId);
 
     res.json({ response: lastMessage.content });
   } catch (err: any) {
-    console.error("Error in /api/message:", err);
-    console.error("Error stack:", err.stack);
-    res.status(500).json({ error: "LangChain Error", details: err.message });
+    if (err.message === "Aborted") {
+      res.status(500).json({ error: "Message processing cancelled" });
+    } else {
+      console.error("Error in /api/message:", err);
+      console.error("Error stack:", err.stack);
+      res.status(500).json({ error: "LangChain Error", details: err.message });
+    }
+    activeMessages.delete(messageId);
+  }
+});
+
+// Endpoint for cancelling message processing
+app.post("/default/davaiServer/cancel", async (req, res) => {
+  const { messageId } = req.body;  
+  const controller = activeMessages.get(messageId);
+  if (controller) {
+    controller.abort();
+    activeMessages.delete(messageId);
+    res.json({ status: "cancelled", message: "Message processing cancelled successfully" });
+  } else {
+    res.status(404).json({ error: "Message not found or already completed" });
   }
 });
 

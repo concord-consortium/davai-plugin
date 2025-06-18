@@ -1,27 +1,26 @@
-const MAX_TOKENS_PER_CHUNK = 4000;
-const CHARS_PER_TOKEN = 3; // Conservative token estimate (3 chars ≈ 1 token)
+import { CHARS_PER_TOKEN, MAX_TOKENS_PER_CHUNK } from "../constants.js";
 
-export interface IDataContextChunk {
-  context: string;
+export interface ICodapDataChunk {
+  data: string;
   name: string;
 }
 
-export interface IProcessedChunk {
+export interface IProcessedChunk extends Record<string, unknown> {
   content: string;
-  role: "user";
+  role: "user" | "assistant" | "system";
 }
 
 /**
- * Splits a large data context into smaller chunks based on token size
+ * Splits a large data object into smaller chunks based on token size
  */
-export const chunkDataContexts = (contexts: IDataContextChunk[]): IDataContextChunk[][] => {
-  const chunks: IDataContextChunk[][] = [];
-  let currentChunk: IDataContextChunk[] = [];
+export const chunkData = (data: ICodapDataChunk[]): ICodapDataChunk[][] => {
+  const chunks: ICodapDataChunk[][] = [];
+  let currentChunk: ICodapDataChunk[] = [];
   let currentSize = 0;
 
-  for (const context of contexts) {
-    const contextStr = JSON.stringify(context);
-    const estimatedTokens = contextStr.length / CHARS_PER_TOKEN;
+  for (const dataObject of data) {
+    const dataStr = JSON.stringify(dataObject);
+    const estimatedTokens = dataStr.length / CHARS_PER_TOKEN;
 
     if (currentSize + estimatedTokens > MAX_TOKENS_PER_CHUNK) {
       if (currentChunk.length > 0) {
@@ -30,14 +29,14 @@ export const chunkDataContexts = (contexts: IDataContextChunk[]): IDataContextCh
         currentSize = 0;
       }
 
-      // If a single context is too large, split it into smaller pieces
+      // If a single data chunk is too large, split it into smaller pieces
       if (estimatedTokens > MAX_TOKENS_PER_CHUNK) {
-        const subContexts = splitLargeContext(context);
-        chunks.push(...subContexts);
+        const subChunks = splitLargeChunk(dataObject);
+        chunks.push(...subChunks);
         continue;
       }
     }
-    currentChunk.push(context);
+    currentChunk.push(dataObject);
     currentSize += estimatedTokens;
   }
 
@@ -49,48 +48,44 @@ export const chunkDataContexts = (contexts: IDataContextChunk[]): IDataContextCh
 };
 
 /**
- * Splits a single large context into smaller chunks based on its attributes
+ * Splits a single large data chunk into smaller chunks based on its attributes
  */
-export const splitLargeContext = (context: IDataContextChunk): IDataContextChunk[][] => {
-  const chunks: IDataContextChunk[][] = [];
-  const contextStr = JSON.stringify(context);
-  const estimatedTokens = contextStr.length / CHARS_PER_TOKEN;
+export const splitLargeChunk = (dataChunk: ICodapDataChunk): ICodapDataChunk[][] => {
+  const chunks: ICodapDataChunk[][] = [];
+  const dataChunkStr = JSON.stringify(dataChunk);
+  const estimatedTokens = dataChunkStr.length / CHARS_PER_TOKEN;
   if (estimatedTokens <= MAX_TOKENS_PER_CHUNK) {
-    // If the context is small enough, just return it as a single chunk
-    return [[context]];
+    // If the chunk is small enough, just return it as a single chunk
+    return [[dataChunk]];
   }
-  // console.log(`Context ${context.name} is too large (${estimatedTokens} tokens), splitting...`);
 
-  // split the context into smaller pieces that are under CHUNK_SIZE
-  for ( let i = 0; i < contextStr.length; i += MAX_TOKENS_PER_CHUNK * CHARS_PER_TOKEN) {
-    const subContextStr = contextStr.slice(i, i + MAX_TOKENS_PER_CHUNK * CHARS_PER_TOKEN);
-    const subContext: IDataContextChunk = {
-      name: context.name,
-      context: subContextStr
+  // split the chunk into smaller pieces that are under CHUNK_SIZE
+  for ( let i = 0; i < dataChunkStr.length; i += MAX_TOKENS_PER_CHUNK * CHARS_PER_TOKEN) {
+    const subChunkStr = dataChunkStr.slice(i, i + MAX_TOKENS_PER_CHUNK * CHARS_PER_TOKEN);
+    const subChunk: ICodapDataChunk = {
+      name: dataChunk.name,
+      data: subChunkStr
     };
-    chunks.push([subContext]);
+    chunks.push([subChunk]);
   }
 
   return chunks;
 };
 
 /**
- * Processes data contexts into a series of message chunks
+ * Processes data into a series of message chunks
  */
-export const processDataContexts = (dataContexts: Record<string, any>): IProcessedChunk[] => {
+export const processCodapData = (data: Record<string, any>): IProcessedChunk[] => {
   const messages: IProcessedChunk[] = [];
   
-  const contextsArray = Object.entries(dataContexts).map(([name, context]) => {
-    // const contextSize = JSON.stringify(context).length / CHARS_PER_TOKEN;
-    // console.log(`Processing context ${name}, size: ${contextSize} tokens`);
-
+  const dataArray = Object.entries(data).map(([name, dataObject]) => {
     return {
       name,
-      context: context ? JSON.stringify(context) : ""
+      data: dataObject ? JSON.stringify(dataObject) : ""
     };
   });
   
-  const chunks = chunkDataContexts(contextsArray);
+  const chunks = chunkData(dataArray);
   // console.log(`Created ${chunks.length} chunks`);
   
   // Process chunks and add them as user messages
@@ -100,9 +95,11 @@ export const processDataContexts = (dataContexts: Record<string, any>): IProcess
     // const chunkSize = chunkStr.length / CHARS_PER_TOKEN;
     // console.log(`Processing chunk ${i + 1}/${chunks.length}, size: ${chunkSize} tokens`);
 
-    messages.push({ 
-      role: "user", 
-      content: `Data contexts chunk ${i + 1}/${chunks.length}: ${chunkStr}` 
+    // Ideally, this would be "system" message, but Gemini doesn't seem to accept more than one system message per session,
+    // and these messages get sent separately from the initial system message.
+    messages.push({
+      content: `CODAP document data chunk ${i + 1}/${chunks.length}: ${chunkStr}`,
+      role: "user"
     });
   }
 

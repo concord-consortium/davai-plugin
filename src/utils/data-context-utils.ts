@@ -1,5 +1,36 @@
 import { DATA_CONTEXT_MESSAGES } from "../constants";
 
+/**
+ * Trims the dataset to reduce its size.
+ * Currently we only remove the `_categoryMap` attribute from all attributes in the dataset.
+ * It may be extended in the future to perform additional optimizations.
+ *
+ * @param dataset - The dataset to be trimmed.
+ * @returns A new dataset with some unnecessary items removed.
+ */
+export const trimDataset = (dataset: any): any => {
+  const newDataset = structuredClone(dataset);
+
+  for (const contextKey of Object.keys(newDataset)) {
+    const context = newDataset[contextKey];
+    const collections = context?.collections;
+    if (!Array.isArray(collections)) continue;
+
+    for (const collection of collections) {
+      if (!Array.isArray(collection.attrs)) continue;
+
+      // Remove the _categoryMap attribute.
+      for (const attr of collection.attrs) {
+        if (attr._categoryMap) {
+          delete attr._categoryMap;
+        }
+      }
+    }
+  }
+
+  return newDataset;
+};
+
 export const formatDataContextMessage = (
   type: keyof typeof DATA_CONTEXT_MESSAGES,
   params: { name?: string; context?: any; contexts?: any }
@@ -11,8 +42,8 @@ export const formatDataContextMessage = (
     .replace("{contexts}", JSON.stringify(params.contexts || {}));
 };
 
-interface ExtractedDataContext {
-  dataContexts: Record<string, any>;
+interface IExtractedDataContext {
+  codapData: Record<string, any>;
   type: "create" | "initial" | "remove" | "update";
 }
 
@@ -24,14 +55,14 @@ interface ExtractedDataContext {
  * @returns An object containing the extracted data contexts and type if the message matches
  *   patterns defined in DATA_CONTEXT_MESSAGES, or null if no match is found.
  */
-export const extractDataContexts = (message: string): ExtractedDataContext | null => {
+export const extractDataContexts = (message: string): IExtractedDataContext | null => {
   try {
     // Check for initial data contexts
     if (message.startsWith(DATA_CONTEXT_MESSAGES.INITIAL.split("{contexts}")[0])) {
       const contexts = JSON.parse(
         message.substring(DATA_CONTEXT_MESSAGES.INITIAL.split("{contexts}")[0].length)
       );
-      return { dataContexts: contexts, type: "initial" };
+      return { codapData: trimDataset(contexts), type: "initial" };
     }
 
     // Check for updated data context
@@ -48,7 +79,7 @@ export const extractDataContexts = (message: string): ExtractedDataContext | nul
           message.length - updateSuffix.length
         )
       );
-      return { dataContexts: { [name]: context }, type: "update" };
+      return { codapData: { [name]: trimDataset(context) }, type: "update" };
     }
 
     // Check for new data context
@@ -65,16 +96,27 @@ export const extractDataContexts = (message: string): ExtractedDataContext | nul
           message.length - createSuffix.length
         )
       );
-      return { dataContexts: { [name]: context }, type: "create" };
+      return { codapData: { [name]: trimDataset(context) }, type: "create" };
     }
 
     // Check for removed data context
-    if (message === DATA_CONTEXT_MESSAGES.REMOVED.replace("{name}", "")) {
+    const removePrefix = DATA_CONTEXT_MESSAGES.REMOVED.split("{name}")[0];
+    const removeSuffix = DATA_CONTEXT_MESSAGES.REMOVED.split("{name}")[1];
+    if (message.startsWith(removePrefix) && message.endsWith(removeSuffix)) {
       const name = message.substring(
         DATA_CONTEXT_MESSAGES.REMOVED.split("{name}")[0].length,
         message.length - DATA_CONTEXT_MESSAGES.REMOVED.split("{name}")[1].length
       );
-      return { dataContexts: { [name]: null }, type: "remove" };
+      return { codapData: { [name]: null }, type: "remove" };
+    }
+
+    // Check for updated graph
+    const graphPrefix = DATA_CONTEXT_MESSAGES.GRAPH.split("{graph}")[0];
+    if (message.startsWith(graphPrefix)) {
+      const graph = JSON.parse(
+        message.substring(graphPrefix.length, message.length - DATA_CONTEXT_MESSAGES.GRAPH.split("{graph}")[1].length)
+      );
+      return { codapData: { graph }, type: "update" };
     }
 
     return null;
