@@ -6,7 +6,6 @@ import {
   ClientNotification,
   addDataContextChangeListener,
 } from "@concord-consortium/codap-plugin-api";
-import { IRootStore } from "./root-store";
 import { GraphSonificationModel } from "./graph-sonification-model";
 
 // Define the Attribute model
@@ -170,7 +169,7 @@ export const CODAPDocumentModel = types.model("CODAPDocument", {
       }
 
       const summary = self.getDocumentSummary();
-      const rootStore = getRoot(self) as IRootStore;
+      const rootStore = getRoot(self) as any;
       rootStore.assistantStore.sendCODAPDocumentInfo(summary);
 
     } catch (err) {
@@ -256,6 +255,6 @@ export const CODAPDocumentModel = types.model("CODAPDocument", {
     initializeDocument,
     initializeDataContexts: self.initializeDataContexts,
   };
-})
+});
 
 export interface ICODAPDocumentModel extends Instance<typeof CODAPDocumentModel> {}

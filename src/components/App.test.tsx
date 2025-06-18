@@ -3,7 +3,7 @@ import React from "react";
 import { render, screen } from "@testing-library/react";
 import { App } from "./App";
 import { mockAppConfig } from "../test-utils/mock-app-config";
-import { MockAppConfigProvider } from "../test-utils/app-config-provider";
+import { MockAppConfigProvider } from "../test-utils/mock-app-config-context";
 
 jest.mock("../hooks/use-root-store", () => ({
   useRootStore: jest.fn(() => ({
@@ -14,9 +14,11 @@ jest.mock("../hooks/use-root-store", () => ({
         addMessage: jest.fn(),
       }
     },
-    sonificationStore: {
-      selectedGraph: { id: "graph1", name: "Graph 1" },
-      setGraphs: jest.fn(),
+    documentStore: {
+      graphStore: {
+        selectedGraph: { id: "graph1", name: "Graph 1" },
+        setGraphs: jest.fn(),
+      },
     }
   }))
 }));
