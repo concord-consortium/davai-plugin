@@ -263,7 +263,7 @@ export const AssistantModel = types
             content
           }
         };
-        const toolOutputResponse = yield postMessage(reqBody, "message");
+        const toolOutputResponse = yield postMessage(reqBody, "tool");
 
         if (!toolOutputResponse.ok) {
           throw new Error(`Failed to send tool response: ${toolOutputResponse.statusText}`);
