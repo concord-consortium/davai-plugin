@@ -1,15 +1,16 @@
 import express, { json } from "express";
 import * as dotenv from "dotenv";
 import { START, END, MemorySaver, MessagesAnnotation, StateGraph } from "@langchain/langgraph";
-import { BaseMessage, SystemMessage, ToolMessage, trimMessages } from "@langchain/core/messages";
+import { BaseMessage, ToolMessage, trimMessages } from "@langchain/core/messages";
 import { ChatPromptTemplate } from "@langchain/core/prompts";
 import { instructions } from "./instructions.js";
 import { codapApiDoc } from "./codap-api-documentation.js";
 import { escapeCurlyBraces } from "./utils/rag-utils.js";
 import { processCodapData } from "./utils/data-context-utils.js";
 import { createModelInstance } from "./utils/llm-utils.js";
-import { CHARS_PER_TOKEN, MAX_TOKENS, MAX_TOKENS_PER_CHUNK } from "./constants.js";
+import { MAX_TOKENS, MAX_TOKENS_PER_CHUNK } from "./constants.js";
 import { toolCallResponse, tools } from "./tools.js";
+import { extractToolCalls, tokenCounter } from "./utils/utils.js";
 
 dotenv.config();
 
@@ -31,18 +32,19 @@ app.use((req: any, res: any, next: any) => {
   next();
 });
 
-const tokenCounter = (messages: BaseMessage[]): number => {
-  let count = 0;
-  for (const msg of messages) {
-    // Don't count system messages towards the token limit.
-    if (msg instanceof SystemMessage) continue;
-
-    count += msg.content.length;
-  }
-  return count / CHARS_PER_TOKEN;
-};
-
 let promptTemplate: ChatPromptTemplate;
+
+const buildResponse = async (message: BaseMessage) => {
+  const toolCalls = extractToolCalls(message);
+
+  // If there are tool calls, we need to handle them first.
+  if (toolCalls?.[0]) {
+    const response = await toolCallResponse(toolCalls?.[0]);
+    return response;
+  } else {
+    return { response: message.content };
+  }
+};
 
 export const initializeApp = async () => {
   console.log("Initializing application...");
@@ -115,15 +117,9 @@ app.post("/default/davaiServer/tool", async (req, res) => {
     const toolResponseOutput = await langApp.invoke({ messages }, config);
 
     // There may be a follow-on tool call in the response, so we need to check for that and handle it.
-    const toolCalls = (toolResponseOutput.messages[toolResponseOutput.messages.length - 1] as any).tool_calls;
-    const toolCall = toolCalls?.[0];
-
-    if (toolCall) {
-      const response = await toolCallResponse(toolCall);
-      res.json(response);
-    } else {
-      res.json({ response: toolResponseOutput.messages[toolResponseOutput.messages.length - 1].content });
-    }
+    const lastMessage = toolResponseOutput.messages[toolResponseOutput.messages.length - 1];
+    const response = await buildResponse(lastMessage);
+    res.json(response);
   } catch (err: any) {
     console.error("Error in /api/message:", err);
     console.error("Error stack:", err.stack);
@@ -156,7 +152,7 @@ app.post("/default/davaiServer/message", async (req, res) => {
       });
     }
 
-    // Create an AbortController for this request. This lets us to cancel the request if needed.
+    // Create an AbortController for this request. This lets us cancel the request if needed.
     const controller = new AbortController();
     activeMessages.set(messageId, controller);
 
@@ -167,21 +163,13 @@ app.post("/default/davaiServer/message", async (req, res) => {
         signal: controller.signal 
       }
     );
-    const lastMessage = output.messages[output.messages.length - 1];
 
     // Clean up the controller
     activeMessages.delete(messageId);
 
-    const toolCall = (lastMessage && "tool_calls" in lastMessage && Array.isArray((lastMessage as any).tool_calls))
-        ? (lastMessage as any).tool_calls[0]
-        : undefined;
-
-    if (toolCall) {
-      const response = await toolCallResponse(toolCall);
-      res.json(response);
-    } else {
-      res.json({ response: lastMessage.content });
-    }
+    const lastMessage = output.messages[output.messages.length - 1];
+    const response = await buildResponse(lastMessage);
+    res.json(response);
   } catch (err: any) {
     if (err.message === "Aborted") {
       res.status(500).json({ error: "Message processing cancelled" });
