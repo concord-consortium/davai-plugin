@@ -5,6 +5,7 @@ import { DAVAI_SPEAKER, DEBUG_SPEAKER } from "../constants";
 import { formatJsonMessage, getDataContexts, getGraphByID, isGraphSonifiable } from "../utils/utils";
 import { ChatTranscriptModel } from "./chat-transcript-model";
 import { extractDataContexts } from "../utils/data-context-utils";
+import { postMessage } from "../utils/llm-utils";
 
 interface IGraphAttrData {
   legend?: Record<string, any>;
@@ -165,22 +166,14 @@ export const AssistantModel = types
         if (!self.threadId) {
           self.codapNotificationQueue.push(message);
         } else {
-
           if (extracted) {
             const requestBody = {
               llmId: self.llmId,
               threadId: self.threadId,
-              isSystemMessage: true,
-              dataContexts: extracted.dataContexts
+              codapData: extracted.codapData
             };
 
-            const dataContextResponse = yield fetch(`${process.env.LANGCHAIN_SERVER_URL}/api/message`, {
-              method: "POST",
-              headers: {
-                "Content-Type": "application/json",
-              },
-              body: JSON.stringify(requestBody),
-            });
+            const dataContextResponse = yield postMessage(requestBody, "message");
 
             if (!dataContextResponse.ok) {
               throw new Error(`Failed to send system message: ${dataContextResponse.statusText}`);
@@ -261,20 +254,16 @@ export const AssistantModel = types
       if (self.isAssistantMocked) return;
 
       try {
-        const toolOutputResponse = yield fetch(`${process.env.LANGCHAIN_SERVER_URL}/api/tool`, {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-          },
-          body: JSON.stringify({
-            llmId: self.llmId,
-            threadId: self.threadId,
-            message: {
-              tool_call_id: toolCallId,
-              content
-            }
-          }),
-        });
+        const reqBody = {
+          llmId: self.llmId,
+          threadId: self.threadId,
+          isToolResponse: true,
+          message: {
+            tool_call_id: toolCallId,
+            content
+          }
+        };
+        const toolOutputResponse = yield postMessage(reqBody, "tool");
 
         if (!toolOutputResponse.ok) {
           throw new Error(`Failed to send tool response: ${toolOutputResponse.statusText}`);
@@ -302,19 +291,16 @@ export const AssistantModel = types
           const messageId = nanoid();
           self.currentMessageId = messageId;
 
-          const messageResponse = yield fetch(`${process.env.LANGCHAIN_SERVER_URL}/api/message`, {
-            method: "POST",
-            headers: {
-              "Content-Type": "application/json",
-            },
-            body: JSON.stringify({
-              llmId: self.llmId,
-              threadId: self.threadId,
-              message: messageText,
-              isSystemMessage: false,
-              messageId
-            }),
-          });
+          const reqBody = {
+            llmId: self.llmId,
+            threadId: self.threadId,
+            message: messageText,
+            isSystemMessage: false,
+            messageId
+          };
+
+          // Send message to LangChain server
+          const messageResponse = yield postMessage(reqBody, "message");
 
           if (!messageResponse.ok) {
             throw new Error(`Failed to send message: ${messageResponse.statusText}`);
@@ -524,21 +510,16 @@ export const AssistantModel = types
 
     const cancelRun = flow(function* (runId: string) {
       try {
-        const cancelResponse = yield fetch(`${process.env.LANGCHAIN_SERVER_URL}/api/cancel`, {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-          },
-          body: JSON.stringify({
-            messageId: runId
-          })
-        });
+        const reqBody = { messageId: runId };
+        const cancelResponse = yield postMessage(reqBody, "cancel");
 
         if (!cancelResponse.ok) {
           throw new Error(`Failed to cancel run: ${cancelResponse.statusText}`);
         }
 
         const cancelRes = yield cancelResponse.json();
+        self.isCancelling = false;
+        self.setShowLoadingIndicator(false);
         self.addDbgMsg(`Cancel request received`, formatJsonMessage(cancelRes));
       } catch (err: any) {
         const errorMessage =
@@ -558,47 +539,43 @@ export const AssistantModel = types
       }
     });
 
-    const resetThread = flow(function* () {
-      try {
-        self.isResetting = true;
-        // const allThreadMessages = yield self.apiConnection.beta.threads.messages.list(self.threadId);
-        // const allThreadMessages = self.transcriptStore.getAllMessages();
-        const allThreadMessages = self.transcriptStore.messages.map(msg => {
-          return `${msg.speaker}: ${msg.messageContent.content}`;
-        }).join("\n");
-        yield createThread();
-        yield fetchAndSendDataContexts();
-        self.addDbgMsg("Sending thread history to LLM", formatJsonMessage(allThreadMessages));
-        // yield self.apiConnection.beta.threads.messages.create(self.threadId, {
-        //   role: "user",
-        //   content: `This is a system message containing the previous conversation history. ${allThreadMessages}`,
-        // });
-        self.isResetting = false;
-      } catch (err) {
-        console.error("Failed to reset thread:", err);
-        self.addDbgMsg("Failed to reset thread", formatJsonMessage(err));
-        self.isCancelling = false;
-        self.isResetting = false;
-      }
-    });
+    // const resetThread = flow(function* () {
+    //   try {
+    //     self.isResetting = true;
+    //     if (self.currentMessageId) {
+    //       self.isCancelling = true;
+    //       yield cancelRun(self.currentMessageId);
+    //     }
+    //     const allThreadMessages = self.transcriptStore.messages.map(msg => {
+    //       return `${msg.speaker}: ${msg.messageContent.content}`;
+    //     }).join("\n");
+    //     yield createThread();
+    //     yield fetchAndSendDataContexts();
+    //     self.addDbgMsg("Sending thread history to LLM", formatJsonMessage(allThreadMessages));
+    //     self.isResetting = false;
+    //   } catch (err) {
+    //     console.error("Failed to reset thread:", err);
+    //     self.addDbgMsg("Failed to reset thread", formatJsonMessage(err));
+    //     self.isCancelling = false;
+    //     self.isResetting = false;
+    //   }
+    // });
 
     const createThread = flow(function* () {
       try {
-        // const newThread = yield self.apiConnection.beta.threads.create();
-        const newThread = yield Promise.resolve({
-          id: nanoid(),
-          name: "New Thread",
-          created_at: new Date().toISOString(),
-          updated_at: new Date().toISOString()
-        });
-        console.log("New thread created:", newThread);
+        if (self.currentMessageId) {
+          self.isCancelling = true;
+          yield cancelRun(self.currentMessageId);
+        }
+        self.isLoadingResponse = false;
+        self.isCancelling = false;
         self.threadId = nanoid();
       } catch (err) {
         console.error("Error creating thread:", err);
       }
     });
 
-    return { cancelRun, createThread, initializeAssistant, handleMessageSubmit, handleCancel, resetThread, sendDataCtxChangeInfo, sendCODAPDocumentInfo };
+    return { cancelRun, createThread, initializeAssistant, handleMessageSubmit, handleCancel, sendDataCtxChangeInfo, sendCODAPDocumentInfo };
   })
   .actions((self) => ({
     // afterCreate() {

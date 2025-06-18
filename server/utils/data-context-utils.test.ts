@@ -1,13 +1,13 @@
-import { IDataContextChunk, chunkDataContexts } from "./data-context-utils";
+import { ICodapDataChunk, chunkData } from "./data-context-utils";
 
 describe("Data Context Utilities", () => {
-  it("should not split small data contexts", () => {
+  it("should not split small data objects", () => {
     const context = { collections: [{ attrs: [{ name: "attr1" }] }] }
-    const smallContext: IDataContextChunk[] = [
-      { name: "context1", context: JSON.stringify(context) },
+    const smallContext: ICodapDataChunk[] = [
+      { name: "context1", data: JSON.stringify(context) },
     ];
 
-    const chunks = chunkDataContexts(smallContext);
+    const chunks = chunkData(smallContext);
     expect(chunks.length).toBe(1);
   });
 
@@ -25,17 +25,17 @@ describe("Data Context Utilities", () => {
         ],
       };
 
-    const largeContext: IDataContextChunk[] = [{
+    const largeContext: ICodapDataChunk[] = [{
       name: "largeContext",
-      context: JSON.stringify(context),
+      data: JSON.stringify(context),
     }];
-    const chunks = chunkDataContexts(largeContext);
+    const chunks = chunkData(largeContext);
     expect(chunks.length).toBe(5);
   });
 
   it("should handle empty data contexts", () => {
-    const contexts: IDataContextChunk[] = [];
-    const chunks = chunkDataContexts(contexts);
+    const contexts: ICodapDataChunk[] = [];
+    const chunks = chunkData(contexts);
     expect(chunks.length).toBe(0);
   });
 });

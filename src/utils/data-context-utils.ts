@@ -43,7 +43,7 @@ export const formatDataContextMessage = (
 };
 
 interface IExtractedDataContext {
-  dataContexts: Record<string, any>;
+  codapData: Record<string, any>;
   type: "create" | "initial" | "remove" | "update";
 }
 
@@ -62,7 +62,7 @@ export const extractDataContexts = (message: string): IExtractedDataContext | nu
       const contexts = JSON.parse(
         message.substring(DATA_CONTEXT_MESSAGES.INITIAL.split("{contexts}")[0].length)
       );
-      return { dataContexts: trimDataset(contexts), type: "initial" };
+      return { codapData: trimDataset(contexts), type: "initial" };
     }
 
     // Check for updated data context
@@ -79,7 +79,7 @@ export const extractDataContexts = (message: string): IExtractedDataContext | nu
           message.length - updateSuffix.length
         )
       );
-      return { dataContexts: { [name]: trimDataset(context) }, type: "update" };
+      return { codapData: { [name]: trimDataset(context) }, type: "update" };
     }
 
     // Check for new data context
@@ -96,7 +96,7 @@ export const extractDataContexts = (message: string): IExtractedDataContext | nu
           message.length - createSuffix.length
         )
       );
-      return { dataContexts: { [name]: trimDataset(context) }, type: "create" };
+      return { codapData: { [name]: trimDataset(context) }, type: "create" };
     }
 
     // Check for removed data context
@@ -107,7 +107,7 @@ export const extractDataContexts = (message: string): IExtractedDataContext | nu
         DATA_CONTEXT_MESSAGES.REMOVED.split("{name}")[0].length,
         message.length - DATA_CONTEXT_MESSAGES.REMOVED.split("{name}")[1].length
       );
-      return { dataContexts: { [name]: null }, type: "remove" };
+      return { codapData: { [name]: null }, type: "remove" };
     }
 
     // Check for updated graph
@@ -116,7 +116,7 @@ export const extractDataContexts = (message: string): IExtractedDataContext | nu
       const graph = JSON.parse(
         message.substring(graphPrefix.length, message.length - DATA_CONTEXT_MESSAGES.GRAPH.split("{graph}")[1].length)
       );
-      return { dataContexts: { graph }, type: "update" };
+      return { codapData: { graph }, type: "update" };
     }
 
     return null;
