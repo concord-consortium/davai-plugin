@@ -1,11 +1,12 @@
 import express, { json } from "express";
 import * as dotenv from "dotenv";
 import { START, END, MemorySaver, MessagesAnnotation, StateGraph } from "@langchain/langgraph";
-import { BaseMessage, SystemMessage, ToolMessage, trimMessages } from "@langchain/core/messages";
+import { BaseMessage, HumanMessage, SystemMessage, ToolMessage, trimMessages } from "@langchain/core/messages";
 import { ChatPromptTemplate } from "@langchain/core/prompts";
+import { MemoryVectorStore } from "langchain/vectorstores/memory";
 import { instructions } from "./text/instructions.js";
 import { codapApiDoc } from "./text/codap-api-documentation.js";
-import { escapeCurlyBraces } from "./utils/rag-utils.js";
+import { escapeCurlyBraces, processCodapDocumentation, setupVectorStore } from "./utils/rag-utils.js";
 import { processCodapData } from "./utils/data-context-utils.js";
 import { createModelInstance } from "./utils/llm-utils.js";
 import { CHARS_PER_TOKEN, MAX_TOKENS, MAX_TOKENS_PER_CHUNK } from "./constants.js";
@@ -31,6 +32,9 @@ app.use((req: any, res: any, next: any) => {
   next();
 });
 
+let vectorStoreCache: { [key: string]: MemoryVectorStore } = {};
+const processedCodapApiDoc = processCodapDocumentation(codapApiDoc);
+
 const tokenCounter = (messages: BaseMessage[]): number => {
   let count = 0;
   for (const msg of messages) {
@@ -48,9 +52,10 @@ export const initializeApp = async () => {
   console.log("Initializing application...");
 
   promptTemplate = ChatPromptTemplate.fromMessages([
-    ["system", `${instructions} Here is the relevant CODAP API documentation:\n ${escapeCurlyBraces(codapApiDoc)}`],
+    ["system", `${instructions}`],
+    ["placeholder", "{context}"],
     ["placeholder", "{messages}"],
-  ]);
+]);
 
   console.log("Application initialized successfully.");
 };
@@ -59,7 +64,7 @@ let llmInstances: Record<string, any> = {};
 
 const getOrCreateModelInstance = (llmId: string): Record<string, any> => {
   if (!llmInstances[llmId]) {
-    llmInstances[llmId] = createModelInstance(llmId).bindTools(tools);
+    llmInstances[llmId] = createModelInstance(llmId).bindTools(tools, { parallel_tool_calls: false });
   }
   return llmInstances[llmId];
 };
@@ -67,6 +72,21 @@ const getOrCreateModelInstance = (llmId: string): Record<string, any> => {
 const callModel = async (state: any, modelConfig: any) => {
   const { llmId } = modelConfig.configurable;
   const llm = getOrCreateModelInstance(llmId);
+  const llmRealId = JSON.parse(llmId).id;
+
+  const lastUserMessage = state.messages
+    .filter((msg: any) => msg instanceof HumanMessage)
+    .pop()?.content;
+
+  let context = "";
+  const vectorStore = vectorStoreCache[llmRealId] ?? await setupVectorStore(processedCodapApiDoc, llmRealId, vectorStoreCache);
+  if (lastUserMessage && !lastUserMessage.startsWith("CODAP document data chunk")) {
+    const retriever = vectorStore.asRetriever({ k: 5, searchType: "mmr" });
+    const relevantDocs = await retriever.invoke(lastUserMessage);
+    context = relevantDocs
+      .map(d => escapeCurlyBraces(d.pageContent))
+      .join("\n\n");
+  }
 
   // Use the trimmer to ensure we don't send too much to the model
   // The trimmer is used to limit the number of tokens in the conversation history.
@@ -80,6 +100,7 @@ const callModel = async (state: any, modelConfig: any) => {
   const trimmedMessages = await trimmer.invoke(state.messages);
 
   const prompt = await promptTemplate.invoke({
+    context,
     messages: trimmedMessages,
   });
 
