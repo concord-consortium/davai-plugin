@@ -48,3 +48,5 @@ export const DATA_CONTEXT_MESSAGES = {
   REMOVED: "Data context {name} has been removed",
   UPDATED: "Data context {name} has been updated: {context}"
 } as const;
+
+export const DELIMITER = "\x1e";  // ASCII Record Separator character

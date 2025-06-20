@@ -1,7 +1,7 @@
 import { types, flow, Instance, getRoot, onSnapshot } from "mobx-state-tree";
 import { nanoid } from "nanoid";
 import { codapInterface } from "@concord-consortium/codap-plugin-api";
-import { DAVAI_SPEAKER, DEBUG_SPEAKER } from "../constants";
+import { DAVAI_SPEAKER, DEBUG_SPEAKER, DELIMITER } from "../constants";
 import { formatJsonMessage, getDataContexts, getGraphByID, isGraphSonifiable } from "../utils/utils";
 import { ChatTranscriptModel } from "./chat-transcript-model";
 import { extractDataContexts } from "../utils/data-context-utils";
@@ -596,7 +596,7 @@ export const AssistantModel = types
       onSnapshot(self, async () => {
         const doneProcessing = !self.isLoadingResponse && !self.isCancelling && !self.isResetting;
         if (self.threadId && doneProcessing && self.codapNotificationQueue.length > 0) {
-          const allMsgs = self.codapNotificationQueue.join("\n");
+          const allMsgs = self.codapNotificationQueue.join(DELIMITER);
           self.codapNotificationQueue.clear();
           await self.sendCODAPDocumentInfo(allMsgs);
         } else if (self.threadId && doneProcessing && self.messageQueue.length > 0) {

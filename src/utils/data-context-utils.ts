@@ -1,4 +1,4 @@
-import { DATA_CONTEXT_MESSAGES } from "../constants";
+import { DATA_CONTEXT_MESSAGES, DELIMITER } from "../constants";
 
 /**
  * Trims the dataset to reduce its size.
@@ -75,7 +75,7 @@ export const extractDataContexts = (message: string): IExtractedDataContext | nu
     // combines these messages into a single string, separated by newlines, to send together in one request to the LLM instead
     // of making multiple requests. We need to handle this case by splitting the `message` string on newlines and then combining
     // the extracted data from each message.
-    const messages = message.split("\n").filter(msg => msg.trim());
+    const messages = message.split(DELIMITER).filter(msg => msg.trim());
 
     if (messages.length > 1) {
       const results = messages.map(msg => extractSingleDataContext(msg)).filter(result => result !== null);
