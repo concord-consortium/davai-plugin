@@ -10,7 +10,24 @@ import { DATA_CONTEXT_MESSAGES } from "../constants";
  */
 export const trimDataset = (dataset: any): any => {
   const newDataset = structuredClone(dataset);
+  const removeCategoryMap = (collection: Record<string, any>) => {
+    for (const attr of collection.attrs) {
+      if (attr._categoryMap) {
+        delete attr._categoryMap;
+      }
+    }
+  };
 
+  // Handle case where `collections` is on the root object
+  if (Array.isArray(newDataset.collections)) {
+    for (const collection of newDataset.collections) {
+      if (!Array.isArray(collection.attrs)) continue;
+
+      removeCategoryMap(collection);
+    }
+  }
+
+  // Handle case where `collections` is nested under context keys
   for (const contextKey of Object.keys(newDataset)) {
     const context = newDataset[contextKey];
     const collections = context?.collections;
@@ -19,12 +36,7 @@ export const trimDataset = (dataset: any): any => {
     for (const collection of collections) {
       if (!Array.isArray(collection.attrs)) continue;
 
-      // Remove the _categoryMap attribute.
-      for (const attr of collection.attrs) {
-        if (attr._categoryMap) {
-          delete attr._categoryMap;
-        }
-      }
+      removeCategoryMap(collection);
     }
   }
 
@@ -42,9 +54,9 @@ export const formatDataContextMessage = (
     .replace("{contexts}", JSON.stringify(params.contexts || {}));
 };
 
-interface IExtractedDataContext {
+export interface IExtractedDataContext {
   codapData: Record<string, any>;
-  type: "create" | "initial" | "remove" | "update";
+  type: "combined" | "create" | "initial" | "remove" | "update";
 }
 
 /**

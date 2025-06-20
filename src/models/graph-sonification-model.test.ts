@@ -42,7 +42,7 @@ const RootStore = types
   .actions((self) => ({
     afterCreate() {
       Object.assign(self.assistantStore, {
-        sendCODAPDocumentInfo: mockSendCODAPDocumentInfo,
+        processAndSendCODAPDocumentInfo: mockSendCODAPDocumentInfo,
         setAssistantState: mockSetAssistantState,
         getAssistantState: mockGetAssistantState
       });
