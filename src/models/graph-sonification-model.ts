@@ -197,7 +197,7 @@ export const GraphSonificationModel = types
         (snapshots) => {
           const root = getRoot(self) as any;
           const msg = `Updated graph information: ${JSON.stringify(snapshots)}`;
-          root.assistantStore.sendCODAPDocumentInfo(msg);
+          root.assistantStore.processAndSendCODAPDocumentInfo(msg);
         }
       );
 

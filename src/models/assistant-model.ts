@@ -1,10 +1,10 @@
 import { types, flow, Instance, getRoot, onSnapshot } from "mobx-state-tree";
 import { nanoid } from "nanoid";
 import { codapInterface } from "@concord-consortium/codap-plugin-api";
-import { DAVAI_SPEAKER, DEBUG_SPEAKER, DELIMITER } from "../constants";
+import { DAVAI_SPEAKER, DEBUG_SPEAKER } from "../constants";
 import { formatJsonMessage, getDataContexts, getGraphByID, isGraphSonifiable } from "../utils/utils";
 import { ChatTranscriptModel } from "./chat-transcript-model";
-import { extractDataContexts } from "../utils/data-context-utils";
+import { extractDataContexts, IExtractedDataContext } from "../utils/data-context-utils";
 import { postMessage } from "../utils/llm-utils";
 
 interface IGraphAttrData {
@@ -61,7 +61,7 @@ interface IMessageResponse {
 export const AssistantModel = types
   .model("AssistantModel", {
     // assistant: types.maybe(types.frozen()),
-    codapNotificationQueue: types.array(types.string),
+    codapNotificationQueue: types.array(types.frozen<IExtractedDataContext>()),
     isCancelling: types.optional(types.boolean, false),
     isLoadingResponse: types.optional(types.boolean, false),
     isResetting: types.optional(types.boolean, false),
@@ -115,22 +115,27 @@ export const AssistantModel = types
   }))
   .actions((self) => ({
     addMessageToCODAPNotificationQueue(msg: string) {
-      self.codapNotificationQueue.push(msg);
-    },
-    deDupeCODAPNotificationQueue(msg: string) {
-      // CODAP update notification messages typically have a prefix like "Data context Coasters has been updated:" to
-      // explain why we are sending the data to the LLM. If any messages in the queue have the same prefix as `msg`
-      // (e.g., "Data context Coasters has been updated: {dataContextData}"), we remove those messages from
-      // the queue since they are no longer up to date and will be wasting valuable space. (If a message in the queue
-      // does not have any such prefix, it should simply not be removed.)
-      if (self.codapNotificationQueue.length > 0) {
-        const getPrefix = (msgStr: string) => msgStr.split(":", 1)[0].trim();
-        const currentPrefix = getPrefix(msg);
-
-        self.codapNotificationQueue.replace(
-          self.codapNotificationQueue.filter(queuedMsg => getPrefix(queuedMsg) !== currentPrefix)
-        );
+      const extracted = extractDataContexts(msg);
+      if (extracted) {
+        self.codapNotificationQueue.push(extracted);
       }
+    },
+    clearCODAPNotificationQueue() {
+      self.codapNotificationQueue.clear();
+    },
+    clearUserMessageQueue() {
+      self.messageQueue.clear();
+    },
+    deDupeCODAPNotificationQueue(msg: IExtractedDataContext) {
+      // If any existing messages in the queue have the same type and context name values as `msg`, we remove them
+      // from the queue since they are no longer up to date and will be wasting valuable space.
+      self.codapNotificationQueue.replace(
+        self.codapNotificationQueue.filter(queued => 
+          !(queued.type === msg.type && 
+            Object.keys(queued.codapData)[0] === Object.keys(msg.codapData)[0] // context name check
+           )
+        )
+      );
     }
   }))
   .actions((self) => {
@@ -151,7 +156,7 @@ export const AssistantModel = types
       try {
         const contexts = yield getDataContexts();
         self.addDbgMsg("Data contexts information", formatJsonMessage(contexts));
-        sendCODAPDocumentInfo(`Data contexts: ${JSON.stringify(contexts)}`);
+        processAndSendCODAPDocumentInfo(`Data contexts: ${JSON.stringify(contexts)}`);
       } catch (err) {
         console.error("Failed to get data contexts:", err);
         self.addDbgMsg("Failed to get data contexts", formatJsonMessage(err));
@@ -159,14 +164,20 @@ export const AssistantModel = types
     });
 
     const sendDataCtxChangeInfo = flow(function* (msg: string) {
+      const dataContextMsg = extractDataContexts(msg);
+      if (!dataContextMsg) {
+        self.addDbgMsg("No data contexts extracted from message", msg);
+        return;
+      }
+  
       try {
         if (self.isLoadingResponse || self.isCancelling || self.isResetting) {
           if (self.codapNotificationQueue.length > 0) {
-            self.deDupeCODAPNotificationQueue(msg);
+            self.deDupeCODAPNotificationQueue(dataContextMsg);
           }
-          self.codapNotificationQueue.push(msg);
+          self.codapNotificationQueue.push(dataContextMsg);
         } else {
-          yield sendCODAPDocumentInfo(msg);
+          yield processAndSendCODAPDocumentInfo(msg);
         }
       } catch (err) {
         console.error("Failed to send data context info to LLM:", err);
@@ -174,7 +185,24 @@ export const AssistantModel = types
       }
     });
 
-    const sendCODAPDocumentInfo = flow(function* (msg) {
+    const sendCODAPDataToLlm = flow(function* (codapData: Record<string, any>) {
+      if (self.isAssistantMocked) return;
+
+      const requestBody = {
+        llmId: self.llmId,
+        threadId: self.threadId,
+        codapData
+      };
+
+      const dataContextResponse = yield postMessage(requestBody, "message");
+      if (!dataContextResponse.ok) {
+        throw new Error(`Failed to send system message: ${dataContextResponse.statusText}`);
+      }
+      const data = yield dataContextResponse.json();
+      self.addDbgMsg("CODAP document info received by LLM", formatJsonMessage(data));
+    });
+
+    const processAndSendCODAPDocumentInfo = flow(function* (msg) {
       if (self.isAssistantMocked) return;
 
       try {
@@ -189,20 +217,7 @@ export const AssistantModel = types
         } else {
           if (extracted) {
             self.isLoadingResponse = true;
-            const requestBody = {
-              llmId: self.llmId,
-              threadId: self.threadId,
-              codapData: extracted.codapData
-            };
-
-            const dataContextResponse = yield postMessage(requestBody, "message");
-
-            if (!dataContextResponse.ok) {
-              throw new Error(`Failed to send system message: ${dataContextResponse.statusText}`);
-            }
-
-            const data = yield dataContextResponse.json();
-            self.addDbgMsg("CODAP document info received by LLM", formatJsonMessage(data));
+            yield sendCODAPDataToLlm(extracted.codapData);
             self.isLoadingResponse = false;
           } else {
             self.addDbgMsg("Could not extract data contexts from message", msg);
@@ -599,20 +614,30 @@ export const AssistantModel = types
       }
     });
 
-    return { cancelRun, createThread, initializeAssistant, handleMessageSubmit, handleCancel, sendDataCtxChangeInfo, sendCODAPDocumentInfo };
+    return { cancelRun, createThread, initializeAssistant, handleMessageSubmit, handleCancel, sendDataCtxChangeInfo, sendCODAPDataToLlm, processAndSendCODAPDocumentInfo };
   })
   .actions((self) => ({
     afterCreate() {
       onSnapshot(self, async () => {
         const doneProcessing = !self.isLoadingResponse && !self.isCancelling && !self.isResetting;
         if (self.threadId && doneProcessing && self.codapNotificationQueue.length > 0) {
-          const allMsgs = self.codapNotificationQueue.join(DELIMITER);
-          self.codapNotificationQueue.clear();
-          await self.sendCODAPDocumentInfo(allMsgs);
+          // We combine all the queued messages into one for a single request to the LLM.
+          const combinedCodapData = self.codapNotificationQueue.reduce((acc, item) => {
+            return { ...acc, ...item.codapData };
+          }, {});
+
+          try {
+            await self.sendCODAPDataToLlm(combinedCodapData);
+          } catch (err) {
+            console.error("Failed to send system message:", err);
+            self.addDbgMsg("Failed to send CODAP document information to LLM", formatJsonMessage(err));
+          }
+          
+          self.clearCODAPNotificationQueue();
         }
         if (self.threadId && doneProcessing && self.messageQueue.length > 0) {
           const allMsgs = self.messageQueue.join("\n");
-          self.messageQueue.clear();
+          self.clearUserMessageQueue();
           await self.handleMessageSubmit(allMsgs);
         }
       });

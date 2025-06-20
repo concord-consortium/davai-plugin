@@ -1,4 +1,3 @@
-import { DELIMITER } from "../constants";
 import { extractDataContexts, trimDataset } from "./data-context-utils";
 
 // mock Node.js's structuredClone function
@@ -118,14 +117,5 @@ describe("extractDataContexts", () => {
     const message = "This is not a data context message";
     const result = extractDataContexts(message);
     expect(result).toBeNull();
-  });
-
-  it("should return combined data contexts", () => {
-    const message = `Data contexts updated: {contexts}${DELIMITER}New data context {name} created: {}`;
-    const result = extractDataContexts(message);
-    expect(result).toEqual({
-      codapData: {" ": {}},
-      type: "combined"
-    });
   });
 });
