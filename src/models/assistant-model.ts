@@ -116,6 +116,21 @@ export const AssistantModel = types
   .actions((self) => ({
     addMessageToCODAPNotificationQueue(msg: string) {
       self.codapNotificationQueue.push(msg);
+    },
+    deDupeCODAPNotificationQueue(msg: string) {
+      // CODAP update notification messages typically have a prefix like "Data context Coasters has been updated:" to
+      // explain why we are sending the data to the LLM. If any messages in the queue have the same prefix as `msg`
+      // (e.g., "Data context Coasters has been updated: {dataContextData}"), we remove those messages from
+      // the queue since they are no longer up to date and will be wasting valuable space. (If a message in the queue
+      // does not have any such prefix, it should simply not be removed.)
+      if (self.codapNotificationQueue.length > 0) {
+        const getPrefix = (msgStr: string) => msgStr.split(":", 1)[0].trim();
+        const currentPrefix = getPrefix(msg);
+
+        self.codapNotificationQueue.replace(
+          self.codapNotificationQueue.filter(queuedMsg => getPrefix(queuedMsg) !== currentPrefix)
+        );
+      }
     }
   }))
   .actions((self) => {
@@ -146,16 +161,8 @@ export const AssistantModel = types
     const sendDataCtxChangeInfo = flow(function* (msg: string) {
       try {
         if (self.isLoadingResponse || self.isCancelling || self.isResetting) {
-          // If the last message in the queue has the same prefix as the current message
-          // (e.g., "Data context Coasters has been updated: {dataContextData}"), remove the last message from
-          // the queue since it is no longer up to date and will be wasting valuable space.
           if (self.codapNotificationQueue.length > 0) {
-            const getPrefix = (msgStr: string) => msgStr.split(":", 1)[0].trim();
-            const currentPrefix = getPrefix(msg);
-            const lastPrefix = getPrefix(self.codapNotificationQueue[self.codapNotificationQueue.length - 1]);
-            if (currentPrefix === lastPrefix) {
-              self.codapNotificationQueue.pop();
-            }
+            self.deDupeCODAPNotificationQueue(msg);
           }
           self.codapNotificationQueue.push(msg);
         } else {
@@ -167,15 +174,18 @@ export const AssistantModel = types
       }
     });
 
-    const sendCODAPDocumentInfo = flow(function* (message) {
+    const sendCODAPDocumentInfo = flow(function* (msg) {
       if (self.isAssistantMocked) return;
 
       try {
-        const extracted = extractDataContexts(message);
-        self.addDbgMsg("Sending CODAP document info to LLM", extracted ? formatJsonMessage(extracted) : message);
+        const extracted = extractDataContexts(msg);
+        self.addDbgMsg("Sending CODAP document info to LLM", extracted ? formatJsonMessage(extracted) : msg);
         if (!self.threadId) {
-          console.warn("Thread ID is not set, queuing CODAP document info message:", message);
-          self.codapNotificationQueue.push(message);
+          console.warn("Thread ID is not set, queuing CODAP document info message:", msg);
+          if (self.codapNotificationQueue.length > 0) {
+            self.deDupeCODAPNotificationQueue(msg);
+          }
+          self.codapNotificationQueue.push(msg);
         } else {
           if (extracted) {
             self.isLoadingResponse = true;
@@ -195,7 +205,7 @@ export const AssistantModel = types
             self.addDbgMsg("CODAP document info received by LLM", formatJsonMessage(data));
             self.isLoadingResponse = false;
           } else {
-            self.addDbgMsg("Could not extract data contexts from message", message);
+            self.addDbgMsg("Could not extract data contexts from message", msg);
           }
         }
       } catch (err) {
@@ -599,7 +609,8 @@ export const AssistantModel = types
           const allMsgs = self.codapNotificationQueue.join(DELIMITER);
           self.codapNotificationQueue.clear();
           await self.sendCODAPDocumentInfo(allMsgs);
-        } else if (self.threadId && doneProcessing && self.messageQueue.length > 0) {
+        }
+        if (self.threadId && doneProcessing && self.messageQueue.length > 0) {
           const allMsgs = self.messageQueue.join("\n");
           self.messageQueue.clear();
           await self.handleMessageSubmit(allMsgs);

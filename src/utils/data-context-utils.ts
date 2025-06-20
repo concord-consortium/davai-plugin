@@ -10,17 +10,20 @@ import { DATA_CONTEXT_MESSAGES, DELIMITER } from "../constants";
  */
 export const trimDataset = (dataset: any): any => {
   const newDataset = structuredClone(dataset);
+  const removeCategoryMap = (collection: Record<string, any>) => {
+    for (const attr of collection.attrs) {
+      if (attr._categoryMap) {
+        delete attr._categoryMap;
+      }
+    }
+  };
 
   // Handle case where `collections` is on the root object
   if (Array.isArray(newDataset.collections)) {
     for (const collection of newDataset.collections) {
       if (!Array.isArray(collection.attrs)) continue;
 
-      for (const attr of collection.attrs) {
-        if (attr._categoryMap) {
-          delete attr._categoryMap;
-        }
-      }
+      removeCategoryMap(collection);
     }
   }
 
@@ -33,12 +36,7 @@ export const trimDataset = (dataset: any): any => {
     for (const collection of collections) {
       if (!Array.isArray(collection.attrs)) continue;
 
-      // Remove the _categoryMap attribute.
-      for (const attr of collection.attrs) {
-        if (attr._categoryMap) {
-          delete attr._categoryMap;
-        }
-      }
+      removeCategoryMap(collection);
     }
   }
 
