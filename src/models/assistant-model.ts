@@ -74,7 +74,6 @@ export const AssistantModel = types
     dataContextForGraph: null as IGraphAttrData | null,
     dataUri: "",
     uploadFileAfterRun: false,
-    updateSonificationStoreAfterRun: false,
     llmId: "mock" as string,  // Set explicitly via setLlmId
     currentMessageId: null as string | null,
   }))
@@ -197,15 +196,16 @@ export const AssistantModel = types
           const { action, resource, values } = data.request;
           const request = { action, resource, values };
 
-          // When the request is to create a graph component, we need to update the sonification
-          // store after the run.
-          if (action === "create" && resource === "component" && values.type === "graph") {
-            self.updateSonificationStoreAfterRun = true;
-          }
-
           self.addDbgMsg("Request sent to CODAP", formatJsonMessage(request));
           let res = yield codapInterface.sendRequest(request);
           self.addDbgMsg("Response from CODAP", formatJsonMessage(res));
+
+          // When the request is to create a graph component, we need to update the sonification
+          // store after the run.
+          if (action === "create" && resource === "component" && values.type === "graph" && res.success) {
+            const root = getRoot(self) as any;
+            root.sonificationStore.setGraphs({ selectNewest: true });
+          }
 
           // Prepare for uploading of image file after run if the request is to get dataDisplay
           const isImageSnapshotRequest = action === "get" && resource.match(/^dataDisplay/);
