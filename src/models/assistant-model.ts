@@ -228,7 +228,7 @@ export const AssistantModel = types
           }
 
           return JSON.stringify(res);
-        
+
         } else if (data.type === "sonify_graph") {
           const root = getRoot(self) as any;
           if (typeof data.request.graphID === "undefined") {
@@ -312,10 +312,10 @@ export const AssistantModel = types
           // Keep processing tool calls until we get a final response
           while (data?.status === "requires_action" && data?.tool_call_id) {
             const toolOutput = yield handleToolCall(data as IToolCallData);
-            
+
             // Send tool response back to server
             const toolResponseResult = yield sendToolOutputToLlm(data.tool_call_id, toolOutput);
-            
+
             // Get the next response in the chain
             data = toolResponseResult;
           }

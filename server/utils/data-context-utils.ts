@@ -77,17 +77,17 @@ export const splitLargeChunk = (dataChunk: ICodapDataChunk): ICodapDataChunk[][]
  */
 export const processCodapData = (data: Record<string, any>): IProcessedChunk[] => {
   const messages: IProcessedChunk[] = [];
-  
+
   const dataArray = Object.entries(data).map(([name, dataObject]) => {
     return {
       name,
       data: dataObject ? JSON.stringify(dataObject) : ""
     };
   });
-  
+
   const chunks = chunkData(dataArray);
   // console.log(`Created ${chunks.length} chunks`);
-  
+
   // Process chunks and add them as user messages
   for (let i = 0; i < chunks.length; i++) {
     const chunk = chunks[i];

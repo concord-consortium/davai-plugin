@@ -19,9 +19,9 @@ export const createRequestTool = tool(
       const request = { action, resource, values };
       return JSON.stringify(request);
     } catch (error) {
-      return JSON.stringify({ 
-        status: "error", 
-        error: error instanceof Error ? error.message : String(error) 
+      return JSON.stringify({
+        status: "error",
+        error: error instanceof Error ? error.message : String(error)
       });
     }
   },

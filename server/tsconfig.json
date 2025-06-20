@@ -10,8 +10,8 @@
     "outDir": "dist",
     "allowJs": true,
     "sourceMap": true,
-    "types": ["jest", "node"]
+    "types": ["jest"]
   },
-  "include": ["**/*.ts"],
+  "include": ["**/*.ts", "text/codap-api-documentation.ts", "text/instructions.ts"],
   "exclude": ["node_modules", "dist"]
 }

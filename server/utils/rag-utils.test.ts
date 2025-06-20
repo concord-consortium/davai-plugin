@@ -2,8 +2,7 @@ import { TextEncoder } from "util";
 import { ReadableStream } from "web-streams-polyfill";
 global.TextEncoder = TextEncoder;
 global.ReadableStream = ReadableStream as any;
-import { escapeCurlyBraces, getEmbeddingsModel, processMarkdownDoc,
-  setupVectorStore } from "./rag-utils";
+import { escapeCurlyBraces, getEmbeddingsModel, setupVectorStore } from "./rag-utils";
 
 
 jest.mock("langchain/vectorstores/memory", () => ({
@@ -63,16 +62,6 @@ describe("getEmbeddingsModel", () => {
     expect(model).toHaveProperty("embedQuery");
     expect(model).toHaveProperty("embedDocuments");
     expect(model.modelName).toBe("mock-openai-model");
-  });
-});
-
-describe("processMarkdownDoc", () => {
-  it("should process markdown document correctly", async () => {
-    const markdownContent = "# Title\n\n" + "hello ".repeat(500) + "\n\n## Sub Title\n\nThis is a test document with {curly braces}.";
-    const processedDoc = await processMarkdownDoc(markdownContent);
-    expect(processedDoc.length).toBe(6);
-    expect(processedDoc[0].pageContent).toContain("# Title");
-    expect(processedDoc[5].pageContent).toContain("## Sub Title\n\nThis is a test document with {{curly braces}}.");
   });
 });
 
