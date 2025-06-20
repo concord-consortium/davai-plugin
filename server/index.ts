@@ -1,7 +1,7 @@
 import express, { json } from "express";
 import * as dotenv from "dotenv";
 import { START, END, MemorySaver, MessagesAnnotation, StateGraph } from "@langchain/langgraph";
-import { BaseMessage, HumanMessage, SystemMessage, ToolMessage, trimMessages } from "@langchain/core/messages";
+import { BaseMessage, HumanMessage, ToolMessage, trimMessages } from "@langchain/core/messages";
 import { ChatPromptTemplate } from "@langchain/core/prompts";
 import { MemoryVectorStore } from "langchain/vectorstores/memory";
 import { instructions } from "./text/instructions.js";
@@ -9,7 +9,7 @@ import { codapApiDoc } from "./text/codap-api-documentation.js";
 import { escapeCurlyBraces, processCodapDocumentation, setupVectorStore } from "./utils/rag-utils.js";
 import { processCodapData } from "./utils/data-context-utils.js";
 import { createModelInstance } from "./utils/llm-utils.js";
-import { CHARS_PER_TOKEN, MAX_TOKENS, MAX_TOKENS_PER_CHUNK } from "./constants.js";
+import { MAX_TOKENS, MAX_TOKENS_PER_CHUNK } from "./constants.js";
 import { toolCallResponse, tools } from "./tools.js";
 import { extractToolCalls, tokenCounter } from "./utils/utils.js";
 
