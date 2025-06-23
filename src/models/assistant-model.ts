@@ -1,10 +1,10 @@
-import { types, flow, Instance, getRoot } from "mobx-state-tree";
+import { types, flow, Instance, getRoot, onSnapshot } from "mobx-state-tree";
 import { nanoid } from "nanoid";
 import { codapInterface } from "@concord-consortium/codap-plugin-api";
 import { DAVAI_SPEAKER, DEBUG_SPEAKER } from "../constants";
 import { formatJsonMessage, getDataContexts, getGraphByID, isGraphSonifiable } from "../utils/utils";
 import { ChatTranscriptModel } from "./chat-transcript-model";
-import { extractDataContexts } from "../utils/data-context-utils";
+import { extractDataContexts, IExtractedDataContext } from "../utils/data-context-utils";
 import { postMessage } from "../utils/llm-utils";
 
 interface IGraphAttrData {
@@ -61,7 +61,7 @@ interface IMessageResponse {
 export const AssistantModel = types
   .model("AssistantModel", {
     // assistant: types.maybe(types.frozen()),
-    codapNotificationQueue: types.array(types.string),
+    codapNotificationQueue: types.array(types.frozen<IExtractedDataContext>()),
     isCancelling: types.optional(types.boolean, false),
     isLoadingResponse: types.optional(types.boolean, false),
     isResetting: types.optional(types.boolean, false),
@@ -114,9 +114,38 @@ export const AssistantModel = types
     }
   }))
   .actions((self) => ({
-    addMessageToCODAPNotificationQueue(msg: string) {
-      self.codapNotificationQueue.push(msg);
+    clearCODAPNotificationQueue() {
+      self.codapNotificationQueue.clear();
+    },
+    clearUserMessageQueue() {
+      self.messageQueue.clear();
+    },
+    deDupeCODAPNotificationQueue(msg: IExtractedDataContext) {
+      // If any existing messages in the queue have the same type and ID values as `msg`, we remove them
+      // from the queue since they are no longer up to date and will be wasting valuable space.
+      // Note that `codapData` should have only one key which will be a prefix string like the ones defined
+      // in `DATA_CONTEXT_MESSAGES`, and the value will be the data context object.
+      const msgKey = Object.keys(msg.codapData)[0];
+      const msgValue = msg.codapData[msgKey];
+      self.codapNotificationQueue.replace(
+        self.codapNotificationQueue.filter(queued => {
+          const queuedKey = Object.keys(queued.codapData)[0];
+          const queuedValue = queued.codapData[queuedKey];
+
+          return !(queued.type === msg.type && queuedValue.id === msgValue.id);
+        })
+      );
     }
+  }))
+  .actions((self) => ({
+    addMessageToCODAPNotificationQueue(msg: IExtractedDataContext | null) {
+      if (!msg) return;
+
+      if (self.codapNotificationQueue.length > 0) {
+        self.deDupeCODAPNotificationQueue(msg);
+      }
+      self.codapNotificationQueue.push(msg);
+    },
   }))
   .actions((self) => {
     const initializeAssistant = flow(function* (llmId: string) {
@@ -136,7 +165,7 @@ export const AssistantModel = types
       try {
         const contexts = yield getDataContexts();
         self.addDbgMsg("Data contexts information", formatJsonMessage(contexts));
-        sendCODAPDocumentInfo(`Data contexts: ${JSON.stringify(contexts)}`);
+        processAndSendCODAPDocumentInfo(`Data contexts: ${JSON.stringify(contexts)}`);
       } catch (err) {
         console.error("Failed to get data contexts:", err);
         self.addDbgMsg("Failed to get data contexts", formatJsonMessage(err));
@@ -144,11 +173,17 @@ export const AssistantModel = types
     });
 
     const sendDataCtxChangeInfo = flow(function* (msg: string) {
+      const dataContextMsg = extractDataContexts(msg);
+      if (!dataContextMsg) {
+        self.addDbgMsg("No data contexts extracted from message", msg);
+        return;
+      }
+  
       try {
         if (self.isLoadingResponse || self.isCancelling || self.isResetting) {
-          self.codapNotificationQueue.push(msg);
+          self.addMessageToCODAPNotificationQueue(dataContextMsg);
         } else {
-          yield sendCODAPDocumentInfo(msg);
+          yield processAndSendCODAPDocumentInfo(msg);
         }
       } catch (err) {
         console.error("Failed to send data context info to LLM:", err);
@@ -156,32 +191,39 @@ export const AssistantModel = types
       }
     });
 
-    const sendCODAPDocumentInfo = flow(function* (message) {
+    const sendCODAPDataToLlm = flow(function* (codapData: Record<string, any>) {
+      if (self.isAssistantMocked) return;
+
+      const requestBody = {
+        llmId: self.llmId,
+        threadId: self.threadId,
+        codapData
+      };
+
+      const dataContextResponse = yield postMessage(requestBody, "message");
+      if (!dataContextResponse.ok) {
+        throw new Error(`Failed to send system message: ${dataContextResponse.statusText}`);
+      }
+      const data = yield dataContextResponse.json();
+      self.addDbgMsg("CODAP document info received by LLM", formatJsonMessage(data));
+    });
+
+    const processAndSendCODAPDocumentInfo = flow(function* (msg) {
       if (self.isAssistantMocked) return;
 
       try {
-        const extracted = extractDataContexts(message);
-        self.addDbgMsg("Sending CODAP document info to LLM", extracted ? formatJsonMessage(extracted) : message);
+        const dataContextMsg = extractDataContexts(msg);
+        self.addDbgMsg("Sending CODAP document info to LLM", dataContextMsg ? formatJsonMessage(dataContextMsg) : msg);
         if (!self.threadId) {
-          self.codapNotificationQueue.push(message);
+          console.warn("Thread ID is not set, queuing CODAP document info message:", msg);
+          self.addMessageToCODAPNotificationQueue(dataContextMsg);
         } else {
-          if (extracted) {
-            const requestBody = {
-              llmId: self.llmId,
-              threadId: self.threadId,
-              codapData: extracted.codapData
-            };
-
-            const dataContextResponse = yield postMessage(requestBody, "message");
-
-            if (!dataContextResponse.ok) {
-              throw new Error(`Failed to send system message: ${dataContextResponse.statusText}`);
-            }
-
-            const data = yield dataContextResponse.json();
-            self.addDbgMsg("CODAP document info received by LLM", formatJsonMessage(data));
+          if (dataContextMsg) {
+            self.isLoadingResponse = true;
+            yield sendCODAPDataToLlm(dataContextMsg.codapData);
+            self.isLoadingResponse = false;
           } else {
-            self.addDbgMsg("Could not extract data contexts from message", message);
+            self.addDbgMsg("Could not extract data contexts from message", msg);
           }
         }
       } catch (err) {
@@ -575,23 +617,34 @@ export const AssistantModel = types
       }
     });
 
-    return { cancelRun, createThread, initializeAssistant, handleMessageSubmit, handleCancel, sendDataCtxChangeInfo, sendCODAPDocumentInfo };
+    return { cancelRun, createThread, initializeAssistant, handleMessageSubmit, handleCancel, sendDataCtxChangeInfo, sendCODAPDataToLlm, processAndSendCODAPDocumentInfo };
   })
   .actions((self) => ({
-    // afterCreate() {
-    //   onSnapshot(self, async () => {
-    //     const doneProcessing = !self.isLoadingResponse && !self.isCancelling && !self.isResetting;
-    //     if (self.threadId && doneProcessing && self.codapNotificationQueue.length > 0) {
-    //       const allMsgs = self.codapNotificationQueue.join("\n");
-    //       self.codapNotificationQueue.clear();
-    //       await self.sendCODAPDocumentInfo(allMsgs);
-    //     } else if (self.threadId && doneProcessing && self.messageQueue.length > 0) {
-    //       const allMsgs = self.messageQueue.join("\n");
-    //       self.messageQueue.clear();
-    //       await self.handleMessageSubmit(allMsgs);
-    //     }
-    //   });
-    // }
+    afterCreate() {
+      onSnapshot(self, async () => {
+        const doneProcessing = !self.isLoadingResponse && !self.isCancelling && !self.isResetting;
+        if (self.threadId && doneProcessing && self.codapNotificationQueue.length > 0) {
+          // We combine all the queued messages into one for a single request to the LLM.
+          const combinedCodapData = self.codapNotificationQueue.reduce((acc, item) => {
+            return { ...acc, ...item.codapData };
+          }, {});
+
+          try {
+            await self.sendCODAPDataToLlm(combinedCodapData);
+          } catch (err) {
+            console.error("Failed to send system message:", err);
+            self.addDbgMsg("Failed to send CODAP document information to LLM", formatJsonMessage(err));
+          }
+          
+          self.clearCODAPNotificationQueue();
+        }
+        if (self.threadId && doneProcessing && self.messageQueue.length > 0) {
+          const allMsgs = self.messageQueue.join("\n");
+          self.clearUserMessageQueue();
+          await self.handleMessageSubmit(allMsgs);
+        }
+      });
+    }
   }));
 
 export interface AssistantModelType extends Instance<typeof AssistantModel> {}
