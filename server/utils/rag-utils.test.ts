@@ -32,12 +32,6 @@ jest.mock("@langchain/google-genai", () => ({
   })),
 }));
 
-jest.mock("@langchain/core/documents", () => ({
-  Document: jest.fn(function (this: any, args: any) {
-    Object.assign(this, args);
-  }),
-}));
-
 afterAll(() => {
   jest.clearAllMocks();
   jest.resetModules();
@@ -79,22 +73,27 @@ describe("setupVectorStore", () => {
   });
 
   describe("chunkCodapDocumentation", () => {
+
     it("should split markdown into documents by H3 headers", () => {
       const markdown = `
-      # CODAP API
+  # CODAP API
 
-      Some intro text.
+  Some intro text.
 
-      ### Section One
-      Content for section one.
+  ### Section One
+  Content for section one.
 
-      ### Section Two
-      Content for section two.
-      More content.
+  ### Section Two
+  Content for section two with {curly} braces.
 
-      ### Section Three
-      Content for section three.
-      `;
+  ### Section Three
+  \`\`\`json
+  {
+    "key": "value"
+  }
+  \`\`\`
+  End of section three.
+      `.trim();
 
       const docs = chunkCodapDocumentation(markdown);
 
@@ -102,26 +101,43 @@ describe("setupVectorStore", () => {
 
       expect(docs[0].metadata.section).toBe("Section One");
       expect(docs[0].pageContent).toContain("Section One");
-      expect(docs[0].metadata.startLine).toBeGreaterThan(0);
       expect(docs[0].metadata.type).toBe("codap-api-section");
+      expect(docs[0].metadata.startLine).toBeGreaterThan(0);
+      expect(docs[0].metadata.endLine).toBeGreaterThan(docs[0].metadata.startLine);
 
       expect(docs[1].metadata.section).toBe("Section Two");
-      expect(docs[1].pageContent).toContain("section two");
-      expect(docs[1].metadata.type).toBe("codap-api-section");
+      expect(docs[1].pageContent).toContain("Section Two");
+      // Should have curly braces escaped
+      expect(docs[1].pageContent).toContain("{{curly}}");
 
       expect(docs[2].metadata.section).toBe("Section Three");
-      expect(docs[2].pageContent).toContain("section three");
-      expect(docs[2].metadata.type).toBe("codap-api-section");
+      // Should escape curly braces in JSON code block
+      expect(docs[2].pageContent).toContain("{{");
+      expect(docs[2].pageContent).toContain("}}");
+      expect(docs[2].pageContent).toContain("```json");
     });
 
-    it("should escape curly braces in section content", () => {
+    it("should return empty array if no H3 headers", () => {
       const markdown = `
-  ### Section A
-  This {should} be escaped.
+  # No Sections Here
+
+  Just some text.
       `.trim();
 
       const docs = chunkCodapDocumentation(markdown);
-      expect(docs[0].pageContent).toContain("{{should}}");
+      expect(docs).toHaveLength(0);
+    });
+
+    it("should handle markdown with only one section", () => {
+      const markdown = `
+  ### Only Section
+  All the content is here.
+      `.trim();
+
+      const docs = chunkCodapDocumentation(markdown);
+      expect(docs).toHaveLength(1);
+      expect(docs[0].metadata.section).toBe("Only Section");
+      expect(docs[0].pageContent).toContain("All the content is here.");
     });
   });
 });

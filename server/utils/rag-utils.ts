@@ -1,7 +1,7 @@
-import { MemoryVectorStore } from "langchain/vectorstores/memory";
+import { GoogleGenerativeAIEmbeddings } from "@langchain/google-genai";
 import { Document } from "@langchain/core/documents";
 import { OpenAIEmbeddings } from "@langchain/openai";
-import { GoogleGenerativeAIEmbeddings } from "@langchain/google-genai";
+import { MemoryVectorStore } from "langchain/vectorstores/memory";
 
 // This is used to ensure the CODAP Plugin API documentation Markdown is properly formatted.
 export const escapeCurlyBraces = (text: string): string => {
@@ -35,7 +35,7 @@ export const chunkCodapDocumentation = (markdownContent: string): Document[] => 
     }
   });
 
-  // Create documents for each major section
+    // Create documents for each major section
   sectionOrder.forEach((sectionName, index) => {
     const startLine = sectionStarts[sectionName];
     const endLine = index < sectionOrder.length - 1
