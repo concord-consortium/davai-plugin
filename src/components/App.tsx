@@ -90,9 +90,6 @@ export const App = observer(() => {
           const graph = graphs.find((g: ICODAPGraph) => g.id === notification.values.id);
           if (graph && isGraphSonifiable(graph)) {
             sonificationStore.setSelectedGraphID(graph.id);
-          } else {
-            // If the modified graph is not sonifiable, ensure that no graph is selected.
-            sonificationStore.setSelectedGraphID(undefined);
           }
         } catch (error) {
           console.error("Failed to fetch graph details for auto-selection:", error);
