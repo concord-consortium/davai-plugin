@@ -59,13 +59,6 @@ export const initializeApp = async () => {
     ["placeholder", "{messages}"],
 ]);
 
-  // processedCodapApiDoc = chunkCodapDocumentation(codapApiDoc);
-
-  promptTemplate = ChatPromptTemplate.fromMessages([
-    ["system", `${instructions} Here is the relevant CODAP API documentation:\n ${escapeCurlyBraces(codapApiDoc)}`],
-    ["placeholder", "{messages}"],
-  ]);
-
   console.log("Application initialized successfully.");
 };
 

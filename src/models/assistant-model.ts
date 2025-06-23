@@ -5,7 +5,6 @@ import { DAVAI_SPEAKER, DEBUG_SPEAKER } from "../constants";
 import { formatJsonMessage, getDataContexts, getGraphByID, isGraphSonifiable } from "../utils/utils";
 import { ChatTranscriptModel } from "./chat-transcript-model";
 import { extractDataContexts } from "../utils/data-context-utils";
-import { IGraphAttrData, IToolCallData, IMessageResponse, ToolOutput } from "../types";
 import { postMessage } from "../utils/llm-utils";
 
 /**
