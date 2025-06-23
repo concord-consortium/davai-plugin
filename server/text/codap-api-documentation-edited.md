@@ -1,7 +1,3 @@
-# The Data Interactive Plugin API
-
-## Data Interactive-Initiated Actions
-
 ### DataContexts
 
 #### The dataContext object
