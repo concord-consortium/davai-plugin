@@ -114,12 +114,6 @@ export const AssistantModel = types
     }
   }))
   .actions((self) => ({
-    addMessageToCODAPNotificationQueue(msg: string) {
-      const extracted = extractDataContexts(msg);
-      if (extracted) {
-        self.codapNotificationQueue.push(extracted);
-      }
-    },
     clearCODAPNotificationQueue() {
       self.codapNotificationQueue.clear();
     },
@@ -127,16 +121,29 @@ export const AssistantModel = types
       self.messageQueue.clear();
     },
     deDupeCODAPNotificationQueue(msg: IExtractedDataContext) {
-      // If any existing messages in the queue have the same type and context name values as `msg`, we remove them
+      // If any existing messages in the queue have the same type and ID values as `msg`, we remove them
       // from the queue since they are no longer up to date and will be wasting valuable space.
+      const msgKey = Object.keys(msg.codapData)[0];
+      const msgValue = msg.codapData[msgKey];
       self.codapNotificationQueue.replace(
-        self.codapNotificationQueue.filter(queued => 
-          !(queued.type === msg.type && 
-            Object.keys(queued.codapData)[0] === Object.keys(msg.codapData)[0] // context name check
-           )
-        )
+        self.codapNotificationQueue.filter(queued => {
+          const queuedKey = Object.keys(queued.codapData)[0];
+          const queuedValue = queued.codapData[queuedKey];
+
+          return !(queued.type === msg.type && queuedValue.id === msgValue.id);
+        })
       );
     }
+  }))
+  .actions((self) => ({
+    addMessageToCODAPNotificationQueue(msg: IExtractedDataContext | null) {
+      if (!msg) return;
+
+      if (self.codapNotificationQueue.length > 0) {
+        self.deDupeCODAPNotificationQueue(msg);
+      }
+      self.codapNotificationQueue.push(msg);
+    },
   }))
   .actions((self) => {
     const initializeAssistant = flow(function* (llmId: string) {
@@ -172,10 +179,7 @@ export const AssistantModel = types
   
       try {
         if (self.isLoadingResponse || self.isCancelling || self.isResetting) {
-          if (self.codapNotificationQueue.length > 0) {
-            self.deDupeCODAPNotificationQueue(dataContextMsg);
-          }
-          self.codapNotificationQueue.push(dataContextMsg);
+          self.addMessageToCODAPNotificationQueue(dataContextMsg);
         } else {
           yield processAndSendCODAPDocumentInfo(msg);
         }
@@ -206,18 +210,15 @@ export const AssistantModel = types
       if (self.isAssistantMocked) return;
 
       try {
-        const extracted = extractDataContexts(msg);
-        self.addDbgMsg("Sending CODAP document info to LLM", extracted ? formatJsonMessage(extracted) : msg);
+        const dataContextMsg = extractDataContexts(msg);
+        self.addDbgMsg("Sending CODAP document info to LLM", dataContextMsg ? formatJsonMessage(dataContextMsg) : msg);
         if (!self.threadId) {
           console.warn("Thread ID is not set, queuing CODAP document info message:", msg);
-          if (self.codapNotificationQueue.length > 0) {
-            self.deDupeCODAPNotificationQueue(msg);
-          }
-          self.codapNotificationQueue.push(msg);
+          self.addMessageToCODAPNotificationQueue(dataContextMsg);
         } else {
-          if (extracted) {
+          if (dataContextMsg) {
             self.isLoadingResponse = true;
-            yield sendCODAPDataToLlm(extracted.codapData);
+            yield sendCODAPDataToLlm(dataContextMsg.codapData);
             self.isLoadingResponse = false;
           } else {
             self.addDbgMsg("Could not extract data contexts from message", msg);

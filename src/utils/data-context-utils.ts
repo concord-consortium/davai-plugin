@@ -54,6 +54,21 @@ export const formatDataContextMessage = (
     .replace("{contexts}", JSON.stringify(params.contexts || {}));
 };
 
+const extractPrefixAndContext = (message: string, suffixLength: number): { prefix: string; context: any } | null => {
+  // Find the position of ": " which separates the description/prefix from the context
+  const colonIndex = message.indexOf(": ");
+  if (colonIndex === -1) return null;
+
+  const prefix = message.substring(0, colonIndex);
+  const contextStr = message.substring(colonIndex + 2, message.length - suffixLength);
+  try {
+    const context = JSON.parse(contextStr);
+    return { prefix, context };
+  } catch {
+    return null;
+  }
+};
+
 export interface IExtractedDataContext {
   codapData: Record<string, any>;
   type: "combined" | "create" | "initial" | "remove" | "update";
@@ -81,45 +96,33 @@ export const extractDataContexts = (message: string): IExtractedDataContext | nu
     const updatePrefix = DATA_CONTEXT_MESSAGES.UPDATED.split("{name}")[0];
     const updateSuffix = DATA_CONTEXT_MESSAGES.UPDATED.split("{context}")[1];
     if (message.startsWith(updatePrefix) && message.endsWith(updateSuffix)) {
-      const name = message.substring(
-        updatePrefix.length,
-        message.length - updateSuffix.length - DATA_CONTEXT_MESSAGES.UPDATED.split("{name}")[1].length
-      );
-      const context = JSON.parse(
-        message.substring(
-          message.indexOf(": ") + 2,
-          message.length - updateSuffix.length
-        )
-      );
-      return { codapData: { [name]: trimDataset(context) }, type: "update" };
+      const extracted = extractPrefixAndContext(message, updateSuffix.length);
+      if (!extracted) return null;
+
+      const { prefix, context } = extracted;
+      return { codapData: { [prefix]: trimDataset(context) }, type: "update" };
     }
 
     // Check for new data context
     const createPrefix = DATA_CONTEXT_MESSAGES.CREATED.split("{name}")[0];
     const createSuffix = DATA_CONTEXT_MESSAGES.CREATED.split("{context}")[1];
     if (message.startsWith(createPrefix) && message.endsWith(createSuffix)) {
-      const name = message.substring(
-        createPrefix.length,
-        message.length - createSuffix.length - DATA_CONTEXT_MESSAGES.CREATED.split("{name}")[1].length
-      );
-      const context = JSON.parse(
-        message.substring(
-          message.indexOf(": ") + 2,
-          message.length - createSuffix.length
-        )
-      );
-      return { codapData: { [name]: trimDataset(context) }, type: "create" };
+      const extracted = extractPrefixAndContext(message, updateSuffix.length);
+      if (!extracted) return null;
+
+      const { prefix, context } = extracted;
+      return { codapData: { [prefix]: trimDataset(context) }, type: "create" };
     }
 
     // Check for removed data context
     const removePrefix = DATA_CONTEXT_MESSAGES.REMOVED.split("{name}")[0];
     const removeSuffix = DATA_CONTEXT_MESSAGES.REMOVED.split("{name}")[1];
     if (message.startsWith(removePrefix) && message.endsWith(removeSuffix)) {
-      const name = message.substring(
+      const prefix = message.substring(
         DATA_CONTEXT_MESSAGES.REMOVED.split("{name}")[0].length,
         message.length - DATA_CONTEXT_MESSAGES.REMOVED.split("{name}")[1].length
       );
-      return { codapData: { [name]: null }, type: "remove" };
+      return { codapData: { [prefix]: null }, type: "remove" };
     }
 
     // Check for updated graph
