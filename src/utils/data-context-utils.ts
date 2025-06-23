@@ -69,6 +69,9 @@ const extractPrefixAndContext = (message: string, suffixLength: number): { prefi
   }
 };
 
+// TODO: Type this better so that the structure of codapData is more specific.
+// It should have only one key which will be a prefix string like the ones defined in `DATA_CONTEXT_MESSAGES`,
+// and the value will be the data context object.
 export interface IExtractedDataContext {
   codapData: Record<string, any>;
   type: "combined" | "create" | "initial" | "remove" | "update";

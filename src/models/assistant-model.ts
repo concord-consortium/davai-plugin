@@ -123,6 +123,8 @@ export const AssistantModel = types
     deDupeCODAPNotificationQueue(msg: IExtractedDataContext) {
       // If any existing messages in the queue have the same type and ID values as `msg`, we remove them
       // from the queue since they are no longer up to date and will be wasting valuable space.
+      // Note that `codapData` should have only one key which will be a prefix string like the ones defined
+      // in `DATA_CONTEXT_MESSAGES`, and the value will be the data context object.
       const msgKey = Object.keys(msg.codapData)[0];
       const msgValue = msg.codapData[msgKey];
       self.codapNotificationQueue.replace(
