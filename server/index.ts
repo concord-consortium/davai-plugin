@@ -25,6 +25,9 @@ const userMessageTokenCount = 1000;
 
 // Middleware to check for the API secret in the request headers
 app.use((req: any, res: any, next: any) => {
+  if (req.method === "OPTIONS") {
+    return next();
+  }
   const token = req.headers.authorization;
   if (token !== process.env.DAVAI_API_SECRET) {
     return res.status(401).json({ error: "Unauthorized" });
@@ -157,10 +160,10 @@ app.post("/default/davaiServer/message", async (req, res) => {
     activeMessages.set(messageId, controller);
 
     const output = await langApp.invoke(
-      { messages }, 
-      { 
+      { messages },
+      {
         ...config,
-        signal: controller.signal 
+        signal: controller.signal
       }
     );
 
@@ -184,7 +187,7 @@ app.post("/default/davaiServer/message", async (req, res) => {
 
 // Endpoint for cancelling message processing
 app.post("/default/davaiServer/cancel", async (req, res) => {
-  const { messageId } = req.body;  
+  const { messageId } = req.body;
   const controller = activeMessages.get(messageId);
   if (controller) {
     controller.abort();
