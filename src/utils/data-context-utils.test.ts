@@ -99,7 +99,7 @@ describe("extractDataContexts", () => {
     const message = "New data context {name} created: {}";
     const result = extractDataContexts(message);
     expect(result).toEqual({
-      codapData: {" ": {}},
+      codapData: {"New data context {name} created": {}},
       type: "create"
     });
   });
@@ -108,7 +108,7 @@ describe("extractDataContexts", () => {
     const message = "Data context {name} has been updated: {}";
     const result = extractDataContexts(message);
     expect(result).toEqual({
-      codapData: {" ": {}},
+      codapData: {"Data context {name} has been updated": {}},
       type: "update"
     });
   });

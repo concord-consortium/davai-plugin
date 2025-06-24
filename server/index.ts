@@ -25,6 +25,9 @@ const userMessageTokenCount = 1000;
 
 // Middleware to check for the API secret in the request headers
 app.use((req: any, res: any, next: any) => {
+  if (req.method === "OPTIONS") {
+    return next();
+  }
   const token = req.headers.authorization;
   if (token !== process.env.DAVAI_API_SECRET) {
     return res.status(401).json({ error: "Unauthorized" });
