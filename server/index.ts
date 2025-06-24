@@ -117,12 +117,30 @@ app.post("/default/davaiServer/tool", async (req, res) => {
 
   try {
     const messages = [];
-    const toolResponse = new ToolMessage({
-      content: message.content,
+    let toolMessageContent: string;
+    let humanMessage;
+
+    // `message.content` will be an array if previously the user asked to describe a graph
+    // ToolMessage doesn't support sending images back to the model
+    // So we stub the response to the tool call, and follow up with HumanMessage
+    if (Array.isArray(message.content)) {
+      // stub tool response
+      toolMessageContent = "ok";
+      humanMessage = new HumanMessage({ content: message.content });
+    } else {
+      toolMessageContent = message.content;
+    }
+
+    const toolMessage = new ToolMessage({
+      content: toolMessageContent,
       tool_call_id: message.tool_call_id,
     });
 
-    messages.push(toolResponse);
+    messages.push(toolMessage);
+
+    if (humanMessage) {
+      messages.push(humanMessage);
+    }
 
     const toolResponseOutput = await langApp.invoke({ messages }, config);
 
@@ -170,7 +188,7 @@ app.post("/default/davaiServer/message", async (req, res) => {
       { messages },
       {
         ...config,
-        signal: controller.signal
+      signal: controller.signal
       }
     );
 

@@ -45,7 +45,7 @@
   description: // {String} Currently unused (reserved for future)
   parent:      // {String} Name of the parent collection, "_root_" to make this the new root
   attrs: [     // {Array<Object>} Attribute definitions (see Attribute object spec)
-    /* { name, type, precision, … } */
+    // { name, type, precision, … }
   ],
   labels: {    // {Object} Optional custom labels for UI wording
     singleCase,            // e.g. "observation"
@@ -204,8 +204,8 @@ Receive:
 
 ```json
 {
-  "collection": /* name of the attribute's collection */,
-  "position": /* zero indexed position of the attribute in the list of attributes */
+  "collection": // name of the attribute's collection ,
+  "position": // zero indexed position of the attribute in the list of attributes
 }
 ```
 
@@ -230,7 +230,7 @@ Receive:
   id:       // {Number} Unique case identifier
   parent:   // {Number} Optional ID of parent case (required for child collections)
   values: { // {Object} Attribute-value pairs
-    /* "Height": 65, "Name": "Sam" */
+    // "Height": 65, "Name": "Sam"
   }
 }
 ```
@@ -394,15 +394,15 @@ The selectionList object is just an array of case ids.
 
 ```json
 {
-  type:            /* {String} Component type, e.g. "graph" */,
-  name:            /* {String} Unique identifier, set only at create */,
-  title:           /* {String} Optional UI title (defaults to name) */,
-  dimensions: {    /* {Object} Size in pixels */
+  type:            // {String} Component type, e.g. "graph" ,
+  name:            // {String} Unique identifier, set only at create ,
+  title:           // {String} Optional UI title (defaults to name) ,
+  dimensions: {    // {Object} Size in pixels
     width:  Number,
     height: Number
   },
-  position:        /* {"top" | "bottom" | { left: Number, top: Number }} */,
-  cannotClose:     /* {Boolean} Hide "X" in title bar */
+  position:        // {"top" | "bottom" | { left: Number, top: Number }} ,
+  cannotClose:     // {Boolean} Hide "X" in title bar
 }
 ```
 
@@ -412,14 +412,13 @@ The selectionList object is just an array of case ids.
 {
   type: "graph",
   ...baseComponentProperties,
-  dataContext: /* {String} Name of the data context that the attributes associated with the graph belong to. MUST be present in the create request if the properties xAttributeName, yAttributeName, y2AttributeName, and/or legendAttributeName are also present. */
-  xAttributeName: /* {String} An attribute name within the data context */,
-  yAttributeName: /* {String} An attribute name within the data context */,
-  y2AttributeName: /* {String} An attribute name within the data context */,
-  legendAttributeName: /* {String} An attribute name within the data context */
-  enableNumberToggle: /* {Boolean} whether the numberToggle display should be presented in this graph */
-  numberToggleLastMode: /* {Boolean} whether numberToggle display should be in "last mode" */
-  exportDataUri: /* {String} Optional. Not used in creating or updating a graph, but is returned when getting a graph. A data URI string that corresponds to an image of the graph. */
+  dataContext: // {String} Name of the data context that the attributes associated with the graph belong to. MUST be present in the create request if the properties xAttributeName, yAttributeName, y2AttributeName, and/or legendAttributeName are also present.
+  xAttributeName: // {String} An attribute name within the data context ,
+  yAttributeName: // {String} An attribute name within the data context ,
+  y2AttributeName: // {String} An attribute name within the data context ,
+  legendAttributeName: // {String} An attribute name within the data context
+  enableNumberToggle: // {Boolean} whether the numberToggle display should be presented in this graph
+  numberToggleLastMode: // {Boolean} whether numberToggle display should be in "last mode"
 }
 ```
 
@@ -429,9 +428,9 @@ The selectionList object is just an array of case ids.
 {
   type: "caseTable",
   ...baseComponentProperties,
-  dataContext: /* {String} Name of a data context */
-  horizontalScrollOffset: /* {Number} Scroll offset in pixels from the left. */
-  isIndexHidden: /* {Boolean} Whether the index column is shown in case table collections */
+  dataContext: // {String} Name of a data context
+  horizontalScrollOffset: // {Number} Scroll offset in pixels from the left.
+  isIndexHidden: // {Boolean} Whether the index column is shown in case table collections
 }
 ```
 
@@ -441,10 +440,10 @@ The selectionList object is just an array of case ids.
 {
   type: "map",
   ...baseComponentProperties,
-  dataContext: /* {String} Name of a data context */
-  legendAttributeName: /* {String} Name of the attribute to be displayed in the legend. Optional. */
-  center: /* {Array} a two element array consisting of a decimal latitude and longitude of the desired map center. */
-  zoom: /* {Number} A zoom factor. 1: entire globe, higher numbers closer in. */
+  dataContext: // {String} Name of a data context
+  legendAttributeName: // {String} Name of the attribute to be displayed in the legend. Optional.
+  center: // {Array} a two element array consisting of a decimal latitude and longitude of the desired map center.
+  zoom: // {Number} A zoom factor. 1: entire globe, higher numbers closer in.
 }
 ```
 
@@ -454,7 +453,7 @@ The selectionList object is just an array of case ids.
 {
   type: "slider",
   ...baseComponentProperties,
-  "globalValueName": {string},/* Name of global value slider is managing. Global value must be created prior to slider creation. */
+  "globalValueName": {string},// Name of global value slider is managing. Global value must be created prior to slider creation.
   "animationDirection": {number},
   "animationMode": {number},
   "lowerBound": {number},
@@ -477,7 +476,7 @@ The selectionList object is just an array of case ids.
 {
   type: 'text',
   ...baseComponentProperties,
-  text: /*{String} The text displayed in the component .*/
+  text: //{String} The text displayed in the component .
 }
 ```
 
@@ -489,7 +488,7 @@ Note that setting the dimensions is required for a webView component.
 {
   type: 'webView',
   ...baseComponentProperties,
-  URL: /* {String} */
+  URL: // {String}
 }
 ```
 
@@ -516,7 +515,7 @@ Note that setting the dimensions is required for a webView component.
 }
 ```
 
-### Data Display
+### Image of component (Data Display)
 
 #### **Resource Selector Patterns + Supported Actions**
 
@@ -528,11 +527,12 @@ Note that setting the dimensions is required for a webView component.
 #### The DataDisplay Object
 
 ```json
-{ exportDataUri: /* {String} A data URI string representing the graph image */ }
+{ exportDataUri: // {String} A data URI string representing the graph image
 ```
 
 #### Notes
 -   Only available for components of type `"graph"`.
+-   Use the resource string to define the Id of the component you want; do not include any 'values' object.
 -   The returned `exportDataUri` can be embedded directly as an image (e.g., in an `<img>` tag or downloaded).
 
 ### Globals
@@ -541,8 +541,8 @@ Note that setting the dimensions is required for a webView component.
 
 ```json
 {
-  name: /* {String} Unique name of the global value */
-  value: /* {Number} Numeric value associated with the global */
+  name: // {String} Unique name of the global value
+  value: // {Number} Numeric value associated with the global
 }
 ```
 
@@ -577,14 +577,14 @@ Note that setting the dimensions is required for a webView component.
 
 ```json
 {
-  name: /* {String} Function name */
-  displayName: /* {String} Display name for UI */
-  description: /* {String} Function description */
-  category: /* {String} Category like "Arithmetic Functions", "Statistical Functions", etc. */
-  args: /* {Array} Argument definitions with name, description, required, type */
-  examples: /* {Array<String>} Example formulas using this function */
-  maxArgs: /* {Number} Maximum arguments allowed */
-  minArgs: /* {Number} Minimum arguments required */
+  name: // {String} Function name
+  displayName: // {String} Display name for UI
+  description: // {String} Function description
+  category: // {String} Category like "Arithmetic Functions", "Statistical Functions", etc.
+  args: // {Array} Argument definitions with name, description, required, type
+  examples: // {Array<String>} Example formulas using this function
+  maxArgs: // {Number} Maximum arguments allowed
+  minArgs: // {Number} Minimum arguments required
 }
 ```
 

@@ -134,3 +134,31 @@ export interface ICODAPGraph {
   yLowerBound?: number;
   yUpperBound?: number;
 }
+
+export interface IGraphAttrData {
+  legend?: Record<string, any>;
+  rightSplit?: Record<string, any>;
+  topSplit?: Record<string, any>;
+  xAxis?: Record<string, any>;
+  yAxis?: Record<string, any>;
+  y2Axis?: Record<string, any>;
+}
+
+export interface IToolCallData {
+  request: {
+    action: string;
+    resource: string;
+    graphID?: string;
+    values?: any;
+  };
+  tool_call_id: string;
+  type: string;
+}
+
+export interface IMessageResponse {
+  response?: string;
+  status?: string;
+  tool_call_id?: string;
+}
+
+export type ToolOutput = string | Record<string, any>[];

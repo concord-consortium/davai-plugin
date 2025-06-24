@@ -4,40 +4,9 @@ import { codapInterface } from "@concord-consortium/codap-plugin-api";
 import { DAVAI_SPEAKER, DEBUG_SPEAKER } from "../constants";
 import { formatJsonMessage, getDataContexts, getGraphByID, isGraphSonifiable } from "../utils/utils";
 import { ChatTranscriptModel } from "./chat-transcript-model";
+import { IGraphAttrData, IToolCallData, IMessageResponse, ToolOutput } from "../types";
 import { extractDataContexts, IExtractedDataContext } from "../utils/data-context-utils";
 import { postMessage } from "../utils/llm-utils";
-
-interface IGraphAttrData {
-  legend?: Record<string, any>;
-  rightSplit?: Record<string, any>;
-  topSplit?: Record<string, any>;
-  xAxis?: Record<string, any>;
-  yAxis?: Record<string, any>;
-  y2Axis?: Record<string, any>;
-}
-
-interface IToolCallData {
-  request: {
-    action: string;
-    graphID?: string;
-    resource: string;
-    values?: any;
-  };
-  tool_call_id: string;
-  type: string;
-}
-
-interface IMessageResponse {
-  request?: {
-    action: string;
-    resource: string;
-    values?: any;
-  };
-  response?: string;
-  status?: string;
-  tool_call_id?: string;
-  type: "CODAP_REQUEST" | "MESSAGE";
-}
 
 /**
  * AssistantModel encapsulates the AI assistant and its interactions with the user.
@@ -71,9 +40,6 @@ export const AssistantModel = types
     transcriptStore: ChatTranscriptModel,
   })
   .volatile(() => ({
-    dataContextForGraph: null as IGraphAttrData | null,
-    dataUri: "",
-    uploadFileAfterRun: false,
     llmId: "mock" as string,  // Set explicitly via setLlmId
     currentMessageId: null as string | null,
   }))
@@ -151,7 +117,6 @@ export const AssistantModel = types
     const initializeAssistant = flow(function* (llmId: string) {
       try {
         self.setLlmId(llmId);
-
         self.setThreadId(nanoid());
         self.addDbgMsg("Assistant initialized", `Assistant ID: ${llmId}, Thread ID: ${self.threadId}`);
         yield fetchAndSendDataContexts();
@@ -232,7 +197,7 @@ export const AssistantModel = types
       }
     });
 
-    const handleToolCall = flow(function* (data: IToolCallData) {
+    const processToolCall = flow(function* (data: IToolCallData) {
       try {
         if (data.type === "create_request") {
           const { action, resource, values } = data.request;
@@ -250,27 +215,21 @@ export const AssistantModel = types
           }
 
           // Prepare for uploading of image file after run if the request is to get dataDisplay
-          const isImageSnapshotRequest = action === "get" && resource.match(/^dataDisplay/);
-          if (isImageSnapshotRequest) {
-            self.uploadFileAfterRun = true;
-            self.dataUri = res.values.exportDataUri;
-            const graphIdMatch = resource.match(/\[(\d+)\]/);
-            const graphID = graphIdMatch?.[1];
-            if (graphID) {
+          const graphIdMatch = resource.match(/\[(\d+)\]/);
+          const graphID = graphIdMatch?.[1];
+
+          if (res.values.exportDataUri && graphID) {
               // Send data for the attributes on the graph for additional context
-              self.dataContextForGraph = yield getGraphAttrData(graphID);
-            } else {
-              self.addDbgMsg("Could not extract graphID from resource string", resource);
-              self.dataContextForGraph = null;
-            }
-            // remove any exportDataUri value that exists since it can be large and we don't need to send it to the assistant
-            res = isImageSnapshotRequest
-              ? { ...res, values: { ...res.values, exportDataUri: undefined } }
-              : res;
+            const graphData = yield getGraphAttrData(graphID);
+            return [
+              { type: "text", text: "Describe this image of the graph for the user."},
+              { type: "image_url", image_url: { url: res.values.exportDataUri } },
+              { type: "text", text: `Here is data about the graph in the image. Use it to improve your description. ${JSON.stringify(graphData)}`}
+            ];
+          } else {
+
+            return JSON.stringify(res);
           }
-
-          return JSON.stringify(res);
-
         } else if (data.type === "sonify_graph") {
           const root = getRoot(self) as any;
           if (typeof data.request.graphID === "undefined") {
@@ -292,9 +251,8 @@ export const AssistantModel = types
         }
     });
 
-    const sendToolOutputToLlm = flow(function* (toolCallId: string, content: string) {
+    const sendToolOutputToLlm = flow(function* (toolCallId: string, content: ToolOutput) {
       if (self.isAssistantMocked) return;
-
       try {
         const reqBody = {
           llmId: self.llmId,
@@ -353,10 +311,12 @@ export const AssistantModel = types
 
           // Keep processing tool calls until we get a final response
           while (data?.status === "requires_action" && data?.tool_call_id) {
-            const toolOutput = yield handleToolCall(data as IToolCallData);
+            const toolOutput = yield processToolCall(data as IToolCallData);
+            self.addDbgMsg("Tool output generated", formatJsonMessage(toolOutput));
 
             // Send tool response back to server
             const toolResponseResult = yield sendToolOutputToLlm(data.tool_call_id, toolOutput);
+            self.addDbgMsg("Response to tool output from server", formatJsonMessage(toolResponseResult));
 
             // Get the next response in the chain
             data = toolResponseResult;
@@ -385,20 +345,6 @@ export const AssistantModel = types
       self.setShowLoadingIndicator(false);
       self.addDavaiMsg("I've cancelled processing your message.");
     };
-
-    // const uploadFile = flow(function* () {
-    //   try {
-    //     const fileFromDataUri = yield convertBase64ToImage(self.dataUri);
-    //     const uploadedFile = yield self.apiConnection?.files.create({
-    //       file: fileFromDataUri,
-    //       purpose: "vision"
-    //     });
-    //     return uploadedFile.id;
-    //   } catch (err) {
-    //     console.error("Failed to upload image:", err);
-    //     self.addDbgMsg("Failed to upload image", formatJsonMessage(err));
-    //   }
-    // });
 
     const getAttributeData = flow(function* (graphID: string, attrID: string | null) {
       if (!attrID) return { attributeData: null };
@@ -449,106 +395,6 @@ export const AssistantModel = types
         return null;
       }
     });
-
-    // const sendFileMessage = flow(function* (fileId) {
-    //   try {
-    //     const res = yield self.apiConnection.beta.threads.messages.create(self.thread.id, {
-    //       role: "user",
-    //       content: [
-    //         {
-    //           type: "text",
-    //           text: "This is an image of a graph. Describe it for the user."
-    //         },
-    //         {
-    //           type: "image_file",
-    //           image_file: {
-    //             file_id: fileId
-    //           }
-    //         },
-    //         {
-    //           type: "text",
-    //           text: `The following JSON data describes key aspects of the graph in the image. Use this context to improve your interpretation and explanation of the graph. ${JSON.stringify(self.dataContextForGraph)}`
-    //         }
-    //       ]
-    //     });
-    //     self.addDbgMsg("Image uploaded", formatJsonMessage(res));
-    //   } catch (err) {
-    //     console.error("Failed to send file message:", err);
-    //     self.addDbgMsg("Failed to send file message", formatJsonMessage(err));
-    //   }
-    // });
-
-    // const handleRequiredAction = flow(function* (runState, runId) {
-    //   try {
-    //     const toolOutputs = runState.required_action?.submit_tool_outputs.tool_calls
-    //       ? yield Promise.all(
-    //         runState.required_action.submit_tool_outputs.tool_calls.map(flow(function* (toolCall: any) {
-    //           const parsedResult = getParsedData(toolCall);
-    //           let output = "";
-
-    //           if (!parsedResult.ok) {
-    //             output = "The JSON is invalid; please resend a valid object.";
-    //           } else if (toolCall.function.name === "create_request") {
-    //             const { action, resource, values } = parsedResult.data;
-    //             const request = { action, resource, values };
-
-    //             // When the request is to create a graph component, we need to update the sonification
-    //             // store after the run.
-    //             if (action === "create" && resource === "component" && values.type === "graph") {
-    //               self.updateSonificationStoreAfterRun = true;
-    //             }
-
-    //             self.addDbgMsg("Request sent to CODAP", formatJsonMessage(request));
-    //             let res = yield codapInterface.sendRequest(request);
-    //             self.addDbgMsg("Response from CODAP", formatJsonMessage(res));
-
-    //             // Prepare for uploading of image file after run if the request is to get dataDisplay
-    //             const isImageSnapshotRequest = action === "get" && resource.match(/^dataDisplay/);
-    //             if (isImageSnapshotRequest) {
-    //               self.uploadFileAfterRun = true;
-    //               self.dataUri = res.values.exportDataUri;
-    //               const graphIdMatch = resource.match(/\[(\d+)\]/);
-    //               const graphID = graphIdMatch?.[1];
-    //               if (graphID) {
-    //                 // Send data for the attributes on the graph for additional context
-    //                 // self.dataContextForGraph = yield getGraphAttrData(graphID);
-    //               } else {
-    //                 self.addDbgMsg("Could not extract graphID from resource string", resource);
-    //                 self.dataContextForGraph = null;
-    //               }
-    //             }
-    //             // remove any exportDataUri value that exists since it can be large and we don't need to send it to the assistant
-    //             res = isImageSnapshotRequest
-    //               ? { ...res, values: { ...res.values, exportDataUri: undefined } }
-    //               : res;
-
-    //             output = JSON.stringify(res);
-    //           } else if (toolCall.function.name === "sonify_graph") {
-    //             const root = getRoot(self) as any;
-    //             const graph = yield getGraphByID(parsedResult.data.graphID);
-
-    //             if (isGraphSonifiable(graph)) {
-    //               root.sonificationStore.setSelectedGraphID(graph.id);
-    //               output = `The graph "${graph.name || graph.id}" is ready to be sonified. Tell the user they can use the sonification controls to hear it.`;
-    //             } else {
-    //               output = `The graph "${graph.name || graph.id}" is not a numeric scatter plot or univariate dot plot. Tell the user they must select a numeric scatter plot or univariate dot plot to proceed.`;
-    //             }
-    //           } else {
-    //             output = `The tool call "${toolCall.function.name}" is not recognized.`;
-    //           }
-
-    //           return { tool_call_id: toolCall.id, output };
-    //         })
-    //       ))
-    //       : [];
-
-    //     self.addDbgMsg("Tool outputs being submitted", formatJsonMessage(toolOutputs));
-    //     yield self.apiConnection.beta.threads.runs.submitToolOutputs(self.thread.id, runId, { tool_outputs: toolOutputs });
-    //   } catch (err) {
-    //     console.error(err);
-    //     self.addDbgMsg("Error taking required action", formatJsonMessage(err));
-    //   }
-    // });
 
     const cancelRun = flow(function* (runId: string) {
       try {
