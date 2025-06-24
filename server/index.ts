@@ -3,10 +3,9 @@ import * as dotenv from "dotenv";
 import { START, END, MemorySaver, MessagesAnnotation, StateGraph } from "@langchain/langgraph";
 import { BaseMessage, HumanMessage, ToolMessage, trimMessages } from "@langchain/core/messages";
 import { ChatPromptTemplate } from "@langchain/core/prompts";
-import { MemoryVectorStore } from "langchain/vectorstores/memory";
 import { instructions } from "./text/instructions.js";
 import { codapApiDoc } from "./text/codap-api-documentation.js";
-import { escapeCurlyBraces, chunkCodapDocumentation, setupVectorStore } from "./utils/rag-utils.js";
+import { escapeCurlyBraces } from "./utils/rag-utils.js";
 import { processCodapData } from "./utils/data-context-utils.js";
 import { createModelInstance } from "./utils/llm-utils.js";
 import { MAX_TOKENS, MAX_TOKENS_PER_CHUNK } from "./constants.js";
@@ -33,9 +32,6 @@ app.use((req: any, res: any, next: any) => {
   next();
 });
 
-let vectorStoreCache: { [key: string]: MemoryVectorStore } = {};
-const processedCodapApiDoc = chunkCodapDocumentation(codapApiDoc);
-
 let promptTemplate: ChatPromptTemplate;
 
 const buildResponse = async (message: BaseMessage) => {
@@ -54,8 +50,7 @@ export const initializeApp = async () => {
   console.log("Initializing application...");
 
   promptTemplate = ChatPromptTemplate.fromMessages([
-    ["system", `${instructions}`],
-    ["placeholder", "{context}"],
+    ["system", `${instructions}, CODAP API documentation: ${escapeCurlyBraces(codapApiDoc)}`],
     ["placeholder", "{messages}"],
 ]);
 
@@ -81,15 +76,6 @@ const callModel = async (state: any, modelConfig: any) => {
     .pop()?.content;
 
   let context = "";
-  const vectorStore = vectorStoreCache[llmRealId] ?? await setupVectorStore(processedCodapApiDoc, llmRealId, vectorStoreCache);
-  if (lastUserMessage && !lastUserMessage.startsWith("CODAP document data chunk")) {
-    const retriever = vectorStore.asRetriever({ k: 5, searchType: "mmr" });
-    const relevantDocs = await retriever.invoke(lastUserMessage);
-    context = relevantDocs
-      .map(d => escapeCurlyBraces(d.pageContent))
-      .join("\n\n");
-  }
-
   // Use the trimmer to ensure we don't send too much to the model
   // The trimmer is used to limit the number of tokens in the conversation history.
   const trimmer = trimMessages({
