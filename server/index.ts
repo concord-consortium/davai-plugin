@@ -1,10 +1,10 @@
 import express, { json } from "express";
 import * as dotenv from "dotenv";
 import { START, END, MemorySaver, MessagesAnnotation, StateGraph } from "@langchain/langgraph";
-import { BaseMessage, ToolMessage, trimMessages } from "@langchain/core/messages";
+import { BaseMessage, HumanMessage, ToolMessage, trimMessages } from "@langchain/core/messages";
 import { ChatPromptTemplate } from "@langchain/core/prompts";
-import { instructions } from "./instructions.js";
-import { codapApiDoc } from "./codap-api-documentation.js";
+import { instructions } from "./text/instructions.js";
+import { codapApiDoc } from "./text/codap-api-documentation.js";
 import { escapeCurlyBraces } from "./utils/rag-utils.js";
 import { processCodapData } from "./utils/data-context-utils.js";
 import { createModelInstance } from "./utils/llm-utils.js";
@@ -53,9 +53,9 @@ export const initializeApp = async () => {
   console.log("Initializing application...");
 
   promptTemplate = ChatPromptTemplate.fromMessages([
-    ["system", `${instructions} Here is the relevant CODAP API documentation:\n ${escapeCurlyBraces(codapApiDoc)}`],
+    ["system", `${instructions}, CODAP API documentation: ${escapeCurlyBraces(codapApiDoc)}`],
     ["placeholder", "{messages}"],
-  ]);
+]);
 
   console.log("Application initialized successfully.");
 };
@@ -72,7 +72,13 @@ const getOrCreateModelInstance = (llmId: string): Record<string, any> => {
 const callModel = async (state: any, modelConfig: any) => {
   const { llmId } = modelConfig.configurable;
   const llm = getOrCreateModelInstance(llmId);
+  const llmRealId = JSON.parse(llmId).id;
 
+  const lastUserMessage = state.messages
+    .filter((msg: any) => msg instanceof HumanMessage)
+    .pop()?.content;
+
+  let context = "";
   // Use the trimmer to ensure we don't send too much to the model
   // The trimmer is used to limit the number of tokens in the conversation history.
   const trimmer = trimMessages({
@@ -85,6 +91,7 @@ const callModel = async (state: any, modelConfig: any) => {
   const trimmedMessages = await trimmer.invoke(state.messages);
 
   const prompt = await promptTemplate.invoke({
+    context,
     messages: trimmedMessages,
   });
 
