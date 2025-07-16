@@ -19,7 +19,7 @@ import { ICODAPGraph } from "../types";
 import "./App.scss";
 
 const kPluginName = "DAVAI";
-const kVersion = "0.1.0";
+const kVersion = "0.2.0";
 
 export const App = observer(() => {
   const appConfig = useAppConfigContext();
