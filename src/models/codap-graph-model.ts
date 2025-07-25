@@ -33,6 +33,7 @@ export const CODAPGraphModel = types.model("ICODAPGraph", {
   primaryAxis: types.maybe(types.string),
   rightSplitAttributeID: types.maybe(types.number),
   rightSplitAttributeName: types.maybe(types.string),
+  showConnectingLines: types.maybe(types.boolean),
   showMeasuresForSelection: types.maybe(types.boolean),
   strokeColor: types.maybe(types.string),
   strokeSameAsFill: types.maybe(types.boolean),

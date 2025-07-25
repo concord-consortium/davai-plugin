@@ -1,3 +1,4 @@
+import { BaseMessage } from "@langchain/core/messages";
 import { tool } from "@langchain/core/tools";
 import { z } from "zod";
 
@@ -72,4 +73,12 @@ export const toolCallResponse = async (toolCall: any) => {
     tool_call_id: toolCall.id,
     type: definedTool.name
   };
+};
+
+export const extractToolCalls = (lastMessage: BaseMessage | undefined): any[] => {
+  if (!lastMessage || !("tool_calls" in lastMessage) || !Array.isArray((lastMessage as any).tool_calls)) {
+    return [];
+  }
+
+  return (lastMessage as any).tool_calls;
 };
