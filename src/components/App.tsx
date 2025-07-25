@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useRef } from "react";
+import React, { useCallback, useEffect, useRef, useState } from "react";
 import * as Tone from "tone";
 import { observer } from "mobx-react-lite";
 import removeMarkdown from "remove-markdown";
@@ -34,6 +34,8 @@ export const App = observer(() => {
   const subscribedDataCtxsRef = useRef<string[]>([]);
   const transcriptStore = assistantStore.transcriptStore;
   const newlyCreatedGraphRef = useRef<number | null>(null);
+  const [dataContextsChanged, setDataContextsChanged] = useState(false);
+  const [graphsChanged, setGraphsChanged] = useState(false);
 
   const handleDataContextChangeNotice = useCallback(async (notification: ClientNotification) => {
     if (notificationsToIgnore.includes(notification.values.operation)) return;
@@ -45,6 +47,8 @@ export const App = observer(() => {
       // update the graph items
       sonificationStoreRef.current.setGraphItems();
     }
+    setDataContextsChanged(true);
+    setGraphsChanged(true);
   }, []);
 
   // documentation of the documentChangeNotice object here:
@@ -60,6 +64,8 @@ export const App = observer(() => {
         });
       }
       subscribedDataCtxsRef.current = ctxNames;
+      setDataContextsChanged(true);
+      setGraphsChanged(true);
     }
   }, [handleDataContextChangeNotice]);
 
@@ -90,6 +96,7 @@ export const App = observer(() => {
           console.error("Failed to fetch graph details for auto-selection:", error);
         }
       }
+      setGraphsChanged(true);
     }
   }, [sonificationStore]);
 
@@ -170,8 +177,11 @@ export const App = observer(() => {
     if (appConfig.isAssistantMocked) {
       assistantStore.handleMessageSubmitMockAssistant();
     } else {
-      assistantStore.handleMessageSubmit(messageText);
+      assistantStore.handleMessageSubmit(messageText, dataContextsChanged, graphsChanged);
     }
+
+    setDataContextsChanged(false);
+    setGraphsChanged(false);
   };
 
   const handleCancel = () => {

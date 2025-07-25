@@ -36,6 +36,8 @@ export const AssistantModel = types
   .volatile(() => ({
     llmId: "mock" as string,  // Set explicitly via setLlmId
     currentMessageId: null as string | null,
+    lastDataContexts: null as any,
+    lastGraphs: null as any,
   }))
   .views((self) => ({
     get isAssistantMocked() {
@@ -170,7 +172,7 @@ export const AssistantModel = types
       }
     });
 
-    const handleMessageSubmit = flow(function* (messageText: string) {
+    const handleMessageSubmit = flow(function* (messageText: string, dataContextsChanged, graphsChanged) {
       try {
         self.setShowLoadingIndicator(true);
         if (self.isCancelling || self.isResetting) {
@@ -184,8 +186,22 @@ export const AssistantModel = types
           const messageId = nanoid();
           self.currentMessageId = messageId;
 
-          const dataContexts = yield getDataContexts();
-          const graphs = yield getTrimmedGraphDetails();
+          // Always ensure we have data to send - fetch if changed OR if we don't have cached data
+          let dataContexts = self.lastDataContexts;
+          let graphs = self.lastGraphs;
+
+          if (dataContextsChanged || !self.lastDataContexts) {
+            dataContexts = yield getDataContexts();
+            self.lastDataContexts = dataContexts;
+            self.addDbgMsg("New data context information", formatJsonMessage(dataContexts));
+
+          }
+
+          if (graphsChanged || !self.lastGraphs) {
+            graphs = yield getTrimmedGraphDetails();
+            self.lastGraphs = graphs;
+            self.addDbgMsg("New graph information", formatJsonMessage(graphs));
+          }
 
           const reqBody = {
             llmId: self.llmId,
@@ -291,7 +307,7 @@ export const AssistantModel = types
         if (self.threadId && doneProcessing && self.messageQueue.length > 0) {
           const allMsgs = self.messageQueue.join("\n");
           self.clearUserMessageQueue();
-          await self.handleMessageSubmit(allMsgs);
+          await self.handleMessageSubmit(allMsgs, true, true);
         }
       });
     }
