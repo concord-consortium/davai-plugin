@@ -103,7 +103,8 @@ export const AssistantModel = types
           self.addDbgMsg("Response from CODAP", formatJsonMessage(res));
 
           if (res.success === false) {
-            throw new Error(`CODAP request failed: ${res}`);
+            console.error("CODAP request failed:", res);
+            return JSON.stringify(res);
           }
 
           // When the request is to create a graph component, we need to update the sonification
@@ -126,7 +127,6 @@ export const AssistantModel = types
               { type: "text", text: `Here is data about the graph in the image. Use it to improve your description. ${JSON.stringify(graphData)}`}
             ];
           } else {
-
             return JSON.stringify(res);
           }
         } else if (data.type === "sonify_graph") {
@@ -144,10 +144,10 @@ export const AssistantModel = types
           }
         }
       } catch (err) {
-          console.error("Failed to handle tool call:", err);
-          self.addDbgMsg("Failed to handle tool call", formatJsonMessage(err));
-          return JSON.stringify({ status: "error", error: err instanceof Error ? err.message : String(err) });
-        }
+        console.error("Failed to handle tool call:", err);
+        self.addDbgMsg("Failed to handle tool call", formatJsonMessage(err));
+        return JSON.stringify({ status: "error", error: err instanceof Error ? err.message : String(err) });
+      }
     });
 
     const sendToolOutputToLlm = flow(function* (toolCallId: string, content: ToolOutput) {
