@@ -102,9 +102,13 @@ export const AssistantModel = types
           let res = yield codapInterface.sendRequest(request);
           self.addDbgMsg("Response from CODAP", formatJsonMessage(res));
 
+          if (res.success === false) {
+            throw new Error(`CODAP request failed: ${res}`);
+          }
+
           // When the request is to create a graph component, we need to update the sonification
           // store after the run.
-          if (action === "create" && resource === "component" && values.type === "graph" && res.success) {
+          if (action === "create" && resource === "component" && values.type === "graph") {
             const root = getRoot(self) as any;
             root.sonificationStore.setGraphs({ selectNewest: true });
           }
@@ -113,7 +117,7 @@ export const AssistantModel = types
           const graphIdMatch = resource.match(/\[(\d+)\]/);
           const graphID = graphIdMatch?.[1];
 
-          if (res.values.exportDataUri && graphID) {
+          if (res.values?.exportDataUri && graphID) {
               // Send data for the attributes on the graph for additional context
             const graphData = yield getGraphAttrData(graphID);
             return [
@@ -159,7 +163,6 @@ export const AssistantModel = types
           }
         };
         const toolOutputResponse = yield postMessage(reqBody, "tool");
-
         if (!toolOutputResponse.ok) {
           throw new Error(`Failed to send tool response: ${toolOutputResponse.statusText}`);
         }
