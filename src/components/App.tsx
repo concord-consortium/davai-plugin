@@ -34,8 +34,6 @@ export const App = observer(() => {
   const subscribedDataCtxsRef = useRef<string[]>([]);
   const transcriptStore = assistantStore.transcriptStore;
   const newlyCreatedGraphRef = useRef<number | null>(null);
-  const [dataContextsChanged, setDataContextsChanged] = useState(false);
-  const [graphsChanged, setGraphsChanged] = useState(false);
 
   const handleDataContextChangeNotice = useCallback(async (notification: ClientNotification) => {
     if (notificationsToIgnore.includes(notification.values.operation)) return;
@@ -47,8 +45,8 @@ export const App = observer(() => {
       // update the graph items
       sonificationStoreRef.current.setGraphItems();
     }
-    setDataContextsChanged(true);
-    setGraphsChanged(true);
+    assistantStoreRef.current.updateDataContexts();
+    assistantStoreRef.current.updateGraphs();
   }, []);
 
   // documentation of the documentChangeNotice object here:
@@ -64,8 +62,8 @@ export const App = observer(() => {
         });
       }
       subscribedDataCtxsRef.current = ctxNames;
-      setDataContextsChanged(true);
-      setGraphsChanged(true);
+      assistantStoreRef.current.updateDataContexts();
+      assistantStoreRef.current.updateGraphs();
     }
   }, [handleDataContextChangeNotice]);
 
@@ -89,14 +87,14 @@ export const App = observer(() => {
           const graphs = await getGraphDetails();
           const graph = graphs.find((g: ICODAPGraph) => g.id === notification.values.id);
           if (graph && isGraphSonifiable(graph) && graph.id === newlyCreatedGraphRef.current) {
-            sonificationStore.setSelectedGraphID(graph.id);
+            sonificationStoreRef.current.setSelectedGraphID(graph.id);
             newlyCreatedGraphRef.current = null;
           }
         } catch (error) {
           console.error("Failed to fetch graph details for auto-selection:", error);
         }
       }
-      setGraphsChanged(true);
+      assistantStoreRef.current.updateGraphs();
     }
   }, [sonificationStore]);
 
@@ -177,11 +175,9 @@ export const App = observer(() => {
     if (appConfig.isAssistantMocked) {
       assistantStore.handleMessageSubmitMockAssistant();
     } else {
-      assistantStore.handleMessageSubmit(messageText, dataContextsChanged, graphsChanged);
+      await assistantStore.handleMessageSubmit(messageText);
     }
 
-    setDataContextsChanged(false);
-    setGraphsChanged(false);
   };
 
   const handleCancel = () => {

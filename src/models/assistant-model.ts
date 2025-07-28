@@ -36,8 +36,8 @@ export const AssistantModel = types
   .volatile(() => ({
     llmId: "mock" as string,  // Set explicitly via setLlmId
     currentMessageId: null as string | null,
-    lastDataContexts: null as any,
-    lastGraphs: null as any,
+    dataContexts: null as any,
+    graphs: null as any,
   }))
   .views((self) => ({
     get isAssistantMocked() {
@@ -81,16 +81,40 @@ export const AssistantModel = types
     }
   }))
   .actions((self) => {
-    const initializeAssistant = (llmId: string) => {
+    const initializeAssistant = flow (function* (llmId: string) {
       try {
         self.setLlmId(llmId);
         self.setThreadId(nanoid());
+        yield updateDataContexts();
+        yield updateGraphs();
         self.addDbgMsg("Assistant initialized", `Assistant ID: ${llmId}, Thread ID: ${self.threadId}`);
       } catch (err) {
         console.error("Failed to initialize assistant:", err);
         self.addDbgMsg("Failed to initialize assistant", formatJsonMessage(err));
       }
-    };
+    });
+
+    const updateDataContexts = flow(function* () {
+      try {
+        const dataContexts = yield getDataContexts();
+        self.dataContexts = dataContexts;
+        self.addDbgMsg("Updated data contexts", formatJsonMessage(dataContexts));
+      } catch (err) {
+        console.error("Failed to update data contexts:", err);
+        self.addDbgMsg("Failed to update data contexts", formatJsonMessage(err));
+      }
+    });
+
+    const updateGraphs = flow(function* () {
+      try {
+        const graphs = yield getTrimmedGraphDetails();
+        self.graphs = graphs;
+        self.addDbgMsg("Updated graphs", formatJsonMessage(graphs));
+      } catch (err) {
+        console.error("Failed to update graphs:", err);
+        self.addDbgMsg("Failed to update graphs", formatJsonMessage(err));
+      }
+    });
 
     const processToolCall = flow(function* (data: IToolCallData) {
       try {
@@ -175,7 +199,7 @@ export const AssistantModel = types
       }
     });
 
-    const handleMessageSubmit = flow(function* (messageText: string, dataContextsChanged, graphsChanged) {
+    const handleMessageSubmit = flow(function* (messageText: string) {
       try {
         self.setShowLoadingIndicator(true);
         if (self.isCancelling || self.isResetting) {
@@ -189,28 +213,11 @@ export const AssistantModel = types
           const messageId = nanoid();
           self.currentMessageId = messageId;
 
-          // Always ensure we have data to send - fetch if changed OR if we don't have cached data
-          let dataContexts = self.lastDataContexts;
-          let graphs = self.lastGraphs;
-
-          if (dataContextsChanged || !self.lastDataContexts) {
-            dataContexts = yield getDataContexts();
-            self.lastDataContexts = dataContexts;
-            self.addDbgMsg("New data context information", formatJsonMessage(dataContexts));
-
-          }
-
-          if (graphsChanged || !self.lastGraphs) {
-            graphs = yield getTrimmedGraphDetails();
-            self.lastGraphs = graphs;
-            self.addDbgMsg("New graph information", formatJsonMessage(graphs));
-          }
-
           const reqBody = {
             llmId: self.llmId,
             threadId: self.threadId,
-            dataContexts,
-            graphs,
+            dataContexts: self.dataContexts,
+            graphs: self.graphs,
             message: messageText,
             isSystemMessage: false,
             messageId
@@ -301,7 +308,7 @@ export const AssistantModel = types
       }
     });
 
-    return { createThread, initializeAssistant, handleMessageSubmit, handleCancel };
+    return { createThread, initializeAssistant, handleMessageSubmit, handleCancel, updateDataContexts, updateGraphs };
   })
   .actions((self) => ({
     afterCreate() {
@@ -310,7 +317,7 @@ export const AssistantModel = types
         if (self.threadId && doneProcessing && self.messageQueue.length > 0) {
           const allMsgs = self.messageQueue.join("\n");
           self.clearUserMessageQueue();
-          await self.handleMessageSubmit(allMsgs, true, true);
+          await self.handleMessageSubmit(allMsgs);
         }
       });
     }
