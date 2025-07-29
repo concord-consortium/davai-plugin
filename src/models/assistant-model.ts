@@ -38,6 +38,7 @@ export const AssistantModel = types
     currentMessageId: null as string | null,
     dataContexts: null as any,
     graphs: null as any,
+    cancellationMessageShown: false,
   }))
   .views((self) => ({
     get isAssistantMocked() {
@@ -174,12 +175,13 @@ export const AssistantModel = types
       }
     });
 
-    const sendToolOutputToLlm = flow(function* (toolCallId: string, content: ToolOutput) {
+    const sendToolOutputToLlm = flow(function* (toolCallId: string, content: ToolOutput, messageId: string) {
       if (self.isAssistantMocked) return;
       try {
         const reqBody = {
           llmId: self.llmId,
           threadId: self.threadId,
+          messageId, // pass the original message ID for conversation tracking
           isToolResponse: true,
           message: {
             tool_call_id: toolCallId,
@@ -212,6 +214,7 @@ export const AssistantModel = types
           // Generate a unique message ID for this request. This lets us cancel the message if needed.
           const messageId = nanoid();
           self.currentMessageId = messageId;
+          self.cancellationMessageShown = false; // reset for new message
 
           const reqBody = {
             llmId: self.llmId,
@@ -233,14 +236,26 @@ export const AssistantModel = types
           let data: IMessageResponse = yield messageResponse.json();
           self.addDbgMsg("Response from server", formatJsonMessage(data));
 
+          // check if this is a successful cancellation response
+          if (data.status === "cancelled") {
+            handleCancelResponse("Message was cancelled during processing", messageId);
+            return;
+          }
+
           // Keep processing tool calls until we get a final response
           while (data?.status === "requires_action" && data?.tool_call_id) {
             const toolOutput = yield processToolCall(data as IToolCallData);
             self.addDbgMsg("Tool output generated", formatJsonMessage(toolOutput));
 
             // Send tool response back to server
-            const toolResponseResult = yield sendToolOutputToLlm(data.tool_call_id, toolOutput);
+            const toolResponseResult = yield sendToolOutputToLlm(data.tool_call_id, toolOutput, messageId);
             self.addDbgMsg("Response to tool output from server", formatJsonMessage(toolResponseResult));
+
+            // Check if tool call was cancelled
+            if (toolResponseResult.status === "cancelled") {
+              handleCancelResponse("Tool call was cancelled by server", messageId);
+              return;
+            }
 
             // Get the next response in the chain
             data = toolResponseResult;
@@ -258,8 +273,17 @@ export const AssistantModel = types
         self.isLoadingResponse = false;
         self.setShowLoadingIndicator(false);
         self.currentMessageId = null;
+        self.cancellationMessageShown = false;
       }
     });
+
+    const handleCancelResponse = (debugMsg: string, msgId: string) => {
+      if (!self.cancellationMessageShown) {
+        self.addDbgMsg(debugMsg, `Message ID: ${msgId}`);
+        self.addDavaiMsg("I've cancelled processing your message.");
+        self.cancellationMessageShown = true;
+      }
+    };
 
     const handleCancel = flow(function* () {
       try {
@@ -267,27 +291,31 @@ export const AssistantModel = types
           self.isCancelling = true;
           self.setShowLoadingIndicator(false);
 
-          self.addDavaiMsg("I've cancelled processing your message.");
+          const messageIdToCancel = self.currentMessageId;
           const reqBody = {
-            messageId: self.currentMessageId,
+            messageId: messageIdToCancel,
             threadId: self.threadId
           };
 
           const cancelResponse = yield postMessage(reqBody, "cancel");
-
-          if (!cancelResponse.ok) {
-            throw new Error(`Failed to cancel run: ${cancelResponse.statusText}`);
-          }
-
           const cancelRes = yield cancelResponse.json();
-          self.addDbgMsg(`Cancel request received`, formatJsonMessage(cancelRes));
+
+          if (cancelResponse.ok) {
+            // server confirmed cancellation
+            self.addDbgMsg("Conversation cancelled successfully", formatJsonMessage(cancelRes));
+            self.addDavaiMsg("I've cancelled processing your message.");
+            self.cancellationMessageShown = true;
+          } else {
+            // Cancellation failed or conversation already completed
+            self.addDbgMsg("Cancel attempt result", formatJsonMessage(cancelRes));
+          }
         }
        } catch (err: any) {
           const errorMessage = err instanceof Error ? err.message : String(err);
-          if (!errorMessage.includes("Message not found or already completed")) {
-            console.error("Failed to cancel run:", errorMessage);
-            self.addDbgMsg("Failed to cancel run", formatJsonMessage(errorMessage));
-          }
+          console.error("Failed to cancel run:", errorMessage);
+          self.addDbgMsg("Failed to cancel run", formatJsonMessage(errorMessage));
+          // Show user that cancellation failed
+          self.addDavaiMsg("Unable to cancel - the message may have already completed.");
         } finally {
           self.isCancelling = false;
           self.setShowLoadingIndicator(false);
@@ -302,6 +330,7 @@ export const AssistantModel = types
         }
         self.isLoadingResponse = false;
         self.isCancelling = false;
+        self.cancellationMessageShown = false;
         self.threadId = nanoid();
       } catch (err) {
         console.error("Error creating thread:", err);

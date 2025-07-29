@@ -21,14 +21,23 @@ app.use((req: any, res: any, next: any) => {
   next();
 });
 
-// Track active message processing
-const activeMessages = new Map<string, AbortController>();
+// Track active conversations (not just individual requests)
+const activeConversations = new Map<string, AbortController>();
 
 app.post("/default/davaiServer/tool", async (req, res) => {
-  const { llmId, message, threadId } = req.body;
+  const { llmId, message, threadId, messageId } = req.body;
   const config = { configurable: { thread_id: threadId, llmId } };
 
   try {
+    // Check if this conversation was cancelled
+    const controller = activeConversations.get(messageId);
+    if (!controller) {
+      return res.status(200).json({
+        status: "cancelled",
+        message: "Conversation was cancelled",
+        messageId
+      });
+    }
     const messages = [];
     let toolMessageContent: string;
     let humanMessage;
@@ -55,16 +64,35 @@ app.post("/default/davaiServer/tool", async (req, res) => {
       messages.push(humanMessage);
     }
 
-    const toolResponseOutput = await langApp.invoke({ messages }, config);
+    const toolResponseOutput = await langApp.invoke({ messages }, {
+      ...config,
+      signal: controller.signal
+    });
 
     // There may be a follow-on tool call in the response, so we need to check for that and handle it.
     const lastMessage = toolResponseOutput.messages[toolResponseOutput.messages.length - 1];
     const response = await buildResponse(lastMessage);
+
+    // If this is a final response (no more tool calls needed), clean up the conversation
+    if (!("status" in response) || response.status !== "requires_action") {
+      activeConversations.delete(messageId);
+    }
+
     res.json(response);
   } catch (err: any) {
-    console.error("Error in /api/message:", err);
-    console.error("Error stack:", err.stack);
-    res.status(500).json({ error: "LangChain Error", details: err.message });
+    if (err.message === "Aborted") {
+      // Tool call was cancelled
+      activeConversations.delete(messageId);
+      res.status(200).json({
+        status: "cancelled",
+        message: "Tool call was cancelled",
+        messageId
+      });
+    } else {
+      console.error("Error in tool call:", err);
+      console.error("Error stack:", err.stack);
+      res.status(500).json({ error: "LangChain Error", details: err.message });
+    }
   }
 });
 
@@ -76,7 +104,7 @@ app.post("/default/davaiServer/message", async (req, res) => {
   try {
     // Create an AbortController for this request. This lets us cancel the request if needed.
     const controller = new AbortController();
-    activeMessages.set(messageId, controller);
+    activeConversations.set(messageId, controller);
 
     // pass the user message and fresh CODAP data to langApp
     // the CODAP data will be added to the prompt template
@@ -92,34 +120,51 @@ app.post("/default/davaiServer/message", async (req, res) => {
       }
     );
 
-    // Clean up the controller
-    activeMessages.delete(messageId);
-
     const lastMessage = output.messages[output.messages.length - 1];
     const response = await buildResponse(lastMessage);
+
+    // If this is a final response (no more tool calls needed), clean up the conversation
+    if (!("status" in response) || response.status !== "requires_action") {
+      activeConversations.delete(messageId);
+    }
+
     res.json(response);
   } catch (err: any) {
     if (err.message === "Aborted") {
-      res.status(500).json({ error: "Message processing cancelled" });
+      // Successful cancellation - return 200, not 500
+      res.status(200).json({
+        status: "cancelled",
+        message: "Message processing was successfully cancelled",
+        messageId
+      });
     } else {
       console.error("Error in /api/message:", err);
       console.error("Error stack:", err.stack);
       res.status(500).json({ error: "LangChain Error", details: err.message });
     }
-    activeMessages.delete(messageId);
+    activeConversations.delete(messageId);
   }
 });
 
 // Endpoint for cancelling message processing
 app.post("/default/davaiServer/cancel", async (req, res) => {
   const { messageId } = req.body;
-  const controller = activeMessages.get(messageId);
+  const controller = activeConversations.get(messageId);
   if (controller) {
     controller.abort();
-    activeMessages.delete(messageId);
-    res.json({ status: "cancelled", message: "Message processing cancelled successfully" });
+    activeConversations.delete(messageId);
+    res.json({
+      status: "cancelled",
+      messageId,
+      message: "Message processing cancelled successfully"
+    });
   } else {
-    res.status(404).json({ error: "Message not found or already completed" });
+    // Message not found could mean it already completed or never existed
+    res.status(404).json({
+      error: "Message not found or already completed",
+      messageId,
+      reason: "completed" // Message likely completed before cancellation request
+    });
   }
 });
 
