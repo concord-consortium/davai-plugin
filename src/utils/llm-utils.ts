@@ -13,7 +13,7 @@ export const requestThreadDeletion = async (threadId: string): Promise<Response>
   return response;
 };
 
-export async function postMessage(req: Record<string, any>, msgEndpoint: string) {
+export const postMessage = async (req: Record<string, any>, msgEndpoint: string) => {
   return await fetch(`${serverUrl}default/davaiServer/${msgEndpoint}`, {
     method: "POST",
     headers: {
@@ -22,4 +22,34 @@ export async function postMessage(req: Record<string, any>, msgEndpoint: string)
     },
     body: JSON.stringify(req),
   });
-}
+};
+
+export const getParsedData = (toolCall: any) => {
+  try {
+    const data = JSON.parse(toolCall.function.arguments);
+    return { ok: true, data };
+  } catch {
+    return { ok: false, data: null };
+  }
+};
+
+export const convertBase64ToImage = async (base64Data: string, filename = "image.png") => {
+  try {
+    const mimeType = base64Data.match(/data:(.*?);base64/)?.[1] || "image/png";
+    const base64 = base64Data.split(",")[1];
+    const binary = atob(base64);
+    const binaryLength = binary.length;
+    const arrayBuffer = new Uint8Array(binaryLength);
+    for (let i = 0; i < binaryLength; i++) {
+      arrayBuffer[i] = binary.charCodeAt(i);
+    }
+
+    const blob = new Blob([arrayBuffer], { type: mimeType });
+    const file = new File([blob], filename, { type: mimeType });
+    return file;
+  } catch (error) {
+    console.error("Error converting base64 to image:", error);
+    throw error;
+  }
+};
+

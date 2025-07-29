@@ -2,7 +2,6 @@ import React from "react";
 import { createRoot } from "react-dom/client";
 import { App } from "./components/App";
 import { AppConfigProvider } from "./contexts/app-config-provider";
-import { OpenAIConnectionProvider } from "./contexts/openai-connection-provider";
 import { AriaLiveProvider } from "./contexts/aria-live-context";
 import { UserOptionsProvider } from "./contexts/user-options-context";
 
@@ -14,13 +13,11 @@ if (container) {
 
   root.render(
     <AppConfigProvider>
-      <OpenAIConnectionProvider>
-        <AriaLiveProvider>
-          <UserOptionsProvider>
-            <App />
-          </UserOptionsProvider>
-        </AriaLiveProvider>
-      </OpenAIConnectionProvider>
+      <AriaLiveProvider>
+        <UserOptionsProvider>
+          <App />
+        </UserOptionsProvider>
+      </AriaLiveProvider>
     </AppConfigProvider>
   );
 }

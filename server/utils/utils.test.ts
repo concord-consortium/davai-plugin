@@ -1,6 +1,6 @@
 import { BaseMessage } from "@langchain/core/messages.js";
 import { CHARS_PER_TOKEN } from "../constants.js";
-import { tokenCounter, extractToolCalls } from "./utils.js";
+import { tokenCounter, escapeCurlyBraces } from "./utils.js";
 
 describe("tokenCounter", () => {
   it("should count tokens correctly for a single message", () => {
@@ -13,21 +13,10 @@ describe("tokenCounter", () => {
   });
 });
 
-describe ("extractToolCalls", () => {
-  it("should return an empty array if no tool calls are present", () => {
-    const messages = [
-      { content: "This is a message without tool calls." }
-    ] as BaseMessage[];
-    const result = extractToolCalls(messages[0]);
-    expect(result).toEqual([]);
-  });
-
-  it("should extract tool calls from the last message", () => {
-    const toolCalls = [{ name: "exampleTool", args: {} }];
-    const messages = [
-      { content: "This is a message with tool calls.", tool_calls: toolCalls }
-    ] as any as BaseMessage[];
-    const result = extractToolCalls(messages[0]);
-    expect(result).toEqual(toolCalls);
+describe("escapeCurlyBraces", () => {
+  it("should escape curly braces in text", () => {
+    const input = "This is a test with {curly braces} and {{double braces}}.";
+    const expected = "This is a test with {{curly braces}} and {{{{double braces}}}}.";
+    expect(escapeCurlyBraces(input)).toBe(expected);
   });
 });

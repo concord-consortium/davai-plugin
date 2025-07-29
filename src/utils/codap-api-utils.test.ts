@@ -1,4 +1,4 @@
-import { extractDataContexts, trimDataset } from "./data-context-utils";
+import { trimDataset } from "./codap-api-utils";
 
 // mock Node.js's structuredClone function
 if (!globalThis.structuredClone) {
@@ -82,40 +82,5 @@ describe("trimDataset", () => {
     };
     const trimmed = trimDataset(dataset);
     expect(trimmed).toEqual(dataset);
-  });
-});
-
-describe("extractDataContexts", () => {
-  it("should extract initial data contexts", () => {
-    const message = "Data contexts: {}";
-    const result = extractDataContexts(message);
-    expect(result).toEqual({
-      codapData: {},
-      type: "initial"
-    });
-  });
-
-  it("should extract create data contexts", () => {
-    const message = "New data context {name} created: {}";
-    const result = extractDataContexts(message);
-    expect(result).toEqual({
-      codapData: {"New data context {name} created": {}},
-      type: "create"
-    });
-  });
-
-  it("should extract update data contexts", () => {
-    const message = "Data context {name} has been updated: {}";
-    const result = extractDataContexts(message);
-    expect(result).toEqual({
-      codapData: {"Data context {name} has been updated": {}},
-      type: "update"
-    });
-  });
-
-  it("should return null for non-matching messages", () => {
-    const message = "This is not a data context message";
-    const result = extractDataContexts(message);
-    expect(result).toBeNull();
   });
 });

@@ -30,14 +30,6 @@ jest.mock("@langchain/google-genai", () => ({
   })),
 }));
 
-jest.mock("./rag-utils", () => ({
-  ...jest.requireActual("./rag-utils"),
-  getEmbeddingsModel: jest.fn(() => ({
-    embedQuery: jest.fn(),
-    embedDocuments: jest.fn(),
-  })),
-}));
-
 afterAll(() => {
   jest.clearAllMocks();
   jest.resetModules();

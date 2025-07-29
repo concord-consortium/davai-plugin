@@ -3,9 +3,8 @@ import { observer } from "mobx-react-lite";
 import * as Tone from "tone";
 import { codapInterface } from "@concord-consortium/codap-plugin-api";
 import { GraphSonificationModelType } from "../models/graph-sonification-model";
-import { mapPitchFractionToFrequency, mapValueToStereoPan, updateRoiAdornment } from "./graph-sonification-utils";
 import { ErrorMessage } from "./error-message";
-import { isUnivariateDotPlot } from "../utils/utils";
+import { mapPitchFractionToFrequency, mapValueToStereoPan, updateRoiAdornment, isUnivariateDotPlot } from "../utils/graph-sonification-utils";
 
 import PlayIcon from "../assets/play-sonification-icon.svg";
 import PauseIcon from "../assets/pause-sonification-icon.svg";
@@ -88,7 +87,7 @@ export const GraphSonification = observer(({sonificationStore}: IProps) => {
   const handlePlayEnd = useCallback(() => {
     const position = Tone.getTransport().seconds;
     setPlayState({ playing: false, ended: true, position });
-    
+
     // Clean up oscillator state
     if (osc.current) {
       osc.current.stop();

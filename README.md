@@ -17,11 +17,27 @@ The code consists of a React-based client app (in `/src`) and a Node-based serve
 
 ## Testing the plugin in CODAP
 
-Currently there is no trivial way to load a plugin running on a local server with `http` into the online CODAP, which forces `https`. One simple solution is to download the latest `build_[...].zip` file from https://codap.concord.org/releases/zips/, extract it to a folder and run it locally. If CODAP is running on port 8080, and this project is running by default on 8081, you can go to
+Currently there is no trivial way to load a plugin running on a local server with `http` into the online CODAP, which forces `https`.
+
+### Method one
+One simple solution is to download the latest `build_[...].zip` file from https://codap.concord.org/releases/zips/, extract it to a folder and run it locally. If CODAP is running on port 8080, and this project is running by default on 8081, you can go to
 
 http://127.0.0.1:8080/static/dg/en/cert/index.html?di=http://localhost:8081
 
 to see the plugin running in CODAP.
+
+### Method two
+
+1. Start the DAVAI plugin by running `npm start` in this codebase.
+2. Open the CODAP repository, navigate to the `v3` directory, and run `npm start` to launch CODAP locally.
+3. Open a new Chrome window with web security disabled by running:
+  ```
+  open -na "Google Chrome" --args --disable-web-security --user-data-dir=/tmp
+  ```
+4. In this Chrome window, go to the local CODAP URL (e.g., `http://localhost:8080`) and open a sample file (such as "Mammals").
+5. In CODAP, go to **Options** > **Load web page**, and enter the local DAVAI plugin URL (for example, `http://localhost:8081/?mode=development`).
+
+This method allows you to test the plugin locally in CODAP, bypassing browser security restrictions that normally prevent loading local resources.
 
 # Create React App Readme
 
@@ -78,7 +94,7 @@ Default configuration setting values are defined in the `app-config.json` file. 
 
 ### llmId
 
-- **`llmId`** (string)  
+- **`llmId`** (string)
   The unique ID of an LLM to use, or "mock" for a mocked LLM.
 
 ### Dimensions
