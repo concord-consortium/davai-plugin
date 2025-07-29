@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useRef, useState } from "react";
+import React, { useCallback, useEffect, useRef } from "react";
 import * as Tone from "tone";
 import { observer } from "mobx-react-lite";
 import removeMarkdown from "remove-markdown";

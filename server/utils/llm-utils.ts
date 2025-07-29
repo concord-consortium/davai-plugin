@@ -12,10 +12,18 @@ import { MAX_TOKENS } from "../constants.js";
 let llmInstances: Record<string, any> = {};
 
 const promptTemplate = ChatPromptTemplate.fromMessages([
-    ["system", `${instructions}
-    CODAP API documentation: ${escapeCurlyBraces(codapApiDoc)}
-    Current CODAP Data Contexts: {dataContexts}
-    Current CODAP Graphs: {graphs}`],
+    [ "system",
+      `${instructions}
+
+      ### CODAP API documentation:
+      ${escapeCurlyBraces(codapApiDoc)}
+
+      ### Current CODAP Data Contexts:
+      {dataContexts}
+
+      ### Current CODAP Graphs:
+      {graphs}`
+    ],
     ["placeholder", "{messages}"],
 ]);
 

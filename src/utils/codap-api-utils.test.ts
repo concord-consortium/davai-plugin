@@ -1,4 +1,4 @@
-import { trimDataset } from "./codap-api-utils"
+import { trimDataset } from "./codap-api-utils";
 
 // mock Node.js's structuredClone function
 if (!globalThis.structuredClone) {
