@@ -36,7 +36,7 @@ app.use((req: any, res: any, next: any) => {
 });
 
 app.post("/default/davaiServer/message", async (req, res) => {
-  const { llmId, message, threadId, codapData } = req.body;
+  const { llmId, message, threadId, dataContexts, graphs } = req.body;
   const messageId = nanoid();
 
   try {
@@ -44,7 +44,8 @@ app.post("/default/davaiServer/message", async (req, res) => {
       llmId,
       threadId,
       message,
-      codapData
+      dataContexts,
+      graphs
     };
 
     // Store job in DynamoDB
