@@ -14,7 +14,7 @@ Deployment involves manually uploading the zipped server files to AWS Lambda. Th
 
 ### 1. Make sure you are in the server directory
 ### 2. Run `bash build-and-package.sh`
-### 5. Upload the newly-created zip file to AWS Lambda
+### 3. Upload the newly-created zip file to AWS Lambda
 1. Go to the AWS Lambda Console
 2. Select the Lambda function `davaiServer`
 3. Under the "Code" section, choose "Upload from → .zip file"
