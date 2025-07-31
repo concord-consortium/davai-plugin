@@ -8,20 +8,26 @@
     "transpileOnly": true
   },
   "scripts": {
-    "start": "node --loader ts-node/esm index.ts",
     "build": "tsc",
+    "dev:infra": "docker-compose up",
+    "start": "node --loader ts-node/esm index.ts",
     "test": "jest",
-    "test:coverage": "jest --coverage"
+    "test:coverage": "jest --coverage",
+    "worker": "node --loader ts-node/esm worker.ts"
   },
   "keywords": [],
   "author": "",
   "license": "ISC",
   "description": "",
   "dependencies": {
-    "@langchain/community": "^0.3.45",
+    "@aws-sdk/client-dynamodb": "^3.857.0",
+    "@aws-sdk/client-sqs": "^3.857.0",
+    "@aws-sdk/lib-dynamodb": "^3.857.0",
+    "@langchain/community": "^0.3.49",
     "@langchain/core": "^0.3.58",
     "@langchain/google-genai": "^0.2.10",
-    "@langchain/langgraph": "^0.2.74",
+    "@langchain/langgraph": "^0.4.0",
+    "@langchain/langgraph-checkpoint": "^0.1.0",
     "@langchain/openai": "^0.5.11",
     "@types/jest": "^29.5.14",
     "@vendia/serverless-express": "^4.12.6",

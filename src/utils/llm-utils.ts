@@ -13,16 +13,22 @@ export const requestThreadDeletion = async (threadId: string): Promise<Response>
   return response;
 };
 
-export const postMessage = async (req: Record<string, any>, msgEndpoint: string) => {
-  return await fetch(`${serverUrl}default/davaiServer/${msgEndpoint}`, {
-    method: "POST",
+export async function postMessage(req: Record<string, any>, msgEndpoint: string, method = "POST") {
+  const url = `${serverUrl}default/davaiServer/${msgEndpoint}`;
+  const opts: RequestInit = {
+    method,
     headers: {
       "Content-Type": "application/json",
-      "Authorization": process.env.AUTH_TOKEN || "",
-    },
-    body: JSON.stringify(req),
-  });
-};
+      "Authorization": process.env.AUTH_TOKEN || ""
+    }
+  };
+
+  if (req && method !== "GET") {
+    opts.body = JSON.stringify(req);
+  }
+
+  return await fetch(url, opts);
+}
 
 export const getParsedData = (toolCall: any) => {
   try {
@@ -52,4 +58,3 @@ export const convertBase64ToImage = async (base64Data: string, filename = "image
     throw error;
   }
 };
-

@@ -1,0 +1,20 @@
+version: "3.8"
+
+services:
+  dynamodb-local:
+    image: amazon/dynamodb-local
+    container_name: dynamodb-local
+    ports:
+      - "8000:8000"
+    command: "-jar DynamoDBLocal.jar -inMemory -sharedDb"
+
+  elasticmq:
+    image: softwaremill/elasticmq-native
+    container_name: elasticmq
+    ports:
+      - "9324:9324"
+      - "9325:9325" # management GUI (optional)
+    environment:
+      - ELASTICMQ_CONFIG_FILE=/opt/elasticmq.conf
+    volumes:
+      - ./elasticmq.conf:/opt/elasticmq.conf
