@@ -2,9 +2,7 @@ import * as dotenv from "dotenv";
 dotenv.config();
 
 import express, { json } from "express";
-import { HumanMessage, ToolMessage } from "@langchain/core/messages";
-import { buildResponse, langApp } from "./utils/llm-utils.js";
-import { DynamoDBClient, PutItemCommand, UpdateItemCommand, GetItemCommand } from "@aws-sdk/client-dynamodb";
+import { DynamoDBClient, PutItemCommand, GetItemCommand, UpdateItemCommand } from "@aws-sdk/client-dynamodb";
 import { SQSClient, SendMessageCommand } from "@aws-sdk/client-sqs";
 import { nanoid } from "nanoid";
 
@@ -37,8 +35,43 @@ app.use((req: any, res: any, next: any) => {
   next();
 });
 
-// Track active message processing
-// const activeMessages = new Map<string, AbortController>();
+app.post("/default/davaiServer/message", async (req, res) => {
+  const { llmId, message, threadId, codapData } = req.body;
+  const messageId = nanoid();
+
+  try {
+    const jobInput = {
+      llmId,
+      threadId,
+      message,
+      codapData
+    };
+
+    // Store job in DynamoDB
+    await dynamodb.send(new PutItemCommand({
+      TableName: tableName,
+      Item: {
+        messageId: { S: messageId },
+        status: { S: "queued" },
+        input: { S: JSON.stringify(jobInput) },
+        createdAt: { N: `${Date.now()}` },
+        updatedAt: { N: `${Date.now()}` },
+        cancelled: { BOOL: false }
+      }
+    }));
+
+    // Queue the message
+    await sqs.send(new SendMessageCommand({
+      QueueUrl: queueUrl,
+      MessageBody: JSON.stringify({ messageId })
+    }));
+
+    res.status(202).json({ messageId, status: "queued" });
+  } catch (err: any) {
+    console.error("Error enqueuing message:", err);
+    res.status(500).json({ error: "Failed to queue message", details: err.message });
+  }
+});
 
 app.post("/default/davaiServer/tool", async (req, res) => {
   const { llmId, message, threadId } = req.body;
@@ -78,100 +111,6 @@ app.post("/default/davaiServer/tool", async (req, res) => {
   }
 });
 
-// This is the main endpoint for use by the client app. We may want to add more, e.g. another for tool calls, etc.
-// app.post("/default/davaiServer/message", async (req, res) => {
-//   const { llmId, message, threadId, codapData, messageId } = req.body;
-//   const config = { configurable: { thread_id: threadId, llmId } };
-
-//   try {
-//     const messages = [];
-
-//     // If we have data contexts, process them before adding.
-//     if (codapData && typeof codapData === "object") {
-//       const processedCodapData = processCodapData(codapData);
-//       codapDataTokenCount = Math.min(
-//         codapDataTokenCount + processedCodapData.length * MAX_TOKENS_PER_CHUNK,
-//         MAX_TOKENS
-//       );
-
-//       messages.push(...processedCodapData);
-//     } else {
-//       // Add the user's message
-//       messages.push({
-//         role: "user",
-//         content: message,
-//       });
-//     }
-
-//     // Create an AbortController for this request. This lets us cancel the request if needed.
-//     const controller = new AbortController();
-//     activeMessages.set(messageId, controller);
-
-//     const output = await langApp.invoke(
-//       { messages },
-//       {
-//         ...config,
-//       signal: controller.signal
-//       }
-//     );
-
-//     // Clean up the controller
-//     activeMessages.delete(messageId);
-
-//     const lastMessage = output.messages[output.messages.length - 1];
-//     const response = await buildResponse(lastMessage);
-//     res.json(response);
-//   } catch (err: any) {
-//     if (err.message === "Aborted") {
-//       res.status(500).json({ error: "Message processing cancelled" });
-//     } else {
-//       console.error("Error in /api/message:", err);
-//       console.error("Error stack:", err.stack);
-//       res.status(500).json({ error: "LangChain Error", details: err.message });
-//     }
-//     activeMessages.delete(messageId);
-//   }
-// });
-
-app.post("/default/davaiServer/message", async (req, res) => {
-  const { llmId, message, threadId, codapData } = req.body;
-  const messageId = nanoid();
-  const config = { threadId, llmId };
-
-  try {
-    const jobInput = {
-      llmId,
-      threadId,
-      message,
-      codapData
-    };
-
-    // Store job in DynamoDB
-    await dynamodb.send(new PutItemCommand({
-      TableName: tableName,
-      Item: {
-        messageId: { S: messageId },
-        status: { S: "queued" },
-        input: { S: JSON.stringify(jobInput) },
-        createdAt: { N: `${Date.now()}` },
-        updatedAt: { N: `${Date.now()}` },
-        cancelled: { BOOL: false }
-      }
-    }));
-
-    // Queue the message
-    await sqs.send(new SendMessageCommand({
-      QueueUrl: queueUrl,
-      MessageBody: JSON.stringify({ messageId })
-    }));
-
-    res.status(202).json({ messageId, status: "queued" });
-  } catch (err: any) {
-    console.error("Error enqueuing message:", err);
-    res.status(500).json({ error: "Failed to queue message", details: err.message });
-  }
-});
-
 app.get("/default/davaiServer/status", async (req, res) => {
   const { messageId } = req.query;
 
@@ -199,19 +138,6 @@ app.get("/default/davaiServer/status", async (req, res) => {
     res.status(500).json({ error: "Failed to fetch job status", details: err.message });
   }
 });
-
-// Endpoint for cancelling message processing
-// app.post("/default/davaiServer/cancel", async (req, res) => {
-//   const { messageId } = req.body;
-//   const controller = activeMessages.get(messageId);
-//   if (controller) {
-//     controller.abort();
-//     activeMessages.delete(messageId);
-//     res.json({ status: "cancelled", message: "Message processing cancelled successfully" });
-//   } else {
-//     res.status(404).json({ error: "Message not found or already completed" });
-//   }
-// });
 
 app.post("/default/davaiServer/cancel", async (req, res) => {
   const { messageId } = req.body;
