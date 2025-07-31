@@ -118,19 +118,49 @@ async function pollQueue() {
         console.log("Job was cancelled. Skipping.");
       } else {
         const input = JSON.parse(job.input.S || "{}");
-        const { llmId, threadId, message: _message, codapData } = input;
+        const { llmId, threadId, message: _message, codapData, isToolCall } = input;
         const config = { configurable: { llmId, thread_id: threadId } };
         const messages: any[] = [];
 
-        if (codapData && typeof codapData === "object") {
-          const processedCodapData = processCodapData(codapData);
-          codapDataTokenCount = Math.min(
-            codapDataTokenCount + processedCodapData.length * MAX_TOKENS_PER_CHUNK,
-            MAX_TOKENS
-          );
-          messages.push(...processedCodapData);
+        if (isToolCall) {
+          // Handle tool call response
+          let toolMessageContent: string;
+          let humanMessage;
+
+          // `message.content` will be an array if previously the user asked to describe a graph
+          // ToolMessage doesn't support sending images back to the model
+          // So we stub the response to the tool call, and follow up with HumanMessage
+          if (Array.isArray(_message.content)) {
+            // stub tool response
+            toolMessageContent = "ok";
+            humanMessage = new HumanMessage({ content: _message.content });
+          } else {
+            toolMessageContent = _message.content;
+          }
+
+          const { ToolMessage } = await import("@langchain/core/messages");
+          const toolMessage = new ToolMessage({
+            content: toolMessageContent,
+            tool_call_id: _message.tool_call_id,
+          });
+
+          messages.push(toolMessage);
+
+          if (humanMessage) {
+            messages.push(humanMessage);
+          }
         } else {
-          messages.push(new HumanMessage({ content: _message }));
+          // Handle regular message
+          if (codapData && typeof codapData === "object") {
+            const processedCodapData = processCodapData(codapData);
+            codapDataTokenCount = Math.min(
+              codapDataTokenCount + processedCodapData.length * MAX_TOKENS_PER_CHUNK,
+              MAX_TOKENS
+            );
+            messages.push(...processedCodapData);
+          } else {
+            messages.push(new HumanMessage({ content: _message }));
+          }
         }
 
         const result = await langApp.invoke({ messages }, config);

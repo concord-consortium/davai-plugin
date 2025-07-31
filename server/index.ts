@@ -42,45 +42,39 @@ app.use((req: any, res: any, next: any) => {
 
 app.post("/default/davaiServer/tool", async (req, res) => {
   const { llmId, message, threadId } = req.body;
-  const config = { configurable: { thread_id: threadId, llmId } };
+  const messageId = nanoid();
 
   try {
-    const messages = [];
-    let toolMessageContent: string;
-    let humanMessage;
+    const jobInput = {
+      llmId,
+      threadId,
+      message,
+      isToolCall: true
+    };
 
-    // `message.content` will be an array if previously the user asked to describe a graph
-    // ToolMessage doesn't support sending images back to the model
-    // So we stub the response to the tool call, and follow up with HumanMessage
-    if (Array.isArray(message.content)) {
-      // stub tool response
-      toolMessageContent = "ok";
-      humanMessage = new HumanMessage({ content: message.content });
-    } else {
-      toolMessageContent = message.content;
-    }
+    // Store job in DynamoDB
+    await dynamodb.send(new PutItemCommand({
+      TableName: tableName,
+      Item: {
+        messageId: { S: messageId },
+        status: { S: "queued" },
+        input: { S: JSON.stringify(jobInput) },
+        createdAt: { N: `${Date.now()}` },
+        updatedAt: { N: `${Date.now()}` },
+        cancelled: { BOOL: false }
+      }
+    }));
 
-    const toolMessage = new ToolMessage({
-      content: toolMessageContent,
-      tool_call_id: message.tool_call_id,
-    });
+    // Queue the message
+    await sqs.send(new SendMessageCommand({
+      QueueUrl: queueUrl,
+      MessageBody: JSON.stringify({ messageId })
+    }));
 
-    messages.push(toolMessage);
-
-    if (humanMessage) {
-      messages.push(humanMessage);
-    }
-
-    const toolResponseOutput = await langApp.invoke({ messages }, config);
-
-    // There may be a follow-on tool call in the response, so we need to check for that and handle it.
-    const lastMessage = toolResponseOutput.messages[toolResponseOutput.messages.length - 1];
-    const response = await buildResponse(lastMessage);
-    res.json(response);
+    res.status(202).json({ messageId, status: "queued" });
   } catch (err: any) {
-    console.error("Error in /api/message:", err);
-    console.error("Error stack:", err.stack);
-    res.status(500).json({ error: "LangChain Error", details: err.message });
+    console.error("Error enqueuing tool response:", err);
+    res.status(500).json({ error: "Failed to queue tool response", details: err.message });
   }
 });
 

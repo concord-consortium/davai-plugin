@@ -178,7 +178,6 @@ export const AssistantModel = types
       if (self.isAssistantMocked) return;
 
       try {
-        const messageId = nanoid();
         const reqBody = {
           llmId: self.llmId,
           threadId: self.threadId,
@@ -194,8 +193,7 @@ export const AssistantModel = types
           throw new Error(`Failed to submit tool output: ${submissionResponse.statusText}`);
         }
 
-        const { messageId: returnedMessageId } = yield submissionResponse.json();
-        self.currentMessageId = returnedMessageId;
+        const { messageId } = yield submissionResponse.json();
 
         // Poll for the tool response
         let data: IMessageResponse | null = null;
@@ -205,7 +203,7 @@ export const AssistantModel = types
         while (attempt < maxAttempts) {
           if (self.isCancelling) break;
 
-          const statusResponse = yield postMessage({}, `status?messageId=${returnedMessageId}`, "GET");
+          const statusResponse = yield postMessage({}, `status?messageId=${messageId}`, "GET");
           if (!statusResponse.ok) {
             throw new Error(`Failed to fetch tool response status: ${statusResponse.statusText}`);
           }
