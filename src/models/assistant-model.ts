@@ -253,26 +253,63 @@ export const AssistantModel = types
 
     const sendToolOutputToLlm = flow(function* (toolCallId: string, content: ToolOutput) {
       if (self.isAssistantMocked) return;
+
       try {
+        const messageId = nanoid();
         const reqBody = {
           llmId: self.llmId,
           threadId: self.threadId,
-          isToolResponse: true,
           message: {
             tool_call_id: toolCallId,
             content
           }
         };
-        const toolOutputResponse = yield postMessage(reqBody, "tool");
 
-        if (!toolOutputResponse.ok) {
-          throw new Error(`Failed to send tool response: ${toolOutputResponse.statusText}`);
+        // Send tool output to the server
+        const submissionResponse = yield postMessage(reqBody, "tool");
+        if (!submissionResponse.ok) {
+          throw new Error(`Failed to submit tool output: ${submissionResponse.statusText}`);
         }
 
-        return yield toolOutputResponse.json();
+        const { messageId: returnedMessageId } = yield submissionResponse.json();
+        self.currentMessageId = returnedMessageId;
+
+        // Poll for the tool response
+        let data: IMessageResponse | null = null;
+        let maxAttempts = 30;
+        let attempt = 0;
+
+        while (attempt < maxAttempts) {
+          if (self.isCancelling) break;
+
+          const statusResponse = yield postMessage({}, `status?messageId=${returnedMessageId}`, "GET");
+          if (!statusResponse.ok) {
+            throw new Error(`Failed to fetch tool response status: ${statusResponse.statusText}`);
+          }
+
+          const { status, output } = yield statusResponse.json();
+
+          if (status === "completed") {
+            data = output;
+            break;
+          } else if (status === "cancelled") {
+            self.addDbgMsg("Tool call job was cancelled on the server", messageId);
+            return;
+          }
+
+          yield new Promise((res) => setTimeout(res, 1000));
+          attempt++;
+        }
+
+        if (!data) {
+          self.addDbgMsg("Polling expired before tool response received", messageId);
+          return;
+        }
+
+        return data;
       } catch (err) {
-        console.error("Failed to send tool response:", err);
-        self.addDbgMsg("Failed to send tool response", formatJsonMessage(err));
+        console.error("Failed to send tool output:", err);
+        self.addDbgMsg("Failed to send tool output", formatJsonMessage(err));
         throw err;
       }
     });
@@ -299,14 +336,47 @@ export const AssistantModel = types
             messageId
           };
 
-          // Send message to LangChain server
-          const messageResponse = yield postMessage(reqBody, "message");
+          const submissionResponse = yield postMessage(reqBody, "message");
+          if (!submissionResponse.ok) {
+            throw new Error(`Failed to submit message: ${submissionResponse.statusText}`);
+          }
+          const { messageId: _messageId } = yield submissionResponse.json();
+          self.currentMessageId = _messageId;
 
-          if (!messageResponse.ok) {
-            throw new Error(`Failed to send message: ${messageResponse.statusText}`);
+          // 2. Poll server until response is ready
+          let data: IMessageResponse | null = null;
+          let maxAttempts = 30;
+          let attempt = 0;
+
+          while (attempt < maxAttempts) {
+            if (self.isCancelling) break;
+
+            const statusResponse = yield postMessage({}, `status?messageId=${_messageId}`, "GET");
+
+            if (!statusResponse.ok) {
+              throw new Error(`Failed to fetch status: ${statusResponse.statusText}`);
+            }
+
+            const { status, output } = yield statusResponse.json();
+
+            if (status === "completed") {
+              data = output;
+              break;
+            } else if (status === "cancelled") {
+              self.addDbgMsg("Job was cancelled on the server", messageId);
+              return;
+            }
+
+            // Wait a moment before retrying
+            yield new Promise((res) => setTimeout(res, 1000));
+            attempt++;
           }
 
-          let data: IMessageResponse = yield messageResponse.json();
+          if (!data) {
+            self.addDbgMsg("Polling expired before response received", messageId);
+            return;
+          }
+
           self.addDbgMsg("Response from server", formatJsonMessage(data));
 
           // Keep processing tool calls until we get a final response
@@ -315,7 +385,7 @@ export const AssistantModel = types
             self.addDbgMsg("Tool output generated", formatJsonMessage(toolOutput));
 
             // Send tool response back to server
-            const toolResponseResult = yield sendToolOutputToLlm(data.tool_call_id, toolOutput);
+            const toolResponseResult: any = yield sendToolOutputToLlm(data.tool_call_id, toolOutput);
             self.addDbgMsg("Response to tool output from server", formatJsonMessage(toolResponseResult));
 
             // Get the next response in the chain
@@ -323,7 +393,7 @@ export const AssistantModel = types
           }
 
           // Once we're out of the tool call chain, handle the final response.
-          if (data.response) {
+          if (data?.response) {
             self.addDavaiMsg(data.response);
           }
         }

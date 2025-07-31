@@ -13,13 +13,28 @@ export const requestThreadDeletion = async (threadId: string): Promise<Response>
   return response;
 };
 
-export async function postMessage(req: Record<string, any>, msgEndpoint: string) {
-  return await fetch(`${serverUrl}default/davaiServer/${msgEndpoint}`, {
-    method: "POST",
+export async function postMessage(req: Record<string, any>, msgEndpoint: string, method = "POST") {
+  const url = `${serverUrl}default/davaiServer/${msgEndpoint}`;
+  // return await fetch(`${serverUrl}default/davaiServer/${msgEndpoint}`, {
+  //   method,
+  //   headers: {
+  //     "Content-Type": "application/json",
+  //     "Authorization": process.env.AUTH_TOKEN || "",
+  //   },
+  //   body: JSON.stringify(req),
+  // });
+
+  const opts: RequestInit = {
+    method,
     headers: {
       "Content-Type": "application/json",
-      "Authorization": process.env.AUTH_TOKEN || "",
-    },
-    body: JSON.stringify(req),
-  });
+      "Authorization": process.env.AUTH_TOKEN || ""
+    }
+  };
+
+  if (req && method !== "GET") {
+    opts.body = JSON.stringify(req);
+  }
+
+  return await fetch(url, opts);
 }
