@@ -30,7 +30,6 @@ const dynamodb = new DynamoDBClient({
 const queueUrl = process.env.LLM_JOB_QUEUE_URL;
 const tableName = process.env.DYNAMODB_TABLE;
 
-
 // We use these values to track the token count of the CODAP data and limit the total token count of data sent to the model
 // via LangChain's trimMessages utility.
 let codapDataTokenCount = 0;
