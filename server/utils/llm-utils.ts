@@ -1,13 +1,24 @@
+import * as dotenv from "dotenv";
+dotenv.config();
+
 import { ChatOpenAI } from "@langchain/openai";
-import { START, END, MemorySaver, StateGraph, Annotation } from "@langchain/langgraph";
+import { START, END, StateGraph, Annotation } from "@langchain/langgraph";
 import { ChatGoogleGenerativeAI } from "@langchain/google-genai";
 import { BaseMessage, trimMessages } from "@langchain/core/messages";
 import { ChatPromptTemplate } from "@langchain/core/prompts";
+import { PostgresSaver } from "@langchain/langgraph-checkpoint-postgres";
 import { instructions } from "../text/instructions.js";
 import { codapApiDoc } from "../text/codap-api-documentation.js";
 import { extractToolCalls, toolCallResponse, tools } from "./tool-utils.js";
 import { tokenCounter, escapeCurlyBraces } from "./utils.js";
 import { MAX_TOKENS } from "../constants.js";
+
+if (!process.env.POSTGRES_CONNECTION_STRING) {
+  throw new Error("POSTGRES_CONNECTION_STRING environment variable is not set.");
+}
+
+const checkpointer = PostgresSaver.fromConnString(process.env.POSTGRES_CONNECTION_STRING);
+await checkpointer.setup();
 
 let llmInstances: Record<string, any> = {};
 
@@ -112,5 +123,10 @@ const workflow = new StateGraph(StateAnnotation)
   .addEdge(START, "model")
   .addEdge("model", END);
 
-const memory = new MemorySaver();
-export const langApp = workflow.compile({ checkpointer: memory });
+const devMode = process.env.DEV_MODE === "true";
+if (devMode) {
+  console.log("DEV_MODE: langApp instances will be cached per sessionId");
+}
+
+export const langApp = workflow.compile({ checkpointer });
+

@@ -1,12 +1,17 @@
 version: "3.8"
 
 services:
-  dynamodb-local:
-    image: amazon/dynamodb-local
-    container_name: dynamodb-local
+  postgres:
+    image: postgres:17
+    container_name: postgres
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+      POSTGRES_DB: mydb
     ports:
-      - "8000:8000"
-    command: "-jar DynamoDBLocal.jar -inMemory -sharedDb"
+      - "54320:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
 
   elasticmq:
     image: softwaremill/elasticmq-native
@@ -18,3 +23,7 @@ services:
       - ELASTICMQ_CONFIG_FILE=/opt/elasticmq.conf
     volumes:
       - ./elasticmq.conf:/opt/elasticmq.conf
+
+volumes:
+  postgres_data:
+

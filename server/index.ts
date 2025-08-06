@@ -2,13 +2,14 @@ import * as dotenv from "dotenv";
 dotenv.config();
 
 import express, { json } from "express";
-import { DynamoDBClient, PutItemCommand, GetItemCommand, UpdateItemCommand } from "@aws-sdk/client-dynamodb";
+import { Pool } from "pg";
 import { SQSClient, SendMessageCommand } from "@aws-sdk/client-sqs";
 import { nanoid } from "nanoid";
 
-const dynamodb = new DynamoDBClient({
-  region: process.env.AWS_REGION,
-  endpoint: process.env.DYNAMODB_ENDPOINT
+import { MessageJobInput, ToolJobInput } from "./types";
+
+const pool = new Pool({
+  connectionString: process.env.POSTGRES_CONNECTION_STRING
 });
 
 const sqs = new SQSClient({
@@ -17,51 +18,54 @@ const sqs = new SQSClient({
 });
 
 const queueUrl = process.env.LLM_JOB_QUEUE_URL;
-const tableName = process.env.DYNAMODB_TABLE;
 
 const app = express();
-const port = 3000;
+const port = 5000;
 app.use(json({ limit: "5mb" }));
 
-// Middleware to check for the API secret in the request headers
-app.use((req: any, res: any, next: any) => {
+// cors middleware
+app.use((req, res, next) => {
+  res.header("Access-Control-Allow-Origin", "*"); // Allow all origins
+  res.header("Access-Control-Allow-Methods", "GET,POST,PUT,DELETE,OPTIONS"); // Allowed HTTP methods
+  res.header("Access-Control-Allow-Headers", "Content-Type, Authorization"); // Allowed headers
+
+  // Respond to preflight requests
   if (req.method === "OPTIONS") {
-    return next();
+    return res.sendStatus(204); // No Content
   }
-  const token = req.headers.authorization;
-  if (token !== process.env.DAVAI_API_SECRET) {
+
+  next();
+});
+
+// Middleware for API secret check
+app.use((req: any, res: any, next: any) => {
+  if (req.method === "OPTIONS") return next();
+  if (req.headers.authorization !== process.env.DAVAI_API_SECRET) {
     return res.status(401).json({ error: "Unauthorized" });
   }
   next();
 });
+
+async function insertJob(messageId: string,
+  kind: "message" | "tool",
+  jobInput: MessageJobInput | ToolJobInput
+) {
+  await pool.query(
+    `INSERT INTO jobs (message_id, kind, status, input, created_at, updated_at, cancelled)
+     VALUES ($1, $2, $3, $4, NOW(), NOW(), $5)`,
+    [messageId, kind, "queued", jobInput, false]
+  );
+}
 
 app.post("/default/davaiServer/message", async (req, res) => {
   const { llmId, message, threadId, dataContexts, graphs } = req.body;
   const messageId = nanoid();
 
   try {
-    const jobInput = {
-      llmId,
-      threadId,
-      message,
-      dataContexts,
-      graphs
-    };
+    const jobInput: MessageJobInput = { llmId, threadId, message, dataContexts, graphs };
 
-    // Store job in DynamoDB
-    await dynamodb.send(new PutItemCommand({
-      TableName: tableName,
-      Item: {
-        messageId: { S: messageId },
-        status: { S: "queued" },
-        input: { S: JSON.stringify(jobInput) },
-        createdAt: { N: `${Date.now()}` },
-        updatedAt: { N: `${Date.now()}` },
-        cancelled: { BOOL: false }
-      }
-    }));
+    await insertJob(messageId, "message", jobInput);
 
-    // Queue the message
     await sqs.send(new SendMessageCommand({
       QueueUrl: queueUrl,
       MessageBody: JSON.stringify({ messageId })
@@ -79,27 +83,10 @@ app.post("/default/davaiServer/tool", async (req, res) => {
   const messageId = nanoid();
 
   try {
-    const jobInput = {
-      llmId,
-      threadId,
-      message,
-      isToolCall: true
-    };
+    const jobInput: ToolJobInput = { llmId, threadId, message };
 
-    // Store job in DynamoDB
-    await dynamodb.send(new PutItemCommand({
-      TableName: tableName,
-      Item: {
-        messageId: { S: messageId },
-        status: { S: "queued" },
-        input: { S: JSON.stringify(jobInput) },
-        createdAt: { N: `${Date.now()}` },
-        updatedAt: { N: `${Date.now()}` },
-        cancelled: { BOOL: false }
-      }
-    }));
+    await insertJob(messageId, "tool", jobInput);
 
-    // Queue the message
     await sqs.send(new SendMessageCommand({
       QueueUrl: queueUrl,
       MessageBody: JSON.stringify({ messageId })
@@ -114,25 +101,21 @@ app.post("/default/davaiServer/tool", async (req, res) => {
 
 app.get("/default/davaiServer/status", async (req, res) => {
   const { messageId } = req.query;
-
-  if (!messageId) {
-    return res.status(400).json({ error: "Missing messageId" });
-  }
+  if (!messageId) return res.status(400).json({ error: "Missing messageId" });
 
   try {
-    const result = await dynamodb.send(new GetItemCommand({
-      TableName: tableName,
-      Key: { messageId: { S: messageId as string } }
-    }));
+    const { rows } = await pool.query(
+      `SELECT status, output FROM jobs WHERE message_id = $1`,
+      [messageId]
+    );
 
-    if (!result.Item) {
-      return res.status(404).json({ error: "Job not found" });
-    }
+    if (rows.length === 0) return res.status(404).json({ error: "Job not found" });
 
+    const job = rows[0];
     res.json({
       messageId,
-      status: result.Item.status.S,
-      output: result.Item.output?.S ? JSON.parse(result.Item.output.S) : null
+      status: job.status,
+      output: job.output || null
     });
   } catch (err: any) {
     console.error("Error fetching job status:", err);
@@ -142,25 +125,15 @@ app.get("/default/davaiServer/status", async (req, res) => {
 
 app.post("/default/davaiServer/cancel", async (req, res) => {
   const { messageId } = req.body;
-
-  if (!messageId) {
-    return res.status(400).json({ error: "Missing messageId" });
-  }
+  if (!messageId) return res.status(400).json({ error: "Missing messageId" });
 
   try {
-    await dynamodb.send(new UpdateItemCommand({
-      TableName: tableName,
-      Key: { messageId: { S: messageId } },
-      UpdateExpression: "SET #s = :s, cancelled = :c, updatedAt = :u",
-      ExpressionAttributeNames: {
-        "#s": "status"
-      },
-      ExpressionAttributeValues: {
-        ":s": { S: "cancelled" },
-        ":c": { BOOL: true },
-        ":u": { N: `${Date.now()}` }
-      }
-    }));
+    await pool.query(
+      `UPDATE jobs
+       SET status = $1, cancelled = $2, updated_at = NOW()
+       WHERE message_id = $3`,
+      ["cancelled", true, messageId]
+    );
 
     res.json({ status: "cancelled", message: "Job marked as cancelled" });
   } catch (err: any) {

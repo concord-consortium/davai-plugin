@@ -2,36 +2,48 @@ import * as dotenv from "dotenv";
 dotenv.config();
 
 import { SQSClient, ReceiveMessageCommand, DeleteMessageCommand } from "@aws-sdk/client-sqs";
-import { DynamoDBClient, UpdateItemCommand, GetItemCommand } from "@aws-sdk/client-dynamodb";
+import { Pool } from "pg";
 import { HumanMessage } from "@langchain/core/messages";
 import { langApp } from "./utils/llm-utils.js";
 import { extractToolCalls, toolCallResponse } from "./utils/tool-utils.js";
+import { Job } from "./types";
 
-// AWS clients
+const polling = process.env.DEV_MODE === "true";
+
+const pool = new Pool({
+  connectionString: process.env.POSTGRES_CONNECTION_STRING
+});
+
 const sqs = new SQSClient({
   region: process.env.AWS_REGION,
   endpoint: process.env.SQS_ENDPOINT
 });
 
-const dynamodb = new DynamoDBClient({
-  region: process.env.AWS_REGION,
-  endpoint: process.env.DYNAMODB_ENDPOINT
-});
-
 const queueUrl = process.env.LLM_JOB_QUEUE_URL;
-const tableName = process.env.DYNAMODB_TABLE;
+
+// Track currently running jobs
+const runningJobs = new Map<
+  string,
+  { abort: () => void }
+>();
 
 const buildResponse = async (message: any) => {
   const toolCalls = extractToolCalls(message);
-  // If there are tool calls, we need to handle them first.
   if (toolCalls?.[0]) {
     return await toolCallResponse(toolCalls[0]);
-  } else {
-    return { response: message.content };
   }
+  return { response: message.content };
 };
 
-async function pollQueue() {
+// Graceful shutdown
+async function shutdown() {
+  console.log("Shutting down worker...");
+  await pool.end();
+  process.exit(0);
+}
+
+// Pull next job from SQS
+async function pullNextJobFromQueue() {
   try {
     const receiveParams = {
       QueueUrl: queueUrl,
@@ -48,23 +60,19 @@ async function pollQueue() {
 
       console.log(`[${new Date().toISOString()}] Processing messageId: ${messageId}`);
 
-      const jobResult = await dynamodb.send(
-        new GetItemCommand({
-          TableName: tableName,
-          Key: { messageId: { S: messageId } }
-        })
-      );
+      const { rows } = await pool.query(`SELECT * FROM jobs WHERE message_id = $1`, [messageId]);
 
-      const job = jobResult.Item;
-      if (!job) {
-        console.warn("Job not found in DynamoDB.");
-        return;
-      }
-
-      if (job.cancelled?.BOOL) {
-        console.log("Job was cancelled. Skipping.");
+      if (rows.length === 0) {
+        console.warn("Job not found in Postgres.");
       } else {
-        await processJob(job, messageId);
+        const job: Job = rows[0];
+        console.log("job", job);
+
+        if (job.cancelled) {
+          console.log("Job was cancelled. Skipping.");
+        } else {
+          await processJob(job, messageId);
+        }
       }
 
       await sqs.send(
@@ -73,76 +81,110 @@ async function pollQueue() {
           ReceiptHandle: message.ReceiptHandle
         })
       );
+    } else {
+      console.log("No messages found.");
     }
   } catch (err) {
     console.error("Worker error:", err);
   }
+
+  if (!polling) {
+    await shutdown();
+  }
 }
 
-// Process individual job
-async function processJob(job: any, messageId: string) {
-  const input = JSON.parse(job.input.S || "{}");
-  const { llmId, threadId, message: _message, dataContexts, graphs, isToolCall } = input;
-  const config = { configurable: { llmId, thread_id: threadId } };
-  const messages: any[] = [];
+async function processJob(job: Job, messageId: string) {
+  const controller = new AbortController();
+  runningJobs.set(messageId, { abort: () => controller.abort() });
 
-  if (isToolCall) {
-    // Handle tool call response
+  const config = { configurable: { llmId: job.input.llmId, thread_id: job.input.threadId } };
+  const messages: any[] = [];
+  let dataContexts:any = {};
+  let graphs:any = [];
+
+  if (job.kind === "tool") {
+    const { ToolMessage } = await import("@langchain/core/messages");
+
     let toolMessageContent: string;
     let humanMessage;
 
-    // `message.content` will be an array if previously the user asked to describe a graph
-    // ToolMessage doesn't support sending images back to the model
-    // So we stub the response to the tool call, and follow up with HumanMessage
-    if (Array.isArray(_message.content)) {
-      // stub tool response
+    if (Array.isArray(job.input.message.content)) {
       toolMessageContent = "ok";
-      humanMessage = new HumanMessage({ content: _message.content });
+      humanMessage = new HumanMessage({ content: job.input.message.content });
     } else {
-      toolMessageContent = _message.content;
+      toolMessageContent = job.input.message.content;
     }
 
-    const { ToolMessage } = await import("@langchain/core/messages");
     const toolMessage = new ToolMessage({
       content: toolMessageContent,
-      tool_call_id: _message.tool_call_id,
+      tool_call_id: job.input.message.tool_call_id,
     });
 
     messages.push(toolMessage);
-
-    if (humanMessage) {
-      messages.push(humanMessage);
-    }
+    if (humanMessage) messages.push(humanMessage);
   } else {
-    messages.push(new HumanMessage({ content: _message }));
+    dataContexts = job.input.dataContexts || {};
+    graphs = job.input.graphs || [];
+    messages.push(new HumanMessage({ content: job.input.message }));
   }
 
-  // Pass the user message and fresh CODAP data to langApp.
-  // The CODAP data will be added to the prompt template.
-  const result = await langApp.invoke({ 
-    messages,
-    dataContexts: dataContexts || {},
-    graphs: graphs || []
-  }, config);
+  try {
+    const result = await langApp.invoke(
+      { messages, dataContexts, graphs },
+      { ...config, signal: controller.signal }
+    );
 
-  const lastMessage = result.messages[result.messages.length - 1];
-  const output = await buildResponse(lastMessage);
+    if (controller.signal.aborted) {
+      console.log(`Job ${messageId} aborted before completion`);
+      return;
+    }
 
-  await dynamodb.send(
-    new UpdateItemCommand({
-      TableName: tableName,
-      Key: { messageId: { S: messageId } },
-      UpdateExpression: "SET #s = :s, #o = :o, updatedAt = :u",
-      ExpressionAttributeNames: { "#s": "status", "#o": "output" },
-      ExpressionAttributeValues: {
-        ":s": { S: "completed" },
-        ":o": { S: JSON.stringify(output) },
-        ":u": { N: `${Date.now()}` }
-      }
-    })
-  );
+    const lastMessage = result.messages[result.messages.length - 1];
+    const output = await buildResponse(lastMessage);
 
-  console.log(`Job ${messageId} completed.`);
+    await pool.query(
+      `UPDATE jobs
+       SET status = $1, output = $2, updated_at = NOW()
+       WHERE message_id = $3`,
+      ["completed", output, messageId]
+    );
+
+    console.log(`Job ${messageId} (${job.kind}) completed.`);
+  } finally {
+    runningJobs.delete(messageId);
+  }
 }
 
-setInterval(pollQueue, 2000);
+async function listenForCancellations() {
+  const client = await pool.connect();
+  await client.query("LISTEN job_cancelled");
+  client.on("notification", (msg) => {
+    if (msg.channel === "job_cancelled" && msg.payload) {
+      try {
+        const payload = JSON.parse(msg.payload);
+        const cancelledId = payload.messageId;
+        console.log(`[CANCEL] Received cancel signal for job ${cancelledId}`);
+
+        const runningJob = runningJobs.get(cancelledId);
+        if (runningJob) {
+          console.log(`[CANCEL] Aborting running job ${cancelledId}`);
+          runningJob.abort();
+          runningJobs.delete(cancelledId);
+        }
+      } catch (err) {
+        console.error("Failed to parse cancellation payload", err);
+      }
+    }
+  });
+}
+
+// listen for job cancellations
+listenForCancellations();
+
+// Start
+pullNextJobFromQueue();
+
+if (polling) {
+  console.log("DEV_MODE: worker polling every 2 seconds");
+  setInterval(pullNextJobFromQueue, 2000);
+}
