@@ -1,0 +1,10 @@
+CREATE TABLE jobs (
+  message_id TEXT PRIMARY KEY,
+  kind TEXT NOT NULL,
+  status TEXT NOT NULL,
+  input JSONB NOT NULL,
+  output JSONB,
+  created_at TIMESTAMP NOT NULL DEFAULT NOW(),
+  updated_at TIMESTAMP NOT NULL DEFAULT NOW(),
+  cancelled BOOLEAN DEFAULT FALSE
+);

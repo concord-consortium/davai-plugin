@@ -211,7 +211,7 @@ export const ChatInputComponent = ({disabled, isLoading, onCancel, onKeyboardSho
     if (keyboardShortcutEnabled) {
       // Add keyboard shortcut listener to the parent window if one exists.
       if (window.parent && window.parent !== window) {
-        // keydownListeners.push(addShortcutListener(window.parent));
+        keydownListeners.push(addShortcutListener(window.parent));
       }
 
       // Add keyboard shortcut listener to the current window.
