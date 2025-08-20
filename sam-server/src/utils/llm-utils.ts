@@ -21,13 +21,7 @@ if (!process.env.POSTGRES_CONNECTION_STRING) {
 const checkpointer = PostgresSaver.fromConnString(process.env.POSTGRES_CONNECTION_STRING);
 
 // Initialize checkpointer when module loads
-(async () => {
-  try {
-    await checkpointer.setup();
-  } catch (error) {
-    console.error("Failed to setup checkpointer:", error);
-  }
-})();
+const checkpointPromise = checkpointer.setup();
 
 let llmInstances: Record<string, any> = {};
 
@@ -140,5 +134,12 @@ if (devMode) {
   console.log("DEV_MODE: langApp instances will be cached per sessionId");
 }
 
-export const langApp = workflow.compile({ checkpointer });
+export const getLangApp = async () => {
+  try {
+    await checkpointPromise;
+  } catch (error) {
+    console.error("Checkpointer setup failed: ", error);
+  }
 
+  return workflow.compile({ checkpointer });
+};

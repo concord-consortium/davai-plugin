@@ -1,7 +1,7 @@
 import { SQSEvent, SQSBatchResponse, SQSBatchItemFailure } from "aws-lambda";
 import { Pool } from "pg";
 import { HumanMessage, ToolMessage } from "@langchain/core/messages";
-import { langApp } from "../utils/llm-utils";
+import { getLangApp } from "../utils/llm-utils";
 import { extractToolCalls, toolCallResponse } from "../utils/tool-utils";
 import { Job, ToolJob, MessageJob } from "../types";
 
@@ -17,6 +17,38 @@ const buildResponse = async (message: any) => {
   return { response: message.content };
 };
 
+// Track currently running jobs
+const runningJobs = new Map<
+  string,
+  { abort: () => void }
+>();
+
+async function listenForCancellations() {
+  const client = await pool.connect();
+  await client.query("LISTEN job_cancelled");
+  client.on("notification", (msg) => {
+    if (msg.channel === "job_cancelled" && msg.payload) {
+      try {
+        const payload = JSON.parse(msg.payload);
+        const cancelledId = payload.messageId;
+        console.log(`[CANCEL] Received cancel signal for job ${cancelledId}`);
+
+        const runningJob = runningJobs.get(cancelledId);
+        if (runningJob) {
+          console.log(`[CANCEL] Aborting running job ${cancelledId}`);
+          runningJob.abort();
+          runningJobs.delete(cancelledId);
+        }
+      } catch (err) {
+        console.error("Failed to parse cancellation payload", err);
+      }
+    }
+  });
+}
+
+// listen for job cancellations
+listenForCancellations();
+
 export const handler = async (event: SQSEvent): Promise<SQSBatchResponse> => {
   const batchItemFailures: SQSBatchItemFailure[] = [];
 
@@ -24,6 +56,9 @@ export const handler = async (event: SQSEvent): Promise<SQSBatchResponse> => {
     try {
       const body = JSON.parse(record.body);
       const { messageId } = body;
+
+      const controller = new AbortController();
+      runningJobs.set(messageId, { abort: () => controller.abort() });
 
       // Get job from database
       const { rows } = await pool.query(`SELECT * FROM jobs WHERE message_id = $1`, [messageId]);
@@ -39,7 +74,10 @@ export const handler = async (event: SQSEvent): Promise<SQSBatchResponse> => {
       }
 
       // Process the job
-      const config = { configurable: { llmId: job.input.llmId, thread_id: job.input.threadId } };
+      const config = {
+        configurable: { llmId: job.input.llmId, thread_id: job.input.threadId },
+        signal: controller.signal
+      };
       const messages: any[] = [];
       let dataContexts: any = {};
       let graphs: any = [];
@@ -73,22 +111,26 @@ export const handler = async (event: SQSEvent): Promise<SQSBatchResponse> => {
       }
 
       // Process with LangGraph
-      const result = await langApp.invoke(
+      const result = await (await getLangApp()).invoke(
         { messages, dataContexts, graphs },
         config
       );
 
-      const lastMessage = result.messages[result.messages.length - 1];
-      const output = await buildResponse(lastMessage);
+      if (controller.signal.aborted) {
+        console.log(`Job ${messageId} aborted before completion`);
+      } else {
 
-      // Update job status
-      await pool.query(
-        `UPDATE jobs
-         SET status = $1, output = $2, updated_at = NOW()
-         WHERE message_id = $3`,
-        ["completed", output, messageId]
-      );
+        const lastMessage = result.messages[result.messages.length - 1];
+        const output = await buildResponse(lastMessage);
 
+        // Update job status
+        await pool.query(
+          `UPDATE jobs
+          SET status = $1, output = $2, updated_at = NOW()
+          WHERE message_id = $3`,
+          ["completed", output, messageId]
+        );
+      }
     } catch (error) {
       console.error(`Error processing job:`, error);
       batchItemFailures.push({
