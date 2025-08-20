@@ -16,7 +16,12 @@ export const createRequestTool = tool(
       
       // FIXME: Ideally the LLM would just send action, resource, and values as the args. Instead, it's sometimes sending
       // an object with an `input` param whose value is an object containing the action, resource, and values.
-      if (args.input && typeof args.input === "string") {
+      if (typeof args === "string") {
+        args = JSON.parse(args);
+        action = args.action;
+        resource = args.resource;
+        values = args.values;
+      } else if (args.input && typeof args.input === "string") {
         const inputData = JSON.parse(args.input);
         action = inputData.action;
         resource = inputData.resource;
@@ -71,7 +76,8 @@ export const sonifyGraphTool = tool(
       } else if (typeof args === "number") {
         graphID = args;
       } else if (typeof args === "string") {
-        graphID = parseInt(args, 10);
+        args = JSON.parse(args);
+        graphID = args.graphID || args;
       } else {
         throw new Error("No graphID provided");
       }
