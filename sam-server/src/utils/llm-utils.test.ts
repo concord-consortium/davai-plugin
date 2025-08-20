@@ -1,3 +1,7 @@
+process.env.POSTGRES_CONNECTION_STRING = "postgres://user:pass@localhost:5432/testdb";
+process.env.OPENAI_API_KEY = "dummy-openai-key";
+process.env.GOOGLE_API_KEY = "dummy-google-key";
+
 import { TextEncoder } from "util";
 import { ReadableStream } from "web-streams-polyfill";
 global.TextEncoder = TextEncoder as any;

@@ -39,8 +39,8 @@ module.exports = {
     "^.+\\.(js|jsx)$": "babel-jest"
   },
   testRegex: "(/__tests__/.*|(\\.|/)(test|spec))\\.(jsx?|tsx?)$",
-  testPathIgnorePatterns: ["/node_modules/", "/server/", "/cypress/"],
-  coveragePathIgnorePatterns: ["/node_modules/", "/server/", "src/utilities/test-utils.ts"],
+  testPathIgnorePatterns: ["/node_modules/", "/sam-server/", "/server/", "/cypress/"],
+  coveragePathIgnorePatterns: ["/node_modules/", "/sam-server/", "/server/", "src/utilities/test-utils.ts"],
   transformIgnorePatterns: [
     // "/node_modules/(?!react-markdown|bail|comma-separated-tokens|decode-named-character-reference|devlop|estree-util-is-identifier-name|hast-util-to-jsx-runtime|hast-util-whitespace|html-url-attributes|is-plain-obj|mdast-util-from-markdown|mdast-util-to-string|mdast-util-to-hast|micromark|property-information|remark-parse|remark-rehype|space-separated-tokens|trim-lines|trough|unified|unist-util-is|unist-util-position|unist-util-stringify-position|unist-util-visit|vfile|vfile-message/)"
     `/node_modules/(?!${transpileModules.join("|")}/)`
