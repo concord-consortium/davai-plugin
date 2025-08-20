@@ -4,7 +4,7 @@ dotenv.config();
 import { SQSClient, ReceiveMessageCommand, DeleteMessageCommand } from "@aws-sdk/client-sqs";
 import { Pool } from "pg";
 import { HumanMessage } from "@langchain/core/messages";
-import { langApp } from "./utils/llm-utils.js";
+import { getLangApp } from "./utils/llm-utils.js";
 import { extractToolCalls, toolCallResponse } from "./utils/tool-utils.js";
 import { Job } from "./types";
 
@@ -129,7 +129,7 @@ async function processJob(job: Job, messageId: string) {
   }
 
   try {
-    const result = await langApp.invoke(
+    const result = await (await getLangApp()).invoke(
       { messages, dataContexts, graphs },
       { ...config, signal: controller.signal }
     );
