@@ -18,8 +18,6 @@ if (!process.env.POSTGRES_CONNECTION_STRING) {
   throw new Error("POSTGRES_CONNECTION_STRING environment variable is not set.");
 }
 
-console.log("LangGraph checkpointer - POSTGRES_CONNECTION_STRING:", process.env.POSTGRES_CONNECTION_STRING);
-
 const checkpointer = PostgresSaver.fromConnString(process.env.POSTGRES_CONNECTION_STRING);
 
 // Initialize checkpointer when module loads
