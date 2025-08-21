@@ -1,117 +1,126 @@
-import { BaseMessage } from "@langchain/core/messages";
+import type { BaseMessage } from "@langchain/core/messages";
 import { tool } from "@langchain/core/tools";
 
-// interface CreateRequestParams {
-//   action: string;
-//   resource: string;
-//   values?: Record<string, any>;
-// }
+type SimpleTool = {
+  invoke: (input: unknown) => Promise<string>;
+  name: string;
+};
+interface CreateRequestParams {
+  action: string;
+  resource: string;
+  values?: Record<string, unknown>;
+}
+
+const createRequestJsonSchema = {
+  type: "object",
+  properties: {
+    action: { type: "string" },
+    resource: { type: "string" },
+    values: { type: "object", additionalProperties: true },
+  },
+  required: ["action", "resource"],
+  additionalProperties: false,
+} as const;
+
+const sonifyGraphJsonSchema = {
+  type: "object",
+  properties: {
+    graphID: { type: "integer" },
+  },
+  required: ["graphID"],
+  additionalProperties: false,
+} as const;
+
+/**
+ * Normalize the arguments for a tool invocation. This function will attempt to parse and
+ * structure the raw arguments into the correct format since LLMs sometimes use incorrect
+ * formats intermittently.
+ * @param args The raw arguments to normalize.
+ * @returns The normalized arguments.
+ */
+const normalizeArgs = <T>(args: unknown): Partial<T> => {
+  try {
+    let a: unknown = args;
+    if (typeof a === "string") a = JSON.parse(a);
+    if (typeof a !== "object" || a === null) {
+      return { value: a } as unknown as Partial<T>;
+    }
+    if ("input" in (a as Record<string, unknown>)) {
+      const inputVal = (a as Record<string, unknown>).input;
+      if (typeof inputVal === "string") return normalizeArgs<T>(JSON.parse(inputVal));
+      if (typeof inputVal === "object" && inputVal !== null) return normalizeArgs<T>(inputVal);
+    }
+    return a as Partial<T>;
+  } catch {
+    return {};
+  }
+};
+
+const coerceGraphIdtoInteger = (v: unknown): number => {
+  if (typeof v === "number" && Number.isInteger(v)) return v;
+  if (typeof v === "string" && v.trim() !== "") {
+    const n = Number(v);
+    if (Number.isFinite(n)) return Math.trunc(n);
+  }
+
+  throw new Error("Invalid or missing graphID");
+};
 
 export const createRequestTool = tool(
-  async (args: any) => {
+  async (rawArgs: unknown) => {
     try {
-      let action: string;
-      let resource: string;
-      let values: Record<string, any>;
-      
-      // FIXME: Ideally the LLM would just send action, resource, and values as the args. Instead, it's sometimes sending
-      // an object with an `input` param whose value is an object containing the action, resource, and values.
-      if (typeof args === "string") {
-        args = JSON.parse(args);
-        action = args.action;
-        resource = args.resource;
-        values = args.values;
-      } else if (args.input && typeof args.input === "string") {
-        const inputData = JSON.parse(args.input);
-        action = inputData.action;
-        resource = inputData.resource;
-        values = inputData.values;
-      } else if (args.input && typeof args.input === "object") {
-        action = args.input.action;
-        resource = args.input.resource;
-        values = args.input.values;
-      } else if (args.action) {
-        action = args.action;
-        resource = args.resource;
-        values = args.values;
-      } else {
-        throw new Error("No action, resource, or values provided");
-      }
-
-      // Handle some LLM's tendency to wrap values in a 'data' property
-      if (values && values.data && typeof values.data === "object") {
-        // Extract properties from the nested 'data' object and merge them with the top-level values
-        const { data, ...otherValues } = values;
-        values = { ...data, ...otherValues };
-      }
-
-      const request = { action, resource, values };
-      return JSON.stringify(request);
+      const args = normalizeArgs<CreateRequestParams>(rawArgs);
+      const { action, resource, values } = args;
+      return JSON.stringify({ action, resource, values });
     } catch (error) {
       return JSON.stringify({
         status: "error",
-        error: error instanceof Error ? error.message : String(error)
+        error: error instanceof Error ? error.message : String(error),
       });
     }
   },
   {
     name: "create_request",
-    description: "Create a request to send to the CODAP Data Interactive API"
+    description: "Create a request to send to the CODAP Data Interactive API",
+    schema: createRequestJsonSchema as any,
   }
 );
 
 export const sonifyGraphTool = tool(
-  async (args: any) => {
+  async (rawArgs: unknown) => {
     try {
-      // FIXME: Ideally the LLM would just send the graphID as a number. Instead, it's sometimes sending
-      // an object with an `input` param whose value is the graph ID.
-      let graphID: number;
-      if (args.input && typeof args.input === "string") {
-        const inputData = JSON.parse(args.input);
-        graphID = inputData.graphID;
-      } else if (args.input && typeof args.input === "object") {
-        graphID = parseInt(args.input.graphID, 10);
-      } else if (args.graphID) {
-        graphID = parseInt(args.graphID, 10);
-      } else if (typeof args === "number") {
-        graphID = args;
-      } else if (typeof args === "string") {
-        args = JSON.parse(args);
-        graphID = args.graphID || args;
-      } else {
-        throw new Error("No graphID provided");
-      }
-      return JSON.stringify({ graphID });
+      const args = normalizeArgs<{ graphID?: unknown; value?: unknown }>(rawArgs);
+      const graphID = args.graphID ?? args.value;
+      const finalGraphID = coerceGraphIdtoInteger(graphID);
+      return JSON.stringify({ graphID: finalGraphID });
     } catch (error) {
       return JSON.stringify({
         status: "error",
-        error: error instanceof Error ? error.message : String(error)
+        error: error instanceof Error ? error.message : String(error),
       });
     }
   },
   {
     name: "sonify_graph",
-    description: "Sonify the graph requested by the user"
+    description: "Sonify the graph requested by the user",
+    schema: sonifyGraphJsonSchema as any,
   }
 );
 
-export const tools = [createRequestTool, sonifyGraphTool];
+export const tools: SimpleTool[] = [createRequestTool as any, sonifyGraphTool as any];
 
 export const toolCallResponse = async (toolCall: any) => {
-  const definedTool = tools.find(t => t.name === toolCall.name);
+  const definedTool = tools.find((t) => t.name === toolCall.name);
+  if (!definedTool) throw new Error(`Tool ${toolCall.name} not found`);
 
-  if (!definedTool) {
-    throw new Error(`Tool ${toolCall.name} not found`);
-  }
-
-  const toolResult = await definedTool.func(toolCall.args);
+  const toolResult = await (definedTool as any).invoke(toolCall.args);
   const parsedResult = JSON.parse(toolResult);
 
   return {
     request: parsedResult,
     status: "requires_action",
     tool_call_id: toolCall.id,
-    type: definedTool.name
+    type: definedTool.name,
   };
 };
 
@@ -119,6 +128,5 @@ export const extractToolCalls = (lastMessage: BaseMessage | undefined): any[] =>
   if (!lastMessage || !("tool_calls" in lastMessage) || !Array.isArray((lastMessage as any).tool_calls)) {
     return [];
   }
-
   return (lastMessage as any).tool_calls;
 };
