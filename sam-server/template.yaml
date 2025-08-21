@@ -60,7 +60,7 @@ Resources:
       InternetGatewayId: !Ref InternetGateway
       VpcId: !Ref NewVPC
 
-  # Subnets for Lambda functions
+  # Subnet for NatGateway functions
   PublicSubnet1:
     Type: AWS::EC2::Subnet
     Properties:
@@ -71,17 +71,6 @@ Resources:
       Tags:
         - Key: Name
           Value: !Sub "${Environment}-davai-public-subnet-1"
-
-  PublicSubnet2:
-    Type: AWS::EC2::Subnet
-    Properties:
-      VpcId: !Ref NewVPC
-      CidrBlock: 10.1.2.0/24
-      AvailabilityZone: !Select [1, !GetAZs '']
-      MapPublicIpOnLaunch: true
-      Tags:
-        - Key: Name
-          Value: !Sub "${Environment}-davai-public-subnet-2"
 
   # Subnets for RDS
   PrivateSubnet1:
@@ -127,12 +116,6 @@ Resources:
     Type: AWS::EC2::SubnetRouteTableAssociation
     Properties:
       SubnetId: !Ref PublicSubnet1
-      RouteTableId: !Ref PublicRouteTable
-
-  PublicSubnet2RouteTableAssociation:
-    Type: AWS::EC2::SubnetRouteTableAssociation
-    Properties:
-      SubnetId: !Ref PublicSubnet2
       RouteTableId: !Ref PublicRouteTable
 
   # Route table for private subnets
