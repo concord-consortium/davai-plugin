@@ -538,6 +538,456 @@ export const codapApiDoc = `### DataContexts
 }
 \`\`\`
 
+##### Graph adornments
+
+Graphs can display adornments that show various measures along with the points. Plugins can modify adornments via create, update, and delete requests. These work similarly to how create, update, and delete requests work for components except that they are tied to a particular graph component.
+
+Create, Update, and Delete are not fully implemented. Delete will work for all adornments. Create and Update are currently supported only by these:
+
+- Count
+- Percent
+- Least Squares Line (LSRL)
+- Mean
+- Median
+- Movable Value
+- Standard Deviation
+- Region of Interest
+
+###### CREATE
+
+1. Example: Count adornment create
+
+Send:
+\`\`\`json
+{
+  "action": "create",
+  "resource": "component[graphId].adornment",
+  "values": {
+    "type": "Count"
+  }
+}
+\`\`\`
+
+Receive:
+\`\`\`json
+{
+  "success": true,
+  "values": {
+    "id": "ADRNT0bgXef4xVhb",
+    "showCount": true,
+    "showPercent": false,
+    "type": "Count",
+    "data": [
+      {
+        "count": 27
+      }
+    ]
+  }
+}
+\`\`\`
+
+2. Example: Percent adornment create
+
+Send:
+\`\`\`json
+{
+  "action": "create",
+  "resource": "component[123].adornment",
+  "values": {
+    "type": "Percent"
+  }
+}
+\`\`\`
+
+Receive:
+\`\`\`json
+{
+  "success": true,
+  "values": {
+    "id": "ADRNkoqSZUmDf6YN",
+    "showCount": false,
+    "showPercent": true,
+    "type": "Percent",
+    "data": [
+      {
+        "percent": "88.89%",
+        "categories": {
+          "Habitat": "land"
+        }
+      },
+      {
+        "percent": "7.41%",
+        "categories": {
+          "Habitat": "water"
+        }
+      },
+      {
+        "percent": "3.7%",
+        "categories": {
+          "Habitat": "both"
+        }
+      }
+    ]
+  }
+}
+\`\`\`
+
+3. Example: LSRL adornment create
+
+Send:
+\`\`\`json
+{
+  "action": "create",
+  "resource": "component[123].adornment",
+  "values": {
+    "type": "LSRL"
+  }
+}
+\`\`\`
+
+Receive:
+\`\`\`json
+{
+  "success": true,
+  "values": {
+    "id": "ADRNBvu_Wenqa3Kr",
+    "isVisible": true,
+    "showConfidenceBands": false,
+    "type": "LSRL",
+    "data": [
+      {
+        "category": "__main__",
+        "intercept": 46.0819344740109,
+        "rSquared": 0.2913769175823716,
+        "sdResiduals": 18.367278750769525,
+        "slope": -1.9882873643871106
+      }
+    ]
+  }
+}
+\`\`\`
+
+4. Example: Mean adornment create
+
+Send:
+\`\`\`json
+{
+  "action": "create",
+  "resource": "component[123].adornment",
+  "values": {
+    "type": "Mean"
+  }
+}
+\`\`\`
+
+Receive:
+\`\`\`json
+{
+  "success": true,
+  "values": {
+    "id": "ADRNHtTqhndWc0qx",
+    "isVisible": true,
+    "type": "Mean",
+    "data": [
+      {
+        "mean": 10.791666666666666
+      }
+    ]
+  }
+}
+\`\`\`
+
+5. Example: Median adornment create
+
+Send:
+\`\`\`json
+{
+  "action": "create",
+  "resource": "component[123].adornment",
+  "values": {
+    "type": "Median"
+  }
+}
+\`\`\`
+
+Receive:
+\`\`\`json
+{
+  "success": true,
+  "values": {
+    "id": "ADRNHtTqhndWc0qx",
+    "isVisible": true,
+    "type": "Median",
+            "data": [
+          {
+            "median": 11
+          }
+        ]
+  }
+}
+\`\`\`
+
+6. Example: Standard Deviation adornment create
+
+Send:
+\`\`\`json
+{
+  "action": "create",
+  "resource": "component[123].adornment",
+  "values": {
+    "type": "Standard Deviation"
+  }
+}
+\`\`\`
+
+Receive:
+\`\`\`json
+{
+  "success": true,
+  "values": {
+    "id": "ADRNlcE9eSUty0Rl",
+    "isVisible": true,
+    "type": "Standard Deviation",
+    "data": [
+      {
+        "min": 4.998273378005741,
+        "max": 16.58505995532759,
+        "mean": 10.791666666666666
+      }
+    ]
+  }
+}
+\`\`\`
+
+7. Example: Movable Value adornment create
+
+Send:
+\`\`\`json
+{
+  "action": "create",
+  "resource": "component[123].adornment",
+  "values": {
+    "type": "Movable Value"
+  }
+}
+\`\`\`
+
+Receive:
+\`\`\`json
+{
+  "success": true,
+  "values": {
+    "id": "ADRNeH5WViQvDUDF",
+    "isVisible": true,
+    "type": "Movable Value",
+    "data": [
+      {
+        "movableValues": [
+          7
+        ]
+      }
+    ]
+  }
+}
+\`\`\`
+
+If a numeric value for the Movable Value is not specified in the request, CODAP will automatically determine a value to use in the same way it does if you click a graph's "Add Movable Value" button in the CODAP UI. 
+
+You can also specify a numeric value for the Movable Value. To do so, you need to supply a cell key for the subplot you want to add the value to in the request. When there is only a single, undivided plot, the cell key is {}.
+
+\`\`\`json
+{
+  "action": "create",
+  "resource": "component[43].adornment",
+  "values": {
+    "type": "Movable Value",
+    "values": [["{}", 5]]
+  }
+}
+\`\`\`
+
+When there are multiple subplots due to categorical splits, you need to supply cell keys that correspond to the categorical values.
+
+\`\`\`json
+{
+  "action": "create",
+  "resource": "component[43].adornment",
+  "values": {
+    "type": "Movable Value",
+    "values": [
+      ["{\"Diet\":\"both\"}", 5],
+      ["{\"Diet\":\"meat\"}", 6.5],
+      ["{\"Diet\":\"plants\"}", 3]
+    ]
+  }
+}
+\`\`\`
+
+\`\`\`json
+{
+  "action": "create",
+  "resource": "component[43].adornment",
+  "values": {
+    "type": "Movable Value",
+    "values": [
+      ["{\"Diet\":\"both\", \"Habitat\":\"both\"}", 5],
+      ["{\"Diet\":\"both\", \"Habitat\":\"land\"}", 10],
+      ["{\"Diet\":\"both\", \"Habitat\":\"water\"}", 15],
+      ["{\"Diet\":\"meat\", \"Habitat\":\"both\"}", 20],
+      ["{\"Diet\":\"meat\", \"Habitat\":\"land\"}", 25],
+      ["{\"Diet\":\"meat\", \"Habitat\":\"water\"}", 30],
+      ["{\"Diet\":\"plants\", \"Habitat\":\"both\"}", 35],
+      ["{\"Diet\":\"plants\", \"Habitat\":\"land\"}", 40],
+      ["{\"Diet\":\"plants\", \"Habitat\":\"water\"}", 45]
+    ]
+  }
+}
+\`\`\`
+
+8. Example: Region of Interest adornment create
+
+Send:
+\`\`\`json
+{
+  "action": "create",
+  "resource": "component[43].adornment",
+  "values": {
+    "type": "Region of Interest",
+    "primary": { "position": 0, "extent": 10 },
+    "secondary": { "position": "20%", "extent": "50%" }
+  }
+}
+\`\`\`
+
+Receive:
+\`\`\`json
+{
+  "success": true,
+  "values": {
+    "id": "ADRNuDEIIJzsJwXO",
+    "isVisible": true,
+    "type": "Region of Interest",
+    "primary": "{\"extent\":10,\"position\":0}",
+    "secondary": "{\"extent\":\"50%\",\"position\":\"20%\"}"
+  }
+}
+\`\`\`
+
+Both position and extent can take either a numeric coordinate value or a percent string value. A coordinate value corresponds to the values of the axis. A percentage value corresponds to a percentage of the plot.
+
+The secondary value property is optional. If it is not specified in the request, the secondary extent will be 100% and the position will be 0.
+
+###### UPDATE
+
+Except for the Movable Value and Region of Interest, the only property you can update for most adornments that support update is the \`isVisible\` property.
+
+1. Example: Count adornment update
+
+Send:
+\`\`\`json
+{
+  "action": "update",
+  "resource": "component[123].adornment",
+  "values": {
+    "isVisible": false,
+    "type": "Count"
+  }
+}
+\`\`\`
+
+Receive:
+\`\`\`json
+{
+  "success": true
+}
+\`\`\`
+
+2. Example: Movable Value adornment update
+
+To modify an existing Movable Value, you need to supply the cell key for the Movable Value you want to adjust, and a new numeric value. When there is only a single, undivided plot, the cell key is {}.
+
+Send:
+\`\`\`json
+{
+  "action": "update",
+  "resource": "component[43].adornment",
+  "values": {
+    "type": "Movable Value",
+    "values": [["{}", 10]]
+  }
+}
+\`\`\`
+
+When there are multiple subplots due to categorical splits, you need to supply cell keys that correspond to the categorical values.
+
+\`\`\`json
+{
+  "action": "update",
+  "resource": "component[43].adornment",
+  "values": {
+    "type": "Movable Value",
+    "values": [
+      ["{\"Diet\":\"both\"}", 10],
+      ["{\"Diet\":\"meat\"}", 20],
+      ["{\"Diet\":\"plants\"}", 30]
+    ]
+  }
+}
+\`\`\`
+
+Receive:
+\`\`\`json
+{
+  "success": true
+}
+\`\`\`
+
+3. Example: Region of Interest adornment update
+
+Send:
+\`\`\`json
+{
+  "action": "update",
+  "resource": "component[43].adornment",
+  "values": {
+    "type": "Region of Interest",
+    "primary": { "position": 10, "extent": 10 },
+    "secondary": { "position": "10%", "extent": "100%" }
+  }
+}
+\`\`\`
+
+Receive:
+\`\`\`json
+{
+  "success": true
+}
+\`\`\`
+
+###### DELETE
+
+1. Example: adornment delete
+
+Send:
+\`\`\`json
+{
+  "action": "delete",
+  "resource": "component[123].adornment",
+  "values": {
+    "type": "Count"
+  }
+}
+\`\`\`
+
+Receive:
+\`\`\`json
+{
+  "success": true
+}
+\`\`\`
+
+Movable Value is currently the only adornment with its own special Delete handler. That allows API calls to actually delete Movable Value instances instead of just setting the adornment's \`isVisible\` property to \`false\`. This works similarly to clicking on the "Remove Movable Value" button in the CODAP UI where the most recently-added Movable Value will be removed. Subsequent delete requests will remove the next most-recently added Movable Value until all movable values have been removed.
+
 ### Error Handling
 
 All API calls return a response object with the following structure:
