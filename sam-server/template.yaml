@@ -1,0 +1,571 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Transform: AWS::Serverless-2016-10-31
+Description: Davai Plugin Server - AWS SAM Version
+
+Parameters:
+  Environment:
+    Type: String
+    Default: dev
+    Description: Environment name (dev, staging, prod)
+  DBUsername:
+    Type: String
+    Default: postgres
+    Description: PostgreSQL database username
+  DBPassword:
+    Type: String
+    NoEcho: true
+    Description: PostgreSQL database password
+
+Resources:
+  NewVPC:
+    Type: AWS::EC2::VPC
+    Properties:
+      CidrBlock: 10.1.0.0/16
+      EnableDnsHostnames: true
+      EnableDnsSupport: true
+      Tags:
+        - Key: Name
+          Value: !Sub "${Environment}-davai-vpc"
+
+  NatEip:
+    Type: AWS::EC2::EIP
+    Properties: { Domain: vpc }
+
+  NatGateway:
+    Type: AWS::EC2::NatGateway
+    Properties:
+      AllocationId: !GetAtt NatEip.AllocationId
+      SubnetId: !Ref PublicSubnet1
+      Tags:
+        - Key: Name
+          Value: !Sub "${Environment}-davai-nat"
+
+  PrivateDefaultRoute:
+    Type: AWS::EC2::Route
+    Properties:
+      RouteTableId: !Ref PrivateRouteTable
+      DestinationCidrBlock: 0.0.0.0/0
+      NatGatewayId: !Ref NatGateway
+
+  InternetGateway:
+    Type: AWS::EC2::InternetGateway
+    Properties:
+      Tags:
+        - Key: Name
+          Value: !Sub "${Environment}-davai-igw"
+
+  InternetGatewayAttachment:
+    Type: AWS::EC2::VPCGatewayAttachment
+    Properties:
+      InternetGatewayId: !Ref InternetGateway
+      VpcId: !Ref NewVPC
+
+  # Subnet for NatGateway functions
+  PublicSubnet1:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref NewVPC
+      CidrBlock: 10.1.1.0/24
+      AvailabilityZone: !Select [0, !GetAZs '']
+      MapPublicIpOnLaunch: true
+      Tags:
+        - Key: Name
+          Value: !Sub "${Environment}-davai-public-subnet-1"
+
+  # Subnets for RDS
+  PrivateSubnet1:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref NewVPC
+      CidrBlock: 10.1.10.0/24
+      AvailabilityZone: !Select [0, !GetAZs '']
+      Tags:
+        - Key: Name
+          Value: !Sub "${Environment}-davai-private-subnet-1"
+
+  PrivateSubnet2:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref NewVPC
+      CidrBlock: 10.1.11.0/24
+      AvailabilityZone: !Select [1, !GetAZs '']
+      Tags:
+        - Key: Name
+          Value: !Sub "${Environment}-davai-private-subnet-2"
+
+  # Route table for public subnets
+  PublicRouteTable:
+    Type: AWS::EC2::RouteTable
+    Properties:
+      VpcId: !Ref NewVPC
+      Tags:
+        - Key: Name
+          Value: !Sub "${Environment}-davai-public-routes"
+
+  # Route to Internet Gateway
+  PublicRoute:
+    Type: AWS::EC2::Route
+    DependsOn: InternetGatewayAttachment
+    Properties:
+      RouteTableId: !Ref PublicRouteTable
+      DestinationCidrBlock: 0.0.0.0/0
+      GatewayId: !Ref InternetGateway
+
+  # Associate public subnets with public route table
+  PublicSubnet1RouteTableAssociation:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      SubnetId: !Ref PublicSubnet1
+      RouteTableId: !Ref PublicRouteTable
+
+  # Route table for private subnets
+  PrivateRouteTable:
+    Type: AWS::EC2::RouteTable
+    Properties:
+      VpcId: !Ref NewVPC
+      Tags:
+        - Key: Name
+          Value: !Sub "${Environment}-davai-private-routes"
+
+  # Associate private subnets with private route table
+  PrivateSubnet1RouteTableAssociation:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      SubnetId: !Ref PrivateSubnet1
+      RouteTableId: !Ref PrivateRouteTable
+
+  PrivateSubnet2RouteTableAssociation:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      SubnetId: !Ref PrivateSubnet2
+      RouteTableId: !Ref PrivateRouteTable
+
+  # Security Group for Lambda (allows all outbound)
+  LambdaSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: Security group for Lambda functions
+      VpcId: !Ref NewVPC
+      SecurityGroupEgress:
+        - IpProtocol: -1
+          CidrIp: 0.0.0.0/0
+      Tags:
+        - Key: Name
+          Value: !Sub "${Environment}-davai-lambda-sg"
+
+  # Security Group for PostgreSQL (allows Lambda access)
+  DBSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: Security group for PostgreSQL RDS
+      VpcId: !Ref NewVPC
+      SecurityGroupIngress:
+        - IpProtocol: tcp
+          FromPort: 5432
+          ToPort: 5432
+          SourceSecurityGroupId: !Ref LambdaSecurityGroup
+      Tags:
+        - Key: Name
+          Value: !Sub "${Environment}-davai-db-sg"
+
+  # RDS Subnet Group
+  DBSubnetGroup:
+    Type: AWS::RDS::DBSubnetGroup
+    Properties:
+      DBSubnetGroupDescription: Subnet group for Davai PostgreSQL
+      SubnetIds:
+        - !Ref PrivateSubnet1
+        - !Ref PrivateSubnet2
+      Tags:
+        - Key: Name
+          Value: !Sub "${Environment}-davai-postgres-subnet-group"
+
+  # PostgreSQL RDS Instance
+  PostgreSQLDB:
+    Type: AWS::RDS::DBInstance
+    Properties:
+      DBInstanceIdentifier: !Sub "${Environment}-davai-postgres"
+      Engine: postgres
+      EngineVersion: "15.13"
+      DBInstanceClass: db.t3.micro
+      MasterUsername: !Ref DBUsername
+      MasterUserPassword: !Ref DBPassword
+      DBName: postgres
+      AllocatedStorage: 20
+      MaxAllocatedStorage: 100
+      StorageType: gp2
+      DBSubnetGroupName: !Ref DBSubnetGroup
+      VPCSecurityGroups:
+        - !Ref DBSecurityGroup
+      BackupRetentionPeriod: 7
+      MultiAZ: false
+      PubliclyAccessible: false
+      DeletionProtection: false
+      StorageEncrypted: true
+      MonitoringInterval: 0
+      Tags:
+        - Key: Name
+          Value: !Sub "${Environment}-davai-postgres"
+
+  # API Gateway
+  DavaiApi:
+    Type: AWS::Serverless::Api
+    Properties:
+      StageName: !Ref Environment
+      Cors:
+        AllowMethods: "'GET,POST,PUT,DELETE,OPTIONS'"
+        AllowHeaders: "'Content-Type,Authorization'"
+        AllowOrigin: "'*'"
+        MaxAge: "'86400'"
+
+  # SQS Queue for LLM Jobs
+  LLMJobQueue:
+    Type: AWS::SQS::Queue
+    Properties:
+      QueueName: !Sub "${Environment}-llm-job-queue"
+      VisibilityTimeout: 300
+      MessageRetentionPeriod: 1209600
+
+  # Secrets
+  DavaiApiSecret:
+    Type: AWS::SecretsManager::Secret
+    Properties:
+      Name: !Sub "${Environment}-davai-api-secret"
+      Description: Secret for Davai API authentication
+      SecretString: !Sub '{"secret": "your-api-secret-here"}'
+
+  OpenAIApiKey:
+    Type: AWS::SecretsManager::Secret
+    Properties:
+      Name: !Sub "${Environment}-openai-api-key"
+      Description: OpenAI API key for Davai server
+      SecretString: !Sub '{"key": "your-openai-key-here"}'
+
+  GoogleApiKey:
+    Type: AWS::SecretsManager::Secret
+    Properties:
+      Name: !Sub "${Environment}-google-api-key"
+      Description: Google API key for Davai server
+      SecretString: !Sub '{"key": "your-google-key-here"}'
+
+  # Status Handler Lambda
+  StatusHandlerFunction:
+    Type: AWS::Serverless::Function
+    Metadata:
+      BuildMethod: esbuild
+      BuildProperties:
+        Format: cjs
+        Target: node18
+        Minify: false
+        External:
+          - pg-native
+    Properties:
+      CodeUri: .
+      Handler: src/handlers/status.handler
+      Runtime: nodejs18.x
+      Events:
+        StatusApi:
+          Type: Api
+          Properties:
+            RestApiId: !Ref DavaiApi
+            Path: /default/davaiServer/status
+            Method: get
+      Environment:
+        Variables:
+          ENVIRONMENT: !Ref Environment
+          POSTGRES_CONNECTION_STRING: !Sub "postgresql://${DBUsername}:${DBPassword}@${PostgreSQLDB.Endpoint.Address}:${PostgreSQLDB.Endpoint.Port}/postgres"
+      VpcConfig:
+        SecurityGroupIds:
+          - !Ref LambdaSecurityGroup
+        SubnetIds:
+          - !Ref PrivateSubnet1
+          - !Ref PrivateSubnet2
+      Policies:
+        - VPCAccessPolicy: {}
+        - Statement:
+            - Effect: Allow
+              Action:
+                - secretsmanager:GetSecretValue
+                - secretsmanager:DescribeSecret
+              Resource:
+                - !Sub arn:${AWS::Partition}:secretsmanager:${AWS::Region}:${AWS::AccountId}:secret:${Environment}-davai-api-secret-*
+      Timeout: 60
+      MemorySize: 512
+
+  # Cancel Handler Lambda
+  CancelHandlerFunction:
+    Type: AWS::Serverless::Function
+    Metadata:
+      BuildMethod: esbuild
+      BuildProperties:
+        Format: cjs
+        Target: node18
+        Minify: false
+        External:
+          - pg-native
+    Properties:
+      CodeUri: .
+      Handler: src/handlers/cancel.handler
+      Runtime: nodejs18.x
+      Events:
+        CancelApi:
+          Type: Api
+          Properties:
+            RestApiId: !Ref DavaiApi
+            Path: /default/davaiServer/cancel
+            Method: post
+      Environment:
+        Variables:
+          ENVIRONMENT: !Ref Environment
+          POSTGRES_CONNECTION_STRING: !Sub "postgresql://${DBUsername}:${DBPassword}@${PostgreSQLDB.Endpoint.Address}:${PostgreSQLDB.Endpoint.Port}/postgres"
+          DAVAI_API_SECRET: !Ref DavaiApiSecret
+      VpcConfig:
+        SecurityGroupIds:
+          - !Ref LambdaSecurityGroup
+        SubnetIds:
+          - !Ref PrivateSubnet1
+          - !Ref PrivateSubnet2
+      Policies:
+        - VPCAccessPolicy: {}
+        - Statement:
+            - Effect: Allow
+              Action:
+                - secretsmanager:GetSecretValue
+                - secretsmanager:DescribeSecret
+              Resource:
+                - !Sub arn:${AWS::Partition}:secretsmanager:${AWS::Region}:${AWS::AccountId}:secret:${Environment}-davai-api-secret-*
+      Timeout: 60
+      MemorySize: 512
+
+  # Job Processor Lambda
+  JobProcessorFunction:
+    Type: AWS::Serverless::Function
+    Metadata:
+      BuildMethod: esbuild
+      BuildProperties:
+        Format: cjs
+        Target: node18
+        Minify: false
+        External:
+          - pg-native
+    Properties:
+      CodeUri: .
+      Handler: src/handlers/job-processor.handler
+      Runtime: nodejs18.x
+      Events:
+        SQSEvent:
+          Type: SQS
+          Properties:
+            Queue: !GetAtt LLMJobQueue.Arn
+            BatchSize: 1
+      Environment:
+        Variables:
+          ENVIRONMENT: !Ref Environment
+          POSTGRES_CONNECTION_STRING: !Sub "postgresql://${DBUsername}:${DBPassword}@${PostgreSQLDB.Endpoint.Address}:${PostgreSQLDB.Endpoint.Port}/postgres"
+          OPENAI_API_KEY: !Ref OpenAIApiKey
+          GOOGLE_API_KEY: !Ref GoogleApiKey
+      VpcConfig:
+        SecurityGroupIds:
+          - !Ref LambdaSecurityGroup
+        SubnetIds:
+          - !Ref PrivateSubnet1
+          - !Ref PrivateSubnet2
+      Policies:
+        - VPCAccessPolicy: {}
+        - SQSPollerPolicy:
+            QueueName: !Sub "${Environment}-llm-job-queue"
+        - Statement:
+            - Effect: Allow
+              Action:
+                - secretsmanager:GetSecretValue
+                - secretsmanager:DescribeSecret
+              Resource: 
+                - !Sub arn:${AWS::Partition}:secretsmanager:${AWS::Region}:${AWS::AccountId}:secret:${Environment}-davai-api-secret-*
+                - !Sub arn:${AWS::Partition}:secretsmanager:${AWS::Region}:${AWS::AccountId}:secret:${Environment}-openai-api-key-*
+                - !Sub arn:${AWS::Partition}:secretsmanager:${AWS::Region}:${AWS::AccountId}:secret:${Environment}-google-api-key-*
+      Timeout: 300
+      MemorySize: 512
+
+  # Setup Function (creates database tables)
+  SetupFunction:
+    Type: AWS::Serverless::Function
+    Metadata:
+      BuildMethod: esbuild
+      BuildProperties:
+        Format: cjs
+        Target: node18
+        Minify: false
+        External:
+          - pg-native
+    Properties:
+      CodeUri: .
+      Handler: src/handlers/setup.handler
+      Runtime: nodejs18.x
+      Timeout: 300
+      Environment:
+        Variables:
+          ENVIRONMENT: !Ref Environment
+          POSTGRES_CONNECTION_STRING: !Sub "postgresql://${DBUsername}:${DBPassword}@${PostgreSQLDB.Endpoint.Address}:${PostgreSQLDB.Endpoint.Port}/postgres"
+      VpcConfig:
+        SecurityGroupIds:
+          - !Ref LambdaSecurityGroup
+        SubnetIds:
+          - !Ref PrivateSubnet1
+          - !Ref PrivateSubnet2
+      Policies:
+        - VPCAccessPolicy: {}
+      MemorySize: 512
+
+  # Message Handler Lambda
+  MessageHandlerFunction:
+    Type: AWS::Serverless::Function
+    Metadata:
+      BuildMethod: esbuild
+      BuildProperties:
+        Format: cjs
+        Target: node18
+        Minify: false
+        External:
+          - pg-native
+    Properties:
+      CodeUri: .
+      Handler: src/handlers/message.handler
+      Runtime: nodejs18.x
+      Events:
+        MessageApi:
+          Type: Api
+          Properties:
+            RestApiId: !Ref DavaiApi
+            Path: /default/davaiServer/message
+            Method: post
+      Environment:
+        Variables:
+          ENVIRONMENT: !Ref Environment
+          POSTGRES_CONNECTION_STRING: !Sub "postgresql://${DBUsername}:${DBPassword}@${PostgreSQLDB.Endpoint.Address}:${PostgreSQLDB.Endpoint.Port}/postgres"
+          LLM_JOB_QUEUE_URL: !Ref LLMJobQueue
+          DAVAI_API_SECRET: !Ref DavaiApiSecret
+      VpcConfig:
+        SecurityGroupIds:
+          - !Ref LambdaSecurityGroup
+        SubnetIds:
+          - !Ref PrivateSubnet1
+          - !Ref PrivateSubnet2
+      Policies:
+        - VPCAccessPolicy: {}
+        - SQSSendMessagePolicy:
+            QueueName: !Sub "${Environment}-llm-job-queue"
+        - Statement:
+            - Effect: Allow
+              Action:
+                - secretsmanager:GetSecretValue
+                - secretsmanager:DescribeSecret
+              Resource:
+                - !Sub arn:${AWS::Partition}:secretsmanager:${AWS::Region}:${AWS::AccountId}:secret:${Environment}-davai-api-secret-*
+      Timeout: 60
+      MemorySize: 512
+
+  # Tool Handler Lambda
+  ToolHandlerFunction:
+    Type: AWS::Serverless::Function
+    Metadata:
+      BuildMethod: esbuild
+      BuildProperties:
+        Format: cjs
+        Target: node18
+        Minify: false
+        External:
+          - pg-native
+    Properties:
+      CodeUri: .
+      Handler: src/handlers/tool.handler
+      Runtime: nodejs18.x
+      Events:
+        ToolApi:
+          Type: Api
+          Properties:
+            RestApiId: !Ref DavaiApi
+            Path: /default/davaiServer/tool
+            Method: post
+      Environment:
+        Variables:
+          ENVIRONMENT: !Ref Environment
+          POSTGRES_CONNECTION_STRING: !Sub "postgresql://${DBUsername}:${DBPassword}@${PostgreSQLDB.Endpoint.Address}:${PostgreSQLDB.Endpoint.Port}/postgres"
+          LLM_JOB_QUEUE_URL: !Ref LLMJobQueue
+          DAVAI_API_SECRET: !Ref DavaiApiSecret
+      VpcConfig:
+        SecurityGroupIds:
+          - !Ref LambdaSecurityGroup
+        SubnetIds:
+          - !Ref PrivateSubnet1
+          - !Ref PrivateSubnet2
+      Policies:
+        - VPCAccessPolicy: {}
+        - SQSSendMessagePolicy:
+            QueueName: !Sub "${Environment}-llm-job-queue"
+        - Statement:
+            - Effect: Allow
+              Action:
+                - secretsmanager:GetSecretValue
+                - secretsmanager:DescribeSecret
+              Resource:
+                - !Sub arn:${AWS::Partition}:secretsmanager:${AWS::Region}:${AWS::AccountId}:secret:${Environment}-davai-api-secret-*
+      Timeout: 60
+      MemorySize: 512
+
+  EndpointSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: SG for VPC endpoints
+      VpcId: !Ref NewVPC
+      SecurityGroupIngress:
+        - IpProtocol: tcp
+          FromPort: 443
+          ToPort: 443
+          SourceSecurityGroupId: !Ref LambdaSecurityGroup
+
+  SqsEndpoint:
+    Type: AWS::EC2::VPCEndpoint
+    Properties:
+      VpcId: !Ref NewVPC
+      VpcEndpointType: Interface
+      ServiceName: com.amazonaws.us-east-1.sqs
+      SubnetIds: [!Ref PrivateSubnet1, !Ref PrivateSubnet2]
+      SecurityGroupIds: [!Ref EndpointSecurityGroup]
+      PrivateDnsEnabled: true
+
+  SecretsManagerEndpoint:
+    Type: AWS::EC2::VPCEndpoint
+    Properties:
+      VpcId: !Ref NewVPC
+      VpcEndpointType: Interface
+      ServiceName: com.amazonaws.us-east-1.secretsmanager
+      SubnetIds: [!Ref PrivateSubnet1, !Ref PrivateSubnet2]
+      SecurityGroupIds: [!Ref EndpointSecurityGroup]
+      PrivateDnsEnabled: true
+
+  LogsEndpoint:
+    Type: AWS::EC2::VPCEndpoint
+    Properties:
+      VpcId: !Ref NewVPC
+      VpcEndpointType: Interface
+      ServiceName: com.amazonaws.us-east-1.logs
+      SubnetIds: [!Ref PrivateSubnet1, !Ref PrivateSubnet2]
+      SecurityGroupIds: [!Ref EndpointSecurityGroup]
+      PrivateDnsEnabled: true
+
+Outputs:
+  DavaiApi:
+    Description: "API Gateway endpoint URL"
+    Value: !Sub "https://${DavaiApi}.execute-api.${AWS::Region}.amazonaws.com/${Environment}/"
+  PostgreSQLEndpoint:
+    Description: "PostgreSQL RDS endpoint"
+    Value: !GetAtt PostgreSQLDB.Endpoint.Address
+  PostgreSQLPort:
+    Description: "PostgreSQL RDS port"
+    Value: !GetAtt PostgreSQLDB.Endpoint.Port
+  LLMJobQueue:
+    Description: "SQS queue for LLM jobs"
+    Value: !Ref LLMJobQueue
+  DatabaseName:
+    Description: "Database name"
+    Value: "postgres"

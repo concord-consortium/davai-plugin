@@ -12,13 +12,16 @@ import { codapApiDoc } from "../text/codap-api-documentation.js";
 import { extractToolCalls, toolCallResponse, tools } from "./tool-utils.js";
 import { tokenCounter, escapeCurlyBraces } from "./utils.js";
 import { MAX_TOKENS } from "../constants.js";
+import { getGoogleKey, getOpenAIKey } from "./env-utils.js";
 
 if (!process.env.POSTGRES_CONNECTION_STRING) {
   throw new Error("POSTGRES_CONNECTION_STRING environment variable is not set.");
 }
 
 const checkpointer = PostgresSaver.fromConnString(process.env.POSTGRES_CONNECTION_STRING);
-await checkpointer.setup();
+
+// Initialize checkpointer when module loads
+const checkpointPromise = checkpointer.setup();
 
 let llmInstances: Record<string, any> = {};
 
@@ -38,39 +41,43 @@ const promptTemplate = ChatPromptTemplate.fromMessages([
     ["placeholder", "{messages}"],
 ]);
 
-export const createModelInstance = (llm: string) => {
+export const createModelInstance = async (llm: string) => {
   const llmObj = JSON.parse(llm);
   const { id, provider } = llmObj;
 
   if (provider === "OpenAI") {
+    const apiKey = await getOpenAIKey();
     return new ChatOpenAI({
       model: id,
       temperature: 0,
-      apiKey: process.env.OPENAI_API_KEY,
+      apiKey,
     });
   }
 
   if (provider === "Google") {
+    const apiKey = await getGoogleKey();
     return new ChatGoogleGenerativeAI({
       model: id,
       temperature: 0,
-      apiKey: process.env.GOOGLE_API_KEY,
+      apiKey,
     });
   }
 
   throw new Error(`Unsupported LLM provider: ${provider}`);
 };
 
-const getOrCreateModelInstance = (llmId: string): Record<string, any> => {
+const getOrCreateModelInstance = async (llmId: string): Promise<any> => {
   if (!llmInstances[llmId]) {
-    llmInstances[llmId] = createModelInstance(llmId).bindTools(tools, { parallel_tool_calls: false });
+    const model = await createModelInstance(llmId);
+    llmInstances[llmId] = model.bind({ tools, parallel_tool_calls: false });
   }
+
   return llmInstances[llmId];
 };
 
 const callModel = async (state: any, modelConfig: any) => {
   const { llmId } = modelConfig.configurable;
-  const llm = getOrCreateModelInstance(llmId);
+  const llm = await getOrCreateModelInstance(llmId);
 
   // Use the trimmer to ensure we don't send too much to the model
   // The trimmer is used to limit the number of tokens in the conversation history.
@@ -98,8 +105,7 @@ export const buildResponse = async (message: BaseMessage) => {
 
   // If there are tool calls, we need to handle them first.
   if (toolCalls?.[0]) {
-    const response = await toolCallResponse(toolCalls?.[0]);
-    return response;
+    return await toolCallResponse(toolCalls?.[0]);
   } else {
     return { response: message.content };
   }
@@ -128,5 +134,12 @@ if (devMode) {
   console.log("DEV_MODE: langApp instances will be cached per sessionId");
 }
 
-export const langApp = workflow.compile({ checkpointer });
+export const getLangApp = async () => {
+  try {
+    await checkpointPromise;
+  } catch (error) {
+    console.error("Checkpointer setup failed: ", error);
+  }
 
+  return workflow.compile({ checkpointer });
+};
