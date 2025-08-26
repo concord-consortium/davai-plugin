@@ -1,3 +1,5 @@
+/.aws-sam
+
 # dependencies
 /node_modules
 

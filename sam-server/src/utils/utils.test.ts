@@ -1,15 +1,15 @@
-import { BaseMessage } from "@langchain/core/messages.js";
-import { CHARS_PER_TOKEN } from "../constants.js";
 import { tokenCounter, escapeCurlyBraces } from "./utils.js";
 
 describe("tokenCounter", () => {
   it("should count tokens correctly for a single message", () => {
     const messageLength = 32;
+    // Simple token estimation - roughly 4 characters per token
+    const maxTokens = 4;
     const messages = [
       { content: `This sentence is ${messageLength} tokens long.` }
-    ] as BaseMessage[];
+    ];
     const count = tokenCounter(messages);
-    expect(count).toBe(32 / CHARS_PER_TOKEN);
+    expect(count).toBe(messageLength / maxTokens);
   });
 });
 
