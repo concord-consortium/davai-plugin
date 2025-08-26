@@ -11,7 +11,10 @@
     "sam:deploy": "sam deploy --guided",
     "sam:deploy:dev": "sam deploy --config-env dev",
     "sam:logs": "sam logs -t",
-    "sam:invoke": "sam local invoke"
+    "sam:invoke": "sam local invoke",
+    "dev:infra": "docker-compose up -d",
+    "dev:infra:down": "docker-compose down",
+    "dev:setup": "./dev-start.sh"
   },
   "dependencies": {
     "@aws-sdk/client-secrets-manager": "^3.857.0",
