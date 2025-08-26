@@ -4,6 +4,7 @@ import { HumanMessage, ToolMessage } from "@langchain/core/messages";
 import { getLangApp } from "../utils/llm-utils";
 import { extractToolCalls, toolCallResponse } from "../utils/tool-utils";
 import { Job, ToolJob, MessageJob } from "../types";
+import { getLangSmithKey } from "../utils/env-utils";
 
 const pool = new Pool({
   connectionString: process.env.POSTGRES_CONNECTION_STRING
@@ -50,6 +51,15 @@ async function listenForCancellations() {
 listenForCancellations();
 
 export const handler = async (event: SQSEvent): Promise<SQSBatchResponse> => {
+  // Set LangSmith API key for LangChain integration if available. When set,
+  // data about DAVAI usage will be sent to the related LangSmith account.
+  try {
+    const langSmithKey = await getLangSmithKey();
+    process.env.LANGSMITH_API_KEY = langSmithKey;
+  } catch (error) {
+    console.warn("Failed to set LangSmith API key:", error);
+  }
+
   const batchItemFailures: SQSBatchItemFailure[] = [];
 
   for (const record of event.Records) {

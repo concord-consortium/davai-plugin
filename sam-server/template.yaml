@@ -1,6 +1,6 @@
 AWSTemplateFormatVersion: '2010-09-09'
 Transform: AWS::Serverless-2016-10-31
-Description: Davai Plugin Server - AWS SAM Version
+Description: DAVAI Plugin Server - AWS SAM Version
 
 Parameters:
   Environment:
@@ -172,7 +172,7 @@ Resources:
   DBSubnetGroup:
     Type: AWS::RDS::DBSubnetGroup
     Properties:
-      DBSubnetGroupDescription: Subnet group for Davai PostgreSQL
+      DBSubnetGroupDescription: Subnet group for DAVAI PostgreSQL
       SubnetIds:
         - !Ref PrivateSubnet1
         - !Ref PrivateSubnet2
@@ -231,22 +231,29 @@ Resources:
     Type: AWS::SecretsManager::Secret
     Properties:
       Name: !Sub "${Environment}-davai-api-secret"
-      Description: Secret for Davai API authentication
+      Description: Secret for DAVAI API authentication
       SecretString: !Sub '{"secret": "your-api-secret-here"}'
 
   OpenAIApiKey:
     Type: AWS::SecretsManager::Secret
     Properties:
       Name: !Sub "${Environment}-openai-api-key"
-      Description: OpenAI API key for Davai server
+      Description: OpenAI API key for DAVAI server
       SecretString: !Sub '{"key": "your-openai-key-here"}'
 
   GoogleApiKey:
     Type: AWS::SecretsManager::Secret
     Properties:
       Name: !Sub "${Environment}-google-api-key"
-      Description: Google API key for Davai server
+      Description: Google API key for DAVAI server
       SecretString: !Sub '{"key": "your-google-key-here"}'
+
+  LangSmithApiKey:
+    Type: AWS::SecretsManager::Secret
+    Properties:
+      Name: !Sub "${Environment}-langsmith-api-key"
+      Description: LangSmith API key for DAVAI server
+      SecretString: !Sub '{"key": "your-langsmith-key-here"}'
 
   # Status Handler Lambda
   StatusHandlerFunction:
@@ -364,6 +371,10 @@ Resources:
           POSTGRES_CONNECTION_STRING: !Sub "postgresql://${DBUsername}:${DBPassword}@${PostgreSQLDB.Endpoint.Address}:${PostgreSQLDB.Endpoint.Port}/postgres"
           OPENAI_API_KEY: !Ref OpenAIApiKey
           GOOGLE_API_KEY: !Ref GoogleApiKey
+          LANGSMITH_TRACING: "true"
+          LANGSMITH_ENDPOINT: "https://api.smith.langchain.com"
+          LANGSMITH_PROJECT: "davai"
+          LANGSMITH_API_KEY: !Ref LangSmithApiKey
       VpcConfig:
         SecurityGroupIds:
           - !Ref LambdaSecurityGroup
@@ -383,6 +394,7 @@ Resources:
                 - !Sub arn:${AWS::Partition}:secretsmanager:${AWS::Region}:${AWS::AccountId}:secret:${Environment}-davai-api-secret-*
                 - !Sub arn:${AWS::Partition}:secretsmanager:${AWS::Region}:${AWS::AccountId}:secret:${Environment}-openai-api-key-*
                 - !Sub arn:${AWS::Partition}:secretsmanager:${AWS::Region}:${AWS::AccountId}:secret:${Environment}-google-api-key-*
+                - !Sub arn:${AWS::Partition}:secretsmanager:${AWS::Region}:${AWS::AccountId}:secret:${Environment}-langsmith-api-key-*
       Timeout: 300
       MemorySize: 512
 
