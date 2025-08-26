@@ -14,7 +14,8 @@
     "sam:invoke": "sam local invoke",
     "dev:infra": "docker-compose up -d",
     "dev:infra:down": "docker-compose down",
-    "dev:setup": "./dev-start.sh"
+    "dev:setup": "./dev-start.sh",
+    "dev:poller": "ts-node dev-job-poller-sam.ts"
   },
   "dependencies": {
     "@aws-sdk/client-secrets-manager": "^3.857.0",
