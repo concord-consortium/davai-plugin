@@ -1,29 +1,69 @@
 # Davai Plugin Server - SAM Version
 
-This is the AWS SAM version of the Davai server, converted from the Express-based server.
+This is the AWS SAM version of the DAVAI server app, converted from the Express-based server.
 
 ## Prerequisites
 
 1. Install AWS SAM CLI: `brew install aws-sam-cli` (macOS)
-2. Install Node.js dependencies: `npm install`
-3. Copy `env.example` to `.env` and add values:
+2. Install Node.js dependencies: `npm install` (from inside ./sam-server)
+3. Ensure you have AWS credentials configured (`aws configure`)
 
-- Database connection string
-- API secrets
-- LLM API keys
+## Quick Start
 
-## Deployment
+### Build and Deploy to AWS
 
 ```bash
+# Build the SAM application
 npm run sam:build
+
+# Deploy to AWS
 npm run sam:deploy
 ```
 
-### Local Testing
+### Local Development
 
-```bash
-npm run sam:local
-```
+For local development setup and workflow, see [DEV-README.md](./DEV-README.md).
+
+## AWS Infrastructure
+
+The deployed application requires the following AWS resources:
+
+### Core Infrastructure
+- **VPC** - Custom VPC with public/private subnets
+- **NAT Gateway** - For private subnet internet access
+- **Internet Gateway** - For public subnet internet access
+
+### Compute & API
+- **API Gateway** - REST API endpoints for client communication
+- **Lambda Functions** - Serverless compute for request processing
+- **Lambda Security Groups** - Network access control
+
+### Data & Messaging
+- **RDS PostgreSQL** - Database for jobs and LangGraph checkpoints
+- **SQS Queue** - Job queuing and processing
+- **Secrets Manager** - Secure storage for API keys and secrets
+
+### Lambda Functions
+- **MessageHandlerFunction** - Processes incoming chat messages
+- **ToolHandlerFunction** - Handles tool execution requests
+- **JobProcessorFunction** - Processes queued jobs from SQS
+- **StatusHandlerFunction** - Provides job status updates
+- **SetupFunction** - Initializes database schema and triggers (invoked directly via AWS CLI)
+
+## API Endpoints
+
+- **`POST /default/davaiServer/message`** - Create message jobs
+- **`POST /default/davaiServer/tool`** - Create tool jobs
+- **`GET /default/davaiServer/status?messageId=X`** - Check job status
+- **`POST /default/davaiServer/cancel`** - Cancel jobs
+
+## Architecture
+
+- **API Gateway**: Handles HTTP requests and routes to Lambda functions
+- **Lambda Functions**: Process API requests and jobs asynchronously
+- **RDS PostgreSQL**: Stores jobs, LangGraph checkpoints, and conversation state
+- **SQS**: Queues jobs for background processing by the job processor
+- **Secrets Manager**: Securely stores LLM API keys and other sensitive data
 
 ## Database Setup
 
@@ -43,20 +83,6 @@ You can find the deployed function name in the AWS console or by running:
 ```bash
 aws lambda list-functions
 ```
-
-## Architecture
-
-- **API Gateway**: Handles HTTP requests
-- **Lambda Functions**: Process API requests and jobs
-- **RDS PostgreSQL**: Stores jobs and LangGraph checkpoints
-- **SQS**: Queues jobs for processing
-
-## API Endpoints
-
-- **`POST /default/davaiServer/message`** - Create message jobs
-- **`POST /default/davaiServer/tool`** - Create tool jobs
-- **`GET /default/davaiServer/status?messageId=X`** - Check job status
-- **`POST /default/davaiServer/cancel`** - Cancel jobs
 
 ## Job Cancellation
 
