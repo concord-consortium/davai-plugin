@@ -3,6 +3,30 @@ import { SecretsManagerClient, GetSecretValueCommand } from "@aws-sdk/client-sec
 
 export const authorizeRequest = async (event: APIGatewayProxyEvent): Promise<{ authorized: boolean; errorResponse?: APIGatewayProxyResult }> => {
   const authHeader = event.headers.authorization || event.headers.Authorization;
+  
+  // Check if we're running locally
+  if (process.env.ENVIRONMENT === "local") {
+    // Use local environment variable for local development
+    const localSecret = process.env.DAVAI_API_SECRET;
+    
+    if (authHeader !== localSecret) {
+      return {
+        authorized: false,
+        errorResponse: {
+          statusCode: 401,
+          headers: {
+            "Content-Type": "application/json",
+            "Access-Control-Allow-Origin": "*"
+          },
+          body: JSON.stringify({ error: "Unauthorized" })
+        }
+      };
+    }
+    
+    return { authorized: true };
+  }
+  
+  // Production: Use AWS Secrets Manager
   const secretsClient = new SecretsManagerClient({ region: process.env.AWS_REGION || "us-east-1" });
   const secretArn = process.env.DAVAI_API_SECRET;
   
