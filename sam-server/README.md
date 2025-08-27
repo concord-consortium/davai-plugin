@@ -84,6 +84,19 @@ You can find the deployed function name in the AWS console or by running:
 aws lambda list-functions
 ```
 
+## LLM Providers
+
+The code currently supports two LLM providers: Google and OpenAI. To add another provider, update the `createModelInstance` function in ./sam-server/utils/llm-utils.ts. Follow the pattern used for Google and OpenAI. You will also need to add a new environment variable for the associated API key. And finally, you will need to update the `llmList` in the client app's app-config.json file.
+
+## Tool Functions
+
+Tool functions are defined in ./sam-server/src/utils/tool-utils.ts. There are currently two tool functions:
+
+- createRequestTool - Used for making CODAP API requests
+- sonifyGraphTool - Used for selecting a graph for sonification
+
+To add a new tool function, define it in tool-utils.ts and add then it to the `tools` array in the same file. You will also need to update the `processToolCall` action in the client app's `AssistantModel` to handle the tool call.
+
 ## Job Cancellation
 
 ### Overview
