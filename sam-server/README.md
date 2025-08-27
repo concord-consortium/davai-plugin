@@ -84,6 +84,10 @@ You can find the deployed function name in the AWS console or by running:
 aws lambda list-functions
 ```
 
+## LLM Instructions
+
+The instructions text for the LLM prompt are in ./sam-server/src/text/instructions.ts. These are added to the `promptTemplate` defined in ./sam-server/src/utils/llm-utils.ts along with the CODAP API documentation defined in ./sam-server/src/text/codap-api-documentation.ts.
+
 ## LLM Providers
 
 The code currently supports two LLM providers: Google and OpenAI. To add another provider, update the `createModelInstance` function in ./sam-server/utils/llm-utils.ts. Follow the pattern used for Google and OpenAI. You will also need to add a new environment variable for the associated API key. And finally, you will need to update the `llmList` in the client app's app-config.json file.
