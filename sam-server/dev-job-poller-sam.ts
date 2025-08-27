@@ -3,7 +3,6 @@
 import { Pool } from "pg";
 import { spawn } from "child_process";
 
-// Database connection for job polling
 const pool = new Pool({
   connectionString: "postgresql://postgres:postgres@localhost:5432/postgres"
 });
@@ -13,7 +12,7 @@ let jobPollerInterval: NodeJS.Timeout | null = null;
 
 async function pollAndProcessJobs() {
   try {
-    console.log("🔍 [POLLER] Starting job poll...");
+    console.log("[POLLER] Starting job poll...");
     
     // Query for jobs that need processing (queued or processing)
     const result = await pool.query(
@@ -23,31 +22,29 @@ async function pollAndProcessJobs() {
        LIMIT 5`
     );
     
-    console.log(`🔍 [POLLER] Query result: ${result.rows.length} rows found`);
+    console.log(`[POLLER] Query result: ${result.rows.length} rows found`);
     if (result.rows.length > 0) {
-      console.log(`🔍 [POLLER] Job IDs:`, result.rows.map(r => r.message_id));
+      console.log(`[POLLER] Job IDs:`, result.rows.map(r => r.message_id));
     }
     
     if (result.rows.length > 0) {
-      console.log(`🔍 [POLLER] Found ${result.rows.length} queued jobs`);
+      console.log(`[POLLER] Found ${result.rows.length} queued jobs`);
       
       for (const job of result.rows) {
         try {
-          // Mark job as processing
           await pool.query(
             `UPDATE jobs SET status = 'processing', updated_at = NOW() WHERE message_id = $1`,
             [job.message_id]
           );
           
           // Process the job using SAM local invoke
-          console.log(`🚀 [POLLER] Processing job ${job.message_id} (${job.kind}) with SAM local`);
+          console.log(`[POLLER] Processing job ${job.message_id} (${job.kind}) with SAM local`);
           await processJobWithSamLocal(job);
           
-          console.log(`✅ [POLLER] Job ${job.message_id} completed successfully`);
+          console.log(`[POLLER] Job ${job.message_id} completed successfully`);
         } catch (error) {
-          console.error(`❌ [POLLER] Failed to process job ${job.message_id}:`, error);
+          console.error(`[POLLER] Failed to process job ${job.message_id}:`, error);
           
-          // Mark job as failed
           const errorMessage = error instanceof Error ? error.message : String(error);
           await pool.query(
             `UPDATE jobs SET status = 'failed', output = $1, updated_at = NOW() WHERE message_id = $2`,
@@ -57,11 +54,10 @@ async function pollAndProcessJobs() {
       }
     }
   } catch (error) {
-    console.error("❌ [POLLER] Error polling jobs:", error);
+    console.error("[POLLER] Error polling jobs:", error);
   }
 }
 
-// Process job using SAM local invoke (avoids import issues)
 async function processJobWithSamLocal(job: any): Promise<void> {
   return new Promise((resolve, reject) => {
     console.log(`[SAM] Invoking JobProcessorFunction for job ${job.message_id}`);
@@ -105,7 +101,6 @@ async function processJobWithSamLocal(job: any): Promise<void> {
       
       if (code === 0) {
         try {
-          // Parse the response and check if job was processed
           const response = JSON.parse(stdout);
           console.log(`[SAM] Response:`, response);
           
@@ -139,7 +134,6 @@ async function processJobWithSamLocal(job: any): Promise<void> {
       reject(new Error(`Failed to spawn SAM process: ${error.message}`));
     });
     
-    // Send the event to SAM
     samProcess.stdin.write(JSON.stringify(event));
     samProcess.stdin.end();
   });
@@ -150,14 +144,13 @@ function startJobPoller() {
     clearInterval(jobPollerInterval);
   }
   
-  console.log("🚀 [POLLER] Starting SAM-based job poller (every 1 seconds)");
+  console.log("[POLLER] Starting SAM-based job poller (every 1 seconds)");
   jobPollerInterval = setInterval(() => {
-    console.log("⏰ [POLLER] Interval triggered, calling pollAndProcessJobs...");
+    console.log("[POLLER] Interval triggered, calling pollAndProcessJobs...");
     pollAndProcessJobs();
   }, 1000);
-  
-  // Process jobs immediately on startup
-  console.log("🚀 [POLLER] Running initial job poll...");
+
+  console.log("[POLLER] Running initial job poll...");
   pollAndProcessJobs();
 }
 
@@ -165,25 +158,23 @@ function stopJobPoller() {
   if (jobPollerInterval) {
     clearInterval(jobPollerInterval);
     jobPollerInterval = null;
-    console.log("🛑 [POLLER] Job poller stopped");
+    console.log("[POLLER] Job poller stopped");
   }
 }
 
-// Graceful shutdown
 process.on("SIGINT", () => {
-  console.log("\n🛑 Shutting down job poller...");
+  console.log("\nShutting down job poller...");
   stopJobPoller();
   pool.end();
   process.exit(0);
 });
 
 process.on("SIGTERM", () => {
-  console.log("\n🛑 Shutting down job poller...");
+  console.log("\nShutting down job poller...");
   stopJobPoller();
   pool.end();
   process.exit(0);
 });
 
-// Start the job poller
-console.log("🚀 Starting SAM-based local job poller...");
+console.log("Starting SAM-based local job poller...");
 startJobPoller();
