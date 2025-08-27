@@ -68,3 +68,4 @@ export const getApiKey = async (provider: string, opts?: { region?: string }): P
 // Convenience wrappers, if you like:
 export const getOpenAIKey = () => getApiKey("OPENAI");
 export const getGoogleKey = () => getApiKey("GOOGLE");
+export const getLangSmithKey = () => getApiKey("LANGSMITH");
