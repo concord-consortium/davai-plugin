@@ -1,0 +1,193 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Transform: AWS::Serverless-2016-10-31
+Description: Davai Plugin Server - Local Development Version
+
+Parameters:
+  Environment:
+    Type: String
+    Default: local
+    Description: Environment name
+
+Resources:
+  # API Gateway
+  DavaiApi:
+    Type: AWS::Serverless::Api
+    Properties:
+      StageName: !Ref Environment
+      Cors:
+        AllowMethods: "'GET,POST,PUT,DELETE,OPTIONS'"
+        AllowHeaders: "'Content-Type,Authorization'"
+        AllowOrigin: "'*'"
+        MaxAge: "'86400'"
+
+  # SQS Queue (local)
+  LLMJobQueue:
+    Type: AWS::SQS::Queue
+    Properties:
+      QueueName: "local-llm-job-queue"
+      VisibilityTimeout: 300
+      MessageRetentionPeriod: 1209600
+
+  # Status Handler Lambda
+  StatusHandlerFunction:
+    Type: AWS::Serverless::Function
+    Metadata:
+      BuildMethod: esbuild
+      BuildProperties:
+        Format: cjs
+        Target: node18
+        Minify: false
+        External:
+          - pg-native
+    Properties:
+      CodeUri: .
+      Handler: src/handlers/status.handler
+      Runtime: nodejs18.x
+      Events:
+        StatusApi:
+          Type: Api
+          Properties:
+            RestApiId: !Ref DavaiApi
+            Path: /default/davaiServer/status
+            Method: get
+      Environment:
+        Variables:
+          ENVIRONMENT: !Ref Environment
+          POSTGRES_CONNECTION_STRING: "postgresql://postgres:postgres@localhost:5432/postgres"
+      Timeout: 60
+      MemorySize: 512
+
+  # Cancel Handler Lambda
+  CancelHandlerFunction:
+    Type: AWS::Serverless::Function
+    Metadata:
+      BuildMethod: esbuild
+      BuildProperties:
+        Format: cjs
+        Target: node18
+        Minify: false
+        External:
+          - pg-native
+    Properties:
+      CodeUri: .
+      Handler: src/handlers/cancel.handler
+      Runtime: nodejs18.x
+      Events:
+        CancelApi:
+          Type: Api
+          Properties:
+            RestApiId: !Ref DavaiApi
+            Path: /default/davaiServer/cancel
+            Method: post
+      Environment:
+        Variables:
+          ENVIRONMENT: !Ref Environment
+          POSTGRES_CONNECTION_STRING: "postgresql://postgres:postgres@localhost:5432/postgres"
+          DAVAI_API_SECRET: "local-dev-secret"
+      Timeout: 60
+      MemorySize: 512
+
+  # Job Processor Lambda
+  JobProcessorFunction:
+    Type: AWS::Serverless::Function
+    Metadata:
+      BuildMethod: esbuild
+      BuildProperties:
+        Format: cjs
+        Target: node18
+        Minify: false
+        External:
+          - pg-native
+    Properties:
+      CodeUri: .
+      Handler: src/handlers/job-processor.handler
+      Runtime: nodejs18.x
+      Events:
+        SQSEvent:
+          Type: SQS
+          Properties:
+            Queue: !Ref LLMJobQueue
+            BatchSize: 1
+      Environment:
+        Variables:
+          ENVIRONMENT: !Ref Environment
+          POSTGRES_CONNECTION_STRING: "postgresql://postgres:postgres@localhost:5432/postgres"
+          LLM_JOB_QUEUE_URL: "http://localhost:9324/queue/LLMJobQueue"
+          LANGSMITH_TRACING: "false"
+          LANGSMITH_ENDPOINT: "https://api.smith.langchain.com"
+          LANGSMITH_PROJECT: "davai-local"
+          LANGSMITH_API_KEY: "dummy-key-for-local-dev"
+          OPENAI_API_KEY: "your-openai-api-key-here"
+          GOOGLE_API_KEY: "your-google-api-key-here"
+      Timeout: 300
+      MemorySize: 512
+
+  # Message Handler Lambda
+  MessageHandlerFunction:
+    Type: AWS::Serverless::Function
+    Metadata:
+      BuildMethod: esbuild
+      BuildProperties:
+        Format: cjs
+        Target: node18
+        Minify: false
+        External:
+          - pg-native
+    Properties:
+      CodeUri: .
+      Handler: src/handlers/message.handler
+      Runtime: nodejs18.x
+      Events:
+        MessageApi:
+          Type: Api
+          Properties:
+            RestApiId: !Ref DavaiApi
+            Path: /default/davaiServer/message
+            Method: post
+      Environment:
+        Variables:
+          ENVIRONMENT: !Ref Environment
+          POSTGRES_CONNECTION_STRING: "postgresql://postgres:postgres@localhost:5432/postgres"
+          LLM_JOB_QUEUE_URL: "http://localhost:9324/queue/LLMJobQueue"
+          DAVAI_API_SECRET: "local-dev-secret"
+      Timeout: 60
+      MemorySize: 512
+
+  # Tool Handler Lambda
+  ToolHandlerFunction:
+    Type: AWS::Serverless::Function
+    Metadata:
+      BuildMethod: esbuild
+      BuildProperties:
+        Format: cjs
+        Target: node18
+        Minify: false
+        External:
+          - pg-native
+    Properties:
+      CodeUri: .
+      Handler: src/handlers/tool.handler
+      Runtime: nodejs18.x
+      Events:
+        ToolApi:
+          Type: Api
+          Properties:
+            RestApiId: !Ref DavaiApi
+            Path: /default/davaiServer/tool
+            Method: post
+      Environment:
+        Variables:
+          ENVIRONMENT: !Ref Environment
+          POSTGRES_CONNECTION_STRING: "postgresql://postgres:postgres@localhost:5432/postgres"
+          LLM_JOB_QUEUE_URL: "http://localhost:9324/queue/LLMJobQueue"
+          DAVAI_API_SECRET: "local-dev-secret"
+      Timeout: 60
+      MemorySize: 512
+
+Outputs:
+  DavaiApi:
+    Description: "API Gateway endpoint URL"
+    Value: !Sub "https://${DavaiApi}.execute-api.${AWS::Region}.amazonaws.com/${Environment}/"
+  LLMJobQueue:
+    Description: "SQS queue for LLM jobs"
+    Value: !Ref LLMJobQueue

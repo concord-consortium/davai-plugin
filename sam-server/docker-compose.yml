@@ -1,0 +1,29 @@
+version: "3.8"
+
+services:
+  postgres:
+    image: postgres:15
+    container_name: postgres-local
+    environment:
+      POSTGRES_DB: postgres
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./postgres-init.sql:/docker-entrypoint-initdb.d/init.sql
+
+  elasticmq:
+    image: softwaremill/elasticmq-native
+    container_name: elasticmq
+    ports:
+      - "9324:9324"
+      - "9325:9325"
+    environment:
+      - ELASTICMQ_CONFIG_FILE=/opt/elasticmq.conf
+    volumes:
+      - ./elasticmq.conf:/opt/elasticmq.conf
+
+volumes:
+  postgres_data:

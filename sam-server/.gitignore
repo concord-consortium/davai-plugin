@@ -19,3 +19,5 @@ npm-error.log*
 
 # Environment
 .env
+.env.local
+env-local.json
