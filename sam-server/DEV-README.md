@@ -42,6 +42,24 @@ cp env.example .env
 npm run dev:setup
 ```
 
+> **Note:** If you encounter a "permission denied" error when running the above, you may need to make the `./sam-server/dev-setup.sh` script executable.
+>
+> - **On macOS or Linux:**  
+>   Open a terminal and run:
+>   ```bash
+>   chmod +x ./sam-server/dev-setup.sh
+>   ```
+>
+> - **On Windows (using Git Bash, WSL, or similar):**  
+>   Use the same command as above in your Unix-like shell:
+>   ```bash
+>   chmod +x ./sam-server/dev-setup.sh
+>   ```
+>   If you are using Windows Command Prompt or PowerShell, you can run the script directly with:
+>   ```powershell
+>   bash ./sam-server/dev-setup.sh
+>   ```
+
 ### 4. Start Development Services
 
 ```bash
