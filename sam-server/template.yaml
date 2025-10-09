@@ -15,10 +15,52 @@ Parameters:
     Type: String
     NoEcho: true
     Description: PostgreSQL database password
+  DatabaseName:
+    Type: String
+    NoEcho: true
+    Description: PostgreSQL database name to connect to (postgres, staging_a, or staging_b)
+  VpcId:
+    Type: String
+    Default: ""
+    Description: VPC ID for the environment (leave empty to create new)
+  PrivateSubnet1Id:
+    Type: String
+    Default: ""
+    Description: First private subnet ID (leave empty to create new)
+  PrivateSubnet2Id:
+    Type: String
+    Default: ""
+    Description: Second private subnet ID (leave empty to create new)
+  LambdaSecurityGroupId:
+    Type: String
+    Default: ""
+    Description: Security group ID for Lambda functions (leave empty to create new)
+  RdsEndpoint:
+    Type: String
+    Default: ""
+    Description: RDS endpoint address (leave empty to create new)
+  RdsPort:
+    Type: String
+    Default: "5432"
+    Description: RDS port
+
+  CreateVpcEndpoints:
+    Type: String
+    Default: "false"
+    AllowedValues: ["true", "false"]
+    Description: Whether to create VPC endpoints (only set to true for new environments)
+
+Conditions:
+  CreateInfrastructure:
+    Fn::Equals:
+      - !Ref VpcId
+      - ""
 
 Resources:
+  # VPC - create if not provided
   NewVPC:
     Type: AWS::EC2::VPC
+    Condition: CreateInfrastructure
     Properties:
       CidrBlock: 10.1.0.0/16
       EnableDnsHostnames: true
@@ -29,10 +71,12 @@ Resources:
 
   NatEip:
     Type: AWS::EC2::EIP
+    Condition: CreateInfrastructure
     Properties: { Domain: vpc }
 
   NatGateway:
     Type: AWS::EC2::NatGateway
+    Condition: CreateInfrastructure
     Properties:
       AllocationId: !GetAtt NatEip.AllocationId
       SubnetId: !Ref PublicSubnet1
@@ -42,6 +86,7 @@ Resources:
 
   PrivateDefaultRoute:
     Type: AWS::EC2::Route
+    Condition: CreateInfrastructure
     Properties:
       RouteTableId: !Ref PrivateRouteTable
       DestinationCidrBlock: 0.0.0.0/0
@@ -49,6 +94,7 @@ Resources:
 
   InternetGateway:
     Type: AWS::EC2::InternetGateway
+    Condition: CreateInfrastructure
     Properties:
       Tags:
         - Key: Name
@@ -56,6 +102,7 @@ Resources:
 
   InternetGatewayAttachment:
     Type: AWS::EC2::VPCGatewayAttachment
+    Condition: CreateInfrastructure
     Properties:
       InternetGatewayId: !Ref InternetGateway
       VpcId: !Ref NewVPC
@@ -63,6 +110,7 @@ Resources:
   # Subnet for NatGateway functions
   PublicSubnet1:
     Type: AWS::EC2::Subnet
+    Condition: CreateInfrastructure
     Properties:
       VpcId: !Ref NewVPC
       CidrBlock: 10.1.1.0/24
@@ -75,6 +123,7 @@ Resources:
   # Subnets for RDS
   PrivateSubnet1:
     Type: AWS::EC2::Subnet
+    Condition: CreateInfrastructure
     Properties:
       VpcId: !Ref NewVPC
       CidrBlock: 10.1.10.0/24
@@ -85,6 +134,7 @@ Resources:
 
   PrivateSubnet2:
     Type: AWS::EC2::Subnet
+    Condition: CreateInfrastructure
     Properties:
       VpcId: !Ref NewVPC
       CidrBlock: 10.1.11.0/24
@@ -96,6 +146,7 @@ Resources:
   # Route table for public subnets
   PublicRouteTable:
     Type: AWS::EC2::RouteTable
+    Condition: CreateInfrastructure
     Properties:
       VpcId: !Ref NewVPC
       Tags:
@@ -105,6 +156,7 @@ Resources:
   # Route to Internet Gateway
   PublicRoute:
     Type: AWS::EC2::Route
+    Condition: CreateInfrastructure
     DependsOn: InternetGatewayAttachment
     Properties:
       RouteTableId: !Ref PublicRouteTable
@@ -114,6 +166,7 @@ Resources:
   # Associate public subnets with public route table
   PublicSubnet1RouteTableAssociation:
     Type: AWS::EC2::SubnetRouteTableAssociation
+    Condition: CreateInfrastructure
     Properties:
       SubnetId: !Ref PublicSubnet1
       RouteTableId: !Ref PublicRouteTable
@@ -121,6 +174,7 @@ Resources:
   # Route table for private subnets
   PrivateRouteTable:
     Type: AWS::EC2::RouteTable
+    Condition: CreateInfrastructure
     Properties:
       VpcId: !Ref NewVPC
       Tags:
@@ -130,12 +184,14 @@ Resources:
   # Associate private subnets with private route table
   PrivateSubnet1RouteTableAssociation:
     Type: AWS::EC2::SubnetRouteTableAssociation
+    Condition: CreateInfrastructure
     Properties:
       SubnetId: !Ref PrivateSubnet1
       RouteTableId: !Ref PrivateRouteTable
 
   PrivateSubnet2RouteTableAssociation:
     Type: AWS::EC2::SubnetRouteTableAssociation
+    Condition: CreateInfrastructure
     Properties:
       SubnetId: !Ref PrivateSubnet2
       RouteTableId: !Ref PrivateRouteTable
@@ -143,6 +199,7 @@ Resources:
   # Security Group for Lambda (allows all outbound)
   LambdaSecurityGroup:
     Type: AWS::EC2::SecurityGroup
+    Condition: CreateInfrastructure
     Properties:
       GroupDescription: Security group for Lambda functions
       VpcId: !Ref NewVPC
@@ -156,6 +213,7 @@ Resources:
   # Security Group for PostgreSQL (allows Lambda access)
   DBSecurityGroup:
     Type: AWS::EC2::SecurityGroup
+    Condition: CreateInfrastructure
     Properties:
       GroupDescription: Security group for PostgreSQL RDS
       VpcId: !Ref NewVPC
@@ -171,6 +229,7 @@ Resources:
   # RDS Subnet Group
   DBSubnetGroup:
     Type: AWS::RDS::DBSubnetGroup
+    Condition: CreateInfrastructure
     Properties:
       DBSubnetGroupDescription: Subnet group for DAVAI PostgreSQL
       SubnetIds:
@@ -183,6 +242,7 @@ Resources:
   # PostgreSQL RDS Instance
   PostgreSQLDB:
     Type: AWS::RDS::DBInstance
+    Condition: CreateInfrastructure
     Properties:
       DBInstanceIdentifier: !Sub "${Environment}-davai-postgres"
       Engine: postgres
@@ -280,13 +340,26 @@ Resources:
       Environment:
         Variables:
           ENVIRONMENT: !Ref Environment
-          POSTGRES_CONNECTION_STRING: !Sub "postgresql://${DBUsername}:${DBPassword}@${PostgreSQLDB.Endpoint.Address}:${PostgreSQLDB.Endpoint.Port}/postgres"
+          POSTGRES_CONNECTION_STRING: !If
+            - CreateInfrastructure
+            - !Sub "postgresql://${DBUsername}:${DBPassword}@${PostgreSQLDB.Endpoint.Address}:${PostgreSQLDB.Endpoint.Port}/postgres?sslmode=require"
+            - !Sub "postgresql://${DBUsername}:${DBPassword}@${RdsEndpoint}:${RdsPort}/${DatabaseName}?sslmode=require"
+          # Force deployment with SSL connection
       VpcConfig:
         SecurityGroupIds:
-          - !Ref LambdaSecurityGroup
+          - !If
+            - CreateInfrastructure
+            - !Ref LambdaSecurityGroup
+            - !Ref LambdaSecurityGroupId
         SubnetIds:
-          - !Ref PrivateSubnet1
-          - !Ref PrivateSubnet2
+          - !If
+            - CreateInfrastructure
+            - !Ref PrivateSubnet1
+            - !Ref PrivateSubnet1Id
+          - !If
+            - CreateInfrastructure
+            - !Ref PrivateSubnet2
+            - !Ref PrivateSubnet2Id
       Policies:
         - VPCAccessPolicy: {}
         - Statement:
@@ -324,14 +397,27 @@ Resources:
       Environment:
         Variables:
           ENVIRONMENT: !Ref Environment
-          POSTGRES_CONNECTION_STRING: !Sub "postgresql://${DBUsername}:${DBPassword}@${PostgreSQLDB.Endpoint.Address}:${PostgreSQLDB.Endpoint.Port}/postgres"
+          POSTGRES_CONNECTION_STRING: !If
+            - CreateInfrastructure
+            - !Sub "postgresql://${DBUsername}:${DBPassword}@${PostgreSQLDB.Endpoint.Address}:${PostgreSQLDB.Endpoint.Port}/postgres?sslmode=require"
+            - !Sub "postgresql://${DBUsername}:${DBPassword}@${RdsEndpoint}:${RdsPort}/${DatabaseName}?sslmode=require"
+          # Force deployment with SSL connection
           DAVAI_API_SECRET: !Ref DavaiApiSecret
       VpcConfig:
         SecurityGroupIds:
-          - !Ref LambdaSecurityGroup
+          - !If
+            - CreateInfrastructure
+            - !Ref LambdaSecurityGroup
+            - !Ref LambdaSecurityGroupId
         SubnetIds:
-          - !Ref PrivateSubnet1
-          - !Ref PrivateSubnet2
+          - !If
+            - CreateInfrastructure
+            - !Ref PrivateSubnet1
+            - !Ref PrivateSubnet1Id
+          - !If
+            - CreateInfrastructure
+            - !Ref PrivateSubnet2
+            - !Ref PrivateSubnet2Id
       Policies:
         - VPCAccessPolicy: {}
         - Statement:
@@ -368,7 +454,11 @@ Resources:
       Environment:
         Variables:
           ENVIRONMENT: !Ref Environment
-          POSTGRES_CONNECTION_STRING: !Sub "postgresql://${DBUsername}:${DBPassword}@${PostgreSQLDB.Endpoint.Address}:${PostgreSQLDB.Endpoint.Port}/postgres"
+          POSTGRES_CONNECTION_STRING: !If
+            - CreateInfrastructure
+            - !Sub "postgresql://${DBUsername}:${DBPassword}@${PostgreSQLDB.Endpoint.Address}:${PostgreSQLDB.Endpoint.Port}/postgres?sslmode=require"
+            - !Sub "postgresql://${DBUsername}:${DBPassword}@${RdsEndpoint}:${RdsPort}/${DatabaseName}?sslmode=require"
+          # Force deployment with SSL connection
           OPENAI_API_KEY: !Ref OpenAIApiKey
           GOOGLE_API_KEY: !Ref GoogleApiKey
           LANGSMITH_TRACING: "true"
@@ -377,10 +467,19 @@ Resources:
           LANGSMITH_API_KEY: !Ref LangSmithApiKey
       VpcConfig:
         SecurityGroupIds:
-          - !Ref LambdaSecurityGroup
+          - !If
+            - CreateInfrastructure
+            - !Ref LambdaSecurityGroup
+            - !Ref LambdaSecurityGroupId
         SubnetIds:
-          - !Ref PrivateSubnet1
-          - !Ref PrivateSubnet2
+          - !If
+            - CreateInfrastructure
+            - !Ref PrivateSubnet1
+            - !Ref PrivateSubnet1Id
+          - !If
+            - CreateInfrastructure
+            - !Ref PrivateSubnet2
+            - !Ref PrivateSubnet2Id
       Policies:
         - VPCAccessPolicy: {}
         - SQSPollerPolicy:
@@ -413,17 +512,36 @@ Resources:
       CodeUri: .
       Handler: src/handlers/setup.handler
       Runtime: nodejs18.x
+      Events:
+        SetupApi:
+          Type: Api
+          Properties:
+            RestApiId: !Ref DavaiApi
+            Path: /default/davaiServer/setup
+            Method: post
       Timeout: 300
       Environment:
         Variables:
           ENVIRONMENT: !Ref Environment
-          POSTGRES_CONNECTION_STRING: !Sub "postgresql://${DBUsername}:${DBPassword}@${PostgreSQLDB.Endpoint.Address}:${PostgreSQLDB.Endpoint.Port}/postgres"
+          POSTGRES_CONNECTION_STRING: !If
+            - CreateInfrastructure
+            - !Sub "postgresql://${DBUsername}:${DBPassword}@${PostgreSQLDB.Endpoint.Address}:${PostgreSQLDB.Endpoint.Port}/postgres?sslmode=require"
+            - !Sub "postgresql://${DBUsername}:${DBPassword}@${RdsEndpoint}:${RdsPort}/${DatabaseName}?sslmode=require"
       VpcConfig:
         SecurityGroupIds:
-          - !Ref LambdaSecurityGroup
+          - !If
+            - CreateInfrastructure
+            - !Ref LambdaSecurityGroup
+            - !Ref LambdaSecurityGroupId
         SubnetIds:
-          - !Ref PrivateSubnet1
-          - !Ref PrivateSubnet2
+          - !If
+            - CreateInfrastructure
+            - !Ref PrivateSubnet1
+            - !Ref PrivateSubnet1Id
+          - !If
+            - CreateInfrastructure
+            - !Ref PrivateSubnet2
+            - !Ref PrivateSubnet2Id
       Policies:
         - VPCAccessPolicy: {}
       MemorySize: 512
@@ -453,15 +571,27 @@ Resources:
       Environment:
         Variables:
           ENVIRONMENT: !Ref Environment
-          POSTGRES_CONNECTION_STRING: !Sub "postgresql://${DBUsername}:${DBPassword}@${PostgreSQLDB.Endpoint.Address}:${PostgreSQLDB.Endpoint.Port}/postgres"
+          POSTGRES_CONNECTION_STRING: !If
+            - CreateInfrastructure
+            - !Sub "postgresql://${DBUsername}:${DBPassword}@${PostgreSQLDB.Endpoint.Address}:${PostgreSQLDB.Endpoint.Port}/postgres?sslmode=require"
+            - !Sub "postgresql://${DBUsername}:${DBPassword}@${RdsEndpoint}:${RdsPort}/${DatabaseName}?sslmode=require"
           LLM_JOB_QUEUE_URL: !Ref LLMJobQueue
           DAVAI_API_SECRET: !Ref DavaiApiSecret
       VpcConfig:
         SecurityGroupIds:
-          - !Ref LambdaSecurityGroup
+          - !If
+            - CreateInfrastructure
+            - !Ref LambdaSecurityGroup
+            - !Ref LambdaSecurityGroupId
         SubnetIds:
-          - !Ref PrivateSubnet1
-          - !Ref PrivateSubnet2
+          - !If
+            - CreateInfrastructure
+            - !Ref PrivateSubnet1
+            - !Ref PrivateSubnet1Id
+          - !If
+            - CreateInfrastructure
+            - !Ref PrivateSubnet2
+            - !Ref PrivateSubnet2Id
       Policies:
         - VPCAccessPolicy: {}
         - SQSSendMessagePolicy:
@@ -501,15 +631,27 @@ Resources:
       Environment:
         Variables:
           ENVIRONMENT: !Ref Environment
-          POSTGRES_CONNECTION_STRING: !Sub "postgresql://${DBUsername}:${DBPassword}@${PostgreSQLDB.Endpoint.Address}:${PostgreSQLDB.Endpoint.Port}/postgres"
+          POSTGRES_CONNECTION_STRING: !If
+            - CreateInfrastructure
+            - !Sub "postgresql://${DBUsername}:${DBPassword}@${PostgreSQLDB.Endpoint.Address}:${PostgreSQLDB.Endpoint.Port}/postgres?sslmode=require"
+            - !Sub "postgresql://${DBUsername}:${DBPassword}@${RdsEndpoint}:${RdsPort}/${DatabaseName}?sslmode=require"
           LLM_JOB_QUEUE_URL: !Ref LLMJobQueue
           DAVAI_API_SECRET: !Ref DavaiApiSecret
       VpcConfig:
         SecurityGroupIds:
-          - !Ref LambdaSecurityGroup
+          - !If
+            - CreateInfrastructure
+            - !Ref LambdaSecurityGroup
+            - !Ref LambdaSecurityGroupId
         SubnetIds:
-          - !Ref PrivateSubnet1
-          - !Ref PrivateSubnet2
+          - !If
+            - CreateInfrastructure
+            - !Ref PrivateSubnet1
+            - !Ref PrivateSubnet1Id
+          - !If
+            - CreateInfrastructure
+            - !Ref PrivateSubnet2
+            - !Ref PrivateSubnet2Id
       Policies:
         - VPCAccessPolicy: {}
         - SQSSendMessagePolicy:
@@ -524,46 +666,7 @@ Resources:
       Timeout: 60
       MemorySize: 512
 
-  EndpointSecurityGroup:
-    Type: AWS::EC2::SecurityGroup
-    Properties:
-      GroupDescription: SG for VPC endpoints
-      VpcId: !Ref NewVPC
-      SecurityGroupIngress:
-        - IpProtocol: tcp
-          FromPort: 443
-          ToPort: 443
-          SourceSecurityGroupId: !Ref LambdaSecurityGroup
-
-  SqsEndpoint:
-    Type: AWS::EC2::VPCEndpoint
-    Properties:
-      VpcId: !Ref NewVPC
-      VpcEndpointType: Interface
-      ServiceName: com.amazonaws.us-east-1.sqs
-      SubnetIds: [!Ref PrivateSubnet1, !Ref PrivateSubnet2]
-      SecurityGroupIds: [!Ref EndpointSecurityGroup]
-      PrivateDnsEnabled: true
-
-  SecretsManagerEndpoint:
-    Type: AWS::EC2::VPCEndpoint
-    Properties:
-      VpcId: !Ref NewVPC
-      VpcEndpointType: Interface
-      ServiceName: com.amazonaws.us-east-1.secretsmanager
-      SubnetIds: [!Ref PrivateSubnet1, !Ref PrivateSubnet2]
-      SecurityGroupIds: [!Ref EndpointSecurityGroup]
-      PrivateDnsEnabled: true
-
-  LogsEndpoint:
-    Type: AWS::EC2::VPCEndpoint
-    Properties:
-      VpcId: !Ref NewVPC
-      VpcEndpointType: Interface
-      ServiceName: com.amazonaws.us-east-1.logs
-      SubnetIds: [!Ref PrivateSubnet1, !Ref PrivateSubnet2]
-      SecurityGroupIds: [!Ref EndpointSecurityGroup]
-      PrivateDnsEnabled: true
+  # VPC Endpoints removed - staging environments will use internet routing
 
 Outputs:
   DavaiApi:
@@ -571,10 +674,13 @@ Outputs:
     Value: !Sub "https://${DavaiApi}.execute-api.${AWS::Region}.amazonaws.com/${Environment}/"
   PostgreSQLEndpoint:
     Description: "PostgreSQL RDS endpoint"
-    Value: !GetAtt PostgreSQLDB.Endpoint.Address
+    Value: !If
+      - CreateInfrastructure
+      - !GetAtt PostgreSQLDB.Endpoint.Address
+      - !Ref RdsEndpoint
   PostgreSQLPort:
     Description: "PostgreSQL RDS port"
-    Value: !GetAtt PostgreSQLDB.Endpoint.Port
+    Value: !Ref RdsPort
   LLMJobQueue:
     Description: "SQS queue for LLM jobs"
     Value: !Ref LLMJobQueue
