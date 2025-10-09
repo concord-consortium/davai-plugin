@@ -11,6 +11,8 @@
     "sam:deploy": "sam deploy --guided",
     "sam:deploy:staging-a": "sam deploy --config-env staging-a --guided",
     "sam:deploy:staging-b": "sam deploy --config-env staging-b --guided",
+    "sam:deploy:staging-a:fast": "sam deploy --config-env staging-a --no-confirm-changeset --no-fail-on-empty-changeset --parameter-overrides DBPassword=$DB_PASSWORD",
+    "sam:deploy:staging-b:fast": "sam deploy --config-env staging-b --no-confirm-changeset --no-fail-on-empty-changeset --parameter-overrides DBPassword=$DB_PASSWORD",
     "sam:deploy:dev": "sam deploy --config-env dev",
     "sam:logs": "sam logs -t",
     "sam:invoke": "sam local invoke",

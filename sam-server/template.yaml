@@ -17,7 +17,6 @@ Parameters:
     Description: PostgreSQL database password
   DatabaseName:
     Type: String
-    NoEcho: true
     Description: PostgreSQL database name to connect to (postgres, staging_a, or staging_b)
   VpcId:
     Type: String
@@ -55,6 +54,25 @@ Conditions:
     Fn::Equals:
       - !Ref VpcId
       - ""
+
+  ShouldCreateVpcEndpoints:
+    Fn::Equals: [ !Ref CreateVpcEndpoints, "true" ]
+
+  CreateInfraAndEndpoints:
+    Fn::And:
+      - Condition: CreateInfrastructure
+      - Condition: ShouldCreateVpcEndpoints
+
+Rules:
+  RequireSubnetAndSgWithVpcId:
+    RuleCondition: !Not [ { Fn::Equals: [ !Ref VpcId, "" ] } ]
+    Assertions:
+      - Assert: !Not [ { Fn::Equals: [ !Ref PrivateSubnet1Id, "" ] } ]
+        AssertDescription: When VpcId is provided, PrivateSubnet1Id must also be provided.
+      - Assert: !Not [ { Fn::Equals: [ !Ref PrivateSubnet2Id, "" ] } ]
+        AssertDescription: When VpcId is provided, PrivateSubnet2Id must also be provided.
+      - Assert: !Not [ { Fn::Equals: [ !Ref LambdaSecurityGroupId, "" ] } ]
+        AssertDescription: When VpcId is provided, LambdaSecurityGroupId must also be provided.
 
 Resources:
   # VPC - create if not provided
@@ -250,7 +268,7 @@ Resources:
       DBInstanceClass: db.t3.micro
       MasterUsername: !Ref DBUsername
       MasterUserPassword: !Ref DBPassword
-      DBName: postgres
+      DBName: !Ref DatabaseName
       AllocatedStorage: 20
       MaxAllocatedStorage: 100
       StorageType: gp2
@@ -342,9 +360,10 @@ Resources:
           ENVIRONMENT: !Ref Environment
           POSTGRES_CONNECTION_STRING: !If
             - CreateInfrastructure
-            - !Sub "postgresql://${DBUsername}:${DBPassword}@${PostgreSQLDB.Endpoint.Address}:${PostgreSQLDB.Endpoint.Port}/postgres?sslmode=require"
+            # The two values below are Fn::If branches: create new RDS vs reuse existing.
+            # Only one branch is selected at deploy-time, but both must be provided here.
+            - !Sub "postgresql://${DBUsername}:${DBPassword}@${PostgreSQLDB.Endpoint.Address}:${PostgreSQLDB.Endpoint.Port}/${DatabaseName}?sslmode=require"
             - !Sub "postgresql://${DBUsername}:${DBPassword}@${RdsEndpoint}:${RdsPort}/${DatabaseName}?sslmode=require"
-          # Force deployment with SSL connection
       VpcConfig:
         SecurityGroupIds:
           - !If
@@ -399,9 +418,10 @@ Resources:
           ENVIRONMENT: !Ref Environment
           POSTGRES_CONNECTION_STRING: !If
             - CreateInfrastructure
-            - !Sub "postgresql://${DBUsername}:${DBPassword}@${PostgreSQLDB.Endpoint.Address}:${PostgreSQLDB.Endpoint.Port}/postgres?sslmode=require"
+            # The two values below are Fn::If branches: create new RDS vs reuse existing.
+            # Only one branch is selected at deploy-time, but both must be provided here.
+            - !Sub "postgresql://${DBUsername}:${DBPassword}@${PostgreSQLDB.Endpoint.Address}:${PostgreSQLDB.Endpoint.Port}/${DatabaseName}?sslmode=require"
             - !Sub "postgresql://${DBUsername}:${DBPassword}@${RdsEndpoint}:${RdsPort}/${DatabaseName}?sslmode=require"
-          # Force deployment with SSL connection
           DAVAI_API_SECRET: !Ref DavaiApiSecret
       VpcConfig:
         SecurityGroupIds:
@@ -456,9 +476,10 @@ Resources:
           ENVIRONMENT: !Ref Environment
           POSTGRES_CONNECTION_STRING: !If
             - CreateInfrastructure
-            - !Sub "postgresql://${DBUsername}:${DBPassword}@${PostgreSQLDB.Endpoint.Address}:${PostgreSQLDB.Endpoint.Port}/postgres?sslmode=require"
+            # The two values below are Fn::If branches: create new RDS vs reuse existing.
+            # Only one branch is selected at deploy-time, but both must be provided here.
+            - !Sub "postgresql://${DBUsername}:${DBPassword}@${PostgreSQLDB.Endpoint.Address}:${PostgreSQLDB.Endpoint.Port}/${DatabaseName}?sslmode=require"
             - !Sub "postgresql://${DBUsername}:${DBPassword}@${RdsEndpoint}:${RdsPort}/${DatabaseName}?sslmode=require"
-          # Force deployment with SSL connection
           OPENAI_API_KEY: !Ref OpenAIApiKey
           GOOGLE_API_KEY: !Ref GoogleApiKey
           LANGSMITH_TRACING: "true"
@@ -525,7 +546,9 @@ Resources:
           ENVIRONMENT: !Ref Environment
           POSTGRES_CONNECTION_STRING: !If
             - CreateInfrastructure
-            - !Sub "postgresql://${DBUsername}:${DBPassword}@${PostgreSQLDB.Endpoint.Address}:${PostgreSQLDB.Endpoint.Port}/postgres?sslmode=require"
+            # The two values below are Fn::If branches: create new RDS vs reuse existing.
+            # Only one branch is selected at deploy-time, but both must be provided here.
+            - !Sub "postgresql://${DBUsername}:${DBPassword}@${PostgreSQLDB.Endpoint.Address}:${PostgreSQLDB.Endpoint.Port}/${DatabaseName}?sslmode=require"
             - !Sub "postgresql://${DBUsername}:${DBPassword}@${RdsEndpoint}:${RdsPort}/${DatabaseName}?sslmode=require"
       VpcConfig:
         SecurityGroupIds:
@@ -573,7 +596,9 @@ Resources:
           ENVIRONMENT: !Ref Environment
           POSTGRES_CONNECTION_STRING: !If
             - CreateInfrastructure
-            - !Sub "postgresql://${DBUsername}:${DBPassword}@${PostgreSQLDB.Endpoint.Address}:${PostgreSQLDB.Endpoint.Port}/postgres?sslmode=require"
+            # The two values below are Fn::If branches: create new RDS vs reuse existing.
+            # Only one branch is selected at deploy-time, but both must be provided here.
+            - !Sub "postgresql://${DBUsername}:${DBPassword}@${PostgreSQLDB.Endpoint.Address}:${PostgreSQLDB.Endpoint.Port}/${DatabaseName}?sslmode=require"
             - !Sub "postgresql://${DBUsername}:${DBPassword}@${RdsEndpoint}:${RdsPort}/${DatabaseName}?sslmode=require"
           LLM_JOB_QUEUE_URL: !Ref LLMJobQueue
           DAVAI_API_SECRET: !Ref DavaiApiSecret
@@ -633,7 +658,9 @@ Resources:
           ENVIRONMENT: !Ref Environment
           POSTGRES_CONNECTION_STRING: !If
             - CreateInfrastructure
-            - !Sub "postgresql://${DBUsername}:${DBPassword}@${PostgreSQLDB.Endpoint.Address}:${PostgreSQLDB.Endpoint.Port}/postgres?sslmode=require"
+            # The two values below are Fn::If branches: create new RDS vs reuse existing.
+            # Only one branch is selected at deploy-time, but both must be provided here.
+            - !Sub "postgresql://${DBUsername}:${DBPassword}@${PostgreSQLDB.Endpoint.Address}:${PostgreSQLDB.Endpoint.Port}/${DatabaseName}?sslmode=require"
             - !Sub "postgresql://${DBUsername}:${DBPassword}@${RdsEndpoint}:${RdsPort}/${DatabaseName}?sslmode=require"
           LLM_JOB_QUEUE_URL: !Ref LLMJobQueue
           DAVAI_API_SECRET: !Ref DavaiApiSecret
@@ -666,7 +693,51 @@ Resources:
       Timeout: 60
       MemorySize: 512
 
-  # VPC Endpoints removed - staging environments will use internet routing
+  # Optional VPC Interface Endpoints. Only created when both CreateInfrastructure and ShouldCreateVpcEndpoints are true.
+  EndpointSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Condition: CreateInfraAndEndpoints
+    Properties:
+      GroupDescription: SG for VPC endpoints
+      VpcId: !Ref NewVPC
+      SecurityGroupIngress:
+        - IpProtocol: tcp
+          FromPort: 443
+          ToPort: 443
+          SourceSecurityGroupId: !Ref LambdaSecurityGroup
+
+  SqsEndpoint:
+    Type: AWS::EC2::VPCEndpoint
+    Condition: CreateInfraAndEndpoints
+    Properties:
+      VpcId: !Ref NewVPC
+      VpcEndpointType: Interface
+      ServiceName: !Sub com.amazonaws.${AWS::Region}.sqs
+      SubnetIds: [!Ref PrivateSubnet1, !Ref PrivateSubnet2]
+      SecurityGroupIds: [!Ref EndpointSecurityGroup]
+      PrivateDnsEnabled: true
+
+  SecretsManagerEndpoint:
+    Type: AWS::EC2::VPCEndpoint
+    Condition: CreateInfraAndEndpoints
+    Properties:
+      VpcId: !Ref NewVPC
+      VpcEndpointType: Interface
+      ServiceName: !Sub com.amazonaws.${AWS::Region}.secretsmanager
+      SubnetIds: [!Ref PrivateSubnet1, !Ref PrivateSubnet2]
+      SecurityGroupIds: [!Ref EndpointSecurityGroup]
+      PrivateDnsEnabled: true
+
+  LogsEndpoint:
+    Type: AWS::EC2::VPCEndpoint
+    Condition: CreateInfraAndEndpoints
+    Properties:
+      VpcId: !Ref NewVPC
+      VpcEndpointType: Interface
+      ServiceName: !Sub com.amazonaws.${AWS::Region}.logs
+      SubnetIds: [!Ref PrivateSubnet1, !Ref PrivateSubnet2]
+      SecurityGroupIds: [!Ref EndpointSecurityGroup]
+      PrivateDnsEnabled: true
 
 Outputs:
   DavaiApi:
@@ -686,4 +757,4 @@ Outputs:
     Value: !Ref LLMJobQueue
   DatabaseName:
     Description: "Database name"
-    Value: "postgres"
+    Value: !Ref DatabaseName
