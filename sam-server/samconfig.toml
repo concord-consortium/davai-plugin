@@ -3,12 +3,11 @@ version = 0.1
 [default.deploy]
 [default.deploy.parameters]
 stack_name = "davai-server"
-s3_bucket = "aws-sam-cli-managed-default-samclisourcebucket-XXXXXXXXXXXX"
 s3_prefix = "davai-server"
 region = "us-east-1"
 confirm_changeset = true
 capabilities = "CAPABILITY_IAM"
-parameter_overrides = "Environment=\"prod\" DBUsername=\"postgres\""
+parameter_overrides = "Environment=\"prod\" DBUsername=\"postgres\" VpcId=\"vpc-046ed4f6d2078cf59\" PrivateSubnet1Id=\"subnet-0f69e7eb39ad3e67c\" PrivateSubnet2Id=\"subnet-066929e5f08e95bf0\" LambdaSecurityGroupId=\"sg-01e6f235747e4743a\" RdsEndpoint=\"prod-davai-postgres.cheea3ib6y8u.us-east-1.rds.amazonaws.com\" RdsPort=\"5432\""
 image_repositories = []
 resolve_s3 = true
 disable_rollback = false
@@ -16,3 +15,29 @@ disable_rollback = false
 [default.local_start_api]
 [default.local_start_api.parameters]
 warm_containers = "EAGER"
+
+[staging-a]
+[staging-a.deploy]
+[staging-a.deploy.parameters]
+stack_name = "davai-server-staging-a"
+s3_prefix = "davai-server-staging-a"
+region = "us-east-1"
+confirm_changeset = true
+capabilities = "CAPABILITY_IAM"
+parameter_overrides = "Environment=\"staging-a\" DBUsername=\"davai_staging_a\" DatabaseName=\"staging_a\" VpcId=\"vpc-0bebbbbe0f3fd7e04\" PrivateSubnet1Id=\"subnet-062ae3103a8dea59d\" PrivateSubnet2Id=\"subnet-05f0b561cc3851546\" LambdaSecurityGroupId=\"sg-015a671b5f85bc142\" RdsEndpoint=\"staging-davai-postgres.cheea3ib6y8u.us-east-1.rds.amazonaws.com\" RdsPort=\"5432\" CreateVpcEndpoints=\"false\""
+image_repositories = []
+resolve_s3 = true
+disable_rollback = false
+
+[staging-b]
+[staging-b.deploy]
+[staging-b.deploy.parameters]
+stack_name = "davai-server-staging-b"
+s3_prefix = "davai-server-staging-b"
+region = "us-east-1"
+confirm_changeset = true
+capabilities = "CAPABILITY_IAM"
+parameter_overrides = "Environment=\"staging-b\" DBUsername=\"davai_staging_b\" DatabaseName=\"staging_b\" VpcId=\"vpc-0bebbbbe0f3fd7e04\" PrivateSubnet1Id=\"subnet-062ae3103a8dea59d\" PrivateSubnet2Id=\"subnet-05f0b561cc3851546\" LambdaSecurityGroupId=\"sg-015a671b5f85bc142\" RdsEndpoint=\"staging-davai-postgres.cheea3ib6y8u.us-east-1.rds.amazonaws.com\" RdsPort=\"5432\" CreateVpcEndpoints=\"false\""
+image_repositories = []
+resolve_s3 = true
+disable_rollback = false

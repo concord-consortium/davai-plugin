@@ -20,6 +20,39 @@ npm run sam:build
 npm run sam:deploy
 ```
 
+### Build and Deploy to Staging
+
+There are currently two staging instances set up in AWS: staging-a and staging-b. Each has their own set of Lambda functions, secrets, API gateway, and database. The two separate staging databases are on the same RDS instance, however. The two staging instances also share the same VPC and related infrastructure (subnets, security groups, route tables, etc.).
+
+Building for staging can be done using the same script as for production.
+
+```bash
+# Build the SAM application
+npm run sam:build
+```
+
+There are four new scripts for deploying to staging. For a guided deployment, use one of these:
+
+```bash
+# Deploy to Staging A
+npm run sam:deploy:staging-a
+
+# Deploy to Staging B
+npm run sam:deploy:staging-b
+```
+
+For an unguided, faster deployment, use one of the below.
+
+NOTE: You will first need to set the staging instance database password by running `export DB_PASSWORD='database password'` in your terminal in order for the fast deploy to work.
+
+```bash
+# Deploy to Staging A
+npm run sam:deploy:staging-a:fast
+
+# Deploy to Staging B
+npm run sam:deploy:staging-b:fast
+```
+
 ### Local Development
 
 For local development setup and workflow, see [DEV-README.md](./DEV-README.md).
