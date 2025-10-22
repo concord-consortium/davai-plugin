@@ -1,6 +1,6 @@
 import React from "react";
 import { AssistantModelType } from "../models/assistant-model";
-import { useAppConfigContext } from "../hooks/use-app-config-context";
+import { useAppConfigContext } from "../contexts/app-config-context";
 import { getUrlParam } from "../utils/utils";
 import { DAVAI_SPEAKER, GREETING } from "../constants";
 import { IUserOptions } from "../types";

@@ -1,10 +1,10 @@
 import React from "react";
 import { render, screen, fireEvent } from "@testing-library/react";
 import { UserOptions } from "./user-options";
-import { useOptions } from "../hooks/use-options";
+import { useOptions } from "../contexts/user-options-context";
 import { AssistantModelType } from "../models/assistant-model";
 
-jest.mock("../hooks/use-options", () => ({
+jest.mock("../contexts/user-options-context", () => ({
   useOptions: jest.fn(),
 }));
 

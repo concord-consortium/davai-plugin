@@ -1,11 +1,14 @@
 import React, { FormEvent, useState } from "react";
-import { useOptions } from "../hooks/use-options";
+import { useOptions } from "../contexts/user-options-context";
 import { ErrorMessage } from "./error-message";
 
 import "./keyboard-shortcut-controls.scss";
 
 export const KeyboardShortcutControls = () => {
-  const { keyboardShortcutEnabled, keyboardShortcutKeys, toggleOption, updateOptions } = useOptions();
+  const { 
+    toggleOption, updateOptions, 
+    options: { keyboardShortcutEnabled, keyboardShortcutKeys } 
+  } = useOptions();
   const toggleButtonLabel = keyboardShortcutEnabled ? "Disable Shortcut" : "Enable Shortcut";
   const [showError, setShowError] = useState(false);
   const [showConfirmation, setShowConfirmation] = useState(false);

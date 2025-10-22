@@ -1,6 +1,6 @@
 import React, { useRef, useEffect } from "react";
 import { observer } from "mobx-react-lite";
-import { useOptions } from "../hooks/use-options";
+import { useOptions } from "../contexts/user-options-context";
 import { ChatTranscriptMessage } from "./chat-transcript-message";
 import { ChatTranscript, ChatMessage } from "../types";
 import { LoadingMessage } from "./loading-message";
@@ -13,7 +13,7 @@ interface IProps {
 }
 
 export const ChatTranscriptComponent = observer(({chatTranscript, isLoading}: IProps) => {
-  const { showDebugLog } = useOptions();
+  const { options: { showDebugLog } } = useOptions();
   const chatTranscriptRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {

@@ -1,5 +1,5 @@
 import React from "react";
-import { useOptions } from "../hooks/use-options";
+import { useOptions } from "../contexts/user-options-context";
 import { ReadAloudMenu } from "./readaloud-menu";
 import { KeyboardShortcutControls } from "./keyboard-shortcut-controls";
 import { IUserOptions } from "../types";

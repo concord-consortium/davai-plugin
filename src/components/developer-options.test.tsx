@@ -44,7 +44,7 @@ jest.mock("../models/app-config-model", () => ({
   }
 }));
 
-jest.mock("../hooks/use-app-config-context", () => ({
+jest.mock("../contexts/app-config-context", () => ({
   useAppConfigContext: jest.fn(() => ({...mockAppConfig, mode: "development"})),
 }));
 

@@ -1,5 +1,5 @@
 import React, { FormEvent, useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { useOptions } from "../hooks/use-options";
+import { useOptions } from "../contexts/user-options-context";
 import { kDefaultChatInputHeight, START_RECORDING_NOTE, STOP_RECORDING_NOTE } from "../constants";
 import { playSound, isInputElement, isShortcutPressed } from "../utils/utils";
 import { ErrorMessage } from "./error-message";
@@ -19,7 +19,7 @@ interface IProps {
 }
 
 export const ChatInputComponent = ({disabled, isLoading, onCancel, onKeyboardShortcut, onSubmit}: IProps) => {
-  const { keyboardShortcutEnabled, keyboardShortcutKeys } = useOptions();
+  const { options: { keyboardShortcutEnabled, keyboardShortcutKeys } } = useOptions();
   const [browserSupportsDictation, setBrowserSupportsDictation] = useState(false);
   const [dictationEnabled, setDictationEnabled] = useState(false);
   const [inputValue, setInputValue] = useState("");

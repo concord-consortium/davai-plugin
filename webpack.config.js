@@ -28,6 +28,18 @@ module.exports = (env, argv) => {
         key: path.resolve(os.homedir(), '.localhost-ssl/localhost.key'),
         cert: path.resolve(os.homedir(), '.localhost-ssl/localhost.pem'),
       },
+      proxy: [
+        // Proxy anything not available locally to codap3.concord.org
+        // This makes it possible to load CODAP at https://localhost:8080/branch/main
+        // and the plugin at https://localhost:8080/ this way the plugin can be
+        // embedded in CODAP during development.
+        {
+          context: ['/'],
+          target: 'https://codap3.concord.org',
+          secure: true,
+          changeOrigin: true,
+        }
+      ]
     },
     devtool: devMode ? 'eval-cheap-module-source-map' : 'source-map',
     entry: './src/index.tsx',

@@ -1,5 +1,5 @@
-import React, { createContext, useEffect, useState } from "react";
-import { useAppConfigContext } from "../hooks/use-app-config-context";
+import React, { createContext, useContext, useEffect, useMemo, useState } from "react";
+import { useAppConfigContext } from "./app-config-context";
 import { getUrlParam } from "../utils/utils";
 import { IUserOptions } from "../types";
 import { kDefaultOptions } from "../constants";
@@ -31,10 +31,39 @@ export const UserOptionsProvider = ({ children }: {children: React.ReactNode}) =
     setOptions(initialOptions);
   }, [appConfig.mode, appConfig.accessibility.keyboardShortcut]);
 
+  // Memoize the context value to prevent unnecessary re-renders
+  const value = useMemo(() => ({
+    options,
+    setOptions,
+  }), [options]);
+
   return (
-    <UserOptionsContext.Provider value={{options, setOptions}}>
+    <UserOptionsContext.Provider value={value}>
       {children}
     </UserOptionsContext.Provider>
   );
 };
 
+export const useOptions = () => {
+  const { options, setOptions } = useContext(UserOptionsContext);
+
+  const updateOptions = (newOptions: Partial<IUserOptions>) => {
+    setOptions((prevOptions) => ({
+      ...prevOptions,
+      ...newOptions,
+    }));
+  };
+
+  const toggleOption = (option: keyof IUserOptions) => {
+    setOptions((prevOptions) => ({
+      ...prevOptions,
+      [option]: !prevOptions[option],
+    }));
+  };
+
+  return {
+    options,
+    updateOptions,
+    toggleOption
+  };
+};

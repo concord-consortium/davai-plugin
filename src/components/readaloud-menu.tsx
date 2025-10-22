@@ -1,5 +1,5 @@
 import React from "react";
-import { useOptions } from "../hooks/use-options";
+import { useOptions } from "../contexts/user-options-context";
 import { IUserOptions } from "../types";
 
 interface IProps {
@@ -7,7 +7,7 @@ interface IProps {
 }
 
 export const ReadAloudMenu: React.FC<IProps> = ({createToggleOption}) => {
-  const { playbackSpeed, updateOptions } = useOptions();
+  const { updateOptions, options: { playbackSpeed } } = useOptions();
 
   const handleSelect = (event: React.ChangeEvent<HTMLSelectElement>) => {
     updateOptions({playbackSpeed: parseFloat(event.target.value)});

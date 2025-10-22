@@ -1,11 +1,11 @@
 import React, { useEffect } from "react";
 import { DAVAI_SPEAKER } from "../constants";
 import { useAriaLive } from "../contexts/aria-live-context";
-import { useOptions } from "../hooks/use-options";
+import { useOptions } from "../contexts/user-options-context";
 
 export const LoadingMessage = () => {
   const {setAriaLiveText} = useAriaLive();
-  const {playProcessingMessage} = useOptions();
+  const { options: { playProcessingMessage } } = useOptions();
 
   useEffect(() => {
     if (playProcessingMessage) {
