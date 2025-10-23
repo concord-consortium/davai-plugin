@@ -1,11 +1,12 @@
 import React, { useEffect } from "react";
+import { observer } from "mobx-react-lite";
 import { DAVAI_SPEAKER } from "../constants";
 import { useAriaLive } from "../contexts/aria-live-context";
-import { useOptions } from "../contexts/user-options-context";
+import { useAppConfigContext } from "../contexts/app-config-context";
 
-export const LoadingMessage = () => {
+export const LoadingMessage = observer(function LoadingMessage() {
   const {setAriaLiveText} = useAriaLive();
-  const { options: { playProcessingMessage } } = useOptions();
+  const { playProcessingMessage } = useAppConfigContext();
 
   useEffect(() => {
     if (playProcessingMessage) {
@@ -42,4 +43,4 @@ export const LoadingMessage = () => {
       </div>
     </div>
   );
-};
+});

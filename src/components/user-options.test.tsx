@@ -1,11 +1,11 @@
 import React from "react";
 import { render, screen, fireEvent } from "@testing-library/react";
 import { UserOptions } from "./user-options";
-import { useOptions } from "../contexts/user-options-context";
 import { AssistantModelType } from "../models/assistant-model";
+import { useAppConfigContext } from "../contexts/app-config-context";
 
-jest.mock("../contexts/user-options-context", () => ({
-  useOptions: jest.fn(),
+jest.mock("../contexts/app-config-context", () => ({
+  useAppConfigContext: jest.fn(),
 }));
 
 jest.mock("./readaloud-menu", () => ({
@@ -33,11 +33,9 @@ describe("UserOptions Component", () => {
   const mockAssistantStore = {} as AssistantModelType;
 
   beforeEach(() => {
-    (useOptions as jest.Mock).mockReturnValue({
-      options: {
-        playProcessingMessage: true,
-        playProcessingTone: false,
-      },
+    (useAppConfigContext as jest.Mock).mockReturnValue({    
+      playProcessingMessage: true,
+      playProcessingTone: false,
       toggleOption: mockToggleOption,
     });
   });

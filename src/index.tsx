@@ -3,7 +3,6 @@ import { createRoot } from "react-dom/client";
 import { App } from "./components/App";
 import { AppConfigProvider } from "./contexts/app-config-context";
 import { AriaLiveProvider } from "./contexts/aria-live-context";
-import { UserOptionsProvider } from "./contexts/user-options-context";
 
 import "./index.scss";
 
@@ -14,9 +13,7 @@ if (container) {
   root.render(
     <AppConfigProvider>
       <AriaLiveProvider>
-        <UserOptionsProvider>
-          <App />
-        </UserOptionsProvider>
+        <App />
       </AriaLiveProvider>
     </AppConfigProvider>
   );

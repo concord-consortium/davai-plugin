@@ -1,14 +1,14 @@
 import React from "react";
+import { observer } from "mobx-react-lite";
 import { AssistantModelType } from "../models/assistant-model";
 import { useAppConfigContext } from "../contexts/app-config-context";
 import { getUrlParam } from "../utils/utils";
 import { DAVAI_SPEAKER, GREETING } from "../constants";
-import { IUserOptions } from "../types";
-import { observer } from "mobx-react-lite";
+import { AppConfigToggleOptions } from "../models/app-config-model";
 
 interface IProps {
   assistantStore: AssistantModelType;
-  createToggleOption: (option: keyof IUserOptions, optionLabel: string) => React.JSX.Element;
+  createToggleOption: (option: AppConfigToggleOptions, optionLabel: string) => React.JSX.Element;
   onInitializeAssistant: () => void;
 }
 
@@ -44,7 +44,7 @@ export const DeveloperOptionsComponent = observer(({assistantStore, createToggle
     !isDevMode ? <div/> :
     <div className="control-panel-section" role="group" aria-labelledby="dev-options-heading" data-testid="developer-options">
       <h3 id="dev-options-heading">Developer Options</h3>
-      {createToggleOption("showDebugLog", "Show Debug Log")}
+      {createToggleOption("showDebugLogInDevMode", "Show Debug Log")}
       <div className="user-option">
         <label htmlFor="llm-select" data-testid="llm-select-label">
           Select an LLM:

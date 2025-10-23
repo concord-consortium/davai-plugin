@@ -1,16 +1,19 @@
 import React from "react";
-import { useOptions } from "../contexts/user-options-context";
-import { IUserOptions } from "../types";
+import { observer } from "mobx-react-lite";
+import { useAppConfigContext } from "../contexts/app-config-context";
+import { AppConfigToggleOptions } from "../models/app-config-model";
 
 interface IProps {
-  createToggleOption: (option: keyof IUserOptions, optionLabel: string) => React.JSX.Element
+  createToggleOption: (option: AppConfigToggleOptions, optionLabel: string) => React.JSX.Element
 }
 
-export const ReadAloudMenu: React.FC<IProps> = ({createToggleOption}) => {
-  const { updateOptions, options: { playbackSpeed } } = useOptions();
+export const ReadAloudMenu: React.FC<IProps> = observer(function ReadAloudMenu({createToggleOption}) {
+  const appConfig = useAppConfigContext();
 
   const handleSelect = (event: React.ChangeEvent<HTMLSelectElement>) => {
-    updateOptions({playbackSpeed: parseFloat(event.target.value)});
+    appConfig.update(() => {
+      appConfig.playbackSpeed = parseFloat(event.target.value);
+    });
   };
 
   return (
@@ -27,7 +30,7 @@ export const ReadAloudMenu: React.FC<IProps> = ({createToggleOption}) => {
         <select
           onChange={handleSelect}
           data-testid="readaloud-playback-speed"
-          defaultValue={playbackSpeed}
+          defaultValue={appConfig.playbackSpeed}
           id="readaloud-playback-speed"
         >
           <option data-testid="playback-speed-option-1" value={0.5}>.5x</option>
@@ -38,4 +41,4 @@ export const ReadAloudMenu: React.FC<IProps> = ({createToggleOption}) => {
       </div>
     </div>
   );
-};
+});

@@ -1,30 +1,23 @@
 import React, { createContext, useContext } from "react";
 import { AppConfigModel, AppConfigModelSnapshot, AppConfigModelType } from "../models/app-config-model";
-import { isAppMode } from "../types";
+import { loadAndApplyMSTSettingOverrides, localStorageSettingsSource, urlParamSettingsSource } from "../utils/load-mst-settings";
+import { addMSTSettingsSaver } from "../utils/save-mst-settings";
 
 import appConfigJson from "../app-config.json";
-import { getUrlParam } from "../utils/utils";
 
 export const AppConfigContext = createContext<AppConfigModelType | undefined>(undefined);
 
-const loadAppConfig = (): AppConfigModelSnapshot => {
+const loadAppConfig = (): AppConfigModelType => {
   const defaultConfig = appConfigJson as AppConfigModelSnapshot;
-  const urlParamMode = getUrlParam("mode");
-  const llmId = getUrlParam("llmId");
-  const configOverrides: Partial<AppConfigModelSnapshot> = {
-    mode: isAppMode(urlParamMode) ? urlParamMode : defaultConfig.mode,
-    llmId: llmId || defaultConfig.llmId,
-  };
-
-  return {
-    ...defaultConfig,
-    ...configOverrides,
-  };
+  const appConfig = AppConfigModel.create(defaultConfig);
+  loadAndApplyMSTSettingOverrides(appConfig, urlParamSettingsSource);
+  loadAndApplyMSTSettingOverrides(appConfig, localStorageSettingsSource, "davai:");
+  addMSTSettingsSaver(appConfig, localStorage, localStorageSettingsSource, "davai:", 1);
+  return appConfig;
 };
 
 export const AppConfigProvider = ({ children }: { children: React.ReactNode }) => {
-  const appConfigSnapshot = loadAppConfig();
-  const appConfig = AppConfigModel.create(appConfigSnapshot);
+  const appConfig = loadAppConfig();
   return (
     <AppConfigContext.Provider value={appConfig}>
       {children}

@@ -1,11 +1,11 @@
 import React, { useRef, useEffect } from "react";
 import { observer } from "mobx-react-lite";
-import { useOptions } from "../contexts/user-options-context";
 import { ChatTranscriptMessage } from "./chat-transcript-message";
 import { ChatTranscript, ChatMessage } from "../types";
 import { LoadingMessage } from "./loading-message";
 
 import "./chat-transcript.scss";
+import { useAppConfigContext } from "../contexts/app-config-context";
 
 interface IProps {
   chatTranscript: ChatTranscript;
@@ -13,7 +13,7 @@ interface IProps {
 }
 
 export const ChatTranscriptComponent = observer(({chatTranscript, isLoading}: IProps) => {
-  const { options: { showDebugLog } } = useOptions();
+  const { showDebugLog } = useAppConfigContext();
   const chatTranscriptRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {

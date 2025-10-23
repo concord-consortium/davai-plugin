@@ -7,7 +7,6 @@ import { addComponentListener, addDataContextChangeListener, addDataContextsList
 import { useRootStore } from "../hooks/use-root-store";
 import { useAppConfigContext } from "../contexts/app-config-context";
 import { useAriaLive } from "../contexts/aria-live-context";
-import { useOptions } from "../contexts/user-options-context";
 import { ChatInputComponent } from "./chat-input";
 import { ChatTranscriptComponent } from "./chat-transcript";
 import { DAVAI_SPEAKER, LOADING_NOTE, USER_SPEAKER, notificationsToIgnore } from "../constants";
@@ -27,7 +26,7 @@ export const App = observer(() => {
   const appConfig = useAppConfigContext();
   const { ariaLiveText, setAriaLiveText } = useAriaLive();
   const { assistantStore, sonificationStore } = useRootStore();
-  const { options: { playProcessingTone } } = useOptions();
+  const { playProcessingTone } = appConfig;
   const assistantStoreRef = useRef(assistantStore);
   const sonificationStoreRef = useRef(sonificationStore);
   const dimensions = { width: appConfig.dimensions.width, height: appConfig.dimensions.height };

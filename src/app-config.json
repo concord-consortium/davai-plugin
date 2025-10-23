@@ -1,7 +1,13 @@
 {
-  "accessibility": {
-    "keyboardShortcut": "ctrl+?"
+  "keyboardShortcuts": {
+    "focusChatInput": "ctrl+?",
+    "playGraphSonification": "ctrl+>"
   },
+  "keyboardShortcutsEnabled": true,
+  "playProcessingMessage": true,
+  "playProcessingTone": false,
+  "playbackSpeed": 1,
+  "readAloudEnabled": false,
   "llmId": "{\"id\":\"gpt-4o-mini\",\"provider\":\"OpenAI\"}",
   "llmList": [
     {
