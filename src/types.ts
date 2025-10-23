@@ -135,6 +135,18 @@ export interface ICODAPGraph {
   yUpperBound?: number;
 }
 
+export type UnivariateNote = {
+  freqValue: number;
+  panValue: number;
+};
+
+export type ScatterNote = {
+  voices: {
+    freqValue: number;
+    panValue: number;
+  }[];
+};
+
 export interface IGraphAttrData {
   legend?: Record<string, any>;
   rightSplit?: Record<string, any>;
