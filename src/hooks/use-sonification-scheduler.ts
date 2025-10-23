@@ -1,8 +1,7 @@
 // hooks/useSonificationScheduler.ts
 import { useCallback } from "react";
 import * as Tone from "tone";
-import { interpolateBins, mapPitchFractionToFrequency, mapValueToStereoPan } from "../components/graph-sonification-utils";
-import { isUnivariateDotPlot } from "../utils/utils";
+import { interpolateBins, mapPitchFractionToFrequency, mapValueToStereoPan, isUnivariateDotPlot } from "../utils/graph-sonification-utils";
 import { ICODAPGraph } from "../types";
 import { IBinModel } from "../models/bin-model";
 

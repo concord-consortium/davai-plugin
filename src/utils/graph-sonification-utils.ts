@@ -1,4 +1,35 @@
 import { codapInterface } from "@concord-consortium/codap-plugin-api";
+import { ICODAPGraph } from "../types";
+
+export function isUnivariateDotPlot(graph: ICODAPGraph): boolean {
+  const {
+    plotType,
+    topSplitAttributeID: topId,
+    rightSplitAttributeID: rightId,
+    y2AttributeID: y2Id,
+    xAttributeID: xId,
+    yAttributeID: yId
+  } = graph;
+
+  const isDotPlot = plotType === "dotPlot" || plotType === "binnedDotPlot";
+  const hasExactlyOneAxis = (xId && !yId) || (yId && !xId);
+
+  return !!(isDotPlot
+    && !topId
+    && !rightId
+    && !y2Id
+    && hasExactlyOneAxis);
+}
+
+function isUnsplitScatterPlot(graph: ICODAPGraph): boolean {
+  return graph.plotType === "scatterPlot" &&
+         !graph.topSplitAttributeID &&
+         !graph.rightSplitAttributeID;
+}
+
+export const isGraphSonifiable = (graph: ICODAPGraph): boolean => {
+  return isUnsplitScatterPlot(graph) || isUnivariateDotPlot(graph);
+};
 
 export const mapPitchFractionToFrequency = (pitchFraction: number) => {
   if (pitchFraction === 0) {

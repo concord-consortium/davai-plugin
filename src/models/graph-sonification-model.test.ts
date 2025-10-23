@@ -22,11 +22,16 @@ jest.mock("@concord-consortium/codap-plugin-api", () => ({
   }
 }));
 
-jest.mock("../utils/utils", () => ({
+jest.mock("../utils/codap-api-utils", () => ({
   getGraphDetails: jest.fn(() => Promise.resolve(mockAvailableGraphs)),
-  isGraphSonifiable: jest.fn((graph) => graph.plotType === "scatterPlot" || graph.plotType === "dotPlot"),
   sendCODAPRequest: jest.fn(),
 }));
+
+jest.mock("../utils/graph-sonification-utils", () => ({
+  isGraphSonifiable: jest.fn((graph) => graph.plotType === "scatterPlot" || graph.plotType === "dotPlot"),
+  removeRoiAdornment: jest.fn(),
+}));
+
 
 const mockSendCODAPDocumentInfo = jest.fn();
 const mockSetAssistantState = jest.fn();
@@ -42,7 +47,7 @@ const RootStore = types
   .actions((self) => ({
     afterCreate() {
       Object.assign(self.assistantStore, {
-        sendCODAPDocumentInfo: mockSendCODAPDocumentInfo,
+        processAndSendCODAPDocumentInfo: mockSendCODAPDocumentInfo,
         setAssistantState: mockSetAssistantState,
         getAssistantState: mockGetAssistantState
       });
@@ -69,7 +74,8 @@ describe("GraphSonificationModel", () => {
           bins: [],
           minBinEdge: 0,
           maxBinEdge: 0,
-          binWidth: 0
+          binWidth: 0,
+          values: []
         }
       },
       assistantStore: {
@@ -118,7 +124,7 @@ describe("GraphSonificationModel", () => {
     store.setSelectedGraphID(1);
     await new Promise(resolve => setTimeout(resolve, 100));
     expect(store.selectedGraphID).toBe(1);
-    
+
     // Try to select a non-sonifiable graph
     store.setSelectedGraphID(999);
     await new Promise(resolve => setTimeout(resolve, 100));

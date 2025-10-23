@@ -1,11 +1,11 @@
-import { flow, getRoot, getSnapshot, SnapshotIn, types } from "mobx-state-tree";
+import { flow, SnapshotIn, types } from "mobx-state-tree";
 import { reaction } from "mobx";
 import { CodapItem } from "../types";
 import { getAllItems } from "@concord-consortium/codap-plugin-api";
-import { removeRoiAdornment } from "../components/graph-sonification-utils";
 import { CODAPGraphModel, ICODAPGraphModel } from "./codap-graph-model";
 import { BinModel } from "./bin-model";
-import { getGraphDetails, isGraphSonifiable, sendCODAPRequest } from "../utils/utils";
+import { sendCODAPRequest, getGraphDetails } from "../utils/codap-api-utils";
+import { removeRoiAdornment, isGraphSonifiable } from "../utils/graph-sonification-utils";
 
 export const GraphSonificationModel = types
   .model("GraphSonificationModel", {
@@ -189,15 +189,6 @@ export const GraphSonificationModel = types
           } else {
             self.clearGraphItems();
           }
-        }
-      );
-
-      reaction(
-        () => self.allGraphs.map(g => getSnapshot(g)),
-        (snapshots) => {
-          const root = getRoot(self) as any;
-          const msg = `Updated graph information: ${JSON.stringify(snapshots)}`;
-          root.assistantStore.sendCODAPDocumentInfo(msg);
         }
       );
 

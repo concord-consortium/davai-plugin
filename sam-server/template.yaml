@@ -1,0 +1,760 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Transform: AWS::Serverless-2016-10-31
+Description: DAVAI Plugin Server - AWS SAM Version
+
+Parameters:
+  Environment:
+    Type: String
+    Default: dev
+    Description: Environment name (dev, staging, prod)
+  DBUsername:
+    Type: String
+    Default: postgres
+    Description: PostgreSQL database username
+  DBPassword:
+    Type: String
+    NoEcho: true
+    Description: PostgreSQL database password
+  DatabaseName:
+    Type: String
+    Description: PostgreSQL database name to connect to (postgres, staging_a, or staging_b)
+  VpcId:
+    Type: String
+    Default: ""
+    Description: VPC ID for the environment (leave empty to create new)
+  PrivateSubnet1Id:
+    Type: String
+    Default: ""
+    Description: First private subnet ID (leave empty to create new)
+  PrivateSubnet2Id:
+    Type: String
+    Default: ""
+    Description: Second private subnet ID (leave empty to create new)
+  LambdaSecurityGroupId:
+    Type: String
+    Default: ""
+    Description: Security group ID for Lambda functions (leave empty to create new)
+  RdsEndpoint:
+    Type: String
+    Default: ""
+    Description: RDS endpoint address (leave empty to create new)
+  RdsPort:
+    Type: String
+    Default: "5432"
+    Description: RDS port
+
+  CreateVpcEndpoints:
+    Type: String
+    Default: "false"
+    AllowedValues: ["true", "false"]
+    Description: Whether to create VPC endpoints (only set to true for new environments)
+
+Conditions:
+  CreateInfrastructure:
+    Fn::Equals:
+      - !Ref VpcId
+      - ""
+
+  ShouldCreateVpcEndpoints:
+    Fn::Equals: [ !Ref CreateVpcEndpoints, "true" ]
+
+  CreateInfraAndEndpoints:
+    Fn::And:
+      - Condition: CreateInfrastructure
+      - Condition: ShouldCreateVpcEndpoints
+
+Rules:
+  RequireSubnetAndSgWithVpcId:
+    RuleCondition: !Not [ { Fn::Equals: [ !Ref VpcId, "" ] } ]
+    Assertions:
+      - Assert: !Not [ { Fn::Equals: [ !Ref PrivateSubnet1Id, "" ] } ]
+        AssertDescription: When VpcId is provided, PrivateSubnet1Id must also be provided.
+      - Assert: !Not [ { Fn::Equals: [ !Ref PrivateSubnet2Id, "" ] } ]
+        AssertDescription: When VpcId is provided, PrivateSubnet2Id must also be provided.
+      - Assert: !Not [ { Fn::Equals: [ !Ref LambdaSecurityGroupId, "" ] } ]
+        AssertDescription: When VpcId is provided, LambdaSecurityGroupId must also be provided.
+
+Resources:
+  # VPC - create if not provided
+  NewVPC:
+    Type: AWS::EC2::VPC
+    Condition: CreateInfrastructure
+    Properties:
+      CidrBlock: 10.1.0.0/16
+      EnableDnsHostnames: true
+      EnableDnsSupport: true
+      Tags:
+        - Key: Name
+          Value: !Sub "${Environment}-davai-vpc"
+
+  NatEip:
+    Type: AWS::EC2::EIP
+    Condition: CreateInfrastructure
+    Properties: { Domain: vpc }
+
+  NatGateway:
+    Type: AWS::EC2::NatGateway
+    Condition: CreateInfrastructure
+    Properties:
+      AllocationId: !GetAtt NatEip.AllocationId
+      SubnetId: !Ref PublicSubnet1
+      Tags:
+        - Key: Name
+          Value: !Sub "${Environment}-davai-nat"
+
+  PrivateDefaultRoute:
+    Type: AWS::EC2::Route
+    Condition: CreateInfrastructure
+    Properties:
+      RouteTableId: !Ref PrivateRouteTable
+      DestinationCidrBlock: 0.0.0.0/0
+      NatGatewayId: !Ref NatGateway
+
+  InternetGateway:
+    Type: AWS::EC2::InternetGateway
+    Condition: CreateInfrastructure
+    Properties:
+      Tags:
+        - Key: Name
+          Value: !Sub "${Environment}-davai-igw"
+
+  InternetGatewayAttachment:
+    Type: AWS::EC2::VPCGatewayAttachment
+    Condition: CreateInfrastructure
+    Properties:
+      InternetGatewayId: !Ref InternetGateway
+      VpcId: !Ref NewVPC
+
+  # Subnet for NatGateway functions
+  PublicSubnet1:
+    Type: AWS::EC2::Subnet
+    Condition: CreateInfrastructure
+    Properties:
+      VpcId: !Ref NewVPC
+      CidrBlock: 10.1.1.0/24
+      AvailabilityZone: !Select [0, !GetAZs '']
+      MapPublicIpOnLaunch: true
+      Tags:
+        - Key: Name
+          Value: !Sub "${Environment}-davai-public-subnet-1"
+
+  # Subnets for RDS
+  PrivateSubnet1:
+    Type: AWS::EC2::Subnet
+    Condition: CreateInfrastructure
+    Properties:
+      VpcId: !Ref NewVPC
+      CidrBlock: 10.1.10.0/24
+      AvailabilityZone: !Select [0, !GetAZs '']
+      Tags:
+        - Key: Name
+          Value: !Sub "${Environment}-davai-private-subnet-1"
+
+  PrivateSubnet2:
+    Type: AWS::EC2::Subnet
+    Condition: CreateInfrastructure
+    Properties:
+      VpcId: !Ref NewVPC
+      CidrBlock: 10.1.11.0/24
+      AvailabilityZone: !Select [1, !GetAZs '']
+      Tags:
+        - Key: Name
+          Value: !Sub "${Environment}-davai-private-subnet-2"
+
+  # Route table for public subnets
+  PublicRouteTable:
+    Type: AWS::EC2::RouteTable
+    Condition: CreateInfrastructure
+    Properties:
+      VpcId: !Ref NewVPC
+      Tags:
+        - Key: Name
+          Value: !Sub "${Environment}-davai-public-routes"
+
+  # Route to Internet Gateway
+  PublicRoute:
+    Type: AWS::EC2::Route
+    Condition: CreateInfrastructure
+    DependsOn: InternetGatewayAttachment
+    Properties:
+      RouteTableId: !Ref PublicRouteTable
+      DestinationCidrBlock: 0.0.0.0/0
+      GatewayId: !Ref InternetGateway
+
+  # Associate public subnets with public route table
+  PublicSubnet1RouteTableAssociation:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Condition: CreateInfrastructure
+    Properties:
+      SubnetId: !Ref PublicSubnet1
+      RouteTableId: !Ref PublicRouteTable
+
+  # Route table for private subnets
+  PrivateRouteTable:
+    Type: AWS::EC2::RouteTable
+    Condition: CreateInfrastructure
+    Properties:
+      VpcId: !Ref NewVPC
+      Tags:
+        - Key: Name
+          Value: !Sub "${Environment}-davai-private-routes"
+
+  # Associate private subnets with private route table
+  PrivateSubnet1RouteTableAssociation:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Condition: CreateInfrastructure
+    Properties:
+      SubnetId: !Ref PrivateSubnet1
+      RouteTableId: !Ref PrivateRouteTable
+
+  PrivateSubnet2RouteTableAssociation:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Condition: CreateInfrastructure
+    Properties:
+      SubnetId: !Ref PrivateSubnet2
+      RouteTableId: !Ref PrivateRouteTable
+
+  # Security Group for Lambda (allows all outbound)
+  LambdaSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Condition: CreateInfrastructure
+    Properties:
+      GroupDescription: Security group for Lambda functions
+      VpcId: !Ref NewVPC
+      SecurityGroupEgress:
+        - IpProtocol: -1
+          CidrIp: 0.0.0.0/0
+      Tags:
+        - Key: Name
+          Value: !Sub "${Environment}-davai-lambda-sg"
+
+  # Security Group for PostgreSQL (allows Lambda access)
+  DBSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Condition: CreateInfrastructure
+    Properties:
+      GroupDescription: Security group for PostgreSQL RDS
+      VpcId: !Ref NewVPC
+      SecurityGroupIngress:
+        - IpProtocol: tcp
+          FromPort: 5432
+          ToPort: 5432
+          SourceSecurityGroupId: !Ref LambdaSecurityGroup
+      Tags:
+        - Key: Name
+          Value: !Sub "${Environment}-davai-db-sg"
+
+  # RDS Subnet Group
+  DBSubnetGroup:
+    Type: AWS::RDS::DBSubnetGroup
+    Condition: CreateInfrastructure
+    Properties:
+      DBSubnetGroupDescription: Subnet group for DAVAI PostgreSQL
+      SubnetIds:
+        - !Ref PrivateSubnet1
+        - !Ref PrivateSubnet2
+      Tags:
+        - Key: Name
+          Value: !Sub "${Environment}-davai-postgres-subnet-group"
+
+  # PostgreSQL RDS Instance
+  PostgreSQLDB:
+    Type: AWS::RDS::DBInstance
+    Condition: CreateInfrastructure
+    Properties:
+      DBInstanceIdentifier: !Sub "${Environment}-davai-postgres"
+      Engine: postgres
+      EngineVersion: "15.13"
+      DBInstanceClass: db.t3.micro
+      MasterUsername: !Ref DBUsername
+      MasterUserPassword: !Ref DBPassword
+      DBName: !Ref DatabaseName
+      AllocatedStorage: 20
+      MaxAllocatedStorage: 100
+      StorageType: gp2
+      DBSubnetGroupName: !Ref DBSubnetGroup
+      VPCSecurityGroups:
+        - !Ref DBSecurityGroup
+      BackupRetentionPeriod: 7
+      MultiAZ: false
+      PubliclyAccessible: false
+      DeletionProtection: false
+      StorageEncrypted: true
+      MonitoringInterval: 0
+      Tags:
+        - Key: Name
+          Value: !Sub "${Environment}-davai-postgres"
+
+  # API Gateway
+  DavaiApi:
+    Type: AWS::Serverless::Api
+    Properties:
+      StageName: !Ref Environment
+      Cors:
+        AllowMethods: "'GET,POST,PUT,DELETE,OPTIONS'"
+        AllowHeaders: "'Content-Type,Authorization'"
+        AllowOrigin: "'*'"
+        MaxAge: "'86400'"
+
+  # SQS Queue for LLM Jobs
+  LLMJobQueue:
+    Type: AWS::SQS::Queue
+    Properties:
+      QueueName: !Sub "${Environment}-llm-job-queue"
+      VisibilityTimeout: 300
+      MessageRetentionPeriod: 1209600
+
+  # Secrets
+  DavaiApiSecret:
+    Type: AWS::SecretsManager::Secret
+    Properties:
+      Name: !Sub "${Environment}-davai-api-secret"
+      Description: Secret for DAVAI API authentication
+      SecretString: !Sub '{"secret": "your-api-secret-here"}'
+
+  OpenAIApiKey:
+    Type: AWS::SecretsManager::Secret
+    Properties:
+      Name: !Sub "${Environment}-openai-api-key"
+      Description: OpenAI API key for DAVAI server
+      SecretString: !Sub '{"key": "your-openai-key-here"}'
+
+  GoogleApiKey:
+    Type: AWS::SecretsManager::Secret
+    Properties:
+      Name: !Sub "${Environment}-google-api-key"
+      Description: Google API key for DAVAI server
+      SecretString: !Sub '{"key": "your-google-key-here"}'
+
+  LangSmithApiKey:
+    Type: AWS::SecretsManager::Secret
+    Properties:
+      Name: !Sub "${Environment}-langsmith-api-key"
+      Description: LangSmith API key for DAVAI server
+      SecretString: !Sub '{"key": "your-langsmith-key-here"}'
+
+  # Status Handler Lambda
+  StatusHandlerFunction:
+    Type: AWS::Serverless::Function
+    Metadata:
+      BuildMethod: esbuild
+      BuildProperties:
+        Format: cjs
+        Target: node18
+        Minify: false
+        External:
+          - pg-native
+    Properties:
+      CodeUri: .
+      Handler: src/handlers/status.handler
+      Runtime: nodejs18.x
+      Events:
+        StatusApi:
+          Type: Api
+          Properties:
+            RestApiId: !Ref DavaiApi
+            Path: /default/davaiServer/status
+            Method: get
+      Environment:
+        Variables:
+          ENVIRONMENT: !Ref Environment
+          POSTGRES_CONNECTION_STRING: !If
+            - CreateInfrastructure
+            # The two values below are Fn::If branches: create new RDS vs reuse existing.
+            # Only one branch is selected at deploy-time, but both must be provided here.
+            - !Sub "postgresql://${DBUsername}:${DBPassword}@${PostgreSQLDB.Endpoint.Address}:${PostgreSQLDB.Endpoint.Port}/${DatabaseName}?sslmode=require"
+            - !Sub "postgresql://${DBUsername}:${DBPassword}@${RdsEndpoint}:${RdsPort}/${DatabaseName}?sslmode=require"
+      VpcConfig:
+        SecurityGroupIds:
+          - !If
+            - CreateInfrastructure
+            - !Ref LambdaSecurityGroup
+            - !Ref LambdaSecurityGroupId
+        SubnetIds:
+          - !If
+            - CreateInfrastructure
+            - !Ref PrivateSubnet1
+            - !Ref PrivateSubnet1Id
+          - !If
+            - CreateInfrastructure
+            - !Ref PrivateSubnet2
+            - !Ref PrivateSubnet2Id
+      Policies:
+        - VPCAccessPolicy: {}
+        - Statement:
+            - Effect: Allow
+              Action:
+                - secretsmanager:GetSecretValue
+                - secretsmanager:DescribeSecret
+              Resource:
+                - !Sub arn:${AWS::Partition}:secretsmanager:${AWS::Region}:${AWS::AccountId}:secret:${Environment}-davai-api-secret-*
+      Timeout: 60
+      MemorySize: 512
+
+  # Cancel Handler Lambda
+  CancelHandlerFunction:
+    Type: AWS::Serverless::Function
+    Metadata:
+      BuildMethod: esbuild
+      BuildProperties:
+        Format: cjs
+        Target: node18
+        Minify: false
+        External:
+          - pg-native
+    Properties:
+      CodeUri: .
+      Handler: src/handlers/cancel.handler
+      Runtime: nodejs18.x
+      Events:
+        CancelApi:
+          Type: Api
+          Properties:
+            RestApiId: !Ref DavaiApi
+            Path: /default/davaiServer/cancel
+            Method: post
+      Environment:
+        Variables:
+          ENVIRONMENT: !Ref Environment
+          POSTGRES_CONNECTION_STRING: !If
+            - CreateInfrastructure
+            # The two values below are Fn::If branches: create new RDS vs reuse existing.
+            # Only one branch is selected at deploy-time, but both must be provided here.
+            - !Sub "postgresql://${DBUsername}:${DBPassword}@${PostgreSQLDB.Endpoint.Address}:${PostgreSQLDB.Endpoint.Port}/${DatabaseName}?sslmode=require"
+            - !Sub "postgresql://${DBUsername}:${DBPassword}@${RdsEndpoint}:${RdsPort}/${DatabaseName}?sslmode=require"
+          DAVAI_API_SECRET: !Ref DavaiApiSecret
+      VpcConfig:
+        SecurityGroupIds:
+          - !If
+            - CreateInfrastructure
+            - !Ref LambdaSecurityGroup
+            - !Ref LambdaSecurityGroupId
+        SubnetIds:
+          - !If
+            - CreateInfrastructure
+            - !Ref PrivateSubnet1
+            - !Ref PrivateSubnet1Id
+          - !If
+            - CreateInfrastructure
+            - !Ref PrivateSubnet2
+            - !Ref PrivateSubnet2Id
+      Policies:
+        - VPCAccessPolicy: {}
+        - Statement:
+            - Effect: Allow
+              Action:
+                - secretsmanager:GetSecretValue
+                - secretsmanager:DescribeSecret
+              Resource:
+                - !Sub arn:${AWS::Partition}:secretsmanager:${AWS::Region}:${AWS::AccountId}:secret:${Environment}-davai-api-secret-*
+      Timeout: 60
+      MemorySize: 512
+
+  # Job Processor Lambda
+  JobProcessorFunction:
+    Type: AWS::Serverless::Function
+    Metadata:
+      BuildMethod: esbuild
+      BuildProperties:
+        Format: cjs
+        Target: node18
+        Minify: false
+        External:
+          - pg-native
+    Properties:
+      CodeUri: .
+      Handler: src/handlers/job-processor.handler
+      Runtime: nodejs18.x
+      Events:
+        SQSEvent:
+          Type: SQS
+          Properties:
+            Queue: !GetAtt LLMJobQueue.Arn
+            BatchSize: 1
+      Environment:
+        Variables:
+          ENVIRONMENT: !Ref Environment
+          POSTGRES_CONNECTION_STRING: !If
+            - CreateInfrastructure
+            # The two values below are Fn::If branches: create new RDS vs reuse existing.
+            # Only one branch is selected at deploy-time, but both must be provided here.
+            - !Sub "postgresql://${DBUsername}:${DBPassword}@${PostgreSQLDB.Endpoint.Address}:${PostgreSQLDB.Endpoint.Port}/${DatabaseName}?sslmode=require"
+            - !Sub "postgresql://${DBUsername}:${DBPassword}@${RdsEndpoint}:${RdsPort}/${DatabaseName}?sslmode=require"
+          OPENAI_API_KEY: !Ref OpenAIApiKey
+          GOOGLE_API_KEY: !Ref GoogleApiKey
+          LANGSMITH_TRACING: "true"
+          LANGSMITH_ENDPOINT: "https://api.smith.langchain.com"
+          LANGSMITH_PROJECT: "davai"
+          LANGSMITH_API_KEY: !Ref LangSmithApiKey
+      VpcConfig:
+        SecurityGroupIds:
+          - !If
+            - CreateInfrastructure
+            - !Ref LambdaSecurityGroup
+            - !Ref LambdaSecurityGroupId
+        SubnetIds:
+          - !If
+            - CreateInfrastructure
+            - !Ref PrivateSubnet1
+            - !Ref PrivateSubnet1Id
+          - !If
+            - CreateInfrastructure
+            - !Ref PrivateSubnet2
+            - !Ref PrivateSubnet2Id
+      Policies:
+        - VPCAccessPolicy: {}
+        - SQSPollerPolicy:
+            QueueName: !Sub "${Environment}-llm-job-queue"
+        - Statement:
+            - Effect: Allow
+              Action:
+                - secretsmanager:GetSecretValue
+                - secretsmanager:DescribeSecret
+              Resource: 
+                - !Sub arn:${AWS::Partition}:secretsmanager:${AWS::Region}:${AWS::AccountId}:secret:${Environment}-davai-api-secret-*
+                - !Sub arn:${AWS::Partition}:secretsmanager:${AWS::Region}:${AWS::AccountId}:secret:${Environment}-openai-api-key-*
+                - !Sub arn:${AWS::Partition}:secretsmanager:${AWS::Region}:${AWS::AccountId}:secret:${Environment}-google-api-key-*
+                - !Sub arn:${AWS::Partition}:secretsmanager:${AWS::Region}:${AWS::AccountId}:secret:${Environment}-langsmith-api-key-*
+      Timeout: 300
+      MemorySize: 512
+
+  # Setup Function (creates database tables)
+  SetupFunction:
+    Type: AWS::Serverless::Function
+    Metadata:
+      BuildMethod: esbuild
+      BuildProperties:
+        Format: cjs
+        Target: node18
+        Minify: false
+        External:
+          - pg-native
+    Properties:
+      CodeUri: .
+      Handler: src/handlers/setup.handler
+      Runtime: nodejs18.x
+      Events:
+        SetupApi:
+          Type: Api
+          Properties:
+            RestApiId: !Ref DavaiApi
+            Path: /default/davaiServer/setup
+            Method: post
+      Timeout: 300
+      Environment:
+        Variables:
+          ENVIRONMENT: !Ref Environment
+          POSTGRES_CONNECTION_STRING: !If
+            - CreateInfrastructure
+            # The two values below are Fn::If branches: create new RDS vs reuse existing.
+            # Only one branch is selected at deploy-time, but both must be provided here.
+            - !Sub "postgresql://${DBUsername}:${DBPassword}@${PostgreSQLDB.Endpoint.Address}:${PostgreSQLDB.Endpoint.Port}/${DatabaseName}?sslmode=require"
+            - !Sub "postgresql://${DBUsername}:${DBPassword}@${RdsEndpoint}:${RdsPort}/${DatabaseName}?sslmode=require"
+      VpcConfig:
+        SecurityGroupIds:
+          - !If
+            - CreateInfrastructure
+            - !Ref LambdaSecurityGroup
+            - !Ref LambdaSecurityGroupId
+        SubnetIds:
+          - !If
+            - CreateInfrastructure
+            - !Ref PrivateSubnet1
+            - !Ref PrivateSubnet1Id
+          - !If
+            - CreateInfrastructure
+            - !Ref PrivateSubnet2
+            - !Ref PrivateSubnet2Id
+      Policies:
+        - VPCAccessPolicy: {}
+      MemorySize: 512
+
+  # Message Handler Lambda
+  MessageHandlerFunction:
+    Type: AWS::Serverless::Function
+    Metadata:
+      BuildMethod: esbuild
+      BuildProperties:
+        Format: cjs
+        Target: node18
+        Minify: false
+        External:
+          - pg-native
+    Properties:
+      CodeUri: .
+      Handler: src/handlers/message.handler
+      Runtime: nodejs18.x
+      Events:
+        MessageApi:
+          Type: Api
+          Properties:
+            RestApiId: !Ref DavaiApi
+            Path: /default/davaiServer/message
+            Method: post
+      Environment:
+        Variables:
+          ENVIRONMENT: !Ref Environment
+          POSTGRES_CONNECTION_STRING: !If
+            - CreateInfrastructure
+            # The two values below are Fn::If branches: create new RDS vs reuse existing.
+            # Only one branch is selected at deploy-time, but both must be provided here.
+            - !Sub "postgresql://${DBUsername}:${DBPassword}@${PostgreSQLDB.Endpoint.Address}:${PostgreSQLDB.Endpoint.Port}/${DatabaseName}?sslmode=require"
+            - !Sub "postgresql://${DBUsername}:${DBPassword}@${RdsEndpoint}:${RdsPort}/${DatabaseName}?sslmode=require"
+          LLM_JOB_QUEUE_URL: !Ref LLMJobQueue
+          DAVAI_API_SECRET: !Ref DavaiApiSecret
+      VpcConfig:
+        SecurityGroupIds:
+          - !If
+            - CreateInfrastructure
+            - !Ref LambdaSecurityGroup
+            - !Ref LambdaSecurityGroupId
+        SubnetIds:
+          - !If
+            - CreateInfrastructure
+            - !Ref PrivateSubnet1
+            - !Ref PrivateSubnet1Id
+          - !If
+            - CreateInfrastructure
+            - !Ref PrivateSubnet2
+            - !Ref PrivateSubnet2Id
+      Policies:
+        - VPCAccessPolicy: {}
+        - SQSSendMessagePolicy:
+            QueueName: !Sub "${Environment}-llm-job-queue"
+        - Statement:
+            - Effect: Allow
+              Action:
+                - secretsmanager:GetSecretValue
+                - secretsmanager:DescribeSecret
+              Resource:
+                - !Sub arn:${AWS::Partition}:secretsmanager:${AWS::Region}:${AWS::AccountId}:secret:${Environment}-davai-api-secret-*
+      Timeout: 60
+      MemorySize: 512
+
+  # Tool Handler Lambda
+  ToolHandlerFunction:
+    Type: AWS::Serverless::Function
+    Metadata:
+      BuildMethod: esbuild
+      BuildProperties:
+        Format: cjs
+        Target: node18
+        Minify: false
+        External:
+          - pg-native
+    Properties:
+      CodeUri: .
+      Handler: src/handlers/tool.handler
+      Runtime: nodejs18.x
+      Events:
+        ToolApi:
+          Type: Api
+          Properties:
+            RestApiId: !Ref DavaiApi
+            Path: /default/davaiServer/tool
+            Method: post
+      Environment:
+        Variables:
+          ENVIRONMENT: !Ref Environment
+          POSTGRES_CONNECTION_STRING: !If
+            - CreateInfrastructure
+            # The two values below are Fn::If branches: create new RDS vs reuse existing.
+            # Only one branch is selected at deploy-time, but both must be provided here.
+            - !Sub "postgresql://${DBUsername}:${DBPassword}@${PostgreSQLDB.Endpoint.Address}:${PostgreSQLDB.Endpoint.Port}/${DatabaseName}?sslmode=require"
+            - !Sub "postgresql://${DBUsername}:${DBPassword}@${RdsEndpoint}:${RdsPort}/${DatabaseName}?sslmode=require"
+          LLM_JOB_QUEUE_URL: !Ref LLMJobQueue
+          DAVAI_API_SECRET: !Ref DavaiApiSecret
+      VpcConfig:
+        SecurityGroupIds:
+          - !If
+            - CreateInfrastructure
+            - !Ref LambdaSecurityGroup
+            - !Ref LambdaSecurityGroupId
+        SubnetIds:
+          - !If
+            - CreateInfrastructure
+            - !Ref PrivateSubnet1
+            - !Ref PrivateSubnet1Id
+          - !If
+            - CreateInfrastructure
+            - !Ref PrivateSubnet2
+            - !Ref PrivateSubnet2Id
+      Policies:
+        - VPCAccessPolicy: {}
+        - SQSSendMessagePolicy:
+            QueueName: !Sub "${Environment}-llm-job-queue"
+        - Statement:
+            - Effect: Allow
+              Action:
+                - secretsmanager:GetSecretValue
+                - secretsmanager:DescribeSecret
+              Resource:
+                - !Sub arn:${AWS::Partition}:secretsmanager:${AWS::Region}:${AWS::AccountId}:secret:${Environment}-davai-api-secret-*
+      Timeout: 60
+      MemorySize: 512
+
+  # Optional VPC Interface Endpoints. Only created when both CreateInfrastructure and ShouldCreateVpcEndpoints are true.
+  EndpointSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Condition: CreateInfraAndEndpoints
+    Properties:
+      GroupDescription: SG for VPC endpoints
+      VpcId: !Ref NewVPC
+      SecurityGroupIngress:
+        - IpProtocol: tcp
+          FromPort: 443
+          ToPort: 443
+          SourceSecurityGroupId: !Ref LambdaSecurityGroup
+
+  SqsEndpoint:
+    Type: AWS::EC2::VPCEndpoint
+    Condition: CreateInfraAndEndpoints
+    Properties:
+      VpcId: !Ref NewVPC
+      VpcEndpointType: Interface
+      ServiceName: !Sub com.amazonaws.${AWS::Region}.sqs
+      SubnetIds: [!Ref PrivateSubnet1, !Ref PrivateSubnet2]
+      SecurityGroupIds: [!Ref EndpointSecurityGroup]
+      PrivateDnsEnabled: true
+
+  SecretsManagerEndpoint:
+    Type: AWS::EC2::VPCEndpoint
+    Condition: CreateInfraAndEndpoints
+    Properties:
+      VpcId: !Ref NewVPC
+      VpcEndpointType: Interface
+      ServiceName: !Sub com.amazonaws.${AWS::Region}.secretsmanager
+      SubnetIds: [!Ref PrivateSubnet1, !Ref PrivateSubnet2]
+      SecurityGroupIds: [!Ref EndpointSecurityGroup]
+      PrivateDnsEnabled: true
+
+  LogsEndpoint:
+    Type: AWS::EC2::VPCEndpoint
+    Condition: CreateInfraAndEndpoints
+    Properties:
+      VpcId: !Ref NewVPC
+      VpcEndpointType: Interface
+      ServiceName: !Sub com.amazonaws.${AWS::Region}.logs
+      SubnetIds: [!Ref PrivateSubnet1, !Ref PrivateSubnet2]
+      SecurityGroupIds: [!Ref EndpointSecurityGroup]
+      PrivateDnsEnabled: true
+
+Outputs:
+  DavaiApi:
+    Description: "API Gateway endpoint URL"
+    Value: !Sub "https://${DavaiApi}.execute-api.${AWS::Region}.amazonaws.com/${Environment}/"
+  PostgreSQLEndpoint:
+    Description: "PostgreSQL RDS endpoint"
+    Value: !If
+      - CreateInfrastructure
+      - !GetAtt PostgreSQLDB.Endpoint.Address
+      - !Ref RdsEndpoint
+  PostgreSQLPort:
+    Description: "PostgreSQL RDS port"
+    Value: !Ref RdsPort
+  LLMJobQueue:
+    Description: "SQS queue for LLM jobs"
+    Value: !Ref LLMJobQueue
+  DatabaseName:
+    Description: "Database name"
+    Value: !Ref DatabaseName

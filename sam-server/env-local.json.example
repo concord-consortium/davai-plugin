@@ -1,0 +1,30 @@
+{
+  "MessageHandlerFunction": {
+    "ENVIRONMENT": "local",
+    "POSTGRES_CONNECTION_STRING": "postgresql://postgres:postgres@host.docker.internal:5432/postgres",
+    "LLM_JOB_QUEUE_URL": "http://host.docker.internal:9324/queue/LLMJobQueue",
+    "DAVAI_API_SECRET": "local-dev-secret",
+    "OPENAI_API_KEY": "your-openai-api-key-here",
+    "GOOGLE_API_KEY": "your-google-api-key-here"
+  },
+  "StatusHandlerFunction": {
+    "ENVIRONMENT": "local",
+    "POSTGRES_CONNECTION_STRING": "postgresql://postgres:postgres@host.docker.internal:5432/postgres"
+  },
+  "ToolHandlerFunction": {
+    "ENVIRONMENT": "local",
+    "POSTGRES_CONNECTION_STRING": "postgresql://postgres:postgres@host.docker.internal:5432/postgres",
+    "LLM_JOB_QUEUE_URL": "http://host.docker.internal:9324/queue/LLMJobQueue",
+    "DAVAI_API_SECRET": "local-dev-secret",
+    "OPENAI_API_KEY": "your-openai-api-key-here",
+    "GOOGLE_API_KEY": "your-google-api-key-here"
+  },
+  "JobProcessorFunction": {
+    "ENVIRONMENT": "local",
+    "POSTGRES_CONNECTION_STRING": "postgresql://postgres:postgres@host.docker.internal:5432/postgres",
+    "LLM_JOB_QUEUE_URL": "http://host.docker.internal:9324/queue/LLMJobQueue",
+    "DAVAI_API_SECRET": "local-dev-secret",
+    "OPENAI_API_KEY": "your-openai-api-key-here",
+    "GOOGLE_API_KEY": "your-google-api-key-here"
+  }
+}

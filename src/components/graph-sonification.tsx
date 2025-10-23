@@ -2,8 +2,8 @@ import React, { useCallback, useEffect, useRef, useState } from "react";
 import { observer } from "mobx-react-lite";
 import * as Tone from "tone";
 import { GraphSonificationModelType } from "../models/graph-sonification-model";
-import { createRoiAdornment, updateRoiAdornment } from "./graph-sonification-utils";
 import { ErrorMessage } from "./error-message";
+import { mapPitchFractionToFrequency, mapValueToStereoPan, createRoiAdornment, updateRoiAdornment, isUnivariateDotPlot } from "../utils/graph-sonification-utils";
 import { useTone } from "../hooks/use-tone";
 import { useSonificationScheduler } from "../hooks/use-sonification-scheduler";
 
