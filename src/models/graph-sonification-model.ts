@@ -99,7 +99,7 @@ export const GraphSonificationModel = types
     clearGraphs() {
       self.allGraphs.replace([]);
     },
-    setSelectedGraphID(graphID: number) {
+    setSelectedGraphID(graphID?: number) {
       self.selectedGraphID = graphID;
     },
     removeSelectedGraphID() {
