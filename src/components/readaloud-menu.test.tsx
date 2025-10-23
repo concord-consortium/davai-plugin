@@ -1,6 +1,7 @@
 import React from "react";
 import { fireEvent, render, screen } from "@testing-library/react";
 
+import { AppConfigProvider } from "../contexts/app-config-context";
 import { ReadAloudMenu } from "./readaloud-menu";
 
 describe("test read aloud menu component", () => {
@@ -26,7 +27,9 @@ describe("test read aloud menu component", () => {
 
   it("renders a toggle switch to turn readaloud on and off and a select menu to control playback speed", () => {
     render(
-      <ReadAloudMenu createToggleOption={mockCreateToggleOption}/>
+      <AppConfigProvider>
+        <ReadAloudMenu createToggleOption={mockCreateToggleOption}/>
+      </AppConfigProvider>
     );
 
     const readAloudToggle = screen.getByTestId("readAloudEnabled-toggle");
