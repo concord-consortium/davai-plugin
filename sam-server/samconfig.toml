@@ -7,7 +7,7 @@ s3_prefix = "davai-server"
 region = "us-east-1"
 confirm_changeset = true
 capabilities = "CAPABILITY_IAM"
-parameter_overrides = "Environment=\"prod\" DBUsername=\"postgres\" VpcId=\"vpc-046ed4f6d2078cf59\" PrivateSubnet1Id=\"subnet-0f69e7eb39ad3e67c\" PrivateSubnet2Id=\"subnet-066929e5f08e95bf0\" LambdaSecurityGroupId=\"sg-01e6f235747e4743a\" RdsEndpoint=\"prod-davai-postgres.cheea3ib6y8u.us-east-1.rds.amazonaws.com\" RdsPort=\"5432\""
+parameter_overrides = "Environment=\"prod\" DBUsername=\"postgres\" DatabaseName=\"postgres\" VpcId=\"vpc-046ed4f6d2078cf59\" PrivateSubnet1Id=\"subnet-0f69e7eb39ad3e67c\" PrivateSubnet2Id=\"subnet-066929e5f08e95bf0\" LambdaSecurityGroupId=\"sg-01e6f235747e4743a\" RdsEndpoint=\"prod-davai-postgres.cheea3ib6y8u.us-east-1.rds.amazonaws.com\" RdsPort=\"5432\" CreateVpcEndpoints=\"false\""
 image_repositories = []
 resolve_s3 = true
 disable_rollback = false

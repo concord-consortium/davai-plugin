@@ -9,6 +9,7 @@
     "sam:build": "sam build",
     "sam:local": "sam local start-api",
     "sam:deploy": "sam deploy --guided",
+    "sam:deploy:production:fast": "sam deploy --config-env default --no-confirm-changeset --no-fail-on-empty-changeset --parameter-overrides DBPassword=$DB_PASSWORD",
     "sam:deploy:staging-a": "sam deploy --config-env staging-a --guided",
     "sam:deploy:staging-b": "sam deploy --config-env staging-b --guided",
     "sam:deploy:staging-a:fast": "sam deploy --config-env staging-a --no-confirm-changeset --no-fail-on-empty-changeset --parameter-overrides DBPassword=$DB_PASSWORD",

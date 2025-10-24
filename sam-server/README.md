@@ -20,6 +20,16 @@ npm run sam:build
 npm run sam:deploy
 ```
 
+### For an unguided/faster deploy to production
+First set the production instance database password by running `export DB_PASSWORD='database password'` in your terminal
+
+Then:
+
+```bash
+# Deploy to production
+npm run sam:deploy:production:fast
+```
+
 ### Build and Deploy to Staging
 
 There are currently two staging instances set up in AWS: staging-a and staging-b. Each has their own set of Lambda functions, secrets, API gateway, and database. The two separate staging databases are on the same RDS instance, however. The two staging instances also share the same VPC and related infrastructure (subnets, security groups, route tables, etc.).
