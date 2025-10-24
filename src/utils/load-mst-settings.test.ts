@@ -107,6 +107,27 @@ describe("loadMSTSettingOverrides", () => {
     });
   });
 
+  it("handles primitive types defined with a value", () => {
+    const MockModel = types.model("MockModel", {
+      numProp: 10,
+      boolProp: false,
+      strProp: "default",
+    });
+    const settingsSource = new MockSettingsSource({
+      "numProp": "99",
+      "boolProp": "true",
+      "strProp": "overridden",
+    });
+
+    const overrides = loadMSTSettingOverrides(MockModel, settingsSource);
+
+    expect(overrides).toEqual({
+      numProp: 99,
+      boolProp: true,
+      strProp: "overridden",
+    });
+  });
+
   it("handles the prefix parameter", () => {
     const MockModel = types.model("MockModel", {
       strProp: types.string,

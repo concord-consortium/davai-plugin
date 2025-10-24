@@ -101,7 +101,7 @@ export function addMSTSettingsSaver(
     const updatedSettings = updateSavedValues(currentSavedSettings, snapshot);
 
     // Find all changes from the initialSnapshot, this is how new keys that have
-    // changed values where aren't stored in the settingsDestination are
+    // changed values that aren't stored in the settingsDestination are
     // identified.
     const diff = diffObjects(initialSnapshot, snapshot);
 

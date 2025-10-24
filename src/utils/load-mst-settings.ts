@@ -1,4 +1,4 @@
-import { applySnapshot, getSnapshot, getType, IAnyModelType, IAnyStateTreeNode, IAnyType, isArrayType, isFrozenType, isLiteralType, isModelType, isUnionType, types } from "mobx-state-tree";
+import { applySnapshot, getSnapshot, getType, IAnyModelType, IAnyStateTreeNode, IAnyType, isArrayType, isFrozenType, isLiteralType, isModelType, isOptionalType, isUnionType, types } from "mobx-state-tree";
 import merge from "deepmerge";
 
 export type SettingsSourceValue = string | null | undefined;
@@ -39,11 +39,15 @@ export abstract class SettingsSource {
     const item = this.getItem(key);
 
     // Handle primitive types
-    if (propertyType === types.number) {
+    if (propertyType === types.number || 
+      isOptionalType(propertyType) && (propertyType as any).getSubTypes() === types.number
+    ) {
       return this.getNumber(key, item);
     }
 
-    if (propertyType === types.boolean) {
+    if (propertyType === types.boolean ||
+      isOptionalType(propertyType) && (propertyType as any).getSubTypes() === types.boolean
+    ) {
       return this.getBoolean(key, item);
     }
 
@@ -51,7 +55,9 @@ export abstract class SettingsSource {
       return undefined;
     }
 
-    if (propertyType === types.string) {
+    if (propertyType === types.string ||
+      isOptionalType(propertyType) && (propertyType as any).getSubTypes() === types.string
+    ) {
       return item;
     }
     
