@@ -1,28 +1,30 @@
 import React, { FormEvent, useState } from "react";
-import { useOptions } from "../hooks/use-options";
+import { observer } from "mobx-react-lite";
 import { ErrorMessage } from "./error-message";
+import { useAppConfigContext } from "../contexts/app-config-context";
 
 import "./keyboard-shortcut-controls.scss";
 
-export const KeyboardShortcutControls = () => {
-  const { keyboardShortcutEnabled, keyboardShortcutKeys, toggleOption, updateOptions } = useOptions();
-  const toggleButtonLabel = keyboardShortcutEnabled ? "Disable Shortcut" : "Enable Shortcut";
+export const KeyboardShortcutControls = observer(function KeyboardShortcutControls() {
+  const appConfig = useAppConfigContext();
+  const { keyboardShortcutsEnabled, keyboardShortcuts: { focusChatInput } } = appConfig;
+  const toggleButtonLabel = keyboardShortcutsEnabled ? "Disable Shortcut" : "Enable Shortcut";
   const [showError, setShowError] = useState(false);
   const [showConfirmation, setShowConfirmation] = useState(false);
 
   const handleToggleShortcut = () => {
-    localStorage.setItem("keyboardShortcutEnabled", JSON.stringify(!keyboardShortcutEnabled));
-    toggleOption("keyboardShortcutEnabled");
+    appConfig.toggleOption("keyboardShortcutsEnabled");
   };
 
   const handleCustomizeShortcut = (event: FormEvent) => {
-    if (!keyboardShortcutEnabled) return;
+    if (!keyboardShortcutsEnabled) return;
     event.preventDefault();
     const form = event.target as HTMLInputElement;
     const shortcut = form.querySelector("input")?.value.trim();
     if (shortcut) {
-      localStorage.setItem("keyboardShortcutKeys", shortcut);
-      updateOptions?.({keyboardShortcutKeys: shortcut});
+      appConfig.update(() => {
+        appConfig.keyboardShortcuts.focusChatInput = shortcut;
+      });
       setShowError(false);
       setShowConfirmation(true);
     } else {
@@ -51,13 +53,13 @@ export const KeyboardShortcutControls = () => {
         </button>
       </div>
       <form data-testid="custom-keyboard-shortcut-form" onSubmit={handleCustomizeShortcut}>
-        <fieldset aria-disabled={!keyboardShortcutEnabled}>
+        <fieldset aria-disabled={!keyboardShortcutsEnabled}>
           <label htmlFor="custom-keyboard-shortcut">Customize Shortcut:</label>
           <input
             aria-describedby={customShortcutInputDescribedBy}
             aria-invalid={showError}
             data-testid="custom-keyboard-shortcut"
-            defaultValue={keyboardShortcutKeys}
+            defaultValue={focusChatInput}
             id="custom-keyboard-shortcut"
             type="text"
           />
@@ -70,7 +72,7 @@ export const KeyboardShortcutControls = () => {
               id="custom-keyboard-shortcut-confirmation"
               role="status"
             >
-              Keyboard shortcut changed to {keyboardShortcutKeys}
+              Keyboard shortcut changed to {focusChatInput}
               <button
                 className="dismiss"
                 data-testid="custom-keyboard-shortcut-confirmation-dismiss"
@@ -84,4 +86,4 @@ export const KeyboardShortcutControls = () => {
       </form>
     </div>
   );
-};
+});

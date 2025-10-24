@@ -18,16 +18,6 @@ export type AppConfig = {
   mode: AppMode;
 };
 
-export type IUserOptions = {
-  keyboardShortcutEnabled: boolean;
-  keyboardShortcutKeys: string;
-  playProcessingMessage: boolean;
-  playProcessingTone: boolean;
-  playbackSpeed: number;
-  readAloudEnabled: boolean;
-  showDebugLog: boolean;
-};
-
 export type MessageContent = {
   description?: string;
   content: string;

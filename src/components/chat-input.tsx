@@ -1,7 +1,8 @@
 import React, { FormEvent, useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { useOptions } from "../hooks/use-options";
+import { observer } from "mobx-react-lite";
 import { kDefaultChatInputHeight, START_RECORDING_NOTE, STOP_RECORDING_NOTE } from "../constants";
 import { playSound, isInputElement, isShortcutPressed } from "../utils/utils";
+import { useAppConfigContext } from "../contexts/app-config-context";
 import { ErrorMessage } from "./error-message";
 
 import StopIcon from "../assets/stop-icon.svg";
@@ -18,8 +19,8 @@ interface IProps {
   onSubmit: (messageText: string) => void;
 }
 
-export const ChatInputComponent = ({disabled, isLoading, onCancel, onKeyboardShortcut, onSubmit}: IProps) => {
-  const { keyboardShortcutEnabled, keyboardShortcutKeys } = useOptions();
+export const ChatInputComponent = observer(function({disabled, isLoading, onCancel, onKeyboardShortcut, onSubmit}: IProps) {
+  const { keyboardShortcutsEnabled, keyboardShortcuts: { focusChatInput } }  = useAppConfigContext();
   const [browserSupportsDictation, setBrowserSupportsDictation] = useState(false);
   const [dictationEnabled, setDictationEnabled] = useState(false);
   const [inputValue, setInputValue] = useState("");
@@ -180,7 +181,7 @@ export const ChatInputComponent = ({disabled, isLoading, onCancel, onKeyboardSho
   const addShortcutListener = useCallback((context: Window) => {
     const keydownHandler = (event: KeyboardEvent) => {
       pressedKeys.add(event.code);
-      if (isShortcutPressed(pressedKeys, keyboardShortcutKeys)) {
+      if (isShortcutPressed(pressedKeys, focusChatInput)) {
         event.preventDefault();
         const activeElement = context.document.activeElement;
         if (isInputElement(activeElement)) return;
@@ -203,12 +204,12 @@ export const ChatInputComponent = ({disabled, isLoading, onCancel, onKeyboardSho
       context.document.removeEventListener("keydown", keydownHandler);
       context.document.removeEventListener("keyup", keyupHandler);
     };
-  }, [onKeyboardShortcut, pressedKeys, keyboardShortcutKeys]);
+  }, [onKeyboardShortcut, pressedKeys, focusChatInput]);
 
   useEffect(() => {
     const keydownListeners: (() => void)[] = [];
 
-    if (keyboardShortcutEnabled) {
+    if (keyboardShortcutsEnabled) {
       // Add keyboard shortcut listener to the parent window if one exists.
       if (window.parent && window.parent !== window) {
         keydownListeners.push(addShortcutListener(window.parent));
@@ -221,7 +222,7 @@ export const ChatInputComponent = ({disabled, isLoading, onCancel, onKeyboardSho
     return () => {
       keydownListeners.forEach((cleanup) => cleanup());
     };
-  }, [addShortcutListener, keyboardShortcutEnabled]);
+  }, [addShortcutListener, keyboardShortcutsEnabled]);
 
   // Place focus on the textarea when the component mounts.
   useEffect(() => {
@@ -295,4 +296,4 @@ export const ChatInputComponent = ({disabled, isLoading, onCancel, onKeyboardSho
       {showError && <ErrorMessage slug="input" message="Please enter a message before sending." />}
     </div>
   );
-};
+});

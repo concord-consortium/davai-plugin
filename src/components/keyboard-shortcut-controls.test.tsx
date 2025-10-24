@@ -1,8 +1,8 @@
 import React from "react";
 import { cleanup, fireEvent, render, screen, within } from "@testing-library/react";
 
+import { AppConfigProvider } from "../contexts/app-config-context";
 import { KeyboardShortcutControls } from "./keyboard-shortcut-controls";
-import { MockUserOptionsProvider } from "../test-utils/mock-user-options-provider";
 
 
 describe("test keyboard shortcut controls component", () => {
@@ -13,9 +13,9 @@ describe("test keyboard shortcut controls component", () => {
 
   const WrapperComponent = () => {
     return (
-      <MockUserOptionsProvider initialOptions={{ keyboardShortcutEnabled: true, keyboardShortcutKeys: defaultShortcut }}>
+      <AppConfigProvider>
         <KeyboardShortcutControls/>
-      </MockUserOptionsProvider>
+      </AppConfigProvider>
     );
   };
 

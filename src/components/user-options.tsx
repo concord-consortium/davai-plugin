@@ -1,10 +1,11 @@
 import React from "react";
-import { useOptions } from "../hooks/use-options";
+import { observer } from "mobx-react-lite";
 import { ReadAloudMenu } from "./readaloud-menu";
 import { KeyboardShortcutControls } from "./keyboard-shortcut-controls";
-import { IUserOptions } from "../types";
 import { DeveloperOptionsComponent } from "./developer-options";
 import { AssistantModelType } from "../models/assistant-model";
+import { AppConfigToggleOptions } from "../models/app-config-model";
+import { useAppConfigContext } from "../contexts/app-config-context";
 
 import "./user-options.scss";
 
@@ -13,10 +14,10 @@ interface IProps {
   onInitializeAssistant: () => void;
 }
 
-export const UserOptions: React.FC<IProps> = ({assistantStore, onInitializeAssistant}) => {
-  const { options, toggleOption } = useOptions();
+export const UserOptions: React.FC<IProps> = observer(function UserOptions({assistantStore, onInitializeAssistant}) {
+  const appConfig = useAppConfigContext();
 
-  const createToggleOption = (option: keyof IUserOptions, optionLabel: string) => {
+  const createToggleOption = (option: AppConfigToggleOptions, optionLabel: string) => {
     return (
       <div className="user-option">
         <label htmlFor={`${option}-toggle`} data-testid={`${option}-toggle-label`}>
@@ -27,9 +28,9 @@ export const UserOptions: React.FC<IProps> = ({assistantStore, onInitializeAssis
           id={`${option}-toggle`}
           type="checkbox"
           role="switch"
-          checked={!!options[option]}
-          aria-checked={!!options[option]}
-          onChange={() => toggleOption(option)}
+          checked={!!appConfig[option]}
+          aria-checked={!!appConfig[option]}
+          onChange={() => appConfig.toggleOption(option)}
         />
       </div>
     );
@@ -52,4 +53,4 @@ export const UserOptions: React.FC<IProps> = ({assistantStore, onInitializeAssis
       />
     </div>
   );
-};
+});

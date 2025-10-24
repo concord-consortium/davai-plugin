@@ -1,6 +1,7 @@
 import React from "react";
 import { render, screen, within } from "@testing-library/react";
 
+import { AppConfigProvider } from "../contexts/app-config-context";
 import { ChatTranscriptComponent } from "./chat-transcript";
 
 describe("test chat transcript component", () => {
@@ -23,7 +24,11 @@ describe("test chat transcript component", () => {
   };
 
   it("renders a chat transcript that lists all chat messages", () => {
-    render(<ChatTranscriptComponent chatTranscript={chatTranscript}/>);
+    render(
+      <AppConfigProvider>
+        <ChatTranscriptComponent chatTranscript={chatTranscript}/>
+      </AppConfigProvider>
+    );
 
     const transcript = screen.getByTestId("chat-transcript");
     const messages = within(transcript).getAllByTestId("chat-message");

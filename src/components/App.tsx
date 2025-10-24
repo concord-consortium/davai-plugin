@@ -4,10 +4,9 @@ import { observer } from "mobx-react-lite";
 import removeMarkdown from "remove-markdown";
 import { addComponentListener, addDataContextChangeListener, addDataContextsListListener, ClientNotification,
   codapInterface, getListOfDataContexts, initializePlugin, selectSelf } from "@concord-consortium/codap-plugin-api";
-import { useAppConfigContext } from "../hooks/use-app-config-context";
 import { useRootStore } from "../hooks/use-root-store";
+import { useAppConfigContext } from "../contexts/app-config-context";
 import { useAriaLive } from "../contexts/aria-live-context";
-import { useOptions } from "../hooks/use-options";
 import { ChatInputComponent } from "./chat-input";
 import { ChatTranscriptComponent } from "./chat-transcript";
 import { DAVAI_SPEAKER, LOADING_NOTE, USER_SPEAKER, notificationsToIgnore } from "../constants";
@@ -27,7 +26,7 @@ export const App = observer(() => {
   const appConfig = useAppConfigContext();
   const { ariaLiveText, setAriaLiveText } = useAriaLive();
   const { assistantStore, sonificationStore } = useRootStore();
-  const { playProcessingTone } = useOptions();
+  const { playProcessingTone } = appConfig;
   const assistantStoreRef = useRef(assistantStore);
   const sonificationStoreRef = useRef(sonificationStore);
   const dimensions = { width: appConfig.dimensions.width, height: appConfig.dimensions.height };

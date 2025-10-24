@@ -2,6 +2,7 @@ import React from "react";
 import { fireEvent, render, screen, within } from "@testing-library/react";
 
 import { ChatInputComponent } from "./chat-input";
+import { AppConfigProvider } from "../contexts/app-config-context";
 
 const originalSpeechRecognition = global.SpeechRecognition;
 const mockSpeechRecognition = jest.fn().mockImplementation(() => ({
@@ -47,7 +48,11 @@ describe("test chat input component", () => {
   const mockHandleCancel = jest.fn();
 
   it("renders a textarea and submit button that lets user send chat messages", () => {
-    render(<ChatInputComponent onCancel={mockHandleCancel} onSubmit={mockHandleSubmit} onKeyboardShortcut={jest.fn()} />);
+    render(
+      <AppConfigProvider>
+        <ChatInputComponent onCancel={mockHandleCancel} onSubmit={mockHandleSubmit} onKeyboardShortcut={jest.fn()} />
+      </AppConfigProvider>
+    );
 
     const chatInput = screen.getByTestId("chat-input");
     expect(chatInput).toHaveClass("has-focus");
@@ -77,7 +82,11 @@ describe("test chat input component", () => {
   });
 
   it ("renders a dictate button that lets user dictate chat messages", () => {
-    render(<ChatInputComponent onCancel={mockHandleCancel} onSubmit={mockHandleSubmit} onKeyboardShortcut={jest.fn()} />);
+    render(
+      <AppConfigProvider>
+        <ChatInputComponent onCancel={mockHandleCancel} onSubmit={mockHandleSubmit} onKeyboardShortcut={jest.fn()} />
+      </AppConfigProvider>
+    );
 
     const chatInput = screen.getByTestId("chat-input");
     const chatInputDictate = within(chatInput).getByTestId("chat-input-dictate");
