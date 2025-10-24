@@ -3,6 +3,7 @@ import { fireEvent, render, screen, within } from "@testing-library/react";
 
 import { ChatInputComponent } from "./chat-input";
 import { AppConfigProvider } from "../contexts/app-config-context";
+import { ShortcutsServiceProvider } from "../contexts/shortcuts-service-context";
 
 const originalSpeechRecognition = global.SpeechRecognition;
 const mockSpeechRecognition = jest.fn().mockImplementation(() => ({
@@ -50,7 +51,9 @@ describe("test chat input component", () => {
   it("renders a textarea and submit button that lets user send chat messages", () => {
     render(
       <AppConfigProvider>
-        <ChatInputComponent onCancel={mockHandleCancel} onSubmit={mockHandleSubmit} onKeyboardShortcut={jest.fn()} />
+        <ShortcutsServiceProvider>
+          <ChatInputComponent onCancel={mockHandleCancel} onSubmit={mockHandleSubmit} />
+        </ShortcutsServiceProvider>
       </AppConfigProvider>
     );
 
@@ -84,7 +87,9 @@ describe("test chat input component", () => {
   it ("renders a dictate button that lets user dictate chat messages", () => {
     render(
       <AppConfigProvider>
-        <ChatInputComponent onCancel={mockHandleCancel} onSubmit={mockHandleSubmit} onKeyboardShortcut={jest.fn()} />
+        <ShortcutsServiceProvider>
+          <ChatInputComponent onCancel={mockHandleCancel} onSubmit={mockHandleSubmit} />
+        </ShortcutsServiceProvider>
       </AppConfigProvider>
     );
 

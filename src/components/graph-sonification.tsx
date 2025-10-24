@@ -3,7 +3,7 @@ import { observer } from "mobx-react-lite";
 import * as Tone from "tone";
 import { GraphSonificationModelType } from "../models/graph-sonification-model";
 import { ErrorMessage } from "./error-message";
-import { mapPitchFractionToFrequency, mapValueToStereoPan, createRoiAdornment, updateRoiAdornment, isUnivariateDotPlot } from "../utils/graph-sonification-utils";
+import { createRoiAdornment, updateRoiAdornment } from "../utils/graph-sonification-utils";
 import { useTone } from "../hooks/use-tone";
 import { useSonificationScheduler } from "../hooks/use-sonification-scheduler";
 

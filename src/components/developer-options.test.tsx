@@ -39,13 +39,13 @@ const mockAssistantStore = MockAssistantModel.create({
 
 jest.mock("../models/app-config-model", () => ({
   AppConfigModel: {
-    create: jest.fn(() => ({...mockAppConfig, mode: "development"})),
+    create: jest.fn(() => ({...mockAppConfig, isDevMode: true})),
     initialize: jest.fn(),
   }
 }));
 
 jest.mock("../contexts/app-config-context", () => ({
-  useAppConfigContext: jest.fn(() => ({...mockAppConfig, mode: "development"})),
+  useAppConfigContext: jest.fn(() => ({...mockAppConfig, isDevMode: true})),
 }));
 
 describe("test developer options component", () => {

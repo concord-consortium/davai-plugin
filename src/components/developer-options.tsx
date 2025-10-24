@@ -2,7 +2,6 @@ import React from "react";
 import { observer } from "mobx-react-lite";
 import { AssistantModelType } from "../models/assistant-model";
 import { useAppConfigContext } from "../contexts/app-config-context";
-import { getUrlParam } from "../utils/utils";
 import { DAVAI_SPEAKER, GREETING } from "../constants";
 import { AppConfigToggleOptions } from "../models/app-config-model";
 
@@ -15,7 +14,7 @@ interface IProps {
 export const DeveloperOptionsComponent = observer(({assistantStore, createToggleOption, onInitializeAssistant}: IProps) => {
   const appConfig = useAppConfigContext();
   const selectedLlm = appConfig.llmId;
-  const isDevMode = getUrlParam("mode") === "development" || appConfig.mode === "development";
+  const { isDevMode } = appConfig;
 
   const handleCreateThread = async () => {
     if (!assistantStore.threadId || appConfig.isAssistantMocked) return;

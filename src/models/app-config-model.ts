@@ -11,8 +11,8 @@ type BooleanKeys<T> = {
  * It includes properties and methods for managing accessibility, AI assistant settings, and the application's mode.
  *
  * @property {Object} keyboardShortcuts - Custom keystrokes
- * @property {string} keyboardShortcuts.focusChatInput - placing focus in the main text input field (e.g., `ctrl+?`).
- * @property {string} keyboardShortcuts.playGraphSonification - playing the graph sonification (e.g., `ctrl+g`) (not implemented yet).
+ * @property {string} keyboardShortcuts.focusChatInput - placing focus in the main text input field (e.g., `Control+Shift+/`).
+ * @property {string} keyboardShortcuts.playGraphSonification - playing the graph sonification (e.g., `Control+Shift+.`) (not implemented yet).
  * @property {boolean} keyboardShortcutsEnabled - Whether keyboard shortcuts are enabled.
  * @property {boolean} playProcessingMessage - Whether to play a message when processing starts.
  * @property {boolean} playProcessingTone - Whether to play a tone when processing starts.
@@ -46,12 +46,17 @@ export const AppConfigModel = types.model("AppConfigModel", {
   showDebugLogInDevMode: true,
 })
 .views((self) => ({
+  get isDevMode() {
+    return self.mode === "development";
+  }
+}))
+.views((self) => ({
   get isAssistantMocked() {
     const llmData = JSON.parse(self.llmId || "");
     return llmData.id === "mock";
   },
   get showDebugLog() {
-    return (self.mode === "development") && self.showDebugLogInDevMode;
+    return self.isDevMode && self.showDebugLogInDevMode;
   }
 }))
 .actions((self) => ({
@@ -70,3 +75,4 @@ export interface AppConfigModelSnapshot extends SnapshotIn<typeof AppConfigModel
 export interface AppConfigModelType extends Instance<typeof AppConfigModel> {}
 
 export type AppConfigToggleOptions = Parameters<AppConfigModelType["toggleOption"]>[0];
+export type AppConfigKeyboardShortcutKeys = keyof AppConfigModelSnapshot["keyboardShortcuts"];
