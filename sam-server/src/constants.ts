@@ -1,1 +1,1 @@
-export const MAX_TOKENS = 50000;
+export const MAX_TOKENS = 100000;
