@@ -99,7 +99,7 @@ export const GraphSonificationModel = types
     clearGraphs() {
       self.allGraphs.replace([]);
     },
-    setSelectedGraphID(graphID: number) {
+    setSelectedGraphID(graphID?: number) {
       self.selectedGraphID = graphID;
     },
     removeSelectedGraphID() {
@@ -175,7 +175,7 @@ export const GraphSonificationModel = types
         }),
         ({ selectedGraphID, validGraphIDs }) => {
           if (selectedGraphID !== undefined && !validGraphIDs.includes(selectedGraphID)) {
-            removeRoiAdornment(`${selectedGraphID}`);
+            removeRoiAdornment(selectedGraphID);
             self.removeSelectedGraphID();
           }
         }

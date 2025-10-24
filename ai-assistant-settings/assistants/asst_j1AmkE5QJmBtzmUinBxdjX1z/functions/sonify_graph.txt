@@ -1,0 +1,18 @@
+{
+  "name": "sonify_graph",
+  "description": "Sonify the graph requested by the user",
+  "parameters": {
+    "type": "object",
+    "properties": {
+      "graphID": {
+        "type": "number",
+        "description": "The id of the graph to sonify"
+      }
+    },
+    "additionalProperties": false,
+    "required": [
+      "graphID"
+    ]
+  },
+  "strict": true
+}
