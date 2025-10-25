@@ -16,27 +16,39 @@ export const DeveloperOptionsComponent = observer(({assistantStore, createToggle
   const selectedLlm = appConfig.llmId;
   const { isDevMode } = appConfig;
 
-  const handleCreateThread = async () => {
-    if (!assistantStore.threadId || appConfig.isAssistantMocked) return;
-    const confirmCreate = window.confirm("Are you sure you want to create a new thread? If you do, you will lose any existing chat history.");
-    if (!confirmCreate) return false;
-
-    assistantStore.transcriptStore.clearTranscript();
-    assistantStore.transcriptStore.addMessage(DAVAI_SPEAKER, {content: GREETING});
-    onInitializeAssistant();
-    return true;
+  const confirmNewThread = () => {
+    if (!assistantStore.threadId) {
+      // We don't need to confirm if there's no existing thread
+      return true;
+    }
+    return window.confirm("Are you sure you want to create a new thread? If you do, you will lose any existing chat history.");
   };
 
-  const handleSelectLlm = async (e: React.ChangeEvent<HTMLSelectElement>) => {
-    // If we switch LLMs, we create a new thread and clear the transcript.
-    // First make sure the user is OK with that.
-    const llm = e.target.value;
-    const newThreadConfirmed = await handleCreateThread();
-    if (!newThreadConfirmed) return;
-
+  const resetTranscriptStore = () => {
     assistantStore.transcriptStore.clearTranscript();
     assistantStore.transcriptStore.addMessage(DAVAI_SPEAKER, {content: GREETING});
-    appConfig.setLlmId(llm);
+  };
+
+  const handleCreateThread = (skipConfirmation = false) => {
+    if (!skipConfirmation) {
+      if(!confirmNewThread()) return;
+    }
+
+    resetTranscriptStore();
+    // We need to manually initialize the assistant again since we are reusing the same assistant store
+    onInitializeAssistant();
+  };
+
+  const handleSelectLlm = (e: React.ChangeEvent<HTMLSelectElement>) => {
+    // If we switch LLMs, we are going to create a new thread and clear the transcript.
+    // First make sure the user is OK with that.
+    const newThreadConfirmed = confirmNewThread();
+    if (!newThreadConfirmed) return;
+
+    resetTranscriptStore();
+    appConfig.setLlmId(e.target.value);
+    // We don't need to initialize the assistant here, because changing the LLM ID
+    // will automatically re-initialize it via an effect in the App component
   };
 
   return (
@@ -69,7 +81,7 @@ export const DeveloperOptionsComponent = observer(({assistantStore, createToggle
         <button
           data-testid="new-thread-button"
           aria-disabled={!!assistantStore.threadId || appConfig.isAssistantMocked}
-          onClick={handleCreateThread}
+          onClick={() => handleCreateThread()}
         >
           New Thread
         </button>
