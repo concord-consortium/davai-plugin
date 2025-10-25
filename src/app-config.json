@@ -1,7 +1,7 @@
 {
   "keyboardShortcuts": {
-    "focusChatInput": "ctrl+?",
-    "playGraphSonification": "ctrl+>"
+    "focusChatInput": "Control+Shift+/",
+    "playGraphSonification": "Control+Shift+."
   },
   "keyboardShortcutsEnabled": true,
   "playProcessingMessage": true,

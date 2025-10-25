@@ -1,8 +1,8 @@
-import React, { FormEvent, useCallback, useEffect, useMemo, useRef, useState } from "react";
+import React, { FormEvent, useEffect, useRef, useState } from "react";
 import { observer } from "mobx-react-lite";
 import { kDefaultChatInputHeight, START_RECORDING_NOTE, STOP_RECORDING_NOTE } from "../constants";
-import { playSound, isInputElement, isShortcutPressed } from "../utils/utils";
-import { useAppConfigContext } from "../contexts/app-config-context";
+import { playSound } from "../utils/utils";
+import { useShortcutsService } from "../contexts/shortcuts-service-context";
 import { ErrorMessage } from "./error-message";
 
 import StopIcon from "../assets/stop-icon.svg";
@@ -15,12 +15,11 @@ interface IProps {
   disabled?: boolean;
   isLoading?: boolean;
   onCancel: () => void;
-  onKeyboardShortcut: () => void;
   onSubmit: (messageText: string) => void;
 }
 
-export const ChatInputComponent = observer(function({disabled, isLoading, onCancel, onKeyboardShortcut, onSubmit}: IProps) {
-  const { keyboardShortcutsEnabled, keyboardShortcuts: { focusChatInput } }  = useAppConfigContext();
+export const ChatInputComponent = observer(function({disabled, isLoading, onCancel, onSubmit}: IProps) {
+  const shortcutsService = useShortcutsService();
   const [browserSupportsDictation, setBrowserSupportsDictation] = useState(false);
   const [dictationEnabled, setDictationEnabled] = useState(false);
   const [inputValue, setInputValue] = useState("");
@@ -176,53 +175,19 @@ export const ChatInputComponent = observer(function({disabled, isLoading, onCanc
     }
   };
 
-  const pressedKeys: Set<string> = useMemo(() => new Set(), []);
-
-  const addShortcutListener = useCallback((context: Window) => {
-    const keydownHandler = (event: KeyboardEvent) => {
-      pressedKeys.add(event.code);
-      if (isShortcutPressed(pressedKeys, focusChatInput)) {
-        event.preventDefault();
-        const activeElement = context.document.activeElement;
-        if (isInputElement(activeElement)) return;
-
-        onKeyboardShortcut();
-        textAreaRef.current?.focus();
-        textAreaRef.current?.scrollIntoView({behavior: "smooth", block: "nearest"});
-      }
-    };
-
-    const keyupHandler = (event: KeyboardEvent) => {
-      pressedKeys.delete(event.code);
-    };
-
-    context.document.addEventListener("keydown", keydownHandler);
-    context.document.addEventListener("keyup", keyupHandler);
-
-    // Return handler for cleanup
-    return () => {
-      context.document.removeEventListener("keydown", keydownHandler);
-      context.document.removeEventListener("keyup", keyupHandler);
-    };
-  }, [onKeyboardShortcut, pressedKeys, focusChatInput]);
-
   useEffect(() => {
-    const keydownListeners: (() => void)[] = [];
+    return shortcutsService.registerShortcutHandler("focusChatInput", (event) => {
+      event.preventDefault();
+      // The old code would ignore the shortcut if an input element was focused.
+      // I suspect that was just to work around issues with the key handler, so
+      // hopefully it isn't needed anymore.
+      // const activeElement = context.document.activeElement;
+      // if (isInputElement(activeElement)) return;
 
-    if (keyboardShortcutsEnabled) {
-      // Add keyboard shortcut listener to the parent window if one exists.
-      if (window.parent && window.parent !== window) {
-        keydownListeners.push(addShortcutListener(window.parent));
-      }
-
-      // Add keyboard shortcut listener to the current window.
-      keydownListeners.push(addShortcutListener(window));
-    }
-
-    return () => {
-      keydownListeners.forEach((cleanup) => cleanup());
-    };
-  }, [addShortcutListener, keyboardShortcutsEnabled]);
+      textAreaRef.current?.focus();
+      textAreaRef.current?.scrollIntoView({behavior: "smooth", block: "nearest"});
+    }, { focus: true });
+  }, [shortcutsService]);
 
   // Place focus on the textarea when the component mounts.
   useEffect(() => {
