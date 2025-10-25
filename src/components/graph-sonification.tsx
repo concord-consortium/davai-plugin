@@ -4,6 +4,7 @@ import * as Tone from "tone";
 import { GraphSonificationModelType } from "../models/graph-sonification-model";
 import { ErrorMessage } from "./error-message";
 import { createRoiAdornment, updateRoiAdornment } from "../utils/graph-sonification-utils";
+import { useShortcutsService } from "../contexts/shortcuts-service-context";
 import { useTone } from "../hooks/use-tone";
 import { useSonificationScheduler } from "../hooks/use-sonification-scheduler";
 
@@ -26,10 +27,14 @@ export const GraphSonification = observer(({sonificationStore}: IProps) => {
     pitchFractions, primaryBounds, binValues } = sonificationStore;
   const { bins, minBinEdge, maxBinEdge, binWidth } = binValues || {};
 
+  const shortcutsService = useShortcutsService();
+
   const durationRef = useRef(kDefaultDuration);
   const frame = useRef<number | null>(null);
   const isLoopingRef = useRef(false);
   const shouldScheduleTones = useRef(false);
+
+  const playPauseButtonRef = useRef<HTMLButtonElement>(null);
 
   const {osc, pan, poly, part, disposeUnivariateSources, cancelAndResetTransport, restartTransport} = useTone();
   const { scheduleTones } = useSonificationScheduler({ selectedGraph, binValues, pitchFractions,
@@ -116,7 +121,7 @@ export const GraphSonification = observer(({sonificationStore}: IProps) => {
     frame.current = requestAnimationFrame(step);
   }, [handlePlayEnd, restartTransport, selectedGraphID]);
 
-  const handlePlayPause = () => {
+  const handlePlayPause = useCallback(() => {
     if (!selectedGraphID) {
       setShowError(true);
       return;
@@ -161,7 +166,21 @@ export const GraphSonification = observer(({sonificationStore}: IProps) => {
         position,
       };
     });
-  };
+  }, [animateSonification, isAtBeginning, restartTransport, scheduleTones, selectedGraphID, playState.ended]);
+
+  // Register keyboard shortcut for play/pause
+  // This isn't great because the handlePlayPause function is recreated at the beginning
+  // and end of playing. It should work anyhow, just the shortcuts are going to be
+  // added and removed pretty often.
+  useEffect(() => {
+    return shortcutsService.registerShortcutHandler("playGraphSonification", (event) => {
+      event.preventDefault();
+
+      handlePlayPause();
+      playPauseButtonRef.current?.focus();
+      playPauseButtonRef.current?.scrollIntoView({behavior: "smooth", block: "nearest"});
+    }, { focus: true });
+  }, [handlePlayPause, shortcutsService]);
 
   const handleReset = () => {
     if (isAtBeginning || !selectedGraphID) return;
@@ -256,6 +275,7 @@ export const GraphSonification = observer(({sonificationStore}: IProps) => {
       </div>
       <div className="sonification-buttons">
         <button
+          ref={playPauseButtonRef}
           className="play"
           data-testid="playback-button"
           onClick={handlePlayPause}

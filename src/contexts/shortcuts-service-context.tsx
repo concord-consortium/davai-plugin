@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useEffect } from "react";
+import React, { createContext, useContext, useEffect, useState } from "react";
 import { createKeybindingsHandler } from "../utils/tinykeys";
 import { AppConfigKeyboardShortcutKeys, AppConfigModelType } from "../models/app-config-model";
 import { action, autorun, computed, makeObservable, observable } from "mobx";
@@ -30,7 +30,8 @@ class ShortcutsService {
     makeObservable(this, {
       shortcutHandlers: observable,
       tinykeysShortcutMap: computed,
-      registerShortcutHandler: action
+      registerShortcutHandler: action,
+      removeShortcutHandler: action,
     });
     // Automatically update the main handler when keyboard shortcut is enabled/disabled
     // It should also run when a shortcut string is changed in the app config
@@ -55,12 +56,16 @@ class ShortcutsService {
 
     // Add the shortcut and handler to the map
     this.shortcutHandlers.set(shortcut, {handlerFunc, options});
+    // Because the map is observable, it modifies the passed in object
+    // So we save the real value to a local variable so we can find it later when
+    // removing the shortcut
+    const shortcutHandler = this.shortcutHandlers.get(shortcut);
 
     return () => {
-      // We use the handler function to remove the shortcut instead of the shortcut key
+      // We use the handler entry to remove the shortcut instead of the shortcut key
       // This way if the shortcut has been overridden by another component we don't remove
       // the other component's handler
-      this.removeShortcutHandler(handlerFunc);
+      shortcutHandler && this.removeShortcutHandler(shortcutHandler);
     };
   }
 
@@ -106,12 +111,12 @@ class ShortcutsService {
     }
   }
 
-  removeShortcutHandler(handlerFunc: (event: KeyboardEvent) => void) {
+  removeShortcutHandler(shortcutHandler: ShortcutHandler) {
     // Remove the shortcut and handler from the map
     // Find the shortcut key for the given handler
     let shortcut: AppConfigKeyboardShortcutKeys | undefined;
     for (const [key, value] of this.shortcutHandlers) {
-      if (value.handlerFunc === handlerFunc) {
+      if (value === shortcutHandler) {
         shortcut = key;
         break;
       }
@@ -132,7 +137,12 @@ export const ShortcutsServiceContext = createContext<ShortcutsService | null>(nu
 
 export const ShortcutsServiceProvider = ({ children }: { children: React.ReactNode; }) => {
   const appConfig = useAppConfigContext();
-  const shortcutsService = new ShortcutsService(appConfig);
+  const [shortcutsService] = useState(() => new ShortcutsService(appConfig));
+  useEffect(() => {
+    return () => {
+      shortcutsService?.dispose();
+    };
+  }, [shortcutsService]);
   return (
     <ShortcutsServiceContext.Provider value={shortcutsService}>
       {children}
@@ -142,11 +152,6 @@ export const ShortcutsServiceProvider = ({ children }: { children: React.ReactNo
 
 export const useShortcutsService = (): ShortcutsService => {
   const shortcutsService = useContext(ShortcutsServiceContext);
-  useEffect(() => {
-    return () => {
-      shortcutsService?.dispose();
-    };
-  }, [shortcutsService]);
   if (!shortcutsService) {
     throw new Error("useShortcutsService must be used within a ShortcutsServiceProvider");
   }
