@@ -29,10 +29,8 @@ export const DeveloperOptionsComponent = observer(({assistantStore, createToggle
     assistantStore.transcriptStore.addMessage(DAVAI_SPEAKER, {content: GREETING});
   };
 
-  const handleCreateThread = (skipConfirmation = false) => {
-    if (!skipConfirmation) {
-      if(!confirmNewThread()) return;
-    }
+  const handleCreateThread = () => {
+    if (!confirmNewThread()) return;
 
     resetTranscriptStore();
     // We need to manually initialize the assistant again since we are reusing the same assistant store
@@ -42,8 +40,7 @@ export const DeveloperOptionsComponent = observer(({assistantStore, createToggle
   const handleSelectLlm = (e: React.ChangeEvent<HTMLSelectElement>) => {
     // If we switch LLMs, we are going to create a new thread and clear the transcript.
     // First make sure the user is OK with that.
-    const newThreadConfirmed = confirmNewThread();
-    if (!newThreadConfirmed) return;
+    if (!confirmNewThread()) return;
 
     resetTranscriptStore();
     appConfig.setLlmId(e.target.value);

@@ -17,9 +17,9 @@ interface ShortcutHandler {
   handlerFunc: (event: KeyboardEvent) => void;
 }
 
-class ShortcutsService {
+export class ShortcutsService {
   shortcutHandlers: Map<AppConfigKeyboardShortcutKeys, ShortcutHandler> = new Map();
-  private mainHandler: EventListener | undefined;
+  mainHandler: EventListener | undefined;
   private autorunDisposer: () => void;
 
   // When running in an iframe, if the parent window supports it, it can set a function
@@ -96,7 +96,7 @@ class ShortcutsService {
   }
 
   updateMainHandler() {
-    if (Object.keys(this.shortcutHandlers).length > 0) {
+    if (this.shortcutHandlers.size > 0) {
       const newHandler = createKeybindingsHandler(this.tinykeysShortcutMap);
 
       this.removeMainHandler();
