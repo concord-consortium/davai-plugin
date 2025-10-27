@@ -522,6 +522,31 @@ export const codapApiDoc = `### DataContexts
 }
 \`\`\`
 
+#### Creating a map component
+
+\`\`\`json
+{
+  "action": "create",
+  "resource": "component",
+  "values": {
+    "type": "map",
+    "dataContext": "Roller Coasters",
+  }
+}
+\`\`\`
+
+#### Adding a legend to a map component
+
+\`\`\`json
+{
+  "action": "update",
+  "resource": "component[myMap]",
+  "values": {
+    "legendAttributeName": "Height"
+  }
+}
+\`\`\`
+
 #### Creating a graph component
 
 \`\`\`json

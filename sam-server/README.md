@@ -53,7 +53,7 @@ npm run sam:deploy:staging-b
 
 For an unguided, faster deployment, use one of the below.
 
-NOTE: You will first need to set the staging instance database password by running `export DB_PASSWORD='database password'` in your terminal in order for the fast deploy to work.
+NOTE: You will first need to set the staging instance database password by running `export DB_PASSWORD='database password'` in your terminal in order for the fast deploy to work. The password is in 1Password under DAVAI Staging <A or B> Postgres DB User
 
 ```bash
 # Deploy to Staging A
