@@ -3,7 +3,6 @@ import { createKeybindingsHandler } from "../utils/tinykeys";
 import { AppConfigModel, AppConfigModelType } from "../models/app-config-model";
 import { ShortcutsService } from "./shortcuts-service-context";
 import appConfigJSON from "../app-config.json";
-import { create } from "domain";
 
 // Mock the tinykeys utility
 jest.mock("../utils/tinykeys", () => ({

@@ -168,19 +168,24 @@ export const GraphSonification = observer(({sonificationStore}: IProps) => {
     });
   }, [animateSonification, isAtBeginning, restartTransport, scheduleTones, selectedGraphID, playState.ended]);
 
+  // Save handlePlayPause as a ref for the shortcut handler. This avoids re-registering the shortcut on
+  // every render.
+  // In React 19 this would be better handled by useEffectEvent
+  const handlePlayPauseRef = useRef(handlePlayPause);
+  useEffect(() => {
+    handlePlayPauseRef.current = handlePlayPause;
+  }, [handlePlayPause]);
+
   // Register keyboard shortcut for play/pause
-  // This isn't great because the handlePlayPause function is recreated at the beginning
-  // and end of playing. It should work anyhow, just the shortcuts are going to be
-  // added and removed pretty often.
   useEffect(() => {
     return shortcutsService.registerShortcutHandler("playGraphSonification", (event) => {
       event.preventDefault();
 
-      handlePlayPause();
+      handlePlayPauseRef.current();
       playPauseButtonRef.current?.focus();
       playPauseButtonRef.current?.scrollIntoView({behavior: "smooth", block: "nearest"});
     }, { focus: true });
-  }, [handlePlayPause, shortcutsService]);
+  }, [shortcutsService]);
 
   const handleReset = () => {
     if (isAtBeginning || !selectedGraphID) return;

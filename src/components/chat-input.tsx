@@ -178,12 +178,6 @@ export const ChatInputComponent = observer(function({disabled, isLoading, onCanc
   useEffect(() => {
     return shortcutsService.registerShortcutHandler("focusChatInput", (event) => {
       event.preventDefault();
-      // The old code would ignore the shortcut if an input element was focused.
-      // I suspect that was just to work around issues with the key handler, so
-      // hopefully it isn't needed anymore.
-      // const activeElement = context.document.activeElement;
-      // if (isInputElement(activeElement)) return;
-
       textAreaRef.current?.focus();
       textAreaRef.current?.scrollIntoView({behavior: "smooth", block: "nearest"});
     }, { focus: true });
