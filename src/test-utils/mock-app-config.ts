@@ -2,7 +2,7 @@ import { AppMode } from "../types";
 
 export const mockAppConfig = {
   keyboardShortcuts: {
-    focusChatInput: "ctrl+?"
+    focusChatInput: "Control+Shift+/"
   },
   llmId: "{ id: \"mock\", name: \"Mock LLM\" }",
   llmList: [

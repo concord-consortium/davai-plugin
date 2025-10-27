@@ -7,6 +7,7 @@ import { addComponentListener, addDataContextChangeListener, addDataContextsList
 import { useRootStore } from "../hooks/use-root-store";
 import { useAppConfigContext } from "../contexts/app-config-context";
 import { useAriaLive } from "../contexts/aria-live-context";
+import { useShortcutsService } from "../contexts/shortcuts-service-context";
 import { ChatInputComponent } from "./chat-input";
 import { ChatTranscriptComponent } from "./chat-transcript";
 import { DAVAI_SPEAKER, LOADING_NOTE, USER_SPEAKER, notificationsToIgnore } from "../constants";
@@ -24,6 +25,7 @@ const kVersion = "0.3.0";
 
 export const App = observer(() => {
   const appConfig = useAppConfigContext();
+  const shortcutsService = useShortcutsService();
   const { ariaLiveText, setAriaLiveText } = useAriaLive();
   const { assistantStore, sonificationStore } = useRootStore();
   const { playProcessingTone } = appConfig;
@@ -114,6 +116,9 @@ export const App = observer(() => {
 
     init();
     selectSelf();
+    shortcutsService.setFocusOurIFrameFunc(() => {
+      selectSelf();
+    });
 
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
@@ -152,10 +157,6 @@ export const App = observer(() => {
 
   }, [assistantStore.showLoadingIndicator, playProcessingTone]);
 
-  const handleFocusShortcut = () => {
-    selectSelf();
-  };
-
   const handleChatInputSubmit = async (messageText: string) => {
     Tone.start();
     transcriptStore.addMessage(USER_SPEAKER, {content: messageText});
@@ -189,7 +190,6 @@ export const App = observer(() => {
         isLoading={assistantStore.showLoadingIndicator}
         onCancel={handleCancel}
         onSubmit={handleChatInputSubmit}
-        onKeyboardShortcut={handleFocusShortcut}
       />
       <GraphSonification
         sonificationStore={sonificationStore}

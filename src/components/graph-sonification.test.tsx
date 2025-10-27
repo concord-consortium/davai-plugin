@@ -4,6 +4,8 @@ import { render, fireEvent, screen } from "@testing-library/react";
 import { GraphSonification } from "./graph-sonification";
 import { GraphSonificationModelType } from "../models/graph-sonification-model";
 import { ICODAPGraph } from "../types";
+import { AppConfigProvider } from "../contexts/app-config-context";
+import { ShortcutsServiceProvider } from "../contexts/shortcuts-service-context";
 
 const mockAvailableGraphs = [
   { id: 1, name: "Graph 1", plotType: "scatterPlot" },
@@ -55,12 +57,20 @@ describe("GraphSonification Component", () => {
     mockSonificationStore.setGraphs();
   });
 
-  it("renders the component with default state", () => {
+  const renderGraphSonification = () => {
     render(
-      <GraphSonification
-        sonificationStore={mockSonificationStore}
-      />
+      <AppConfigProvider>
+        <ShortcutsServiceProvider>
+          <GraphSonification
+            sonificationStore={mockSonificationStore}
+          />
+        </ShortcutsServiceProvider>
+      </AppConfigProvider>
     );
+  };
+
+  it("renders the component with default state", () => {
+    renderGraphSonification();
 
     expect(screen.getByText("Sonification")).toBeInTheDocument();
     expect(screen.getByLabelText("Graph to sonify:")).toBeInTheDocument();
@@ -71,11 +81,7 @@ describe("GraphSonification Component", () => {
   });
 
   it("shows an error message when no graph is selected", () => {
-    render(
-      <GraphSonification
-        sonificationStore={mockSonificationStore}
-      />
-    );
+    renderGraphSonification();
 
     const playButton = screen.getByTestId("playback-button");
     fireEvent.click(playButton);
@@ -84,11 +90,7 @@ describe("GraphSonification Component", () => {
   });
 
   it("toggles play and pause state", () => {
-    render(
-      <GraphSonification
-        sonificationStore={mockSonificationStore}
-      />
-    );
+    renderGraphSonification();
 
     const graphSelect = screen.getByLabelText("Graph to sonify:");
     fireEvent.change(graphSelect, { target: { value: 1 } });
@@ -100,11 +102,7 @@ describe("GraphSonification Component", () => {
   });
 
   it("toggles looping state", () => {
-    render(
-      <GraphSonification
-        sonificationStore={mockSonificationStore}
-      />
-    );
+    renderGraphSonification();
 
     const repeatButton = screen.getByTestId("repeat-button");
     fireEvent.click(repeatButton);
@@ -116,11 +114,7 @@ describe("GraphSonification Component", () => {
   });
 
   it("changes playback speed", () => {
-    render(
-      <GraphSonification
-        sonificationStore={mockSonificationStore}
-      />
-    );
+    renderGraphSonification();
 
     const speedSelect = screen.getByLabelText("Playback Speed");
     expect(speedSelect).toHaveValue("1");
@@ -129,11 +123,7 @@ describe("GraphSonification Component", () => {
   });
 
   it("allows a user to select from valid graphs", () => {
-    render(
-      <GraphSonification
-        sonificationStore={mockSonificationStore}
-      />
-    );
+    renderGraphSonification();
 
     const graphSelect = screen.getByLabelText("Graph to sonify:");
     expect(graphSelect).toHaveValue("");
@@ -143,11 +133,7 @@ describe("GraphSonification Component", () => {
   });
 
   it("changes the selected graph", () => {
-    render(
-      <GraphSonification
-        sonificationStore={mockSonificationStore}
-      />
-    );
+    renderGraphSonification();
 
     const graphSelect = screen.getByLabelText("Graph to sonify:");
     expect(graphSelect).toHaveValue("");

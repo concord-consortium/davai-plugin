@@ -6,8 +6,8 @@ import { KeyboardShortcutControls } from "./keyboard-shortcut-controls";
 
 
 describe("test keyboard shortcut controls component", () => {
-  const defaultShortcut = "ctrl+?";
-  const customShortcut = "ctrl+b";
+  const defaultShortcut = "Control+Shift+/";
+  const customShortcut = "Control+b";
 
   afterEach(cleanup);
 

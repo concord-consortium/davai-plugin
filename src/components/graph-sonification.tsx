@@ -3,7 +3,8 @@ import { observer } from "mobx-react-lite";
 import * as Tone from "tone";
 import { GraphSonificationModelType } from "../models/graph-sonification-model";
 import { ErrorMessage } from "./error-message";
-import { mapPitchFractionToFrequency, mapValueToStereoPan, createRoiAdornment, updateRoiAdornment, isUnivariateDotPlot } from "../utils/graph-sonification-utils";
+import { createRoiAdornment, updateRoiAdornment } from "../utils/graph-sonification-utils";
+import { useShortcutsService } from "../contexts/shortcuts-service-context";
 import { useTone } from "../hooks/use-tone";
 import { useSonificationScheduler } from "../hooks/use-sonification-scheduler";
 
@@ -26,10 +27,14 @@ export const GraphSonification = observer(({sonificationStore}: IProps) => {
     pitchFractions, primaryBounds, binValues } = sonificationStore;
   const { bins, minBinEdge, maxBinEdge, binWidth } = binValues || {};
 
+  const shortcutsService = useShortcutsService();
+
   const durationRef = useRef(kDefaultDuration);
   const frame = useRef<number | null>(null);
   const isLoopingRef = useRef(false);
   const shouldScheduleTones = useRef(false);
+
+  const playPauseButtonRef = useRef<HTMLButtonElement>(null);
 
   const {osc, pan, poly, part, disposeUnivariateSources, cancelAndResetTransport, restartTransport} = useTone();
   const { scheduleTones } = useSonificationScheduler({ selectedGraph, binValues, pitchFractions,
@@ -116,7 +121,7 @@ export const GraphSonification = observer(({sonificationStore}: IProps) => {
     frame.current = requestAnimationFrame(step);
   }, [handlePlayEnd, restartTransport, selectedGraphID]);
 
-  const handlePlayPause = () => {
+  const handlePlayPause = useCallback(() => {
     if (!selectedGraphID) {
       setShowError(true);
       return;
@@ -161,7 +166,26 @@ export const GraphSonification = observer(({sonificationStore}: IProps) => {
         position,
       };
     });
-  };
+  }, [animateSonification, isAtBeginning, restartTransport, scheduleTones, selectedGraphID, playState.ended]);
+
+  // Save handlePlayPause as a ref for the shortcut handler. This avoids re-registering the shortcut on
+  // every render.
+  // In React 19 this would be better handled by useEffectEvent
+  const handlePlayPauseRef = useRef(handlePlayPause);
+  useEffect(() => {
+    handlePlayPauseRef.current = handlePlayPause;
+  }, [handlePlayPause]);
+
+  // Register keyboard shortcut for play/pause
+  useEffect(() => {
+    return shortcutsService.registerShortcutHandler("playGraphSonification", (event) => {
+      event.preventDefault();
+
+      handlePlayPauseRef.current();
+      playPauseButtonRef.current?.focus();
+      playPauseButtonRef.current?.scrollIntoView({behavior: "smooth", block: "nearest"});
+    }, { focus: true });
+  }, [shortcutsService]);
 
   const handleReset = () => {
     if (isAtBeginning || !selectedGraphID) return;
@@ -256,6 +280,7 @@ export const GraphSonification = observer(({sonificationStore}: IProps) => {
       </div>
       <div className="sonification-buttons">
         <button
+          ref={playPauseButtonRef}
           className="play"
           data-testid="playback-button"
           onClick={handlePlayPause}
