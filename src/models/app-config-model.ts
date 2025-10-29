@@ -44,8 +44,11 @@ export const AppConfigModel = types.model("AppConfigModel", {
   }),
   mode: types.enumeration<AppMode>("Mode", AppModeValues),
   showDebugLogInDevMode: true,
-  // Setting this to 0 will use an automatic binnning strategy that matches
-  // CODAP's behavior when the "Group into Bins" option is selected
+  /**
+   * The default number of bins to use for graph sonification of univariate data.
+   * If set to 0, an automatic binning strategy that matches CODAP's
+   * "Group into Bins" is used.
+   */
   defaultNumBins: 14,
 })
 .views((self) => ({

@@ -78,7 +78,6 @@ export const BinModel = types.model("BinModel", {
         bins[idx]++;
       }
     });
-    console.log("Computed bins:", bins);
     return bins;
   }
 }))
