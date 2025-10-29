@@ -7,11 +7,4 @@ export const RootStore = types.model("RootStore", {
   sonificationStore: GraphSonificationModel,
 });
 
-export function createRootStore() {
-  return RootStore.create({
-    assistantStore: AssistantModel.create(),
-    sonificationStore: GraphSonificationModel.create()
-  });
-}
-
 export interface IRootStore extends Instance<typeof RootStore> {}

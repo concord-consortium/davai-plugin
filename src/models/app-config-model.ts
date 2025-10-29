@@ -44,6 +44,9 @@ export const AppConfigModel = types.model("AppConfigModel", {
   }),
   mode: types.enumeration<AppMode>("Mode", AppModeValues),
   showDebugLogInDevMode: true,
+  // Setting this to 0 will use an automatic binnning strategy that matches
+  // CODAP's behavior when the "Group into Bins" option is selected
+  defaultNumBins: 14,
 })
 .views((self) => ({
   get isDevMode() {
