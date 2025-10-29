@@ -47,6 +47,17 @@ export const AppConfigModel = types.model("AppConfigModel", {
   // Setting this to 0 will use an automatic binnning strategy that matches
   // CODAP's behavior when the "Group into Bins" option is selected
   defaultNumBins: 14,
+  /**
+   * How many simultaneous sounds can be played during sonification. This value of 120
+   * was chosen to support graphs with many points in a cluster. It hasn't been tested to see
+   * how it affects performance.
+   */
+  maxPolyphony: 120,
+  /**
+   * Duration of each note when sonifying points. The value is in Tone.js notation. The default is
+   * "1i", which is supposed to be the shortest possible duration.
+   */
+  pointNoteDuration: "1i",
 })
 .views((self) => ({
   get isDevMode() {

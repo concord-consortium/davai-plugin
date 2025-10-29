@@ -4,6 +4,7 @@ import * as Tone from "tone";
 import { interpolateBins, mapPitchFractionToFrequency, mapValueToStereoPan, isUnivariateDotPlot } from "../utils/graph-sonification-utils";
 import { ICODAPGraph } from "../types";
 import { IBinModel } from "../models/bin-model";
+import { useAppConfigContext } from "../contexts/app-config-context";
 
 type Props = {
   selectedGraph: ICODAPGraph | undefined;
@@ -24,6 +25,8 @@ type Props = {
 
 export const useSonificationScheduler = ({ selectedGraph, binValues, pitchFractions, timeFractions, timeValues, primaryBounds,
   osc, pan, poly, part, durationRef}: Props) => {
+
+  const { pointNoteDuration } = useAppConfigContext();
 
   const scheduleUnivariate = useCallback(() => {
     if (!binValues || !primaryBounds) return;
@@ -62,23 +65,20 @@ export const useSonificationScheduler = ({ selectedGraph, binValues, pitchFracti
 
     const uniqueFractions = Object.keys(fractionGroups).map(parseFloat).sort((a, b) => a - b);
 
-    const scatterEvents: [number, { voices: { freqValue: number; panValue: number }[] }][] = uniqueFractions.map((fraction) => {
+    const scatterEvents: [number, { panValue: number; freqValues: number[] }][] = uniqueFractions.map((fraction) => {
       const offsetSeconds = fraction * durationRef.current;
       const indices = fractionGroups[fraction];
-      const voices = indices.map(i => ({
-        freqValue: mapPitchFractionToFrequency(pitchFractions[i]),
-        panValue: mapValueToStereoPan(timeValues[i], timeLowerBound, timeUpperBound)
-      }));
-      return [offsetSeconds, { voices }];
+      if (indices.length === 0) { throw new Error("No indices for time fraction group"); }
+      const panValue = mapValueToStereoPan(timeValues[indices[0]], timeLowerBound, timeUpperBound);
+      const freqValues = indices.map(i => mapPitchFractionToFrequency(pitchFractions[i]));
+      return [offsetSeconds, { panValue, freqValues }];
     });
 
     part.current = new Tone.Part((time, note) => {
-      note.voices.forEach(({ freqValue, panValue }) => {
-        pan.current?.pan.setValueAtTime(panValue, time);
-        poly.current?.triggerAttackRelease(freqValue, "8n", time);
-      });
+      pan.current?.pan.setValueAtTime(note.panValue, time);
+      poly.current?.triggerAttackRelease(note.freqValues, pointNoteDuration, time);
     }, scatterEvents).start(0);
-  }, [primaryBounds, timeFractions, pitchFractions, timeValues, poly, pan, part, durationRef]);
+  }, [primaryBounds, timeFractions, part, durationRef, timeValues, pitchFractions, pan, poly, pointNoteDuration]);
 
   const scheduleTones = useCallback(() => {
     // dispose current oscillators and parts

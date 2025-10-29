@@ -1,5 +1,6 @@
 import { useRef, useEffect, useCallback } from "react";
 import * as Tone from "tone";
+import { useAppConfigContext } from "../contexts/app-config-context";
 
 export function useTone() {
   const pan = useRef<Tone.Panner | null>(null);
@@ -7,10 +8,11 @@ export function useTone() {
   const poly = useRef<Tone.PolySynth | null>(null);
   const part = useRef<Tone.Part | null>(null);
 
+  const { maxPolyphony } = useAppConfigContext();
   useEffect(() => {
     // Setup audio graph
     pan.current = new Tone.Panner(0).toDestination();
-    poly.current = new Tone.PolySynth().connect(pan.current);
+    poly.current = new Tone.PolySynth({ maxPolyphony }).connect(pan.current);
     osc.current = new Tone.Oscillator(); // we don't want to initialize it with a frequency yet
     part.current = new Tone.Part(); // we don't want to initialize it with any events yet
 
@@ -21,7 +23,7 @@ export function useTone() {
       part.current?.dispose();
       poly.current?.dispose();
     };
-  }, []);
+  }, [maxPolyphony]);
 
   const disposeUnivariateSources = useCallback(() => {
     osc.current?.dispose();
