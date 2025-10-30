@@ -45,7 +45,6 @@ function walkObjectLiteral(prefix: string, obj: any) {
   obj.getProperties().forEach((prop: any) => {
     const name = prop.getName?.();
     if (!name) return;
-    console.log("Processing property:", name);
     const full = prefix ? `${prefix}.${name}` : name;
     const comment = extractComment(prop);
     if (comment) commentMap.set(full, comment);
@@ -115,7 +114,6 @@ function collectFromInstance(node: any, prefix: string, type: any) {
       } else {
         const { label, allowed } = unwrapType(propType);
         const value = node[key];
-        console.log("Collecting entry for", pathName, "type", label, "value", value);
         entries.push({
           path: pathName,
           type: label,

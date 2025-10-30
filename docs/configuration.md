@@ -22,7 +22,7 @@ Generated from source comments and MST runtime introspection. Do not edit manual
 
 ## `defaultNumBins`
 
-The default number of bins to use for graph sonification of univariate data.
+The default number of bins to use for sonification of univariate graphs.
 If set to 0, an automatic binning strategy that matches CODAP's
 "Group into Bins" is used.
 
