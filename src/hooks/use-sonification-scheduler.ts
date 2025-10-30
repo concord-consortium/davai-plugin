@@ -36,13 +36,13 @@ export const useSonificationScheduler = ({ selectedGraph, binValues, pitchFracti
     const interval = durationRef.current / stepCount;
     const smoothBinValues: number[] = interpolateBins(bins, stepCount);
 
-    const freqsToSchedule: [number, { freqValue: number; panValue: number }][] = smoothBinValues.map((count: number, i: number) => {
+    const freqsToSchedule = smoothBinValues.map((count: number, i: number) => {
       const offset = i * interval;
       const countFraction = count / maxCount;
       const freq = mapPitchFractionToFrequency(countFraction);
       const binAvg = minBinEdge + ((i + 0.5) / stepCount) * binWidth;
       const panVal = mapValueToStereoPan(binAvg, minBinEdge, maxBinEdge);
-      return [offset, { freqValue: freq, panValue: panVal }];
+      return { time: offset, freqValue: freq, panValue: panVal };
     });
 
     part.current = new Tone.Part((time, value) => {
@@ -65,15 +65,15 @@ export const useSonificationScheduler = ({ selectedGraph, binValues, pitchFracti
 
     const uniqueFractions = Object.keys(fractionGroups).map(parseFloat).sort((a, b) => a - b);
 
-    const scatterEvents: [number, { panValue: number; freqValues: number[] }][] = uniqueFractions.map((fraction) => {
+    const scatterEvents = uniqueFractions.map((fraction) => {
       const offsetSeconds = fraction * durationRef.current;
       const indices = fractionGroups[fraction];
       if (indices.length === 0) {
-        throw new Error("No indices for time fraction group");
+        throw new Error("Invalid state: time fraction group contains no data points");
       }
       const panValue = mapValueToStereoPan(timeValues[indices[0]], timeLowerBound, timeUpperBound);
       const freqValues = indices.map(i => mapPitchFractionToFrequency(pitchFractions[i]));
-      return [offsetSeconds, { panValue, freqValues }];
+      return { time: offsetSeconds,panValue, freqValues };
     });
 
     part.current = new Tone.Part((time, note) => {
