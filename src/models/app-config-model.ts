@@ -45,7 +45,7 @@ export const AppConfigModel = types.model("AppConfigModel", {
   mode: types.enumeration<AppMode>("Mode", AppModeValues),
   showDebugLogInDevMode: true,
   /**
-   * The default number of bins to use for graph sonification of univariate data.
+   * The default number of bins to use for sonification of univariate graphs.
    * If set to 0, an automatic binning strategy that matches CODAP's
    * "Group into Bins" is used.
    */
