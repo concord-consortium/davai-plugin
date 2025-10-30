@@ -1,4 +1,4 @@
-import { types, Instance, SnapshotIn, SnapshotOut, TypeOfValue } from "mobx-state-tree";
+import { types, Instance, SnapshotIn, SnapshotOut, TypeOfValue, getType, isStateTreeNode } from "mobx-state-tree";
 import { AppMode, AppModeValues } from "../types";
 
 // Selects keys from T whose values are boolean
@@ -79,6 +79,11 @@ export const AppConfigModel = types.model("AppConfigModel", {
 
 export interface AppConfigModelSnapshot extends SnapshotIn<typeof AppConfigModel> {}
 export interface AppConfigModelType extends Instance<typeof AppConfigModel> {}
+
+export function isAppConfig(obj: unknown): obj is AppConfigModelType {
+  return !!obj && typeof obj === "object"
+    && isStateTreeNode(obj) && getType(obj) === AppConfigModel;
+}
 
 export type AppConfigToggleOptions = Parameters<AppConfigModelType["toggleOption"]>[0];
 export type AppConfigKeyboardShortcutKeys = keyof AppConfigModelSnapshot["keyboardShortcuts"];
