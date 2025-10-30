@@ -68,7 +68,9 @@ export const useSonificationScheduler = ({ selectedGraph, binValues, pitchFracti
     const scatterEvents: [number, { panValue: number; freqValues: number[] }][] = uniqueFractions.map((fraction) => {
       const offsetSeconds = fraction * durationRef.current;
       const indices = fractionGroups[fraction];
-      if (indices.length === 0) { throw new Error("No indices for time fraction group"); }
+      if (indices.length === 0) {
+        throw new Error("No indices for time fraction group");
+      }
       const panValue = mapValueToStereoPan(timeValues[indices[0]], timeLowerBound, timeUpperBound);
       const freqValues = indices.map(i => mapPitchFractionToFrequency(pitchFractions[i]));
       return [offsetSeconds, { panValue, freqValues }];
@@ -78,7 +80,7 @@ export const useSonificationScheduler = ({ selectedGraph, binValues, pitchFracti
       pan.current?.pan.setValueAtTime(note.panValue, time);
       poly.current?.triggerAttackRelease(note.freqValues, pointNoteDuration, time);
     }, scatterEvents).start(0);
-  }, [primaryBounds, timeFractions, part, durationRef, timeValues, pitchFractions, pan, poly, pointNoteDuration]);
+  }, [primaryBounds, timeFractions, pitchFractions, timeValues, poly, pan, part, durationRef, pointNoteDuration]);
 
   const scheduleTones = useCallback(() => {
     // dispose current oscillators and parts
