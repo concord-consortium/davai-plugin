@@ -1,5 +1,5 @@
 import { getEnv, Instance, types } from "mobx-state-tree";
-import { AppConfigModelType, isAppConfig } from "./app-config-model";
+import { isAppConfig } from "./app-config-model";
 
 // note: this binning logic is taken from CODAP itself, since the API doesn't support binning directly
 // the original code can be found here:
