@@ -1,0 +1,19 @@
+{
+    // Use IntelliSense to learn about possible attributes.
+    // Hover to view descriptions of existing attributes.
+    // For more information, visit: https://go.microsoft.com/fwlink/?linkid=830387
+    "version": "0.2.0",
+    "configurations": [
+      {
+        "name": "Attach to Chrome",
+        "port": 9222,
+        "request": "attach",
+        "type": "chrome",
+        "webRoot": "${workspaceFolder}",
+        // Human-readable instructions (VS Code will ignore unknown fields but they are visible in the file)
+        "instructions": "Start chrome with --remote-debugging-port=9222. The included task can do this for macOS.",
+        // Run the macOS task that starts Chrome with the right flags before attaching
+        "preLaunchTask": "Start Chrome for Debugging"
+      }
+    ]
+}
