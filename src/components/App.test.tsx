@@ -6,7 +6,7 @@ import { mockAppConfig } from "../test-utils/mock-app-config";
 import { MockAppConfigProvider } from "../test-utils/app-config-provider";
 import { ShortcutsServiceProvider } from "../contexts/shortcuts-service-context";
 
-jest.mock("../hooks/use-root-store", () => ({
+jest.mock("../contexts/root-store-context", () => ({
   useRootStore: jest.fn(() => ({
     assistantStore: {
       initializeAssistant: jest.fn(),

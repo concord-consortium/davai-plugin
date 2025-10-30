@@ -4,6 +4,7 @@ import { App } from "./components/App";
 import { AppConfigProvider } from "./contexts/app-config-context";
 import { AriaLiveProvider } from "./contexts/aria-live-context";
 import { ShortcutsServiceProvider } from "./contexts/shortcuts-service-context";
+import { RootStoreProvider } from "./contexts/root-store-context";
 
 import "./index.scss";
 
@@ -13,11 +14,13 @@ if (container) {
 
   root.render(
     <AppConfigProvider>
-      <ShortcutsServiceProvider>
-        <AriaLiveProvider>
-          <App />
-        </AriaLiveProvider>
-      </ShortcutsServiceProvider>
+      <RootStoreProvider>
+        <ShortcutsServiceProvider>
+          <AriaLiveProvider>
+            <App />
+          </AriaLiveProvider>
+        </ShortcutsServiceProvider>
+      </RootStoreProvider>
     </AppConfigProvider>
   );
 }

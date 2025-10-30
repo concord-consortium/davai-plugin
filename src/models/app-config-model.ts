@@ -1,4 +1,4 @@
-import { types, Instance, SnapshotIn, SnapshotOut, TypeOfValue } from "mobx-state-tree";
+import { types, Instance, SnapshotIn, SnapshotOut, TypeOfValue, getType, isStateTreeNode } from "mobx-state-tree";
 import { AppMode, AppModeValues } from "../types";
 
 // Selects keys from T whose values are boolean
@@ -44,6 +44,12 @@ export const AppConfigModel = types.model("AppConfigModel", {
   }),
   mode: types.enumeration<AppMode>("Mode", AppModeValues),
   showDebugLogInDevMode: true,
+  /**
+   * The default number of bins to use for graph sonification of univariate data.
+   * If set to 0, an automatic binning strategy that matches CODAP's
+   * "Group into Bins" is used.
+   */
+  defaultNumBins: 14,
 })
 .views((self) => ({
   get isDevMode() {
@@ -73,6 +79,11 @@ export const AppConfigModel = types.model("AppConfigModel", {
 
 export interface AppConfigModelSnapshot extends SnapshotIn<typeof AppConfigModel> {}
 export interface AppConfigModelType extends Instance<typeof AppConfigModel> {}
+
+export function isAppConfig(obj: unknown): obj is AppConfigModelType {
+  return !!obj && typeof obj === "object"
+    && isStateTreeNode(obj) && getType(obj) === AppConfigModel;
+}
 
 export type AppConfigToggleOptions = Parameters<AppConfigModelType["toggleOption"]>[0];
 export type AppConfigKeyboardShortcutKeys = keyof AppConfigModelSnapshot["keyboardShortcuts"];

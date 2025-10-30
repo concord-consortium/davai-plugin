@@ -4,8 +4,8 @@ import { observer } from "mobx-react-lite";
 import removeMarkdown from "remove-markdown";
 import { addComponentListener, addDataContextChangeListener, addDataContextsListListener, ClientNotification,
   codapInterface, getListOfDataContexts, initializePlugin, selectSelf } from "@concord-consortium/codap-plugin-api";
-import { useRootStore } from "../hooks/use-root-store";
 import { useAppConfigContext } from "../contexts/app-config-context";
+import { useRootStore } from "../contexts/root-store-context";
 import { useAriaLive } from "../contexts/aria-live-context";
 import { useShortcutsService } from "../contexts/shortcuts-service-context";
 import { ChatInputComponent } from "./chat-input";
@@ -29,8 +29,6 @@ export const App = observer(() => {
   const { ariaLiveText, setAriaLiveText } = useAriaLive();
   const { assistantStore, sonificationStore } = useRootStore();
   const { playProcessingTone } = appConfig;
-  const assistantStoreRef = useRef(assistantStore);
-  const sonificationStoreRef = useRef(sonificationStore);
   const dimensions = { width: appConfig.dimensions.width, height: appConfig.dimensions.height };
   const subscribedDataCtxsRef = useRef<string[]>([]);
   const transcriptStore = assistantStore.transcriptStore;
@@ -40,14 +38,14 @@ export const App = observer(() => {
     // resource is in the form of "dataContextChangeNotice[<dataContextName>]";
     // the dataContext name isn't otherwise available in the notification object
     const dataCtxName = notification.resource.replace("dataContextChangeNotice[", "").replace("]", "");
-    const selectedGraph = sonificationStoreRef.current.selectedGraph;
+    const selectedGraph = sonificationStore.selectedGraph;
     if (dataCtxName === selectedGraph?.dataContext) {
       // update the graph items
-      sonificationStoreRef.current.setGraphItems();
+      sonificationStore.setGraphItems();
     }
-    assistantStoreRef.current.updateDataContexts();
-    assistantStoreRef.current.updateGraphs();
-  }, []);
+    assistantStore.updateDataContexts();
+    assistantStore.updateGraphs();
+  }, [assistantStore, sonificationStore]);
 
   // documentation of the documentChangeNotice object here:
   // https://github.com/concord-consortium/codap/wiki/CODAP-Data-Interactive-Plugin-API#documentchangenotice
@@ -62,10 +60,10 @@ export const App = observer(() => {
         });
       }
       subscribedDataCtxsRef.current = ctxNames;
-      assistantStoreRef.current.updateDataContexts();
-      assistantStoreRef.current.updateGraphs();
+      assistantStore.updateDataContexts();
+      assistantStore.updateGraphs();
     }
-  }, [handleDataContextChangeNotice]);
+  }, [assistantStore, handleDataContextChangeNotice]);
 
   const handleComponentChangeNotice = useCallback(async (notification: ClientNotification) => {
     if (notification.values.type === "graph") {
@@ -78,19 +76,18 @@ export const App = observer(() => {
           const graphs = await getGraphDetails();
           const graph = graphs.find((g: ICODAPGraph) => g.id === notification.values.id);
           if (graph && isGraphSonifiable(graph)) {
-            sonificationStoreRef.current.setSelectedGraphID(graph.id);
+            sonificationStore.setSelectedGraphID(graph.id);
           }
         } catch (error) {
           console.error("Failed to fetch graph details for auto-selection:", error);
         }
       }
-      assistantStoreRef.current.updateGraphs();
+      assistantStore.updateGraphs();
     }
-  }, [sonificationStore]);
+  }, [assistantStore, sonificationStore]);
 
   const handleInitializeAssistant = useCallback(() => {
     assistantStore.initializeAssistant(appConfig.llmId);
-    assistantStoreRef.current = assistantStore;
   }, [appConfig.llmId, assistantStore]);
 
 
