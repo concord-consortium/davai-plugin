@@ -28,24 +28,52 @@ type BooleanKeys<T> = {
  */
 export const AppConfigModel = types.model("AppConfigModel", {
   keyboardShortcuts: types.model({
+    /**
+     * The shortcut key combination to focus the chat input field. This is in tinykeys format.
+     */
     focusChatInput: types.string,
+    /**
+     * The shortcut key combination to play the graph sonification. This is in tinykeys format.
+     */
     playGraphSonification: types.string,
   }),
+  /**
+   * Whether keyboard shortcuts are enabled. If false, keyboard shortcuts will be ignored.
+   */
   keyboardShortcutsEnabled: types.boolean,
   playProcessingMessage: types.boolean,
   playProcessingTone: types.boolean,
   playbackSpeed: types.number,
   readAloudEnabled: types.boolean,
+  /**
+   * The unique ID of an LLM to use, or "mock" for a mocked LLM.
+   * Note: for a real LLM it is a stringified JSON object, not just the ID from the llmList object.
+   */
   llmId: types.string,
   llmList: types.array(types.frozen()),
   dimensions: types.model({
+    /**
+     * Width of the plugin in CODAP (in pixels).
+     */
     width: types.number,
+    /**
+     * Height of the plugin in CODAP (in pixels).
+     */
     height: types.number,
   }),
+  /**
+   * The mode in which the application runs. Possible values:
+   * - `"development"`: Enables additional UI for debugging and artifact maintenance.
+   * - `"production"`: Standard runtime mode for end users.
+   * - `"test"`: Specialized mode for automated testing.
+   */
   mode: types.enumeration<AppMode>("Mode", AppModeValues),
+  /**
+   * Whether to show the log of messages with the LLM when in development mode.
+   */
   showDebugLogInDevMode: true,
   /**
-   * The default number of bins to use for graph sonification of univariate data.
+   * The default number of bins to use for sonification of univariate graphs.
    * If set to 0, an automatic binning strategy that matches CODAP's
    * "Group into Bins" is used.
    */

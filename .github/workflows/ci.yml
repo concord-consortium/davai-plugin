@@ -17,6 +17,15 @@ jobs:
           REACT_APP_OPENAI_BASE_URL: ${{ secrets.REACT_APP_OPENAI_BASE_URL }}
           LANGCHAIN_SERVER_URL: ${{ secrets.LANGCHAIN_SERVER_URL }}
           AUTH_TOKEN: ${{ secrets.AUTH_TOKEN }}
+      - name: Generate docs
+        run: npm run gen:config-docs
+      - name: Verify docs up to date
+        uses: tj-actions/verify-changed-files@a1c6acee9df209257a246f2cc6ae8cb6581c1edf # v20
+        with:
+          files: |
+            docs/**
+          fail-if-changed: true
+          fail-message: "Documentation out of date. Run: npm run gen:config-docs && git add docs && git commit."
       - name: Run Tests
         run: npm run test:coverage -- --runInBand
       - name: Upload coverage to Codecov

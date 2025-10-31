@@ -1,0 +1,22 @@
+{
+  "version": "2.0.0",
+  "tasks": [
+    {
+      "label": "Start Chrome for Debugging",
+      "type": "shell",
+      "command": "open",
+      "args": [
+        "-n",
+        "-a",
+        "Google Chrome",
+        "--args",
+        "--remote-debugging-port=9222",
+        "--user-data-dir=/tmp/chrome-remote-profile"
+      ],
+      "presentation": {
+        "reveal": "silent"
+      },
+      "problemMatcher": []
+    }
+  ]
+}
