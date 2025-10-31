@@ -1,5 +1,5 @@
 import { Project, SyntaxKind } from "ts-morph";
-import { getType, IAnyType, isStateTreeNode } from "mobx-state-tree";
+import { getType, IAnyType, isLiteralType, isStateTreeNode, isUnionType } from "mobx-state-tree";
 import * as fs from "node:fs";
 import * as path from "node:path";
 import { AppConfigModel } from "../src/models/app-config-model";
@@ -82,8 +82,15 @@ function unwrapType(t: IAnyType): { label: string; allowed?: string } {
     return { label: `${innerUnwrapped.label} (optional)`, allowed: innerUnwrapped.allowed };
   }
   // Enumeration
-  if ((t as any).options) {
-    return { label: "enum", allowed: (t as any).options.join(", ") };
+  if (isUnionType(t)) {
+    const subTypes = (t as any).getSubTypes() as IAnyType[];
+    if (subTypes.every((subType) => isLiteralType(subType) && typeof (subType as any).value === "string")) {
+      // This is an enumeration of strings
+      return {
+        label: "enum",
+        allowed: subTypes.map((st) => (st as any).value).join(", ")
+      };
+    }
   }
   // Array
   if ((t as any).subType) {
@@ -98,6 +105,8 @@ function unwrapType(t: IAnyType): { label: string; allowed?: string } {
   if (name.match(/string/i)) return { label: "string" };
   if (name.match(/number/i)) return { label: "number" };
   if (name.match(/boolean/i)) return { label: "boolean" };
+
+  // By default just return the type name
   return { label: name.replace(/Type$/, "") };
 }
 
@@ -144,21 +153,24 @@ function columnInfo(label: string, propName: keyof Entry, maxWidth?: number): [n
   ];
 }
 const sortedEntries = entries.sort((a, b) => a.path.localeCompare(b.path));
-const [keyWidth, keyHeader, keyDivider] = columnInfo("Key", "path");
-const [typeWidth, typeHeader, typeDivider] = columnInfo("Type", "type");
-const [defaultWidth, defaultHeader, defaultDivider] = columnInfo("Default", "default", 20);
-const [allowedWidth, allowedHeader, allowedDivider] = columnInfo("Allowed / Enum", "allowed");
+// The max width numbers of 39, 8, and 43 were chosen so the table fits within 100 characters wide normally.
+const [keyWidth, keyHeader, keyDivider] = columnInfo("Key", "path", 39);
+const [typeWidth, typeHeader, typeDivider] = columnInfo("Type", "type", 8);
+const [defaultWidth, defaultHeader, defaultDivider] = columnInfo("Default", "default", 43);
 const lines: string[] = [];
 lines.push("# Configuration Settings");
 lines.push("Generated from source comments and MST runtime introspection. Do not edit manually.\n");
-lines.push(`| ${keyHeader} | ${typeHeader} | ${defaultHeader} | ${allowedHeader} |`);
-lines.push(`| ${keyDivider} | ${typeDivider} | ${defaultDivider} | ${allowedDivider} |`);
+lines.push(`| ${keyHeader} | ${typeHeader} | ${defaultHeader} |`);
+lines.push(`| ${keyDivider} | ${typeDivider} | ${defaultDivider} |`);
 sortedEntries.forEach(e => {
-  lines.push(`| ${paddedString(e.path, keyWidth)} | ${paddedString(e.type, typeWidth)} | ${paddedString(e.default, defaultWidth)} | ${paddedString(e.allowed, allowedWidth)} |`);
+  lines.push(`| ${paddedString(e.path, keyWidth)} | ${paddedString(e.type, typeWidth)} | ${paddedString(e.default, defaultWidth)} |`);
 });
 sortedEntries.forEach(e => {
   if (!e.description) return;
   lines.push(`\n## \`${e.path}\`\n`);
+  if (e.allowed) {
+    lines.push(`**Allowed values:** ${e.allowed}\n`);
+  }
   lines.push(e.description);
 });
 

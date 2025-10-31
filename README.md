@@ -39,86 +39,20 @@ to see the plugin running in CODAP.
 
 This method allows you to test the plugin locally in CODAP, bypassing browser security restrictions that normally prevent loading local resources.
 
-# Create React App Readme
-
-This project was bootstrapped with [Create React App](https://github.com/facebook/create-react-app).
-
-## Available Scripts
-
-In the project directory, you can run:
-
-### `npm start`
-
-Runs the client app in the development mode.<br>
-Open [http://localhost:3000](http://localhost:3000) to view it in the browser.
-
-The page will reload if you make edits.<br>
-You will also see any lint errors in the console.
-
-### `npm test`
-
-Launches the test runner in the interactive watch mode.<br>
-See the section about [running tests](https://facebook.github.io/create-react-app/docs/running-tests) for more information.
-
-### `npm run build`
-
-Builds the app for production to the `build` folder.<br>
-It correctly bundles React in production mode and optimizes the build for the best performance.
-
-The build is minified and the filenames include the hashes.<br>
-Your app is ready to be deployed!
-
-See the section about [deployment](https://facebook.github.io/create-react-app/docs/deployment) for more information.
-
-### `npm run eject`
-
-**Note: this is a one-way operation. Once you `eject`, you can’t go back!**
-
-If you aren’t satisfied with the build tool and configuration choices, you can `eject` at any time. This command will remove the single build dependency from your project.
-
-Instead, it will copy all the configuration files and the transitive dependencies (Webpack, Babel, ESLint, etc) right into your project so you have full control over them. All of the commands except `eject` will still work, but they will point to the copied scripts so you can tweak them. At this point you’re on your own.
-
-You don’t have to ever use `eject`. The curated feature set is suitable for small and middle deployments, and you shouldn’t feel obligated to use this feature. However we understand that this tool wouldn’t be useful if you couldn’t customize it when you are ready for it.
-
 ## Configuration Settings
 
 Configuration settings control various aspects of the application's behavior and appearance. Access to the configuration settings is provided by `AppConfigContext` via the `useAppConfigContext` hook.
 
-Default configuration setting values are defined in the `app-config.json` file. Currently, only the `mode` setting can be overridden by URL parameter (e.g. `?mode=development`). Support for overriding some of the other settings with URL parameters may be added in the future.
+[Documentation for all settings](docs/configuration.md)
 
-### Accessibility
+Default configuration setting values are defined in the `app-config.json` file, as well as some are defined in `app-config-model.ts` itself.
 
-- **`accessibility`** (Object)
-  Settings related to accessibility in the UI:
-  - **`keyboardShortcut`** (string): Custom keystroke for placing focus in the main text input field (e.g., `ctrl+?`).
+All settings can be overridden by URL parameter (e.g. `?mode=development`) or local storage with a prefix of `davai:` (e.g. `davai:mode | development`)
 
-### llmId
+Some settings have UI to change them, these changes will be stored in local storage. When the UI saves settings only the top level keys are saved with nested objects in JSON format. So if you set the `keyboardShortcuts.focusChatInput` in the UI it will be saved as `davai:keyboardShortcuts | {"focusChatInput": "value"}`. If you are manually creating local storage values you can use dot notation for this instead: `davai:keyboardShortcuts.focusChatInput | value`. It is undefined what happens if you have both defined with conflicting values.
 
-- **`llmId`** (string)
-  The unique ID of an LLM to use, or "mock" for a mocked LLM.
-
-### Dimensions
-
-- **`dimensions`** (Object)
-  Dimensions of the application's component within CODAP:
-  - **`width`** (number): The width of the application (in pixels).
-  - **`height`** (number): The height of the application (in pixels).
-
-### Mock Assistant
-
-- **`mockAssistant`** (boolean)
-  A flag indicating whether to mock AI interactions.
-
-### Mode
-
-- **`mode`** (string)
-  The mode in which the application runs. Possible values:
-  - `"development"`: Enables additional UI for debugging and artifact maintenance.
-  - `"production"`: Standard runtime mode for end users.
-  - `"test"`: Specialized mode for automated testing.
+When the UI saves the settings it will only save values that you have change or that already exist in local storage. So if you change a setting back to its default, it will remain in local storage.
 
 ## Learn More
-
-You can learn more in the [Create React App documentation](https://facebook.github.io/create-react-app/docs/getting-started).
 
 To learn React, check out the [React documentation](https://reactjs.org/).
