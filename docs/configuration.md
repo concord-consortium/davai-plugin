@@ -36,11 +36,11 @@ Width of the plugin in CODAP (in pixels).
 
 ## `keyboardShortcuts.focusChatInput`
 
-The shortcut key combination to focus the chat input field. This is is tinykeys format.
+The shortcut key combination to focus the chat input field. This is in tinykeys format.
 
 ## `keyboardShortcuts.playGraphSonification`
 
-The shortcut key combination to play the graph sonification. This is is tinykeys format.
+The shortcut key combination to play the graph sonification. This is in tinykeys format.
 
 ## `keyboardShortcutsEnabled`
 

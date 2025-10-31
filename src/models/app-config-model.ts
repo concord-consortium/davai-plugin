@@ -29,11 +29,11 @@ type BooleanKeys<T> = {
 export const AppConfigModel = types.model("AppConfigModel", {
   keyboardShortcuts: types.model({
     /**
-     * The shortcut key combination to focus the chat input field. This is is tinykeys format.
+     * The shortcut key combination to focus the chat input field. This is in tinykeys format.
      */
     focusChatInput: types.string,
     /**
-     * The shortcut key combination to play the graph sonification. This is is tinykeys format.
+     * The shortcut key combination to play the graph sonification. This is in tinykeys format.
      */
     playGraphSonification: types.string,
   }),

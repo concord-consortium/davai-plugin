@@ -70,14 +70,7 @@ const entries: Entry[] = [];
 function unwrapType(t: IAnyType): { label: string; allowed?: string } {
   const name = (t as any).name || t.toString();
   // Optional
-  if ((t as any).type) {
-    // Older MST optional wrapper may have .type
-    const inner = (t as any).type;
-    const innerUnwrapped = unwrapType(inner);
-    return { label: `${innerUnwrapped.label} (optional)`, allowed: innerUnwrapped.allowed };
-  }
   if ((t as any).subtype) {
-    // OptionalType new API
     const innerUnwrapped = unwrapType((t as any).subtype);
     return { label: `${innerUnwrapped.label} (optional)`, allowed: innerUnwrapped.allowed };
   }
@@ -126,7 +119,6 @@ function collectFromInstance(node: any, prefix: string, type: any) {
         entries.push({
           path: pathName,
           type: label,
-            // Represent defaults: if property exists on fresh instance
           default: value !== undefined && !isStateTreeNode(value) ? JSON.stringify(value) : "",
           description: commentMap.get(pathName),
           allowed
