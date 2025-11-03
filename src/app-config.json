@@ -1,7 +1,7 @@
 {
   "keyboardShortcuts": {
     "focusChatInput": "Control+Shift+/",
-    "playGraphSonification": "Control+Shift+."
+    "sonifyGraph": "Control+Shift+."
   },
   "keyboardShortcutsEnabled": true,
   "playProcessingMessage": true,
@@ -27,6 +27,9 @@
       "provider": "OpenAI"
     }
   ],
+  "sonify": {
+    "dotPlotMode": "continual"
+  },
   "dimensions": {
     "height": 680,
     "width": 380

@@ -8,7 +8,7 @@ export function useTone() {
   const poly = useRef<Tone.PolySynth | null>(null);
   const part = useRef<Tone.Part | null>(null);
 
-  const { maxPolyphony } = useAppConfigContext();
+  const { sonify: { maxPolyphony } } = useAppConfigContext();
   useEffect(() => {
     // Setup audio graph
     pan.current = new Tone.Panner(0).toDestination();

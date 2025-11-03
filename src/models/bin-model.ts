@@ -30,7 +30,7 @@ export const BinModel = types.model("BinModel", {
 }))
 .views((self) => ({
   get binWidth () {
-    const { defaultNumBins } = self.appConfig;
+    const { defaultNumBins } = self.appConfig.sonify;
     if (defaultNumBins) {
       // We subtract 1 because the calculations that result in totalNumberOfBins
       // often result in adding an extra bin.

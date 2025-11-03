@@ -26,15 +26,23 @@ type Props = {
 export const useSonificationScheduler = ({ selectedGraph, binValues, pitchFractions, timeFractions, timeValues, primaryBounds,
   osc, pan, poly, part, durationRef}: Props) => {
 
-  const { pointNoteDuration } = useAppConfigContext();
+  const { sonify: { pointDuration, dotPlotMode, dotPlotEachDotPitch } } = useAppConfigContext();
+  const univariate = !!selectedGraph && isUnivariateDotPlot(selectedGraph);
 
-  const scheduleUnivariate = useCallback(() => {
-    if (!binValues || !primaryBounds) return;
+  const scheduleUnivariateContinual = useCallback(() => {
+    if (!binValues || !primaryBounds || !pan.current) return;
     const { bins, minBinEdge, maxBinEdge, binWidth } = binValues;
     const maxCount = Math.max(...bins) || 1;
     const stepCount = 1000;
     const interval = durationRef.current / stepCount;
     const smoothBinValues: number[] = interpolateBins(bins, stepCount);
+
+    // create a new oscillator to use for univariate sonification
+    // TODO: consider reusing existing oscillator, or at least disposing old one
+    osc.current = new Tone.Oscillator(220, "sine").connect(pan.current);
+    // this syncs the oscillator to the transport, so that when we call transport.start or
+    // transport.stop, the oscillator will start/stop accordingly
+    osc.current.sync().start(0).stop(durationRef.current);
 
     const freqsToSchedule = smoothBinValues.map((count: number, i: number) => {
       const offset = i * interval;
@@ -52,7 +60,7 @@ export const useSonificationScheduler = ({ selectedGraph, binValues, pitchFracti
     }, freqsToSchedule).start(0);
   }, [binValues, primaryBounds, durationRef, osc, pan, part]);
 
-  const scheduleScatter = useCallback(() => {
+  const scheduleEachDot = useCallback(() => {
     if (!primaryBounds) return;
     const { lowerBound: timeLowerBound, upperBound: timeUpperBound } = primaryBounds;
     if (!timeLowerBound || !timeUpperBound) return;
@@ -72,15 +80,21 @@ export const useSonificationScheduler = ({ selectedGraph, binValues, pitchFracti
         throw new Error("Invalid state: time fraction group contains no data points");
       }
       const panValue = mapValueToStereoPan(timeValues[indices[0]], timeLowerBound, timeUpperBound);
-      const freqValues = indices.map(i => mapPitchFractionToFrequency(pitchFractions[i]));
-      return { time: offsetSeconds,panValue, freqValues };
+      let freqValues: number[] | string[];
+      if (univariate) {
+        // Use a constant pitch for each dot in univariate dot plot mode
+        freqValues = indices.map(i => dotPlotEachDotPitch);
+      } else {
+        freqValues = indices.map(i => mapPitchFractionToFrequency(pitchFractions[i]));
+      }
+      return { time: offsetSeconds, panValue, freqValues };
     });
 
     part.current = new Tone.Part((time, note) => {
       pan.current?.pan.setValueAtTime(note.panValue, time);
-      poly.current?.triggerAttackRelease(note.freqValues, pointNoteDuration, time);
+      poly.current?.triggerAttackRelease(note.freqValues, pointDuration, time);
     }, scatterEvents).start(0);
-  }, [primaryBounds, timeFractions, pitchFractions, timeValues, poly, pan, part, durationRef, pointNoteDuration]);
+  }, [primaryBounds, timeFractions, part, durationRef, timeValues, univariate, dotPlotEachDotPitch, pitchFractions, pan, poly, pointDuration]);
 
   const scheduleTones = useCallback(() => {
     // dispose current oscillators and parts
@@ -90,16 +104,13 @@ export const useSonificationScheduler = ({ selectedGraph, binValues, pitchFracti
     if (!selectedGraph) return;
 
     if (selectedGraph.plotType === "scatterPlot") {
-      scheduleScatter();
-    } else if (isUnivariateDotPlot(selectedGraph) && pan.current) {
-      // create a new oscillator to use for univariate sonification
-      osc.current = new Tone.Oscillator(220, "sine").connect(pan.current);
-      // this syncs the oscillator to the transport, so that when we call transport.start or
-      // transport.stop, the oscillator will start/stop accordingly
-      osc.current.sync().start(0).stop(durationRef.current);
-      scheduleUnivariate();
+      scheduleEachDot();
+    } else if (univariate && dotPlotMode === "continual") {
+      scheduleUnivariateContinual();
+    } else if (univariate && dotPlotMode === "each-dot") {
+      scheduleEachDot();
     }
-  }, [osc, part, selectedGraph, pan, scheduleScatter, durationRef, scheduleUnivariate]);
+  }, [osc, part, selectedGraph, univariate, dotPlotMode, scheduleEachDot, scheduleUnivariateContinual]);
 
   return {
     scheduleTones
