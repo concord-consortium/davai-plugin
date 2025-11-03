@@ -37,8 +37,11 @@ export const useSonificationScheduler = ({ selectedGraph, binValues, pitchFracti
     const interval = durationRef.current / stepCount;
     const smoothBinValues: number[] = interpolateBins(bins, stepCount);
 
-    // create a new oscillator to use for univariate sonification
-    // TODO: consider reusing existing oscillator, or at least disposing old one
+    // Dispose of any existing oscillator before creating a new one to prevent memory leaks
+    if (osc.current) {
+      osc.current.dispose();
+      osc.current = null;
+    }
     osc.current = new Tone.Oscillator(220, "sine").connect(pan.current);
     // this syncs the oscillator to the transport, so that when we call transport.start or
     // transport.stop, the oscillator will start/stop accordingly

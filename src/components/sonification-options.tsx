@@ -3,10 +3,7 @@ import { observer } from "mobx-react-lite";
 import { useAppConfigContext } from "../contexts/app-config-context";
 import { DotPlotMode } from "../models/app-config-model";
 
-interface IProps {
-}
-
-export const SonificationOptions: React.FC<IProps> = observer(function SonificationOptions() {
+export const SonificationOptions: React.FC = observer(function SonificationOptions() {
   const appConfig = useAppConfigContext();
   const { sonify } = appConfig;
   const { dotPlotMode } = sonify;
