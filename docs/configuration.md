@@ -21,6 +21,7 @@ Generated from source comments and MST runtime introspection. Do not edit manual
 | sonify.dotPlotMode               | enum     | "continual"                                 |
 | sonify.maxPolyphony              | number   | 120                                         |
 | sonify.pointDuration             | string   | "1i"                                        |
+| sonify.synthReleaseTime          | number   | 0.1                                         |
 
 ## `dimensions.height`
 
@@ -89,3 +90,8 @@ how it affects performance.
 
 Duration of each note when sonifying points. The value is in Tone.js notation. The default is
 "1i", which is supposed to be the shortest possible duration.
+
+## `sonify.synthReleaseTime`
+
+The release or "fade out" time after the duration of the note is over. Less than
+0.1 causes a noise with lots of points which doesn't sound good.
