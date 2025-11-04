@@ -46,7 +46,12 @@ const SonifyOptions = types.model("SonifyOptions", {
    * Fixed pitch for dot plot each-dot sonification. This is in tone.js format so can
    * be a frequency (e.g., "440") or note name (e.g., "A4").
    */
-  dotPlotEachDotPitch: "440"
+  dotPlotEachDotPitch: "440",
+  /**
+   * The release or "fade out" time after the duration of the note is over. Less than
+   * 0.1 causes a noise with lots of points which doesn't sound good.
+   */
+  synthReleaseTime: 0.1,
 })
 .actions((self) => ({
   setDotPlotMode(mode: string) {

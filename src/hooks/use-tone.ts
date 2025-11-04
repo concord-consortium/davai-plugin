@@ -8,11 +8,13 @@ export function useTone() {
   const poly = useRef<Tone.PolySynth | null>(null);
   const part = useRef<Tone.Part | null>(null);
 
-  const { sonify: { maxPolyphony } } = useAppConfigContext();
+  const { sonify: { maxPolyphony, synthReleaseTime } } = useAppConfigContext();
   useEffect(() => {
     // Setup audio graph
     pan.current = new Tone.Panner(0).toDestination();
     poly.current = new Tone.PolySynth({ maxPolyphony }).connect(pan.current);
+    //During tests the PolySynth is not really created
+    poly.current?.set({ envelope: { release: synthReleaseTime } });
     osc.current = new Tone.Oscillator(); // we don't want to initialize it with a frequency yet
     part.current = new Tone.Part(); // we don't want to initialize it with any events yet
 
@@ -23,7 +25,7 @@ export function useTone() {
       part.current?.dispose();
       poly.current?.dispose();
     };
-  }, [maxPolyphony]);
+  }, [maxPolyphony, synthReleaseTime]);
 
   const disposeUnivariateSources = useCallback(() => {
     osc.current?.dispose();
