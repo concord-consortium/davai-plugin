@@ -1,6 +1,6 @@
 {
   "name": "DAVAI",
-  "version": "0.3.0",
+  "private": true,
   "description": "Data Analysis through Voice and Artificial Intelligence",
   "main": "index.js",
   "browserslist": "> 0.2%, last 5 versions, Firefox ESR, not dead, not ie > 0",
