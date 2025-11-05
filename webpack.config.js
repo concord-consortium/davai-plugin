@@ -15,7 +15,9 @@ require('dotenv').config();
 // `branch/[branch-name]/` or `version/[tag-name]/`
 // See the following documentation for more detail:
 //   https://github.com/concord-consortium/s3-deploy-action/blob/main/README.md#top-branch-example
-const DEPLOY_PATH = process.env.DEPLOY_PATH;
+// We default it to null, so the EnvironmentPlugin below will not complain if it isn't available in
+// the environment.
+const DEPLOY_PATH = process.env.DEPLOY_PATH ?? null;
 
 // Derive DAVAI_VERSION from DEPLOY_PATH to show it in the UI
 const DAVAI_VERSION = DEPLOY_PATH ? DEPLOY_PATH.replace(/\/$/, '').split('/').pop() : 'local-build';
@@ -168,14 +170,14 @@ module.exports = (env, argv) => {
       })] : []),
       new CleanWebpackPlugin(),
       // Provide these environment variables to the built code
+      // See https://webpack.js.org/plugins/environment-plugin/ for documentation
       new webpack.EnvironmentPlugin({
-        NODE_ENV: process.env.NODE_ENV,        // standard
         DEPLOY_PATH,                           // not necessary but can't hurt
         DAVAI_VERSION,                         // derived from DEPLOY_PATH
-        AUTH_TOKEN: process.env.AUTH_TOKEN,    // davai server token
-        LANGCHAIN_SERVER_URL: process.env.LANGCHAIN_SERVER_URL,
-        REACT_APP_OPENAI_BASE_URL: process.env.REACT_APP_OPENAI_BASE_URL,
-        REACT_APP_OPENAI_API_KEY: process.env.REACT_APP_OPENAI_API_KEY,
+        AUTH_TOKEN: undefined,                 // required env davai server token
+        LANGCHAIN_SERVER_URL: undefined,       // required env langchain server url
+        REACT_APP_OPENAI_BASE_URL: null,       // optional openai url
+        REACT_APP_OPENAI_API_KEY: null,        // optional openai api
       }),
     ]
   };
