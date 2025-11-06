@@ -7,6 +7,7 @@ import { createRoiAdornment, updateRoiAdornment } from "../utils/graph-sonificat
 import { useShortcutsService } from "../contexts/shortcuts-service-context";
 import { useTone } from "../hooks/use-tone";
 import { useSonificationScheduler } from "../hooks/use-sonification-scheduler";
+import { SonificationOptions } from "./sonification-options";
 
 import PlayIcon from "../assets/play-sonification-icon.svg";
 import PauseIcon from "../assets/pause-sonification-icon.svg";
@@ -178,7 +179,7 @@ export const GraphSonification = observer(({sonificationStore}: IProps) => {
 
   // Register keyboard shortcut for play/pause
   useEffect(() => {
-    return shortcutsService.registerShortcutHandler("playGraphSonification", (event) => {
+    return shortcutsService.registerShortcutHandler("sonifyGraph", (event) => {
       event.preventDefault();
 
       handlePlayPauseRef.current();
@@ -325,6 +326,7 @@ export const GraphSonification = observer(({sonificationStore}: IProps) => {
         </div>
       </div>
       {showError && <ErrorMessage slug={"sonification"} message={"Please select a graph to sonify."} />}
+      <SonificationOptions />
     </div>
   );
 });

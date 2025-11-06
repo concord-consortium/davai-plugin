@@ -6,6 +6,63 @@ type BooleanKeys<T> = {
   [K in keyof T]: T[K] extends boolean ? K : never
 }[keyof T];
 
+// An "enumeration" for dot plot sonification modes
+// Typescript enum is not used so this can work with node.js' built in basic type stripping
+export const DotPlotMode = {
+  CONTINUAL: "continual",
+  EACH_DOT: "each-dot"
+} as const;
+export type DotPlotMode = typeof DotPlotMode[keyof typeof DotPlotMode];
+export const DotPlotModeValues = Object.values(DotPlotMode);
+export const isDotPlotMode = (value: unknown): value is DotPlotMode => {
+  return DotPlotModeValues.includes(value as DotPlotMode);
+};
+
+const SonifyOptions = types.model("SonifyOptions", {
+  /**
+   * The default number of bins to use for sonification of univariate graphs.
+   * If set to 0, an automatic binning strategy that matches CODAP's
+   * "Group into Bins" is used.
+   */
+  defaultNumBins: 14,
+  /**
+   * How many simultaneous sounds can be played during sonification. This value of 120
+   * was chosen to support graphs with many points in a cluster. It hasn't been tested to see
+   * how it affects performance.
+   */
+  maxPolyphony: 120,
+  /**
+   * Duration of each note when sonifying points. The value is in Tone.js notation. "3i" means
+   * 3 ticks which by default is 0.0078s. The default attack time of the Synth envelope is 0.005s
+   * so this point duration gives the note time reach its full volume before the release phase begins.
+   */
+  pointDuration: "3i",
+  /**
+   * Whether to sonify points in a dot plot as individual dots with quick sharp tones,
+   * or as a continual tone by binning the points and sonifying a smoothed line "drawn"
+   * across the top of the bins.
+   */
+  dotPlotMode: types.enumeration<DotPlotMode>("DotPlotMode", DotPlotModeValues),
+  /**
+   * Fixed pitch for dot plot each-dot sonification. This is in tone.js format so can
+   * be a frequency (e.g., "440") or note name (e.g., "A4").
+   */
+  dotPlotEachDotPitch: "440",
+  /**
+   * The release or "fade out" time after the duration of the note is over. Less than
+   * 0.1 causes a noise with lots of points which doesn't sound good.
+   */
+  synthReleaseTime: 0.24,
+})
+.actions((self) => ({
+  setDotPlotMode(mode: string) {
+    if (!isDotPlotMode(mode)) {
+      throw new Error(`Invalid dotPlotMode: ${mode}`);
+    }
+    self.dotPlotMode = mode;
+  }
+}));
+
 /**
  * AppConfigModel encapsulates the application's configuration settings.
  * It includes properties and methods for managing accessibility, AI assistant settings, and the application's mode.
@@ -35,7 +92,7 @@ export const AppConfigModel = types.model("AppConfigModel", {
     /**
      * The shortcut key combination to play the graph sonification. This is in tinykeys format.
      */
-    playGraphSonification: types.string,
+    sonifyGraph: types.string,
   }),
   /**
    * Whether keyboard shortcuts are enabled. If false, keyboard shortcuts will be ignored.
@@ -72,23 +129,8 @@ export const AppConfigModel = types.model("AppConfigModel", {
    * Whether to show the log of messages with the LLM when in development mode.
    */
   showDebugLogInDevMode: true,
-  /**
-   * The default number of bins to use for sonification of univariate graphs.
-   * If set to 0, an automatic binning strategy that matches CODAP's
-   * "Group into Bins" is used.
-   */
-  defaultNumBins: 14,
-  /**
-   * How many simultaneous sounds can be played during sonification. This value of 120
-   * was chosen to support graphs with many points in a cluster. It hasn't been tested to see
-   * how it affects performance.
-   */
-  maxPolyphony: 120,
-  /**
-   * Duration of each note when sonifying points. The value is in Tone.js notation. The default is
-   * "1i", which is supposed to be the shortest possible duration.
-   */
-  pointNoteDuration: "1i",
+
+  sonify: SonifyOptions
 })
 .views((self) => ({
   get isDevMode() {

@@ -26,6 +26,10 @@ jest.mock("../models/app-config-model", () => ({
   AppConfigModel: {
     create: jest.fn(() => (mockAppConfig)),
     initialize: jest.fn(),
+  },
+  DotPlotMode: {
+    CONTINUAL: "continual",
+    EACH_DOT: "each-dot"
   }
 }));
 

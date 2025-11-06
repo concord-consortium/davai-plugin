@@ -42,19 +42,19 @@ describe("ShortcutsService", () => {
   }
 
   it("should register a shortcut handler", async () => {
-    const unregister = shortcutsService.registerShortcutHandler("playGraphSonification", mockHandler);
-    expect(shortcutsService.shortcutHandlers.has("playGraphSonification")).toBe(true);
+    const unregister = shortcutsService.registerShortcutHandler("sonifyGraph", mockHandler);
+    expect(shortcutsService.shortcutHandlers.has("sonifyGraph")).toBe(true);
 
     await waitForMainHandlerInit();
     expect(createKeybindingsHandler).toHaveBeenCalledWith({
-      [appConfig.keyboardShortcuts.playGraphSonification]: expect.any(Function)
+      [appConfig.keyboardShortcuts.sonifyGraph]: expect.any(Function)
     });
 
     unregister();
   });
 
   it("should remove a shortcut handler, and remove the main handler if no more shortcuts are registered", async () => {
-    const unregister = shortcutsService.registerShortcutHandler("playGraphSonification", mockHandler);
+    const unregister = shortcutsService.registerShortcutHandler("sonifyGraph", mockHandler);
     expect(shortcutsService.shortcutHandlers.size).toBe(1);
 
     await waitForMainHandlerInit();
@@ -68,7 +68,7 @@ describe("ShortcutsService", () => {
   });
 
   it("should dispose the service", () => {
-    shortcutsService.registerShortcutHandler("playGraphSonification", mockHandler);
+    shortcutsService.registerShortcutHandler("sonifyGraph", mockHandler);
 
     shortcutsService.dispose();
 
@@ -79,14 +79,14 @@ describe("ShortcutsService", () => {
   it("should focus the iframe when the shortcut is triggered and the focus option is set", async () => {
     const focusFunc = jest.fn();
     shortcutsService.setFocusOurIFrameFunc(focusFunc);
-    shortcutsService.registerShortcutHandler("playGraphSonification", mockHandler, { focus: true });
+    shortcutsService.registerShortcutHandler("sonifyGraph", mockHandler, { focus: true });
 
     await waitForMainHandlerInit();
 
     // Simulate the keydown event
     const event = {} as KeyboardEvent;
     const tinykeysMap = shortcutsService.tinykeysShortcutMap;
-    tinykeysMap[appConfig.keyboardShortcuts.playGraphSonification](event);
+    tinykeysMap[appConfig.keyboardShortcuts.sonifyGraph](event);
 
     expect(focusFunc).toHaveBeenCalled();
     expect(mockHandler).toHaveBeenCalledWith(event);

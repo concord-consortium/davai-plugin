@@ -16,4 +16,8 @@ export const mockAppConfig = {
   },
   mockAssistant: false,
   mode: "test" as AppMode,
+  sonify: {
+    maxPolyphony: 4,
+    synthReleaseTime: 0.1,
+  }
 };
