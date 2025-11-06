@@ -196,7 +196,7 @@ export const SoundDemo = observer(function SoundDemo() {
 
   return (
     <div>
-      <button onClick={handlePlayPause}>Play/Pause</button><br />
+      <button onClick={handlePlayPause}>Play/Pause</button>
       <div>
         <label htmlFor="sound-type">Sound Type</label><br />
         <select id="sound-type" name="sound-type" defaultValue={SoundType.Synth}
