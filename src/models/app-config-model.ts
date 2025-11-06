@@ -32,10 +32,11 @@ const SonifyOptions = types.model("SonifyOptions", {
    */
   maxPolyphony: 120,
   /**
-   * Duration of each note when sonifying points. The value is in Tone.js notation. The default is
-   * "1i", which is supposed to be the shortest possible duration.
+   * Duration of each note when sonifying points. The value is in Tone.js notation. "3i" means
+   * 3 ticks which by default is 0.0078s. The default attack time of the Synth envelope is 0.005s
+   * so this point duration gives the note time reach its full volume before the release phase begins.
    */
-  pointDuration: "1i",
+  pointDuration: "3i",
   /**
    * Whether to sonify points in a dot plot as individual dots with quick sharp tones,
    * or as a continual tone by binning the points and sonifying a smoothed line "drawn"
@@ -51,7 +52,7 @@ const SonifyOptions = types.model("SonifyOptions", {
    * The release or "fade out" time after the duration of the note is over. Less than
    * 0.1 causes a noise with lots of points which doesn't sound good.
    */
-  synthReleaseTime: 0.1,
+  synthReleaseTime: 0.24,
 })
 .actions((self) => ({
   setDotPlotMode(mode: string) {
