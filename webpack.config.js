@@ -22,6 +22,35 @@ const DEPLOY_PATH = process.env.DEPLOY_PATH ?? null;
 // Derive DAVAI_VERSION from DEPLOY_PATH to show it in the UI
 const DAVAI_VERSION = DEPLOY_PATH ? DEPLOY_PATH.replace(/\/$/, '').split('/').pop() : 'local-build';
 
+const baseHtmlPluginConfig = {
+  template: 'src/index.html',
+  favicon: 'src/public/favicon.ico',
+};
+
+function configHtmlPlugins(config) {
+  const { filename } = config;
+  const numFolders = (filename.match(/\//g) || []).length;
+  const rootPath = '../'.repeat(numFolders);
+  const plugins = [
+    new HtmlWebpackPlugin({
+      ...baseHtmlPluginConfig,
+      ...config,
+      publicPath: rootPath ? `${rootPath}` : ''
+    })
+  ];
+  if (DEPLOY_PATH) {
+    plugins.push(
+      new HtmlWebpackPlugin({
+        ...baseHtmlPluginConfig,
+        ...config,
+        filename: filename.replace('.html', '-top.html'),
+        publicPath: `${rootPath}${DEPLOY_PATH}`
+      })
+    );
+  }
+  return plugins;
+}
+
 module.exports = (env, argv) => {
   const devMode = argv.mode !== 'production';
 
@@ -48,7 +77,10 @@ module.exports = (env, argv) => {
       ]
     },
     devtool: devMode ? 'eval-cheap-module-source-map' : 'source-map',
-    entry: './src/index.tsx',
+    entry: {
+      'index': './src/index.tsx',
+      'sound-demo': './src/sound-demo/index.tsx',
+    },
     mode: 'development',
     output: {
       path: path.resolve(__dirname, 'dist'),
@@ -156,18 +188,14 @@ module.exports = (env, argv) => {
       new MiniCssExtractPlugin({
         filename: devMode ? 'assets/[name].css' : 'assets/[name].[contenthash].css',
       }),
-      new HtmlWebpackPlugin({
+      ...configHtmlPlugins({
         filename: 'index.html',
-        template: 'src/index.html',
-        favicon: 'src/public/favicon.ico',
-        publicPath: '.',
+        chunks: ['index'],
       }),
-      ...(DEPLOY_PATH ? [new HtmlWebpackPlugin({
-        filename: 'index-top.html',
-        template: 'src/index.html',
-        favicon: 'src/public/favicon.ico',
-        publicPath: DEPLOY_PATH
-      })] : []),
+      ...configHtmlPlugins({
+        filename: 'sound-demo/index.html',
+        chunks: ['sound-demo'],
+      }),
       new CleanWebpackPlugin(),
       // Provide these environment variables to the built code
       // See https://webpack.js.org/plugins/environment-plugin/ for documentation
