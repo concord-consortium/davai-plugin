@@ -20,8 +20,8 @@ Generated from source comments and MST runtime introspection. Do not edit manual
 | sonify.dotPlotEachDotPitch       | string   | "440"                                       |
 | sonify.dotPlotMode               | enum     | "continual"                                 |
 | sonify.maxPolyphony              | number   | 120                                         |
-| sonify.pointDuration             | string   | "1i"                                        |
-| sonify.synthReleaseTime          | number   | 0.1                                         |
+| sonify.pointDuration             | string   | "3i"                                        |
+| sonify.synthReleaseTime          | number   | 0.24                                        |
 
 ## `dimensions.height`
 
@@ -88,8 +88,9 @@ how it affects performance.
 
 ## `sonify.pointDuration`
 
-Duration of each note when sonifying points. The value is in Tone.js notation. The default is
-"1i", which is supposed to be the shortest possible duration.
+Duration of each note when sonifying points. The value is in Tone.js notation. "3i" means
+3 ticks which by default is 0.0078s. The default attack time of the Synth envelope is 0.005s
+so this point duration gives the note time reach its full volume before the release phase begins.
 
 ## `sonify.synthReleaseTime`
 
