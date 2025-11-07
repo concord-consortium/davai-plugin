@@ -58,7 +58,8 @@ const SonifyOptions = types.model("SonifyOptions", {
    */
   scatterPlotEachDot: true,
   /**
-   * Play continual tone following the LSRL for the points in a scatter plot.
+   * Play continual tone following the least squares regression line (LSRL) for the points
+   * in a scatter plot.
    */
   scatterPlotLSRL: false,
 })
