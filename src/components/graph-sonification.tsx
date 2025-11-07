@@ -1,10 +1,10 @@
 import React, { useCallback, useEffect, useRef, useState } from "react";
 import { observer } from "mobx-react-lite";
 import * as Tone from "tone";
-import { GraphSonificationModelType } from "../models/graph-sonification-model";
 import { ErrorMessage } from "./error-message";
 import { createRoiAdornment, updateRoiAdornment } from "../utils/graph-sonification-utils";
 import { useShortcutsService } from "../contexts/shortcuts-service-context";
+import { useRootStore } from "../contexts/root-store-context";
 import { useTone } from "../hooks/use-tone";
 import { useSonificationScheduler } from "../hooks/use-sonification-scheduler";
 import { SonificationOptions } from "./sonification-options";
@@ -17,15 +17,20 @@ import LoopOffIcon from "../assets/not-loop-sonification-icon.svg";
 
 import "./graph-sonification.scss";
 
-interface IProps {
-  sonificationStore: GraphSonificationModelType;
-}
-
 const kDefaultDuration = 5;
 
-export const GraphSonification = observer(({sonificationStore}: IProps) => {
-  const { validGraphs, selectedGraph, setSelectedGraphID, timeFractions, timeValues,
-    pitchFractions, primaryBounds, binValues } = sonificationStore;
+export const GraphSonification = observer(() => {
+  const { sonificationStore } = useRootStore();
+  const {
+    validGraphs,
+    selectedGraph,
+    setSelectedGraphID,
+    timeFractions,
+    timeValues,
+    pitchFractions,
+    primaryBounds,
+    binValues
+  } = sonificationStore;
   const { bins, minBinEdge, maxBinEdge, binWidth } = binValues || {};
 
   const shortcutsService = useShortcutsService();
@@ -38,8 +43,10 @@ export const GraphSonification = observer(({sonificationStore}: IProps) => {
   const playPauseButtonRef = useRef<HTMLButtonElement>(null);
 
   const {osc, pan, poly, part, disposeUnivariateSources, cancelAndResetTransport, restartTransport} = useTone();
-  const { scheduleTones } = useSonificationScheduler({ selectedGraph, binValues, pitchFractions,
-    timeFractions, timeValues, primaryBounds, osc, pan, poly, part, durationRef });
+  const { scheduleTones } = useSonificationScheduler({
+    sonificationStore,
+    osc, pan, poly, part, durationRef
+  });
 
   const [showError, setShowError] = useState(false);
   const [speed, setSpeed] = useState(1);
@@ -82,6 +89,7 @@ export const GraphSonification = observer(({sonificationStore}: IProps) => {
 
   useEffect(() => {
     // reset the sonification state when there are updates to the data
+    // TODO: the sonificationStore should have a event which we can use to call reset instead.
     reset();
    }, [timeFractions, timeValues, pitchFractions, primaryBounds, bins, minBinEdge, maxBinEdge, binWidth, reset]);
 

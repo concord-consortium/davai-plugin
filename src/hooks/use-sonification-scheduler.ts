@@ -2,20 +2,11 @@
 import { useCallback } from "react";
 import * as Tone from "tone";
 import { interpolateBins, mapPitchFractionToFrequency, mapValueToStereoPan, isUnivariateDotPlot } from "../utils/graph-sonification-utils";
-import { ICODAPGraph } from "../types";
-import { IBinModel } from "../models/bin-model";
 import { useAppConfigContext } from "../contexts/app-config-context";
+import { GraphSonificationModelType } from "../models/graph-sonification-model";
 
 type Props = {
-  selectedGraph: ICODAPGraph | undefined;
-  binValues: IBinModel | undefined;
-  pitchFractions: number[];
-  timeFractions: number[];
-  timeValues: number[];
-  primaryBounds: {
-    upperBound: number | undefined;
-    lowerBound: number | undefined;
-  };
+  sonificationStore: GraphSonificationModelType;
   osc: React.MutableRefObject<Tone.Oscillator | null>;
   pan: React.MutableRefObject<Tone.Panner | null>;
   poly: React.MutableRefObject<Tone.PolySynth | null>;
@@ -23,10 +14,12 @@ type Props = {
   durationRef: React.MutableRefObject<number>;
 };
 
-export const useSonificationScheduler = ({ selectedGraph, binValues, pitchFractions, timeFractions, timeValues, primaryBounds,
+export const useSonificationScheduler = ({ sonificationStore,
   osc, pan, poly, part, durationRef}: Props) => {
 
-  const { sonify: { pointDuration, dotPlotMode, dotPlotEachDotPitch } } = useAppConfigContext();
+  const { selectedGraph, binValues, pitchFractions, timeFractions, timeValues, primaryBounds } = sonificationStore;
+
+  const { sonify: { pointDuration, dotPlotMode, dotPlotEachDotPitch, scatterPlotEachDot, scatterPlotLSRL } } = useAppConfigContext();
   const univariate = !!selectedGraph && isUnivariateDotPlot(selectedGraph);
 
   const scheduleUnivariateContinual = useCallback(() => {
@@ -62,6 +55,63 @@ export const useSonificationScheduler = ({ selectedGraph, binValues, pitchFracti
       osc.current?.frequency.linearRampToValueAtTime(freqValue, time + interval);
     }, freqsToSchedule).start(0);
   }, [binValues, primaryBounds, durationRef, osc, pan, part]);
+
+  const scheduleScatterPlotLSRL = useCallback(() => {
+    if (!primaryBounds || !pan.current) return;
+    const { lowerBound: timeLowerBound, upperBound: timeUpperBound } = primaryBounds;
+    if (!timeLowerBound || !timeUpperBound) return;
+
+
+    // Dispose of any existing oscillator before creating a new one to prevent memory leaks
+    if (osc.current) {
+      osc.current.dispose();
+      osc.current = null;
+    }
+    // TODO: what should the default frequency be?
+    osc.current = new Tone.Oscillator(220, "sine").connect(pan.current);
+    // this syncs the oscillator to the transport, so that when we call transport.start or
+    // transport.stop, the oscillator will start/stop accordingly
+    osc.current.sync().start(0).stop(durationRef.current);
+
+    const { slope, intercept } = sonificationStore.leastSquaresLinearRegression;
+    if (slope == null || intercept == null) return;
+
+    const stepCount = 1000;
+    const interval = durationRef.current / stepCount;
+
+    const freqsToSchedule: { time: number; freqValue: number; panValue: number }[] = [];
+    const timeRange = timeUpperBound - timeLowerBound;
+    const yStart = slope * timeLowerBound + intercept;
+    const yEnd = slope * timeUpperBound + intercept;
+    const yLower = Math.min(yStart, yEnd);
+    const yUpper = Math.max(yStart, yEnd);
+    const yRange = yUpper - yLower;
+    for (let i = 0; i <= stepCount; i++) {
+      const time = i * interval;
+      const xValue = timeLowerBound + (i / stepCount) * (timeRange);
+      const yValue = slope * xValue + intercept;
+      // It would be best to use a pitch scale that was the same for both the each dot
+      // sonification and the LSRL sonification. However the range of y values might be
+      // much larger for the LSRL than the individual points. For now we just map over
+      // base it on the yValue at the extremes of the x range.
+      // If the yRange is 0 the line is flat, we just use a pitch fraction of 0.5.
+      // This way the pitch is in the middle of the range.
+      const pitchFraction = yRange ? (yValue - yLower) / yRange : 0.5;
+      const freqValue = mapPitchFractionToFrequency(pitchFraction);
+      const panValue = mapValueToStereoPan(xValue, timeLowerBound, timeUpperBound);
+      freqsToSchedule.push({ time, freqValue, panValue });
+    }
+
+    // FIXME: This use of a single part for both the LSRL and the each-dot sonification
+    // can cause problems because we aren't keeping track of both parts in order to dispose
+    // them.
+    part.current = new Tone.Part((time, note) => {
+      const { freqValue, panValue } = note;
+      pan.current?.pan.linearRampToValueAtTime(panValue, time + interval);
+      osc.current?.frequency.linearRampToValueAtTime(freqValue, time + interval);
+    }, freqsToSchedule).start(0);
+  }, [durationRef, osc, pan, part, primaryBounds, sonificationStore.leastSquaresLinearRegression]);
+
 
   const scheduleEachDot = useCallback(() => {
     if (!primaryBounds) return;
@@ -107,13 +157,18 @@ export const useSonificationScheduler = ({ selectedGraph, binValues, pitchFracti
     if (!selectedGraph) return;
 
     if (selectedGraph.plotType === "scatterPlot") {
-      scheduleEachDot();
+      if (scatterPlotEachDot) {
+        scheduleEachDot();
+      }
+      if (scatterPlotLSRL) {
+        scheduleScatterPlotLSRL();
+      }
     } else if (univariate && dotPlotMode === "continual") {
       scheduleUnivariateContinual();
     } else if (univariate && dotPlotMode === "each-dot") {
       scheduleEachDot();
     }
-  }, [osc, part, selectedGraph, univariate, dotPlotMode, scheduleEachDot, scheduleUnivariateContinual]);
+  }, [osc, part, selectedGraph, univariate, dotPlotMode, scatterPlotEachDot, scatterPlotLSRL, scheduleEachDot, scheduleScatterPlotLSRL, scheduleUnivariateContinual]);
 
   return {
     scheduleTones

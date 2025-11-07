@@ -188,9 +188,7 @@ export const App = observer(() => {
         onCancel={handleCancel}
         onSubmit={handleChatInputSubmit}
       />
-      <GraphSonification
-        sonificationStore={sonificationStore}
-      />
+      <GraphSonification />
       <UserOptions assistantStore={assistantStore} onInitializeAssistant={handleInitializeAssistant} />
       {/*
         The aria-live region is used to announce the last message from DAVAI.

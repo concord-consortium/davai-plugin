@@ -6,6 +6,7 @@ import { CODAPGraphModel, ICODAPGraphModel } from "./codap-graph-model";
 import { BinModel } from "./bin-model";
 import { sendCODAPRequest, getGraphDetails } from "../utils/codap-api-utils";
 import { removeRoiAdornment, isGraphSonifiable } from "../utils/graph-sonification-utils";
+import { leastSquaresLinearRegression } from "../utils/graph-utils";
 
 export const GraphSonificationModel = types
   .model("GraphSonificationModel", {
@@ -72,6 +73,15 @@ export const GraphSonificationModel = types
       const timeAttr = self.timeAttr;
       return self.validItems.map((item: CodapItem) => item.values[timeAttr]);
     },
+    get points() {
+      const { timeAttr, pitchAttr } = self;
+      if (!timeAttr || !pitchAttr) return [];
+
+      return self.validItems.map((item: CodapItem) => ({
+        x: item.values[timeAttr],
+        y: item.values[pitchAttr]
+      }));
+    },
     get pitchFractions() {
       if (!self.pitchAttr) return [];
 
@@ -94,6 +104,9 @@ export const GraphSonificationModel = types
       const timeRange = upperBound - lowerBound || 1;
       return self.timeValues.map((value: number) => (value - lowerBound) / timeRange);
     },
+    get leastSquaresLinearRegression() {
+      return leastSquaresLinearRegression(self.points, false);
+    }
   }))
   .actions((self) => ({
     clearGraphs() {

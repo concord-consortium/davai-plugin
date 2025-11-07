@@ -53,6 +53,14 @@ const SonifyOptions = types.model("SonifyOptions", {
    * 0.1 causes a noise with lots of points which doesn't sound good.
    */
   synthReleaseTime: 0.24,
+  /**
+   * Whether each dot in a scatter plot gets its own quick sharp tone.
+   */
+  scatterPlotEachDot: true,
+  /**
+   * Play continual tone following the LSRL for the points in a scatter plot.
+   */
+  scatterPlotLSRL: false,
 })
 .actions((self) => ({
   setDotPlotMode(mode: string) {
@@ -60,6 +68,12 @@ const SonifyOptions = types.model("SonifyOptions", {
       throw new Error(`Invalid dotPlotMode: ${mode}`);
     }
     self.dotPlotMode = mode;
+  },
+  setScatterPlotEachDot(value: boolean) {
+    self.scatterPlotEachDot = value;
+  },
+  setScatterPlotLSRL(value: boolean) {
+    self.scatterPlotLSRL = value;
   }
 }));
 
