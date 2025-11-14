@@ -1,12 +1,11 @@
 import React, { useCallback, useEffect, useRef, useState } from "react";
 import { observer } from "mobx-react-lite";
+import { autorun } from "mobx";
 import * as Tone from "tone";
 import { ErrorMessage } from "./error-message";
 import { createRoiAdornment, updateRoiAdornment } from "../utils/graph-sonification-utils";
 import { useShortcutsService } from "../contexts/shortcuts-service-context";
 import { useRootStore } from "../contexts/root-store-context";
-import { useTone } from "../hooks/use-tone";
-import { useSonificationScheduler } from "../hooks/use-sonification-scheduler";
 import { SonificationOptions } from "./sonification-options";
 
 import PlayIcon from "../assets/play-sonification-icon.svg";
@@ -17,10 +16,8 @@ import LoopOffIcon from "../assets/not-loop-sonification-icon.svg";
 
 import "./graph-sonification.scss";
 
-const kDefaultDuration = 5;
-
 export const GraphSonification = observer(() => {
-  const { sonificationStore } = useRootStore();
+  const { sonificationStore, transportManager } = useRootStore();
   const {
     validGraphs,
     selectedGraph,
@@ -35,100 +32,40 @@ export const GraphSonification = observer(() => {
 
   const shortcutsService = useShortcutsService();
 
-  const durationRef = useRef(kDefaultDuration);
-  const frame = useRef<number | null>(null);
-  const isLoopingRef = useRef(false);
-  const shouldScheduleTones = useRef(false);
-
   const playPauseButtonRef = useRef<HTMLButtonElement>(null);
 
-  const {osc, pan, poly, part, disposeUnivariateSources, cancelAndResetTransport, restartTransport} = useTone();
-  const { scheduleTones } = useSonificationScheduler({
-    sonificationStore,
-    osc, pan, poly, part, durationRef
-  });
-
   const [showError, setShowError] = useState(false);
-  const [speed, setSpeed] = useState(1);
-  const [isLooping, setIsLooping] = useState(false);
-  const [playState, setPlayState] = useState({
-    playing: false,
-    position: 0,
-    ended: false
-  });
 
   const selectedGraphID = selectedGraph?.id;
-  const isAtBeginning = playState.position === 0;
 
   useEffect(() => {
     return () => {
-      // Ensure requestAnimationFrame is cancelled if the component unmounts during playback
-      if (frame.current) {
-        cancelAnimationFrame(frame.current);
-        frame.current = null;
-      }
+      // Ensure the transport and its schedulers are stopped when unmounting
+      transportManager.reset();
     };
-   }, []);
+   }, [transportManager]);
 
   const reset = useCallback(() => {
-    setPlayState({ playing: false, ended: false, position: 0 });
-    cancelAndResetTransport();
-    disposeUnivariateSources();
-    // we want to reschedule tones the next time play is pressed
-    shouldScheduleTones.current = true;
+    transportManager.reset();
 
     if (selectedGraphID) {
       createRoiAdornment(selectedGraphID);
     }
 
-    if (frame.current) {
-      cancelAnimationFrame(frame.current);
-      frame.current = null;
-    }
-  }, [cancelAndResetTransport, disposeUnivariateSources, selectedGraphID]);
+  }, [selectedGraphID, transportManager]);
 
   useEffect(() => {
-    // reset the sonification state when there are updates to the data
-    // TODO: the sonificationStore should have a event which we can use to call reset instead.
+    // reset the sonification state and re-add the ROI adornment when there are updates to the data
     reset();
-   }, [timeFractions, timeValues, pitchFractions, primaryBounds, bins, minBinEdge, maxBinEdge, binWidth, reset]);
+  }, [timeFractions, timeValues, pitchFractions, primaryBounds, bins, minBinEdge, maxBinEdge, binWidth, reset]);
 
-  useEffect(() => { isLoopingRef.current = isLooping; }, [isLooping]);
-  useEffect(() => { durationRef.current = kDefaultDuration / speed; }, [speed]);
-
-  const handlePlayEnd = useCallback(() => {
-    const position = Tone.getTransport().seconds;
-    setPlayState({ playing: false, ended: true, position });
-    Tone.getTransport().stop();
-  }, []);
-
-  const animateSonification = useCallback(() => {
-    if (!selectedGraphID) return;
-    const step = () => {
-      const elapsed = Tone.getTransport().seconds;
-      const fraction = Math.min(elapsed / durationRef.current, 1);
-
-      updateRoiAdornment(selectedGraphID, fraction);
-      setPlayState(prev => ({ ...prev, position: elapsed }));
-
-      if (fraction < 1) {
-        frame.current = requestAnimationFrame(step);
-        return;
-      }
-
-      if (frame.current && !isLoopingRef.current) {
-        cancelAnimationFrame(frame.current);
-        frame.current = null;
-        handlePlayEnd();
-      } else {
-        updateRoiAdornment(selectedGraphID, 0);
-        restartTransport();
-        frame.current = requestAnimationFrame(step);
-      }
-    };
-
-    frame.current = requestAnimationFrame(step);
-  }, [handlePlayEnd, restartTransport, selectedGraphID]);
+  // Keep Roi Adornment in sync with transport position
+  useEffect(() => {
+    return autorun(() => {
+      if (!selectedGraphID) return;
+      updateRoiAdornment(selectedGraphID, transportManager.position / transportManager.duration);
+    });
+  }, [selectedGraphID, transportManager]);
 
   const handlePlayPause = useCallback(() => {
     if (!selectedGraphID) {
@@ -137,45 +74,8 @@ export const GraphSonification = observer(() => {
     }
     setShowError(false);
 
-    if (shouldScheduleTones.current) {
-      scheduleTones();
-      shouldScheduleTones.current = false;
-    }
-
-    if (playState.ended || isAtBeginning) {
-      setPlayState({ playing: true, ended: false, position: 0 });
-      updateRoiAdornment(selectedGraphID, 0);
-      scheduleTones();
-      restartTransport();
-      animateSonification();
-      return;
-    }
-
-    setPlayState(prev => {
-      const position = Tone.getTransport().seconds;
-      // if we were paused, resume
-      if (!prev.playing) {
-        Tone.getTransport().start();
-        animateSonification();
-        return {
-          playing: true,
-          ended: false,
-          position
-        };
-      }
-      // otherwise, pause
-      Tone.getTransport().pause();
-      if (frame.current) {
-        cancelAnimationFrame(frame.current);
-        frame.current = null;
-      }
-      return {
-        playing: false,
-        ended: false,
-        position,
-      };
-    });
-  }, [animateSonification, isAtBeginning, restartTransport, scheduleTones, selectedGraphID, playState.ended]);
+    transportManager.playPause();
+  }, [selectedGraphID, transportManager]);
 
   // Save handlePlayPause as a ref for the shortcut handler. This avoids re-registering the shortcut on
   // every render.
@@ -196,55 +96,12 @@ export const GraphSonification = observer(() => {
     }, { focus: true });
   }, [shortcutsService]);
 
-  const handleReset = () => {
-    if (isAtBeginning || !selectedGraphID) return;
-    reset();
-  };
-
   const handleToggleLoop = () => {
-    setIsLooping(!isLooping);
+    transportManager.setLooping(!transportManager.looping);
   };
 
   const handleSetSpeed = (newSpeed: number) => {
-    const isPlaying = playState.playing;
-    const isPaused = !playState.playing && !playState.ended && !isAtBeginning;
-
-    const oldDuration = durationRef.current;
-    const newDuration = kDefaultDuration / newSpeed;
-
-    durationRef.current = newDuration;
-    setSpeed(newSpeed);
-
-    if (isPlaying) {
-      // pause to get accurate position in next step
-      Tone.getTransport().pause();
-    }
-
-    if (isPlaying || isPaused) {
-      const oldFraction = Tone.getTransport().seconds / oldDuration;
-      // now stop the transport + synced sources and cancel any scheduled events
-      Tone.getTransport().stop();
-      Tone.getTransport().cancel();
-
-      if (frame.current) {
-        cancelAnimationFrame(frame.current);
-        frame.current = null;
-      }
-
-      scheduleTones();
-      const newPositionSeconds = newDuration * oldFraction;
-      Tone.getTransport().seconds = newPositionSeconds;
-      setPlayState(prev => ({
-        ...prev,
-        position: newPositionSeconds,
-      }));
-    }
-
-    if (isPlaying) {
-      // if we were playing, restart the transport + animation
-      Tone.getTransport().start();
-      animateSonification();
-    }
+    transportManager.setSpeed(newSpeed);
   };
 
   const handleSelectGraph =  async (graphId: string) => {
@@ -277,6 +134,8 @@ export const GraphSonification = observer(() => {
     });
   };
 
+  const { speed, looping, isPlaying, isAtBeginning } = transportManager;
+
   return (
     <div className="graph-sonification control-panel" role="group" aria-labelledby="control-panel-heading">
       <h2 id="control-panel-heading">Sonification</h2>
@@ -295,13 +154,13 @@ export const GraphSonification = observer(() => {
           onClick={handlePlayPause}
           aria-disabled={!selectedGraphID}
         >
-          { playState.playing ? <PauseIcon /> : <PlayIcon /> }
-          <span>{playState.playing ? "Pause" : "Play" }</span>
+          { isPlaying ? <PauseIcon /> : <PlayIcon /> }
+          <span>{isPlaying ? "Pause" : "Play" }</span>
         </button>
         <button
           className={`reset ${isAtBeginning && "disabled"}`}
           data-testid="reset-button"
-          onClick={handleReset}
+          onClick={reset}
           aria-disabled={isAtBeginning}
         >
           <ResetIcon />
@@ -312,10 +171,10 @@ export const GraphSonification = observer(() => {
           data-testid="repeat-button"
           onClick={handleToggleLoop}
           role="switch"
-          aria-checked={isLooping}
+          aria-checked={looping}
           aria-label="Loop Playback"
         >
-          {isLooping ? <LoopIcon /> : <LoopOffIcon /> }
+          {looping ? <LoopIcon /> : <LoopOffIcon /> }
           <span>Repeat</span>
         </button>
         <div className="sonify-speed-control">

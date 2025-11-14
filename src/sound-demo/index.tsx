@@ -1,6 +1,7 @@
 import React from "react";
 import { createRoot } from "react-dom/client";
-import { SoundDemo } from "./sound-demo";
+import { LoopDemo } from "./loop-demo";
+import { TransportDemo } from "./transport-demo";
 
 import "./index.scss";
 
@@ -9,7 +10,10 @@ if (container) {
   const root = createRoot(container);
 
   root.render(
-    <SoundDemo/>
+    <>
+      <LoopDemo/>
+      <TransportDemo/>
+    </>
   );
 }
 

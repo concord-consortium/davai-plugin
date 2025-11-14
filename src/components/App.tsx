@@ -19,6 +19,7 @@ import { isGraphSonifiable } from "../utils/graph-sonification-utils";
 import { ICODAPGraph } from "../types";
 
 import "./App.scss";
+import { GraphSonificationScheduler } from "../models/graph-sonification-scheduler";
 
 const kPluginName = "DAVAI";
 const kVersion = process.env.DAVAI_VERSION || "local-build";
@@ -27,7 +28,7 @@ export const App = observer(() => {
   const appConfig = useAppConfigContext();
   const shortcutsService = useShortcutsService();
   const { ariaLiveText, setAriaLiveText } = useAriaLive();
-  const { assistantStore, sonificationStore } = useRootStore();
+  const { assistantStore, sonificationStore, transportManager } = useRootStore();
   const { playProcessingTone } = appConfig;
   const dimensions = { width: appConfig.dimensions.width, height: appConfig.dimensions.height };
   const subscribedDataCtxsRef = useRef<string[]>([]);
@@ -109,6 +110,13 @@ export const App = observer(() => {
         addDataContextChangeListener(ctx.name, handleDataContextChangeNotice);
       });
       await sonificationStore.setGraphs();
+
+      // Configure the transport manager so it plays sonifications of the graphs
+      const sonificationScheduler = new GraphSonificationScheduler(
+        sonificationStore,
+        appConfig,
+      );
+      transportManager.setTransportEventScheduler(sonificationScheduler);
     };
 
     init();

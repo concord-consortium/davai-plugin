@@ -1,4 +1,4 @@
-import { types, Instance, SnapshotIn, SnapshotOut, TypeOfValue, getType, isStateTreeNode } from "mobx-state-tree";
+import { types, Instance, SnapshotIn, SnapshotOut, TypeOfValue, getType, isStateTreeNode, getEnv, IAnyStateTreeNode } from "mobx-state-tree";
 import { AppMode, AppModeValues } from "../types";
 
 // Selects keys from T whose values are boolean
@@ -179,6 +179,18 @@ export interface AppConfigModelType extends Instance<typeof AppConfigModel> {}
 export function isAppConfig(obj: unknown): obj is AppConfigModelType {
   return !!obj && typeof obj === "object"
     && isStateTreeNode(obj) && getType(obj) === AppConfigModel;
+}
+
+export function getEnvAppConfig(self: IAnyStateTreeNode): AppConfigModelType {
+  const env = getEnv(self);
+  if (!env || !env.appConfig) {
+    throw new Error("AppConfig not found in environment");
+  }
+  const { appConfig } = env;
+  if (!isAppConfig(appConfig)) {
+    throw new Error("appConfig in environment is not of type AppConfigModelType");
+  }
+  return appConfig;
 }
 
 export type AppConfigToggleOptions = Parameters<AppConfigModelType["toggleOption"]>[0];
