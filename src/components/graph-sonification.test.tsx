@@ -6,6 +6,8 @@ import { GraphSonificationModelType } from "../models/graph-sonification-model";
 import { ICODAPGraph } from "../types";
 import { AppConfigProvider } from "../contexts/app-config-context";
 import { ShortcutsServiceProvider } from "../contexts/shortcuts-service-context";
+import { RootStoreProvider } from "../contexts/root-store-context";
+import { IRootStore } from "../models/root-store";
 
 const mockAvailableGraphs = [
   { id: 1, name: "Graph 1", plotType: "scatterPlot" },
@@ -51,6 +53,9 @@ describe("GraphSonification Component", () => {
     selectedGraphID: undefined
   }) as unknown as GraphSonificationModelType;
 
+  const mockRootStore = {
+    sonificationStore: mockSonificationStore
+  } as unknown as IRootStore;
   beforeEach(() => {
     jest.clearAllMocks();
     mockSonificationStore.removeSelectedGraphID();
@@ -60,11 +65,11 @@ describe("GraphSonification Component", () => {
   const renderGraphSonification = () => {
     render(
       <AppConfigProvider>
-        <ShortcutsServiceProvider>
-          <GraphSonification
-            sonificationStore={mockSonificationStore}
-          />
-        </ShortcutsServiceProvider>
+        <RootStoreProvider rootStore={mockRootStore}>
+          <ShortcutsServiceProvider>
+            <GraphSonification />
+          </ShortcutsServiceProvider>
+        </RootStoreProvider>
       </AppConfigProvider>
     );
   };

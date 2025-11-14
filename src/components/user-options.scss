@@ -16,16 +16,21 @@
       width: calc(100% - 20px);
       padding: 5px 10px;
       gap: 2.5px;
+      font-size: .75rem;
 
-      &:nth-child(2) {
+      &:first-of-type {
         padding-top: 10px;
       }
-      &:last-child {
+      &:last-of-type {
         padding-bottom: 10px;
       }
 
+      &label {
+        cursor: pointer;
+        user-select: none;
+      }
+
       label {
-        font-size: .75rem;
         margin-right: 2.5px;
         user-select: none;
         cursor: pointer;

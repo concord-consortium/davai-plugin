@@ -6,9 +6,15 @@ import { timeStamp } from "../utils/utils";
 
 export const RootStoreContext = createContext<IRootStore | null>(null);
 
-export const RootStoreProvider = ({ children }: { children: React.ReactNode; }) => {
+interface RootStoreProviderProps {
+  children: React.ReactNode;
+  rootStore?: IRootStore;
+}
+
+export const RootStoreProvider = ({ children, rootStore: providedRootStore }: RootStoreProviderProps) => {
   const appConfig = useAppConfigContext();
   const [rootStore] = useState(() => {
+    if (providedRootStore) return providedRootStore;
     return RootStore.create({
       assistantStore: {
         transcriptStore: {

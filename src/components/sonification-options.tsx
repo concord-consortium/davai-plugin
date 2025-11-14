@@ -16,49 +16,48 @@ export const SonificationOptions: React.FC = observer(function SonificationOptio
     <>
       <div className="control-panel-section" role="group" aria-labelledby="dot-plot-options-heading" data-testid="dot-plot-options">
         <h3 id="dot-plot-options-heading">Dot Plot</h3>
-        <div className="user-option">
-          <div role="radiogroup" aria-label="Dot plot tone options">
-            <div className="user-option">
-              <input
-                type="radio"
-                id="continual-tone"
-                name="dot-plot-tone"
-                value={DotPlotMode.CONTINUAL}
-                checked={dotPlotMode === DotPlotMode.CONTINUAL}
-                onChange={handleDotPlotModeChange}
-                data-testid="continual-tone-option"
-              />
-              <label
-                data-testid="continual-tone-label"
-                htmlFor="continual-tone"
-              >
-                Continual tone set by count in each bin
-              </label>
-            </div>
+        <div role="radiogroup" aria-label="Dot plot tone options">
+          <label className="user-option">
+            <input
+              type="radio"
+              name="dot-plot-tone"
+              value={DotPlotMode.CONTINUAL}
+              checked={dotPlotMode === DotPlotMode.CONTINUAL}
+              onChange={handleDotPlotModeChange}
+            />
+            Continual tone set by count in each bin
+          </label>
 
-            <div className="user-option">
-              <input
-                type="radio"
-                id="each-dot-tone"
-                name="dot-plot-tone"
-                value={DotPlotMode.EACH_DOT}
-                checked={dotPlotMode === DotPlotMode.EACH_DOT}
-                onChange={handleDotPlotModeChange}
-                data-testid="each-dot-tone-option"
-              />
-              <label
-                data-testid="each-dot-tone-label"
-                htmlFor="each-dot-tone"
-              >
-                Each dot gets a sharp quick tone.
-              </label>
-            </div>
-          </div>
+          <label className="user-option">
+            <input
+              type="radio"
+              name="dot-plot-tone"
+              value={DotPlotMode.EACH_DOT}
+              checked={dotPlotMode === DotPlotMode.EACH_DOT}
+              onChange={handleDotPlotModeChange}
+            />
+            Each dot gets a sharp quick tone.
+          </label>
         </div>
       </div>
       <div className="control-panel-section" role="group" aria-labelledby="scatter-plot-options-heading" data-testid="scatter-plot-options">
         <h3 id="scatter-plot-options-heading">Scatter Plot</h3>
-        <div>No options available</div>
+        <label className="user-option">
+          <input
+            type="checkbox"
+            checked={sonify.scatterPlotEachDot}
+            onChange={(e) => sonify.setScatterPlotEachDot(e.target.checked)}
+          />
+          Each dot gets a sharp quick tone.
+        </label>
+        <label className="user-option">
+          <input
+            type="checkbox"
+            checked={sonify.scatterPlotLSRL}
+            onChange={(e) => sonify.setScatterPlotLSRL(e.target.checked)}
+          />
+          Continual tone for LSRL
+        </label>
       </div>
     </>
   );
