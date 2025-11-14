@@ -48,7 +48,7 @@ export const SonificationOptions: React.FC = observer(function SonificationOptio
             checked={sonify.scatterPlotEachDot}
             onChange={(e) => sonify.setScatterPlotEachDot(e.target.checked)}
           />
-          Each dot gets a sharp quick tone again.
+          Each dot gets a sharp quick tone.
         </label>
         <label className="user-option">
           <input
