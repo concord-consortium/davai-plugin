@@ -26,11 +26,11 @@ const SonifyOptions = types.model("SonifyOptions", {
    */
   defaultNumBins: 14,
   /**
-   * How many simultaneous sounds can be played during sonification. This value of 120
+   * How many simultaneous sounds can be played during sonification. This value of 200
    * was chosen to support graphs with many points in a cluster. It hasn't been tested to see
    * how it affects performance.
    */
-  maxPolyphony: 120,
+  maxPolyphony: 200,
   /**
    * Duration of each note when sonifying points. The value is in Tone.js notation. "3i" means
    * 3 ticks which by default is 0.0078s. The default attack time of the Synth envelope is 0.005s

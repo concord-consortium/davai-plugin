@@ -148,7 +148,7 @@ export class GraphSonificationScheduler implements ITransportEventScheduler {
     const { lowerBound: timeLowerBound, upperBound: timeUpperBound } = primaryBounds;
     if (timeLowerBound == null || timeUpperBound == null) return;
 
-    const { pointDuration, dotPlotEachDotPitch, maxPolyphony } = this.appConfig.sonify;
+    const { pointDuration, dotPlotEachDotPitch, maxPolyphony, synthReleaseTime } = this.appConfig.sonify;
 
     const univariate = !!selectedGraph && isUnivariateDotPlot(selectedGraph);
 
@@ -176,7 +176,12 @@ export class GraphSonificationScheduler implements ITransportEventScheduler {
       return { time: offsetSeconds, freqValues };
     });
 
+    console.log("Setting up each-dot sonification with events:", {
+      maxPolyphony,
+      pointDuration,
+    });
     const poly = new Tone.PolySynth({ maxPolyphony }).connect(this.manager.input);
+    poly.set({ envelope: { release: synthReleaseTime } });
 
     const part = new Tone.Part((time, note) => {
       poly.triggerAttackRelease(note.freqValues, pointDuration, time);
