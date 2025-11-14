@@ -1,7 +1,7 @@
 import * as Tone from "tone";
 import { GraphSonificationModelType } from "./graph-sonification-model";
 import { ITransportEventScheduler, kStepCount, TransportManager } from "./transport-manager";
-import { interpolateBins, isUnivariateDotPlot, mapPitchFractionToFrequency } from "../utils/graph-sonification-utils";
+import { interpolateBins, isUnivariateDotPlot, kLowerFreqBound, mapPitchFractionToFrequency } from "../utils/graph-sonification-utils";
 import { AppConfigModelType } from "./app-config-model";
 
 export class GraphSonificationScheduler implements ITransportEventScheduler {
@@ -64,7 +64,7 @@ export class GraphSonificationScheduler implements ITransportEventScheduler {
     const interval = this.manager.duration / kStepCount;
     const smoothBinValues: number[] = interpolateBins(bins, kStepCount);
 
-    const osc = new Tone.Oscillator(220, "sine").connect(this.manager.input);
+    const osc = new Tone.Oscillator(kLowerFreqBound, "sine").connect(this.manager.input);
     // this syncs the oscillator to the transport, so that when we call transport.start or
     // transport.stop, the oscillator will start/stop accordingly
     osc.sync().start(0);
@@ -78,7 +78,7 @@ export class GraphSonificationScheduler implements ITransportEventScheduler {
 
     const part = new Tone.Part((time, value) => {
       const { freqValue } = value;
-      // FIXME: The frequency is starting at 220 and then ramped to the first value
+      // FIXME: The frequency is starting at kLowerFreqBound and then ramped to the first value
       // It should start at least at the first value, and possibly we should skip the first
       // value in this Part.
       osc.frequency.linearRampToValueAtTime(freqValue, time + interval);
@@ -96,12 +96,12 @@ export class GraphSonificationScheduler implements ITransportEventScheduler {
     const { lowerBound: timeLowerBound, upperBound: timeUpperBound } = primaryBounds;
     if (timeLowerBound == null || timeUpperBound == null) return;
 
-    // TODO: Default frequency?
-    const osc = new Tone.Oscillator(220, "sine").connect(this.manager.input);
+    // TODO: We are using the kLowerFreqBound as the initial frequency, probably it should
+    // be the frequency at timeLowerBound.
+    const osc = new Tone.Oscillator(kLowerFreqBound, "sine").connect(this.manager.input);
     // this syncs the oscillator to the transport, so that when we call transport.start or
     // transport.stop, the oscillator will start/stop accordingly
-    // TODO: is the stop necessary here? Won't it just stop when the transport stops?
-    osc.sync().start(0).stop(this.manager.duration);
+    osc.sync().start(0);
 
     const { slope, intercept } = leastSquaresLinearRegression;
     if (slope == null || intercept == null) return;
