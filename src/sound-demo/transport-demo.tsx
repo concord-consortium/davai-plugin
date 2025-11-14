@@ -8,6 +8,12 @@ import { action, makeObservable, observable } from "mobx";
 // const kStartDelay = "+0.5";
 const kStartDelay = undefined;
 
+// Simple logger function to avoid lint errors when console.log is disabled
+function log(...args: any[]) {
+  // eslint-disable-next-line no-console
+  console.log(...args);
+}
+
 class TransportManager {
   position = Tone.getTransport().seconds;
   oscillator = new Tone.Oscillator(220, "sine");
@@ -84,12 +90,12 @@ class TransportManager {
     await Tone.start();
 
     if (Tone.getTransport().state === "started") {
-      console.log("Pausing transport", {
+      log("Pausing transport", {
         "Tone.now()": Tone.now(),
       });
       Tone.getTransport().pause(Tone.immediate());
     } else {
-      console.log("Starting transport", {
+      log("Starting transport", {
         "Tone.now()": Tone.now(),
       });
       // Start will resume from the current position
@@ -134,26 +140,26 @@ class TransportManager {
   }
 
   handleStart(eventAbsoluteTime: number, startTransportTime: number) {
-    console.log("Start:", { eventAbsoluteTime, startTransportTime });
+    log("Start:", { eventAbsoluteTime, startTransportTime });
     this.updateTransportState(eventAbsoluteTime);
     // This might cause a jump backwards
     this.animationFrameStep();
   }
 
   handleStop(eventAbsoluteTime: number) {
-    console.log("Stop:", { eventAbsoluteTime });
+    log("Stop:", { eventAbsoluteTime });
     this.updateTransportState(eventAbsoluteTime);
   }
 
   handlePause(eventAbsoluteTime: number) {
-    console.log("Pause:", { eventAbsoluteTime });
+    log("Pause:", { eventAbsoluteTime });
     this.updateTransportState(eventAbsoluteTime);
   }
 }
 
 export const TransportDemo = observer(function TransportDemo() {
   const [manager] = useState(() => new TransportManager());
-  console.log("Rendering TransportDemo", {
+  log("Rendering TransportDemo", {
      "Tone.now()": Tone.now(),
      "Manager.position": manager.position,
   });

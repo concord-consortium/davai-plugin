@@ -123,6 +123,7 @@ export class TransportManager {
     this.updateState(eventTime);
     // It seems like sometimes the position isn't exactly 0 when stopped
     if (this.position !== 0) {
+      // eslint-disable-next-line no-console
       console.log("TransportManager: transport stopped but position is not zero", {
         managerSeconds: this.position,
         transportSeconds: Tone.getTransport().seconds,

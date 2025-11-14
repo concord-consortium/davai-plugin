@@ -148,8 +148,6 @@ class Looper {
   }
 
   async togglePlayPause() {
-    console.log("play/pause begin");
-
     await Tone.start();
 
     if (!this.playing) {
@@ -183,7 +181,6 @@ class Looper {
       this.playing = false;
       this.loop?.dispose();
     }
-    console.log("play/pause end");
   }
 }
 
