@@ -121,10 +121,11 @@ export class GraphSonificationScheduler implements ITransportEventScheduler {
       const yValue = slope * xValue + intercept;
       // It would be best to use a pitch scale that was the same for both the each dot
       // sonification and the LSRL sonification. However the range of y values might be
-      // much larger for the LSRL than the individual points. For now we just map over
+      // much larger for the LSRL than the individual points. For now we just
       // base it on the yValue at the extremes of the x range.
-      // If the yRange is 0 the line is flat, we just use a pitch fraction of 0.5.
+      // If the yRange is 0 the line is flat, we use a pitch fraction of 0.5.
       // This way the pitch is in the middle of the range.
+      // TODO: if we have the graph axis limits we could use to get a better pitch scale.
       const pitchFraction = yRange ? (yValue - yLower) / yRange : 0.5;
       const freqValue = mapPitchFractionToFrequency(pitchFraction);
       freqsToSchedule.push({ time, freqValue });

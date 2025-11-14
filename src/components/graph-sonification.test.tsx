@@ -1,5 +1,4 @@
 import React from "react";
-import { observable } from "mobx";
 import { types } from "mobx-state-tree";
 import { render, fireEvent, screen } from "@testing-library/react";
 import { GraphSonification } from "./graph-sonification";

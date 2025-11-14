@@ -1,7 +1,6 @@
 import React, { useCallback, useEffect, useRef, useState } from "react";
 import { observer } from "mobx-react-lite";
 import { autorun } from "mobx";
-import * as Tone from "tone";
 import { ErrorMessage } from "./error-message";
 import { createRoiAdornment, updateRoiAdornment } from "../utils/graph-sonification-utils";
 import { useShortcutsService } from "../contexts/shortcuts-service-context";
