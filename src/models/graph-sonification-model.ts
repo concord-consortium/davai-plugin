@@ -1,4 +1,4 @@
-import { flow, SnapshotIn, types } from "mobx-state-tree";
+import { flow, Instance, SnapshotIn, types } from "mobx-state-tree";
 import { reaction } from "mobx";
 import { CodapItem } from "../types";
 import { getAllItems } from "@concord-consortium/codap-plugin-api";
@@ -219,4 +219,4 @@ export const GraphSonificationModel = types
     }
   }));
 
-export type GraphSonificationModelType = typeof GraphSonificationModel.Type;
+export interface GraphSonificationModelType extends Instance<typeof GraphSonificationModel> {}

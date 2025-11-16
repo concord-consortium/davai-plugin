@@ -1,6 +1,6 @@
 import { when } from "mobx";
 import { createKeybindingsHandler } from "../utils/tinykeys";
-import { AppConfigModel, AppConfigModelType } from "../models/app-config-model";
+import { AppConfigModel, AppConfigModelSnapshot, AppConfigModelType } from "../models/app-config-model";
 import { ShortcutsService } from "./shortcuts-service-context";
 import appConfigJSON from "../app-config.json";
 
@@ -21,7 +21,7 @@ describe("ShortcutsService", () => {
   let mockHandler: jest.Mock;
 
   beforeEach(() => {
-    appConfig = AppConfigModel.create(appConfigJSON);
+    appConfig = AppConfigModel.create(appConfigJSON as AppConfigModelSnapshot);
     shortcutsService = new ShortcutsService(appConfig);
     mockHandler = jest.fn();
     jest.spyOn(window, "addEventListener");
