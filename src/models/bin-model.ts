@@ -1,5 +1,5 @@
-import { getEnv, Instance, types } from "mobx-state-tree";
-import { isAppConfig } from "./app-config-model";
+import { Instance, types } from "mobx-state-tree";
+import { getEnvAppConfig } from "./app-config-model";
 
 // note: this binning logic is taken from CODAP itself, since the API doesn't support binning directly
 // the original code can be found here:
@@ -16,21 +16,10 @@ export const BinModel = types.model("BinModel", {
     if (self.values.length === 0) return 0;
     return Math.max(...self.values);
   },
-  get appConfig() {
-    const env = getEnv(self);
-    if (!env || !env.appConfig) {
-      throw new Error("AppConfig not found in environment");
-    }
-    const { appConfig } = env;
-    if (!isAppConfig(appConfig)) {
-      throw new Error("appConfig in environment is not of type AppConfigModelType");
-    }
-    return appConfig;
-  }
 }))
 .views((self) => ({
   get binWidth () {
-    const { defaultNumBins } = self.appConfig.sonify;
+    const { defaultNumBins } = getEnvAppConfig(self).sonify;
     if (defaultNumBins) {
       // We subtract 1 because the calculations that result in totalNumberOfBins
       // often result in adding an extra bin.

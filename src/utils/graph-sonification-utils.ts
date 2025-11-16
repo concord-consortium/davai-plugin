@@ -31,13 +31,13 @@ export const isGraphSonifiable = (graph: ICODAPGraph): boolean => {
   return isUnsplitScatterPlot(graph) || isUnivariateDotPlot(graph);
 };
 
+export const kLowerFreqBound = 220;
+export const kUpperFreqBound = 880;
 export const mapPitchFractionToFrequency = (pitchFraction: number) => {
   if (pitchFraction === 0) {
     return 0;
   } else {
-    const lowerFreqBound = 220;
-    const upperFreqBound = 880;
-    return lowerFreqBound + pitchFraction * (upperFreqBound - lowerFreqBound);
+    return kLowerFreqBound + pitchFraction * (kUpperFreqBound - kLowerFreqBound);
   }
 };
 

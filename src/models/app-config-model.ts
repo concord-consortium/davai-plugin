@@ -1,4 +1,4 @@
-import { types, Instance, SnapshotIn, SnapshotOut, TypeOfValue, getType, isStateTreeNode } from "mobx-state-tree";
+import { types, Instance, SnapshotIn, SnapshotOut, TypeOfValue, getType, isStateTreeNode, getEnv, IAnyStateTreeNode } from "mobx-state-tree";
 import { AppMode, AppModeValues } from "../types";
 
 // Selects keys from T whose values are boolean
@@ -26,11 +26,11 @@ const SonifyOptions = types.model("SonifyOptions", {
    */
   defaultNumBins: 14,
   /**
-   * How many simultaneous sounds can be played during sonification. This value of 120
+   * How many simultaneous sounds can be played during sonification. This value of 200
    * was chosen to support graphs with many points in a cluster. It hasn't been tested to see
    * how it affects performance.
    */
-  maxPolyphony: 120,
+  maxPolyphony: 200,
   /**
    * Duration of each note when sonifying points. The value is in Tone.js notation. "3i" means
    * 3 ticks which by default is 0.0078s. The default attack time of the Synth envelope is 0.005s
@@ -179,6 +179,18 @@ export interface AppConfigModelType extends Instance<typeof AppConfigModel> {}
 export function isAppConfig(obj: unknown): obj is AppConfigModelType {
   return !!obj && typeof obj === "object"
     && isStateTreeNode(obj) && getType(obj) === AppConfigModel;
+}
+
+export function getEnvAppConfig(self: IAnyStateTreeNode): AppConfigModelType {
+  const env = getEnv(self);
+  if (!env || !env.appConfig) {
+    throw new Error("AppConfig not found in environment");
+  }
+  const { appConfig } = env;
+  if (!isAppConfig(appConfig)) {
+    throw new Error("appConfig in environment is not of type AppConfigModelType");
+  }
+  return appConfig;
 }
 
 export type AppConfigToggleOptions = Parameters<AppConfigModelType["toggleOption"]>[0];

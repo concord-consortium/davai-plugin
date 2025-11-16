@@ -19,7 +19,7 @@ Generated from source comments and MST runtime introspection. Do not edit manual
 | sonify.defaultNumBins            | number   | 14                                          |
 | sonify.dotPlotEachDotPitch       | string   | "440"                                       |
 | sonify.dotPlotMode               | enum     | "continual"                                 |
-| sonify.maxPolyphony              | number   | 120                                         |
+| sonify.maxPolyphony              | number   | 200                                         |
 | sonify.pointDuration             | string   | "3i"                                        |
 | sonify.scatterPlotEachDot        | boolean  | true                                        |
 | sonify.scatterPlotLSRL           | boolean  | false                                       |
@@ -84,7 +84,7 @@ across the top of the bins.
 
 ## `sonify.maxPolyphony`
 
-How many simultaneous sounds can be played during sonification. This value of 120
+How many simultaneous sounds can be played during sonification. This value of 200
 was chosen to support graphs with many points in a cluster. It hasn't been tested to see
 how it affects performance.
 

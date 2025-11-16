@@ -25,7 +25,7 @@ export const SonificationOptions: React.FC = observer(function SonificationOptio
               checked={dotPlotMode === DotPlotMode.CONTINUAL}
               onChange={handleDotPlotModeChange}
             />
-            Continual tone set by count in each bin
+            Continual tone tracing shape of distribution
           </label>
 
           <label className="user-option">
@@ -36,7 +36,7 @@ export const SonificationOptions: React.FC = observer(function SonificationOptio
               checked={dotPlotMode === DotPlotMode.EACH_DOT}
               onChange={handleDotPlotModeChange}
             />
-            Each dot gets a sharp quick tone.
+            Sharp, quick tone per dot
           </label>
         </div>
       </div>
@@ -48,7 +48,7 @@ export const SonificationOptions: React.FC = observer(function SonificationOptio
             checked={sonify.scatterPlotEachDot}
             onChange={(e) => sonify.setScatterPlotEachDot(e.target.checked)}
           />
-          Each dot gets a sharp quick tone.
+          Sharp, quick tone per dot
         </label>
         <label className="user-option">
           <input

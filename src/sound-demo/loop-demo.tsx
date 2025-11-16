@@ -148,8 +148,6 @@ class Looper {
   }
 
   async togglePlayPause() {
-    console.log("play/pause begin");
-
     await Tone.start();
 
     if (!this.playing) {
@@ -183,11 +181,10 @@ class Looper {
       this.playing = false;
       this.loop?.dispose();
     }
-    console.log("play/pause end");
   }
 }
 
-export const SoundDemo = observer(function SoundDemo() {
+export const LoopDemo = observer(function LoopDemo() {
   const [looper] = useState(() => new Looper());
 
   const handlePlayPause = useCallback(() => {
@@ -196,6 +193,7 @@ export const SoundDemo = observer(function SoundDemo() {
 
   return (
     <div>
+      <h2>Loop Demo</h2>
       <button onClick={handlePlayPause}>Play/Pause</button>
       <div>
         <label htmlFor="sound-type">Sound Type</label><br />

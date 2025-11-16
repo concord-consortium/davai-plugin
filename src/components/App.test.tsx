@@ -5,6 +5,7 @@ import { App } from "./App";
 import { mockAppConfig } from "../test-utils/mock-app-config";
 import { MockAppConfigProvider } from "../test-utils/app-config-provider";
 import { ShortcutsServiceProvider } from "../contexts/shortcuts-service-context";
+import { mockTransportManager } from "../test-utils/mock-transport-manager";
 
 jest.mock("../contexts/root-store-context", () => ({
   useRootStore: jest.fn(() => ({
@@ -18,7 +19,8 @@ jest.mock("../contexts/root-store-context", () => ({
     sonificationStore: {
       selectedGraph: { id: "graph1", name: "Graph 1" },
       setGraphs: jest.fn(),
-    }
+    },
+    transportManager: mockTransportManager
   }))
 }));
 

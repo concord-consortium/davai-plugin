@@ -8,6 +8,7 @@ import { AppConfigProvider } from "../contexts/app-config-context";
 import { ShortcutsServiceProvider } from "../contexts/shortcuts-service-context";
 import { RootStoreProvider } from "../contexts/root-store-context";
 import { IRootStore } from "../models/root-store";
+import { mockTransportManager } from "../test-utils/mock-transport-manager";
 
 const mockAvailableGraphs = [
   { id: 1, name: "Graph 1", plotType: "scatterPlot" },
@@ -54,7 +55,8 @@ describe("GraphSonification Component", () => {
   }) as unknown as GraphSonificationModelType;
 
   const mockRootStore = {
-    sonificationStore: mockSonificationStore
+    sonificationStore: mockSonificationStore,
+    transportManager: mockTransportManager
   } as unknown as IRootStore;
   beforeEach(() => {
     jest.clearAllMocks();
