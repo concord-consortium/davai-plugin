@@ -258,7 +258,6 @@ export const GraphSonificationModel = types
           });
         });
         itemsAtTime.forEach((itemValues) => {
-          // codapItems.push({ values: itemValues });
           codapItems.push(itemValues);
         });
       });
