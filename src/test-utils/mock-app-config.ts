@@ -1,6 +1,7 @@
+import { AppConfigModelSnapshot } from "../models/app-config-model";
 import { AppMode } from "../types";
 
-export const mockAppConfig = {
+export const mockAppConfig: AppConfigModelSnapshot = {
   keyboardShortcuts: {
     focusChatInput: "Control+Shift+/",
     sonifyGraph: "Control+Shift+?"
@@ -20,11 +21,11 @@ export const mockAppConfig = {
     height: 680,
     width: 380
   },
-  mockAssistant: false,
   mode: "test" as AppMode,
   sonify: {
     dotPlotMode: "continual" as const,
     maxPolyphony: 4,
     synthReleaseTime: 0.1,
+    scatterPlotContinuousType: "lsrl" as const
   }
 };

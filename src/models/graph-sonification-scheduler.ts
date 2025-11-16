@@ -2,7 +2,7 @@ import * as Tone from "tone";
 import { GraphSonificationModelType, ISonificationFrequencies } from "./graph-sonification-model";
 import { ITransportEventScheduler, kStepCount, TransportManager } from "./transport-manager";
 import { interpolateBins, isUnivariateDotPlot, kLowerFreqBound, mapPitchFractionToFrequency } from "../utils/graph-sonification-utils";
-import { AppConfigModelType } from "./app-config-model";
+import { AppConfigModelType, ScatterPlotContinuousType } from "./app-config-model";
 
 export class GraphSonificationScheduler implements ITransportEventScheduler {
   private _manager: TransportManager | undefined;
@@ -34,14 +34,14 @@ export class GraphSonificationScheduler implements ITransportEventScheduler {
     };
     this.sonificationStore.setSonificationFrequencies(this.frequencies);
 
-    const { dotPlotMode, scatterPlotEachDot, scatterPlotLSRL } = this.appConfig.sonify;
+    const { dotPlotMode, scatterPlotEachDot, scatterPlotContinuous, scatterPlotContinuousType } = this.appConfig.sonify;
     const univariate = isUnivariateDotPlot(selectedGraph);
 
     if (selectedGraph.plotType === "scatterPlot") {
       if (scatterPlotEachDot) {
         addSchedulerDisposer(this.scheduleEachDot());
       }
-      if (scatterPlotLSRL) {
+      if (scatterPlotContinuous && scatterPlotContinuousType === ScatterPlotContinuousType.LSRL) {
         addSchedulerDisposer(this.scheduleScatterPlotLSRL());
       }
     } else if (univariate && dotPlotMode === "continual") {

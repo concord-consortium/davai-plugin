@@ -28,7 +28,8 @@
     }
   ],
   "sonify": {
-    "dotPlotMode": "continual"
+    "dotPlotMode": "continual",
+    "scatterPlotContinuousType": "lsrl"
   },
   "dimensions": {
     "height": 680,

@@ -18,6 +18,16 @@ export const isDotPlotMode = (value: unknown): value is DotPlotMode => {
   return DotPlotModeValues.includes(value as DotPlotMode);
 };
 
+export const ScatterPlotContinuousType = {
+  LSRL: "lsrl",
+  LOESS: "loess"
+} as const;
+export type ScatterPlotContinuousType = typeof ScatterPlotContinuousType[keyof typeof ScatterPlotContinuousType];
+export const ScatterPlotContinuousTypeValues = Object.values(ScatterPlotContinuousType);
+export const isScatterPlotContinuousType = (value: unknown): value is ScatterPlotContinuousType => {
+  return ScatterPlotContinuousTypeValues.includes(value as ScatterPlotContinuousType);
+};
+
 const SonifyOptions = types.model("SonifyOptions", {
   /**
    * The default number of bins to use for sonification of univariate graphs.
@@ -61,7 +71,11 @@ const SonifyOptions = types.model("SonifyOptions", {
    * Play continual tone following the least squares regression line (LSRL) for the points
    * in a scatter plot.
    */
-  scatterPlotLSRL: false,
+  scatterPlotContinuous: false,
+  /**
+   * Type of continuous fitting used for scatter plots
+   */
+  scatterPlotContinuousType: types.enumeration<ScatterPlotContinuousType>("ScatterPlotFitType", ScatterPlotContinuousTypeValues),
 })
 .actions((self) => ({
   setDotPlotMode(mode: string) {
@@ -73,8 +87,14 @@ const SonifyOptions = types.model("SonifyOptions", {
   setScatterPlotEachDot(value: boolean) {
     self.scatterPlotEachDot = value;
   },
-  setScatterPlotLSRL(value: boolean) {
-    self.scatterPlotLSRL = value;
+  setScatterPlotContinuous(value: boolean) {
+    self.scatterPlotContinuous = value;
+  },
+  setScatterPlotContinuousType(type: string) {
+    if (!isScatterPlotContinuousType(type)) {
+      throw new Error(`Invalid scatterPlotContinuousType: ${type}`);
+    }
+    self.scatterPlotContinuousType = type;
   }
 }));
 
