@@ -176,10 +176,6 @@ export class GraphSonificationScheduler implements ITransportEventScheduler {
       return { time: offsetSeconds, freqValues };
     });
 
-    console.log("Setting up each-dot sonification with events:", {
-      maxPolyphony,
-      pointDuration,
-    });
     const poly = new Tone.PolySynth({ maxPolyphony }).connect(this.manager.input);
     poly.set({ envelope: { release: synthReleaseTime } });
 

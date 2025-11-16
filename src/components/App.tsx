@@ -17,9 +17,9 @@ import { playSound } from "../utils/utils";
 import { getGraphDetails } from "../utils/codap-api-utils";
 import { isGraphSonifiable } from "../utils/graph-sonification-utils";
 import { ICODAPGraph } from "../types";
+import { GraphSonificationScheduler } from "../models/graph-sonification-scheduler";
 
 import "./App.scss";
-import { GraphSonificationScheduler } from "../models/graph-sonification-scheduler";
 
 const kPluginName = "DAVAI";
 const kVersion = process.env.DAVAI_VERSION || "local-build";
