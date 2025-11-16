@@ -359,7 +359,7 @@ export class TransportManager {
       Tone.getTransport().pause(nowTime);
 
       // Set the current position based on where we would have been at the old speed
-      // This will be more accurate than using this.position which is only updated
+      // This will be more accurate than using this.position which is only updated by the
       // animation frame while we are playing. And since nowTime includes the lookAhead,
       // the position updated by the animation frame will be behind what we want.
       currentPosition = Tone.getTransport().getSecondsAtTime(nowTime);
