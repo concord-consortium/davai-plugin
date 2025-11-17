@@ -1,5 +1,6 @@
 import { Instance, types } from "mobx-state-tree";
 import { nanoid } from "nanoid";
+import removeMarkdown from "remove-markdown";
 import { timeStamp } from "../utils/utils";
 import { MessageContent } from "../types";
 
@@ -8,7 +9,12 @@ const MessageModel = types.model("MessageModel", {
   messageContent: types.frozen<MessageContent>(),
   timestamp: types.string,
   id: types.identifier,
-});
+})
+.views((self) => ({
+  get plainTextContent() {
+    return removeMarkdown(self.messageContent.content, {stripListLeaders: false, useImgAltText: true});
+  }
+}));
 
 /**
  * ChatTranscriptModel encapsulates the transcript of a chat between an AI assistant and the user.

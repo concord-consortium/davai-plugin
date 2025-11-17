@@ -1,7 +1,6 @@
 import React, { useCallback, useEffect, useRef } from "react";
 import * as Tone from "tone";
 import { observer } from "mobx-react-lite";
-import removeMarkdown from "remove-markdown";
 import { addComponentListener, addDataContextChangeListener, addDataContextsListListener, ClientNotification,
   codapInterface, getListOfDataContexts, initializePlugin, selectSelf } from "@concord-consortium/codap-plugin-api";
 import { useAppConfigContext } from "../contexts/app-config-context";
@@ -138,8 +137,7 @@ export const App = observer(() => {
     if (transcriptStore.messages.length > 0) {
       const lastMessage = messages[messages.length - 1];
       if (lastMessage.speaker === DAVAI_SPEAKER) {
-        const plainTextContent = removeMarkdown(lastMessage.messageContent.content, {stripListLeaders: false, useImgAltText: true});
-        setAriaLiveText(plainTextContent);
+        setAriaLiveText(lastMessage.plainTextContent);
       }
     }
   }, [transcriptStore, transcriptStore.messages.length, setAriaLiveText]);

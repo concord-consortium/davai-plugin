@@ -1,30 +1,31 @@
 # Configuration Settings
 Generated from source comments and MST runtime introspection. Do not edit manually.
 
-| Key                              | Type     | Default                                     |
-| -------------------------------- | -------- | ------------------------------------------- |
-| dimensions.height                | number   | 680                                         |
-| dimensions.width                 | number   | 380                                         |
-| keyboardShortcuts.focusChatInput | string   | "Control+Shift+/"                           |
-| keyboardShortcuts.sonifyGraph    | string   | "Control+Shift+."                           |
-| keyboardShortcutsEnabled         | boolean  | true                                        |
-| llmId                            | string   | "{\"id\":\"gpt-4o-mini\",\"provider\":\"OpenAI\"}" |
-| llmList                          | frozen[] |                                             |
-| mode                             | enum     | "production"                                |
-| playbackSpeed                    | number   | 1                                           |
-| playProcessingMessage            | boolean  | true                                        |
-| playProcessingTone               | boolean  | false                                       |
-| readAloudEnabled                 | boolean  | false                                       |
-| showDebugLogInDevMode            | boolean  | true                                        |
-| sonify.defaultNumBins            | number   | 14                                          |
-| sonify.dotPlotEachDotPitch       | string   | "440"                                       |
-| sonify.dotPlotMode               | enum     | "continual"                                 |
-| sonify.maxPolyphony              | number   | 200                                         |
-| sonify.pointDuration             | string   | "3i"                                        |
-| sonify.scatterPlotContinuous     | boolean  | false                                       |
-| sonify.scatterPlotContinuousType | enum     | "lsrl"                                      |
-| sonify.scatterPlotEachDot        | boolean  | true                                        |
-| sonify.synthReleaseTime          | number   | 0.24                                        |
+| Key                                     | Type     | Default                                     |
+| --------------------------------------- | -------- | ------------------------------------------- |
+| dimensions.height                       | number   | 680                                         |
+| dimensions.width                        | number   | 380                                         |
+| keyboardShortcuts.focusChatInput        | string   | "Control+Shift+/"                           |
+| keyboardShortcuts.replayLastDavaiMessage | string   | "Control+Shift+,"                           |
+| keyboardShortcuts.sonifyGraph           | string   | "Control+Shift+."                           |
+| keyboardShortcutsEnabled                | boolean  | true                                        |
+| llmId                                   | string   | "{\"id\":\"gpt-4o-mini\",\"provider\":\"OpenAI\"}" |
+| llmList                                 | frozen[] |                                             |
+| mode                                    | enum     | "production"                                |
+| playbackSpeed                           | number   | 1                                           |
+| playProcessingMessage                   | boolean  | true                                        |
+| playProcessingTone                      | boolean  | false                                       |
+| readAloudEnabled                        | boolean  | false                                       |
+| showDebugLogInDevMode                   | boolean  | true                                        |
+| sonify.defaultNumBins                   | number   | 14                                          |
+| sonify.dotPlotEachDotPitch              | string   | "440"                                       |
+| sonify.dotPlotMode                      | enum     | "continual"                                 |
+| sonify.maxPolyphony                     | number   | 200                                         |
+| sonify.pointDuration                    | string   | "3i"                                        |
+| sonify.scatterPlotContinuous            | boolean  | false                                       |
+| sonify.scatterPlotContinuousType        | enum     | "lsrl"                                      |
+| sonify.scatterPlotEachDot               | boolean  | true                                        |
+| sonify.synthReleaseTime                 | number   | 0.24                                        |
 
 ## `dimensions.height`
 
@@ -37,6 +38,10 @@ Width of the plugin in CODAP (in pixels).
 ## `keyboardShortcuts.focusChatInput`
 
 The shortcut key combination to focus the chat input field. This is in tinykeys format.
+
+## `keyboardShortcuts.replayLastDavaiMessage`
+
+The shortcut key combination to replay the most recent message from DAVAI.
 
 ## `keyboardShortcuts.sonifyGraph`
 

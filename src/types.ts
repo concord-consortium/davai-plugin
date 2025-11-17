@@ -28,6 +28,7 @@ export type ChatMessage = {
   speaker: string;
   timestamp: string;
   id: string;
+  plainTextContent: string;
 };
 
 export type ChatTranscript = {
