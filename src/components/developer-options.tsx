@@ -54,45 +54,47 @@ export const DeveloperOptionsComponent = observer(({assistantStore, createToggle
     !isDevMode ? <div/> :
     <div className="control-panel-section" role="group" aria-labelledby="dev-options-heading" data-testid="developer-options">
       <h3 id="dev-options-heading">Developer Options</h3>
-      {createToggleOption("showDebugLogInDevMode", "Show Debug Log")}
-      <div className="user-option">
-        <label htmlFor="llm-select" data-testid="llm-select-label">
-          Select an LLM:
-        </label>
-        <select
-          id="llm-select"
-          data-testid="llm-select"
-          value={selectedLlm}
-          onChange={handleSelectLlm}
-        >
-          {appConfig.llmList.map((llm) => (
-            <option
-              aria-selected={appConfig.llmId === JSON.stringify(llm)}
-              key={llm.id}
-              value={JSON.stringify(llm)}
-            >
-              {llm.id === "mock" ? "Mock LLM" : `${llm.provider}: ${llm.id}`}
-            </option>
-          ))}
-        </select>
-      </div>
-      <div className="user-option">
-        <button
-          data-testid="new-thread-button"
-          aria-disabled={!!assistantStore.threadId || appConfig.isAssistantMocked}
-          onClick={() => handleCreateThread()}
-        >
-          New Thread
-        </button>
-      </div>
-      <div className="user-option">
-        <button
-          data-testid="frequency-table-button"
-          aria-disabled={!sonificationStore.sonificationFrequencies}
-          onClick={() => sonificationStore.createFrequencyTable()}
-        >
-          Create Frequency Table
-        </button>
+      <div className="options-list-1">
+        {createToggleOption("showDebugLogInDevMode", "Show Debug Log")}
+        <div className="user-option">
+          <label htmlFor="llm-select" data-testid="llm-select-label">
+            Select an LLM:
+          </label>
+          <select
+            id="llm-select"
+            data-testid="llm-select"
+            value={selectedLlm}
+            onChange={handleSelectLlm}
+          >
+            {appConfig.llmList.map((llm) => (
+              <option
+                aria-selected={appConfig.llmId === JSON.stringify(llm)}
+                key={llm.id}
+                value={JSON.stringify(llm)}
+              >
+                {llm.id === "mock" ? "Mock LLM" : `${llm.provider}: ${llm.id}`}
+              </option>
+            ))}
+          </select>
+        </div>
+        <div className="user-option">
+          <button
+            data-testid="new-thread-button"
+            aria-disabled={!!assistantStore.threadId || appConfig.isAssistantMocked}
+            onClick={() => handleCreateThread()}
+          >
+            New Thread
+          </button>
+        </div>
+        <div className="user-option">
+          <button
+            data-testid="sonification-table-button"
+            aria-disabled={!sonificationStore.sonificationData}
+            onClick={() => sonificationStore.createCODAPSonificationTable()}
+          >
+            Create Sonification Table
+          </button>
+        </div>
       </div>
     </div>
   );

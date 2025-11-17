@@ -8,18 +8,19 @@ import { sendCODAPRequest, getGraphDetails } from "../utils/codap-api-utils";
 import { removeRoiAdornment, isGraphSonifiable } from "../utils/graph-sonification-utils";
 import { leastSquaresLinearRegression } from "../utils/graph-utils";
 
-export interface ISonificationFrequenciesItem {
+export interface ISonificationDataItem {
   [attr: string]: number[];
 }
 
 /**
- * A structure to hold sonification frequencies for different sonifications
- * at different time points. Each time point can have multiple frequencies for
+ * A structure to hold sonification data for different sonifications
+ * at different time points. Each time point can have multiple values for
  * each sonification (for example, if multiple data points fall within the same
- * time bin).
+ * time bin). The main type of data are frequencies, but some sonifications
+ * provide also raw values (e.g. LOESS values) for debugging purposes.
  */
-export interface ISonificationFrequencies {
-  items: Record<number, ISonificationFrequenciesItem>;
+export interface ISonificationData {
+  items: Record<number, ISonificationDataItem>;
 }
 
 export const GraphSonificationModel = types
@@ -30,9 +31,9 @@ export const GraphSonificationModel = types
     binValues: BinModel
   })
   .volatile((self) => ({
-    // a place to store the resulting frequencies from sonification calculations
-    // it is only used for debugging.
-    sonificationFrequencies: undefined as ISonificationFrequencies | undefined
+    // a place to store the resulting frequencies and other data from
+    // sonification calculations it is only used for debugging.
+    sonificationData: undefined as ISonificationData | undefined
   }))
   .views((self) => ({
     get validGraphs() {
@@ -157,7 +158,9 @@ export const GraphSonificationModel = types
             resource: `dataContext[${snapshot.dataContext}]`
           }) as any;
           const dataContext = response.values;
-          const parentCollection = dataContext.collections[0];
+          // Note: When a user adds a new graph to CODAP it will have no data context
+          // so it won't have any collections.
+          const parentCollection = dataContext.collections?.[0];
           snapshot.name = parentCollection?.name;
           snapshot.title = parentCollection?.name;
         }
@@ -198,15 +201,15 @@ export const GraphSonificationModel = types
     return { setGraphItems };
   })
   .actions((self) => ({
-    setSonificationFrequencies(frequencies: ISonificationFrequencies) {
-      self.sonificationFrequencies = frequencies;
+    setSonificationData(data: ISonificationData) {
+      self.sonificationData = data;
     },
-    createFrequencyTable: flow(function* () {
-      if (!self.sonificationFrequencies) return;
+    createCODAPSonificationTable: flow(function* () {
+      if (!self.sonificationData) return;
 
       // Create a new CODAP dataset with the frequency table data
       const attributeSet = new Set<string>();
-      Object.values(self.sonificationFrequencies.items).forEach(item => {
+      Object.values(self.sonificationData.items).forEach(item => {
         Object.keys(item).forEach(attr => {
           attributeSet.add(attr);
         });
@@ -215,7 +218,7 @@ export const GraphSonificationModel = types
         name: attrName,
         type: "numeric"
       }));
-      const contextName = `Frequency Table ${new Date().toISOString()}`;
+      const contextName = `Sonification Table ${new Date().toISOString()}`;
       const dataContextResult: {
         success: boolean,
         values: {
@@ -238,7 +241,7 @@ export const GraphSonificationModel = types
       });
 
       const codapItems: CodapItemValues[] = [];
-      Object.entries(self.sonificationFrequencies.items).forEach(([time, freqItem]) => {
+      Object.entries(self.sonificationData.items).forEach(([time, freqItem]) => {
         // There can be multiple items at the same time for a single sonification.
         // So each time point can have multiple codap items.
         // We start with a single item and add more if needed.

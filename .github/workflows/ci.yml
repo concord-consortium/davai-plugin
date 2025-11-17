@@ -92,6 +92,9 @@ jobs:
           # Also turn on the code coverage tasks in cypress itself, these are disabled
           # by default.
           CYPRESS_coverage: true
+          # Environment variables needed when running `npm start`
+          LANGCHAIN_SERVER_URL: ${{ secrets.LANGCHAIN_SERVER_URL }}
+          AUTH_TOKEN: ${{ secrets.AUTH_TOKEN }}
       - name: Upload coverage to Codecov
         uses: codecov/codecov-action@v4
         with:

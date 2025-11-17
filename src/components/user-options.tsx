@@ -42,8 +42,10 @@ export const UserOptions: React.FC<IProps> = observer(function UserOptions({assi
       <ReadAloudMenu createToggleOption={createToggleOption}/>
       <div className="control-panel-section" role="group" aria-labelledby="loading-indicators-heading">
         <h3 id="loading-indicators-heading">Loading Indicators</h3>
-        {createToggleOption("playProcessingMessage", "Play loading message")}
-        {createToggleOption("playProcessingTone", "Play loading tone")}
+        <div className="options-list-1">
+          {createToggleOption("playProcessingMessage", "Play loading message")}
+          {createToggleOption("playProcessingTone", "Play loading tone")}
+        </div>
       </div>
       <KeyboardShortcutControls/>
       <DeveloperOptionsComponent

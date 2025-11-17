@@ -32,6 +32,10 @@ jest.mock("../models/app-config-model", () => ({
   DotPlotMode: {
     CONTINUAL: "continual",
     EACH_DOT: "each-dot"
+  },
+  ScatterPlotContinuousType: {
+    LSRL: "lsrl",
+    LOESS: "loess"
   }
 }));
 

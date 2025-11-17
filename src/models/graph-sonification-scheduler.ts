@@ -1,12 +1,13 @@
 import * as Tone from "tone";
-import { GraphSonificationModelType, ISonificationFrequencies } from "./graph-sonification-model";
+import Loess from "loess";
+import { GraphSonificationModelType, ISonificationData } from "./graph-sonification-model";
 import { ITransportEventScheduler, kStepCount, TransportManager } from "./transport-manager";
 import { interpolateBins, isUnivariateDotPlot, kLowerFreqBound, mapPitchFractionToFrequency } from "../utils/graph-sonification-utils";
-import { AppConfigModelType } from "./app-config-model";
+import { AppConfigModelType, ScatterPlotContinuousType } from "./app-config-model";
 
 export class GraphSonificationScheduler implements ITransportEventScheduler {
   private _manager: TransportManager | undefined;
-  private frequencies: ISonificationFrequencies | undefined;
+  private sonificationData: ISonificationData | undefined;
 
   constructor(
     private sonificationStore: GraphSonificationModelType,
@@ -28,21 +29,25 @@ export class GraphSonificationScheduler implements ITransportEventScheduler {
     const { selectedGraph } = this.sonificationStore;
     if (!selectedGraph) return;
 
-    // Reset the frequencies
-    this.frequencies = {
+    // Reset the sonification data
+    this.sonificationData = {
       items: {}
     };
-    this.sonificationStore.setSonificationFrequencies(this.frequencies);
+    this.sonificationStore.setSonificationData(this.sonificationData);
 
-    const { dotPlotMode, scatterPlotEachDot, scatterPlotLSRL } = this.appConfig.sonify;
+    const { dotPlotMode, scatterPlotEachDot, scatterPlotContinuous, scatterPlotContinuousType } = this.appConfig.sonify;
     const univariate = isUnivariateDotPlot(selectedGraph);
 
     if (selectedGraph.plotType === "scatterPlot") {
       if (scatterPlotEachDot) {
         addSchedulerDisposer(this.scheduleEachDot());
       }
-      if (scatterPlotLSRL) {
-        addSchedulerDisposer(this.scheduleScatterPlotLSRL());
+      if (scatterPlotContinuous) {
+        if (scatterPlotContinuousType === ScatterPlotContinuousType.LOESS) {
+          addSchedulerDisposer(this.scheduleScatterPlotLOESS());
+        } else if (scatterPlotContinuousType === ScatterPlotContinuousType.LSRL) {
+          addSchedulerDisposer(this.scheduleScatterPlotLSRL());
+        }
       }
     } else if (univariate && dotPlotMode === "continual") {
       addSchedulerDisposer(this.scheduleUnivariateContinual());
@@ -55,15 +60,20 @@ export class GraphSonificationScheduler implements ITransportEventScheduler {
     };
   }
 
-  addFrequency(time: number, name: string, freqValue: number | string | number[] | string[]) {
-    if (!this.frequencies) return;
-    let item = this.frequencies.items[time];
+  addFrequenciesAtTime(time: number, name: string, value: number | string | number[] | string[]) {
+    const valueArray = Array.isArray(value) ? value : [value];
+    const frequencies = valueArray.map(f => Tone.Frequency(f).toFrequency());
+    this.addValuesAtTime(time, name, frequencies);
+  }
+
+  addValuesAtTime(time: number, name: string, values: number[]) {
+    if (!this.sonificationData) return;
+    let item = this.sonificationData.items[time];
     if (!item) {
       item = { };
-      this.frequencies.items[time] = item;
+      this.sonificationData.items[time] = item;
     }
-    const freqValueArray = Array.isArray(freqValue) ? freqValue : [freqValue];
-    item[name] = freqValueArray.map(f => Tone.Frequency(f).toFrequency());
+    item[name] = values;
   }
 
   get manager() {
@@ -91,7 +101,7 @@ export class GraphSonificationScheduler implements ITransportEventScheduler {
       const offset = i * interval;
       const countFraction = count / maxCount;
       const freq = mapPitchFractionToFrequency(countFraction);
-      this.addFrequency(offset, "Univariate Continual", freq);
+      this.addFrequenciesAtTime(offset, "Univariate Continual", freq);
       return { time: offset, freqValue: freq };
     });
 
@@ -109,57 +119,144 @@ export class GraphSonificationScheduler implements ITransportEventScheduler {
     };
   }
 
+  createContinuousOscillatorPart(
+    {
+      yLower,
+      yUpper,
+      numberOfPoints,
+      label,
+      yValueFunc,
+    } : {
+      yLower: number,
+      yUpper: number,
+      numberOfPoints: number,
+      label: string,
+      yValueFunc: (i: number) => number
+    }
+  ) {
+    const freqsToSchedule: { time: number, freqValue: number }[] = [];
+    const yRange = yUpper - yLower;
+
+    // This is a fence post problem. The number of intervals between the
+    // x values is one less than the number of x values.
+    const interval = this.manager.duration / ( numberOfPoints - 1 );
+
+    const computeFrequencyAtIndex = (i: number) => {
+      const yValue = yValueFunc(i);
+      // It would be best to use a pitch scale that was the same for both the each dot
+      // sonification and the continuous sonification. The range of y values will be
+      // different between the continuous oscillator and the individual points, so to
+      // do this properly we need to complete the range of each sonification and create
+      // the pitch scale from that overall range. For now we ignore this just look at
+      // range of the continuous oscillator.
+      // The yRange can be 0 if the line is flat. In that case we use a pitch fraction
+      // of 0.5. This way the pitch is in the middle of the range.
+      const pitchFraction = yRange ? (yValue - yLower) / yRange : 0.5;
+      const frequency = mapPitchFractionToFrequency(pitchFraction);
+
+      // This is the time when this frequency should be reached
+      const time = i * interval;
+      this.addFrequenciesAtTime(time, `${label} freq`, frequency);
+      this.addValuesAtTime(time, `${label} value`, [yValue]);
+      return frequency;
+    };
+
+    const initialFrequency = computeFrequencyAtIndex(0);
+
+    for (let i = 1; i < numberOfPoints; i++) {
+      // This is the time when the ramp should start to reach the frequency
+      const time = (i-1) * interval;
+      const freqValue = computeFrequencyAtIndex(i);
+      freqsToSchedule.push({ time, freqValue });
+    }
+
+    // The initial frequency of the oscillator is the first computed frequency
+    // Then we schedule ramps to the next frequencies.
+    const osc = new Tone.Oscillator(initialFrequency, "sine").connect(this.manager.input);
+    // this syncs the oscillator to the transport, so that when we call transport.start or
+    // transport.stop, the oscillator will start/stop accordingly
+    osc.sync().start(0);
+
+    // The time being passed to the callback is the time when the ramp should start.
+    // We are setting up 1 ramp for each interval.
+    const part = new Tone.Part((time, value) => {
+      const { freqValue } = value;
+      osc.frequency.linearRampTo(freqValue, interval, time);
+    }, freqsToSchedule).start(0);
+
+    return { part, osc };
+  }
+
   scheduleScatterPlotLSRL() {
     const { primaryBounds, leastSquaresLinearRegression } = this.sonificationStore;
     if (!primaryBounds) return;
     const { lowerBound: timeLowerBound, upperBound: timeUpperBound } = primaryBounds;
     if (timeLowerBound == null || timeUpperBound == null) return;
 
-    // TODO: We are using the kLowerFreqBound as the initial frequency, probably it should
-    // be the frequency at timeLowerBound.
-    const osc = new Tone.Oscillator(kLowerFreqBound, "sine").connect(this.manager.input);
-    // this syncs the oscillator to the transport, so that when we call transport.start or
-    // transport.stop, the oscillator will start/stop accordingly
-    osc.sync().start(0);
-
     const { slope, intercept } = leastSquaresLinearRegression;
     if (slope == null || intercept == null) return;
 
-    const interval = this.manager.duration / kStepCount;
-
-    const freqsToSchedule: { time: number; freqValue: number; }[] = [];
     const timeRange = timeUpperBound - timeLowerBound;
     const yStart = slope * timeLowerBound + intercept;
     const yEnd = slope * timeUpperBound + intercept;
     const yLower = Math.min(yStart, yEnd);
     const yUpper = Math.max(yStart, yEnd);
-    const yRange = yUpper - yLower;
-    for (let i = 0; i <= kStepCount; i++) {
-      const time = i * interval;
-      const xValue = timeLowerBound + (i / kStepCount) * (timeRange);
-      const yValue = slope * xValue + intercept;
-      // It would be best to use a pitch scale that was the same for both the each dot
-      // sonification and the LSRL sonification. However the range of y values might be
-      // much larger for the LSRL than the individual points. For now we just
-      // base it on the yValue at the extremes of the x range.
-      // If the yRange is 0 the line is flat, we use a pitch fraction of 0.5.
-      // This way the pitch is in the middle of the range.
-      // TODO: if we have the graph axis limits we could use to get a better pitch scale.
-      const pitchFraction = yRange ? (yValue - yLower) / yRange : 0.5;
-      const freqValue = mapPitchFractionToFrequency(pitchFraction);
-      this.addFrequency(time, "Scatter Plot LSRL", freqValue);
-      freqsToSchedule.push({ time, freqValue });
-    }
 
-    const part = new Tone.Part((time, value) => {
-      const { freqValue } = value;
-      osc.frequency.linearRampToValueAtTime(freqValue, time + interval);
-    }, freqsToSchedule).start(0);
+    const { part, osc } = this.createContinuousOscillatorPart({
+      yLower, yUpper,
+      numberOfPoints: kStepCount,
+      label: "Scatter Plot LSRL",
+      yValueFunc(i) {
+        const xValue = timeLowerBound + (i / (kStepCount - 1)) * (timeRange);
+        return slope * xValue + intercept;
+      }
+    });
 
     return () => {
       part.dispose();
       osc.dispose();
     };
+  }
+
+  scheduleScatterPlotLOESS() {
+    const { points } = this.sonificationStore;
+    if (!points) return;
+
+    const data = {
+      x: [] as number[],
+      y: [] as number[],
+    };
+    for (const point of points) {
+      data.x.push(point.x);
+      data.y.push(point.y);
+    }
+
+    // Note: the span can be customized with:
+    // new Loess(data, { span: 0.3 });
+    // the default is 0.75
+    const model = new Loess(data);
+    const grid = model.grid([250]);
+    // Note: this also includes betas and weights which might be useful
+    // for figuring out the error of the fit.
+    const fitted = model.predict(grid).fitted;
+
+    const yLower = Math.min(...fitted);
+    const yUpper = Math.max(...fitted);
+
+    const { part, osc } = this.createContinuousOscillatorPart({
+      yLower, yUpper,
+      numberOfPoints: fitted.length,
+      label: "Scatter Plot LOESS",
+      yValueFunc(i) {
+        return fitted[i];
+      }
+    });
+
+    return () => {
+      part.dispose();
+      osc.dispose();
+    };
+
   }
 
   scheduleEachDot() {
@@ -194,7 +291,7 @@ export class GraphSonificationScheduler implements ITransportEventScheduler {
         freqValues = indices.map(i => mapPitchFractionToFrequency(pitchFractions[i]));
       }
       // Store frequencies for debugging
-      this.addFrequency(offsetSeconds, "Each Dot", freqValues);
+      this.addFrequenciesAtTime(offsetSeconds, "Each Dot", freqValues);
 
       return { time: offsetSeconds, freqValues };
     });
