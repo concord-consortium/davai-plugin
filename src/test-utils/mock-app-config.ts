@@ -4,6 +4,7 @@ import { AppMode } from "../types";
 export const mockAppConfig: AppConfigModelSnapshot = {
   keyboardShortcuts: {
     focusChatInput: "Control+Shift+/",
+    replayLastDavaiMessage: "Control+Shift+,",
     sonifyGraph: "Control+Shift+?"
   },
   keyboardShortcutsEnabled: true,

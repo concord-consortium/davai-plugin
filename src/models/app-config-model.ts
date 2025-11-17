@@ -125,6 +125,10 @@ export const AppConfigModel = types.model("AppConfigModel", {
      */
     focusChatInput: types.string,
     /**
+     * The shortcut key combination to replay the most recent message from DAVAI.
+     */
+    replayLastDavaiMessage: types.string,
+    /**
      * The shortcut key combination to play the graph sonification. This is in tinykeys format.
      */
     sonifyGraph: types.string,

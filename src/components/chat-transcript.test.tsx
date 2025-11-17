@@ -3,6 +3,7 @@ import { render, screen, within } from "@testing-library/react";
 
 import { AppConfigProvider } from "../contexts/app-config-context";
 import { ChatTranscriptComponent } from "./chat-transcript";
+import { ShortcutsServiceProvider } from "../contexts/shortcuts-service-context";
 
 describe("test chat transcript component", () => {
   window.HTMLElement.prototype.scrollIntoView = jest.fn();
@@ -12,13 +13,15 @@ describe("test chat transcript component", () => {
         messageContent: {content: "Hello. How can I help you today?"},
         speaker: "DAVAI",
         timestamp: "2021-07-01T12:00:00Z",
-        id: "1"
+        id: "1",
+        plainTextContent: "Hello. How can I help you today?"
       },
       {
         messageContent: {content: "Tell me about the data!"},
         speaker: "User",
         timestamp: "2021-07-01T12:00:05Z",
-        id: "2"
+        id: "2",
+        plainTextContent: "Tell me about the data!"
       }
     ]
   };
@@ -26,7 +29,9 @@ describe("test chat transcript component", () => {
   it("renders a chat transcript that lists all chat messages", () => {
     render(
       <AppConfigProvider>
-        <ChatTranscriptComponent chatTranscript={chatTranscript}/>
+        <ShortcutsServiceProvider>
+          <ChatTranscriptComponent chatTranscript={chatTranscript}/>
+        </ShortcutsServiceProvider>
       </AppConfigProvider>
     );
 
