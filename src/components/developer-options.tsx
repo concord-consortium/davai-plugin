@@ -88,11 +88,11 @@ export const DeveloperOptionsComponent = observer(({assistantStore, createToggle
         </div>
         <div className="user-option">
           <button
-            data-testid="frequency-table-button"
-            aria-disabled={!sonificationStore.sonificationFrequencies}
-            onClick={() => sonificationStore.createFrequencyTable()}
+            data-testid="sonification-table-button"
+            aria-disabled={!sonificationStore.sonificationData}
+            onClick={() => sonificationStore.createCODAPSonificationTable()}
           >
-            Create Frequency Table
+            Create Sonification Table
           </button>
         </div>
       </div>

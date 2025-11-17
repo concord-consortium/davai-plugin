@@ -34,11 +34,7 @@ export const isGraphSonifiable = (graph: ICODAPGraph): boolean => {
 export const kLowerFreqBound = 220;
 export const kUpperFreqBound = 880;
 export const mapPitchFractionToFrequency = (pitchFraction: number) => {
-  if (pitchFraction === 0) {
-    return 0;
-  } else {
-    return kLowerFreqBound + pitchFraction * (kUpperFreqBound - kLowerFreqBound);
-  }
+  return kLowerFreqBound + pitchFraction * (kUpperFreqBound - kLowerFreqBound);
 };
 
 export const mapValueToStereoPan = (value: number, min: number, max: number) => {
