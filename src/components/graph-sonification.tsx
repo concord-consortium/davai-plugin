@@ -183,6 +183,7 @@ export const GraphSonification = observer(() => {
             value={speed}
             onChange={(e) => handleSetSpeed(parseFloat(e.target.value))}
           >
+            <option value="0.25">0.25x</option>
             <option value="0.5">0.5x</option>
             <option value="1">1x</option>
             <option value="1.5">1.5x</option>
