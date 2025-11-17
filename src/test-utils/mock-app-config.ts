@@ -3,7 +3,7 @@ import { AppMode } from "../types";
 export const mockAppConfig = {
   keyboardShortcuts: {
     focusChatInput: "Control+Shift+/",
-    sonifyGraph: "Control+Shift+?"
+    sonifyGraph: "Control+Shift+."
   },
   keyboardShortcutsEnabled: true,
   playProcessingMessage: true,
