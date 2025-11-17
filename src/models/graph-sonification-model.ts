@@ -236,7 +236,6 @@ export const GraphSonificationModel = types
           }
         ]
       });
-      console.log("Created frequency data context:", dataContextResult);
 
       const codapItems: CodapItemValues[] = [];
       Object.entries(self.sonificationFrequencies.items).forEach(([time, freqItem]) => {
@@ -261,12 +260,9 @@ export const GraphSonificationModel = types
           codapItems.push(itemValues);
         });
       });
-      const itemsResult = yield createItems(String(dataContextResult.values.id), codapItems);
-      console.log("Created frequency items:", itemsResult);
+      yield createItems(String(dataContextResult.values.id), codapItems);
 
-      const tableResult = yield createTable(String(dataContextResult.values.id));
-      console.log("Created frequency table:", tableResult);
-
+      yield createTable(String(dataContextResult.values.id));
     })
   }))
   .actions((self) => ({
