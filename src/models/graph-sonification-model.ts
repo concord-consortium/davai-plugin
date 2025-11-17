@@ -263,6 +263,7 @@ export const GraphSonificationModel = types
         });
       });
       yield createItems(String(dataContextResult.values.id), codapItems);
+
       yield createTable(String(dataContextResult.values.id));
     })
   }))
