@@ -219,11 +219,8 @@ export class GraphSonificationScheduler implements ITransportEventScheduler {
   }
 
   scheduleScatterPlotLOESS() {
-    console.log("Scheduling Scatter Plot LOESS sonification");
     const { points } = this.sonificationStore;
     if (!points) return;
-
-    console.log("Number of points for LOESS:", points.length);
 
     const data = {
       x: [] as number[],
@@ -234,16 +231,14 @@ export class GraphSonificationScheduler implements ITransportEventScheduler {
       data.y.push(point.y);
     }
 
-    console.log("Fitting LOESS model");
-
     // Note: the span can be customized with:
     // new Loess(data, { span: 0.3 });
     // the default is 0.75
     const model = new Loess(data);
     const grid = model.grid([250]);
-    console.log("LOESS grid", grid);
+    // Note: this also includes betas and weights which might be useful
+    // for figuring out the error of the fit.
     const fitted = model.predict(grid).fitted;
-    console.log("LOESS fitted values length:", fitted.length);
 
     const yLower = Math.min(...fitted);
     const yUpper = Math.max(...fitted);
