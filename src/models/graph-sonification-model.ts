@@ -158,7 +158,8 @@ export const GraphSonificationModel = types
             resource: `dataContext[${snapshot.dataContext}]`
           }) as any;
           const dataContext = response.values;
-          // A brand new graph has no collections in the data context
+          // Note: When a user adds a new graph to CODAP it will have no data context
+          // so it won't have any collections.
           const parentCollection = dataContext.collections?.[0];
           snapshot.name = parentCollection?.name;
           snapshot.title = parentCollection?.name;
