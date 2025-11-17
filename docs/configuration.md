@@ -21,8 +21,9 @@ Generated from source comments and MST runtime introspection. Do not edit manual
 | sonify.dotPlotMode               | enum     | "continual"                                 |
 | sonify.maxPolyphony              | number   | 200                                         |
 | sonify.pointDuration             | string   | "3i"                                        |
+| sonify.scatterPlotContinuous     | boolean  | false                                       |
+| sonify.scatterPlotContinuousType | enum     | "lsrl"                                      |
 | sonify.scatterPlotEachDot        | boolean  | true                                        |
-| sonify.scatterPlotLSRL           | boolean  | false                                       |
 | sonify.synthReleaseTime          | number   | 0.24                                        |
 
 ## `dimensions.height`
@@ -94,14 +95,20 @@ Duration of each note when sonifying points. The value is in Tone.js notation. "
 3 ticks which by default is 0.0078s. The default attack time of the Synth envelope is 0.005s
 so this point duration gives the note time reach its full volume before the release phase begins.
 
-## `sonify.scatterPlotEachDot`
-
-Whether each dot in a scatter plot gets its own quick sharp tone.
-
-## `sonify.scatterPlotLSRL`
+## `sonify.scatterPlotContinuous`
 
 Play continual tone following the least squares regression line (LSRL) for the points
 in a scatter plot.
+
+## `sonify.scatterPlotContinuousType`
+
+**Allowed values:** lsrl, loess
+
+Type of continuous fitting used for scatter plots
+
+## `sonify.scatterPlotEachDot`
+
+Whether each dot in a scatter plot gets its own quick sharp tone.
 
 ## `sonify.synthReleaseTime`
 
