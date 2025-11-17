@@ -1,11 +1,12 @@
 import * as Tone from "tone";
-import { GraphSonificationModelType } from "./graph-sonification-model";
+import { GraphSonificationModelType, ISonificationFrequencies } from "./graph-sonification-model";
 import { ITransportEventScheduler, kStepCount, TransportManager } from "./transport-manager";
 import { interpolateBins, isUnivariateDotPlot, kLowerFreqBound, mapPitchFractionToFrequency } from "../utils/graph-sonification-utils";
 import { AppConfigModelType } from "./app-config-model";
 
 export class GraphSonificationScheduler implements ITransportEventScheduler {
   private _manager: TransportManager | undefined;
+  private frequencies: ISonificationFrequencies | undefined;
 
   constructor(
     private sonificationStore: GraphSonificationModelType,
@@ -27,6 +28,12 @@ export class GraphSonificationScheduler implements ITransportEventScheduler {
     const { selectedGraph } = this.sonificationStore;
     if (!selectedGraph) return;
 
+    // Reset the frequencies
+    this.frequencies = {
+      items: {}
+    };
+    this.sonificationStore.setSonificationFrequencies(this.frequencies);
+
     const { dotPlotMode, scatterPlotEachDot, scatterPlotLSRL } = this.appConfig.sonify;
     const univariate = isUnivariateDotPlot(selectedGraph);
 
@@ -46,6 +53,17 @@ export class GraphSonificationScheduler implements ITransportEventScheduler {
     return () => {
       disposers.forEach((dispose) => dispose());
     };
+  }
+
+  addFrequency(time: number, name: string, freqValue: number | string | number[] | string[]) {
+    if (!this.frequencies) return;
+    let item = this.frequencies.items[time];
+    if (!item) {
+      item = { };
+      this.frequencies.items[time] = item;
+    }
+    const freqValueArray = Array.isArray(freqValue) ? freqValue : [freqValue];
+    item[name] = freqValueArray.map(f => Tone.Frequency(f).toFrequency());
   }
 
   get manager() {
@@ -73,6 +91,7 @@ export class GraphSonificationScheduler implements ITransportEventScheduler {
       const offset = i * interval;
       const countFraction = count / maxCount;
       const freq = mapPitchFractionToFrequency(countFraction);
+      this.addFrequency(offset, "Univariate Continual", freq);
       return { time: offset, freqValue: freq };
     });
 
@@ -128,6 +147,7 @@ export class GraphSonificationScheduler implements ITransportEventScheduler {
       // TODO: if we have the graph axis limits we could use to get a better pitch scale.
       const pitchFraction = yRange ? (yValue - yLower) / yRange : 0.5;
       const freqValue = mapPitchFractionToFrequency(pitchFraction);
+      this.addFrequency(time, "Scatter Plot LSRL", freqValue);
       freqsToSchedule.push({ time, freqValue });
     }
 
@@ -173,6 +193,9 @@ export class GraphSonificationScheduler implements ITransportEventScheduler {
       } else {
         freqValues = indices.map(i => mapPitchFractionToFrequency(pitchFractions[i]));
       }
+      // Store frequencies for debugging
+      this.addFrequency(offsetSeconds, "Each Dot", freqValues);
+
       return { time: offsetSeconds, freqValues };
     });
 

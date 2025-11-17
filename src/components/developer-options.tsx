@@ -4,6 +4,7 @@ import { AssistantModelType } from "../models/assistant-model";
 import { useAppConfigContext } from "../contexts/app-config-context";
 import { DAVAI_SPEAKER, GREETING } from "../constants";
 import { AppConfigToggleOptions } from "../models/app-config-model";
+import { useRootStore } from "../contexts/root-store-context";
 
 interface IProps {
   assistantStore: AssistantModelType;
@@ -13,6 +14,7 @@ interface IProps {
 
 export const DeveloperOptionsComponent = observer(({assistantStore, createToggleOption, onInitializeAssistant}: IProps) => {
   const appConfig = useAppConfigContext();
+  const { sonificationStore } = useRootStore();
   const selectedLlm = appConfig.llmId;
   const { isDevMode } = appConfig;
 
@@ -81,6 +83,15 @@ export const DeveloperOptionsComponent = observer(({assistantStore, createToggle
           onClick={() => handleCreateThread()}
         >
           New Thread
+        </button>
+      </div>
+      <div className="user-option">
+        <button
+          data-testid="frequency-table-button"
+          aria-disabled={!sonificationStore.sonificationFrequencies}
+          onClick={() => sonificationStore.createFrequencyTable()}
+        >
+          Create Frequency Table
         </button>
       </div>
     </div>

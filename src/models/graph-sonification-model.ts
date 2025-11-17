@@ -1,12 +1,26 @@
-import { flow, SnapshotIn, types } from "mobx-state-tree";
+import { flow, Instance, SnapshotIn, types } from "mobx-state-tree";
 import { reaction } from "mobx";
-import { CodapItem } from "../types";
-import { getAllItems } from "@concord-consortium/codap-plugin-api";
+import { Attribute, CodapItem, CodapItemValues } from "../types";
+import { sendMessage, getAllItems, createTable, createItems } from "@concord-consortium/codap-plugin-api";
 import { CODAPGraphModel, ICODAPGraphModel } from "./codap-graph-model";
 import { BinModel } from "./bin-model";
 import { sendCODAPRequest, getGraphDetails } from "../utils/codap-api-utils";
 import { removeRoiAdornment, isGraphSonifiable } from "../utils/graph-sonification-utils";
 import { leastSquaresLinearRegression } from "../utils/graph-utils";
+
+export interface ISonificationFrequenciesItem {
+  [attr: string]: number[];
+}
+
+/**
+ * A structure to hold sonification frequencies for different sonifications
+ * at different time points. Each time point can have multiple frequencies for
+ * each sonification (for example, if multiple data points fall within the same
+ * time bin).
+ */
+export interface ISonificationFrequencies {
+  items: Record<number, ISonificationFrequenciesItem>;
+}
 
 export const GraphSonificationModel = types
   .model("GraphSonificationModel", {
@@ -15,6 +29,11 @@ export const GraphSonificationModel = types
     graphItems: types.maybe(types.array(types.frozen())),
     binValues: BinModel
   })
+  .volatile((self) => ({
+    // a place to store the resulting frequencies from sonification calculations
+    // it is only used for debugging.
+    sonificationFrequencies: undefined as ISonificationFrequencies | undefined
+  }))
   .views((self) => ({
     get validGraphs() {
       return self.allGraphs?.filter((graph: ICODAPGraphModel) => isGraphSonifiable(graph)) || [];
@@ -179,6 +198,74 @@ export const GraphSonificationModel = types
     return { setGraphItems };
   })
   .actions((self) => ({
+    setSonificationFrequencies(frequencies: ISonificationFrequencies) {
+      self.sonificationFrequencies = frequencies;
+    },
+    createFrequencyTable: flow(function* () {
+      if (!self.sonificationFrequencies) return;
+
+      // Create a new CODAP dataset with the frequency table data
+      const attributeSet = new Set<string>();
+      Object.values(self.sonificationFrequencies.items).forEach(item => {
+        Object.keys(item).forEach(attr => {
+          attributeSet.add(attr);
+        });
+      });
+      const attributes: Attribute[] = Array.from(attributeSet).map(attrName => ({
+        name: attrName,
+        type: "numeric"
+      }));
+      const contextName = `Frequency Table ${new Date().toISOString()}`;
+      const dataContextResult: {
+        success: boolean,
+        values: {
+          name: string,
+          title?: string,
+          id: number
+        }
+      } = yield sendMessage("create", `dataContext`, {
+        name: contextName,
+        title: contextName,
+        collections: [
+          {
+            name: "Cases",
+            attrs: [
+              { name: "time", type: "numeric" },
+              ...attributes
+            ]
+          }
+        ]
+      });
+
+      const codapItems: CodapItemValues[] = [];
+      Object.entries(self.sonificationFrequencies.items).forEach(([time, freqItem]) => {
+        // There can be multiple items at the same time for a single sonification.
+        // So each time point can have multiple codap items.
+        // We start with a single item and add more if needed.
+        const itemsAtTime: CodapItemValues[] = [
+          { time: Number(time) }
+        ];
+        Object.entries(freqItem).forEach(([sonificationName, values]) => {
+          // There can be multiple frequencies for a sonification at the same time.
+          values.forEach((freq, index) => {
+            let itemValues = itemsAtTime[index];
+            if (!itemValues) {
+              itemValues = { time: Number(time) };
+              itemsAtTime.push(itemValues);
+            }
+            itemValues[sonificationName] = freq;
+          });
+        });
+        itemsAtTime.forEach((itemValues) => {
+          codapItems.push(itemValues);
+        });
+      });
+      yield createItems(String(dataContextResult.values.id), codapItems);
+
+      yield createTable(String(dataContextResult.values.id));
+    })
+  }))
+  .actions((self) => ({
     afterCreate() {
       // clear selectedGraphID if it no longer points to a valid graph
       reaction(
@@ -211,6 +298,11 @@ export const GraphSonificationModel = types
         }),
         ({ timeValues }) => {
           if (timeValues) {
+            const allNumbers = timeValues.every(v => typeof v === "number");
+            if (!allNumbers) {
+              console.warn("Non-numeric time values found, cannot update binValues");
+              return;
+            }
             // update binValues based on timeValues
             self.binValues?.setValues(timeValues);
           }
@@ -219,4 +311,4 @@ export const GraphSonificationModel = types
     }
   }));
 
-export type GraphSonificationModelType = typeof GraphSonificationModel.Type;
+export interface GraphSonificationModelType extends Instance<typeof GraphSonificationModel> {}

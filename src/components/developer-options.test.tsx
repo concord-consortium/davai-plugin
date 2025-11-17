@@ -7,6 +7,9 @@ import { DeveloperOptionsComponent } from "./developer-options";
 import { AssistantModelType } from "../models/assistant-model";
 import { ChatTranscriptModel } from "../models/chat-transcript-model";
 import { mockAppConfig } from "../test-utils/mock-app-config";
+import { IRootStore } from "../models/root-store";
+import { RootStoreProvider } from "../contexts/root-store-context";
+import { GraphSonificationModelType } from "../models/graph-sonification-model";
 
 const MockAssistantModel = types
   .model("MockAssistantModel", {
@@ -51,11 +54,21 @@ jest.mock("../contexts/app-config-context", () => ({
 describe("test developer options component", () => {
 
   it("renders a developer options component with mock assistant checkbox and thread buttons", async () => {
-    render(<DeveloperOptionsComponent
-      createToggleOption={() => <div />}
-      assistantStore={mockAssistantStore}
-      onInitializeAssistant={jest.fn()}
-    />);
+    const mockSonificationStore = {
+    } as unknown as GraphSonificationModelType;
+
+    const mockRootStore = {
+      sonificationStore: mockSonificationStore,
+    } as unknown as IRootStore;
+    render(
+      <RootStoreProvider rootStore={mockRootStore}>
+        <DeveloperOptionsComponent
+          createToggleOption={() => <div />}
+          assistantStore={mockAssistantStore}
+          onInitializeAssistant={jest.fn()}
+        />
+      </RootStoreProvider>
+    );
 
     const developerOptions = screen.getByTestId("developer-options");
     expect(developerOptions).toBeInTheDocument();
