@@ -9,6 +9,8 @@ import { useAriaLive } from "../contexts/aria-live-context";
 
 import "./chat-transcript.scss";
 
+const kAriaLiveClearDelayMs = 10;
+
 interface IProps {
   chatTranscript: ChatTranscript;
   isLoading?: boolean;
@@ -43,8 +45,7 @@ export const ChatTranscriptComponent = observer(({chatTranscript, isLoading}: IP
         } else {
           setAriaLiveText("No previous message from DAVAI to replay.");
         }
-      },
-      10);
+      }, kAriaLiveClearDelayMs);
     }, { focus: true });
   }, [chatTranscript.messages, setAriaLiveText, shortcutsService]);
 
