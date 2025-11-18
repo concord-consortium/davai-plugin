@@ -11,6 +11,9 @@ jobs:
       - uses: actions/setup-node@v4
       - name: Install Dependencies
         run: npm ci
+        env:
+          # skip installing cypress since it isn't needed for just building
+          CYPRESS_INSTALL_BINARY: 0
       - name: Build
         run: npm run build
         env:
