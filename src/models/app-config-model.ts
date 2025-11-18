@@ -103,8 +103,8 @@ const SonifyOptions = types.model("SonifyOptions", {
  * It includes properties and methods for managing accessibility, AI assistant settings, and the application's mode.
  *
  * @property {Object} keyboardShortcuts - Custom keystrokes
- * @property {string} keyboardShortcuts.focusChatInput - placing focus in the main text input field (e.g., `Control+Shift+/`).
- * @property {string} keyboardShortcuts.playGraphSonification - playing the graph sonification (e.g., `Control+Shift+.`) (not implemented yet).
+ * @property {string} keyboardShortcuts.focusChatInput - placing focus in the main text input field (e.g., `Control+Shift+Slash`).
+ * @property {string} keyboardShortcuts.playGraphSonification - playing the graph sonification (e.g., `Control+Shift+Period`)
  * @property {boolean} keyboardShortcutsEnabled - Whether keyboard shortcuts are enabled.
  * @property {boolean} playProcessingMessage - Whether to play a message when processing starts.
  * @property {boolean} playProcessingTone - Whether to play a tone when processing starts.
