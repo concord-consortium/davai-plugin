@@ -5,9 +5,9 @@ Generated from source comments and MST runtime introspection. Do not edit manual
 | --------------------------------------- | -------- | ------------------------------------------- |
 | dimensions.height                       | number   | 680                                         |
 | dimensions.width                        | number   | 380                                         |
-| keyboardShortcuts.focusChatInput        | string   | "Control+Shift+/"                           |
-| keyboardShortcuts.replayLastDavaiMessage | string   | "Control+Shift+,"                           |
-| keyboardShortcuts.sonifyGraph           | string   | "Control+Shift+."                           |
+| keyboardShortcuts.focusChatInput        | string   | "Control+Shift+Slash"                       |
+| keyboardShortcuts.replayLastDavaiMessage | string   | "Control+Shift+Comma"                       |
+| keyboardShortcuts.sonifyGraph           | string   | "Control+Shift+Period"                      |
 | keyboardShortcutsEnabled                | boolean  | true                                        |
 | llmId                                   | string   | "{\"id\":\"gpt-4o-mini\",\"provider\":\"OpenAI\"}" |
 | llmList                                 | frozen[] |                                             |
