@@ -19,9 +19,7 @@ export const ChatTranscriptComponent = observer(({chatTranscript, isLoading}: IP
   const shortcutsService = useShortcutsService();
   const chatTranscriptRef = useRef<HTMLDivElement>(null);
   const { setAriaLiveText } = useAriaLive();
-  // We need to toggle a invisible character to force the screen reader to
-  // read the same message again.
-  const replayNonceRef = useRef(true);
+  const replayHiddenCharToggleRef = useRef(true);
 
   useEffect(() => {
     // Autoscroll to the top of the latest message in the transcript.
@@ -37,10 +35,10 @@ export const ChatTranscriptComponent = observer(({chatTranscript, isLoading}: IP
     return shortcutsService.registerShortcutHandler("replayLastDavaiMessage", (event) => {
       event.preventDefault();
       const lastDavaiMessage = chatTranscript.messages.filter(msg => msg.speaker === "DAVAI").pop();
-      replayNonceRef.current = !replayNonceRef.current;
-      const suffix = replayNonceRef.current ? "\u200B" : "\u200C"; // invisible change
-      // We first clear the live text to ensure the screen reader will read the
-      // the message again even if it is the same as before.
+      // We toggle an invisible character to force the screen reader to read the same message again.
+      // We tried to clear the live text, wait, and set it again, but that didn't work
+      replayHiddenCharToggleRef.current = !replayHiddenCharToggleRef.current;
+      const suffix = replayHiddenCharToggleRef.current ? "\u200B" : "\u200C"; // invisible change
       if (lastDavaiMessage) {
         setAriaLiveText(`Last Message: ${lastDavaiMessage.plainTextContent}${suffix}`);
       } else {
