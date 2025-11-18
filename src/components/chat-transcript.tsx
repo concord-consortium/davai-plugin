@@ -9,8 +9,6 @@ import { useAriaLive } from "../contexts/aria-live-context";
 
 import "./chat-transcript.scss";
 
-const kAriaLiveClearDelayMs = 10;
-
 interface IProps {
   chatTranscript: ChatTranscript;
   isLoading?: boolean;
@@ -21,6 +19,7 @@ export const ChatTranscriptComponent = observer(({chatTranscript, isLoading}: IP
   const shortcutsService = useShortcutsService();
   const chatTranscriptRef = useRef<HTMLDivElement>(null);
   const { setAriaLiveText } = useAriaLive();
+  const replayHiddenCharToggleRef = useRef(true);
 
   useEffect(() => {
     // Autoscroll to the top of the latest message in the transcript.
@@ -36,16 +35,15 @@ export const ChatTranscriptComponent = observer(({chatTranscript, isLoading}: IP
     return shortcutsService.registerShortcutHandler("replayLastDavaiMessage", (event) => {
       event.preventDefault();
       const lastDavaiMessage = chatTranscript.messages.filter(msg => msg.speaker === "DAVAI").pop();
-      // We first clear the live text to ensure the screen reader will read the
-      // the message again even if it is the same as before.
-      setAriaLiveText("");
-      setTimeout(() => {
-        if (lastDavaiMessage) {
-          setAriaLiveText(lastDavaiMessage.plainTextContent);
-        } else {
-          setAriaLiveText("No previous message from DAVAI to replay.");
-        }
-      }, kAriaLiveClearDelayMs);
+      // We toggle an invisible character to force the screen reader to read the same message again.
+      // We tried to clear the live text, wait, and set it again, but that didn't work
+      replayHiddenCharToggleRef.current = !replayHiddenCharToggleRef.current;
+      const suffix = replayHiddenCharToggleRef.current ? "\u200B" : "\u200C";
+      if (lastDavaiMessage) {
+        setAriaLiveText(`Last Message: ${lastDavaiMessage.plainTextContent}${suffix}`);
+      } else {
+        setAriaLiveText(`No previous message from DAVAI to replay.${suffix}`);
+      }
     }, { focus: true });
   }, [chatTranscript.messages, setAriaLiveText, shortcutsService]);
 
