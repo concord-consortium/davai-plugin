@@ -1,10 +1,10 @@
-import { flow, Instance, SnapshotIn, types } from "mobx-state-tree";
+import { applySnapshot, flow, Instance, SnapshotIn, types } from "mobx-state-tree";
 import { reaction } from "mobx";
 import { Attribute, CodapItem, CodapItemValues } from "../types";
-import { sendMessage, getAllItems, createTable, createItems } from "@concord-consortium/codap-plugin-api";
+import { sendMessage, createTable, createItems, getDataContext } from "@concord-consortium/codap-plugin-api";
 import { CODAPGraphModel, ICODAPGraphModel } from "./codap-graph-model";
 import { BinModel } from "./bin-model";
-import { sendCODAPRequest, getGraphDetails } from "../utils/codap-api-utils";
+import { sendCODAPRequest, getGraphDetails, trimDataset, getCollectionItemsForAttributePair, getCollectionItemsForAttribute } from "../utils/codap-api-utils";
 import { removeRoiAdornment, isGraphSonifiable } from "../utils/graph-sonification-utils";
 import { leastSquaresLinearRegression } from "../utils/graph-utils";
 
@@ -25,7 +25,7 @@ export interface ISonificationData {
 
 export const GraphSonificationModel = types
   .model("GraphSonificationModel", {
-    allGraphs: types.optional(types.array(CODAPGraphModel), []),
+    allGraphs: types.map(CODAPGraphModel),
     selectedGraphID: types.maybe(types.number),
     graphItems: types.maybe(types.array(types.frozen())),
     binValues: BinModel
@@ -37,7 +37,8 @@ export const GraphSonificationModel = types
   }))
   .views((self) => ({
     get validGraphs() {
-      return self.allGraphs?.filter((graph: ICODAPGraphModel) => isGraphSonifiable(graph)) || [];
+      return Array.from(self.allGraphs.values())
+        .filter((graph: ICODAPGraphModel) => isGraphSonifiable(graph)) || [];
     }
   }))
   .views((self) => ({
@@ -145,11 +146,8 @@ export const GraphSonificationModel = types
   .actions((self) => ({
     setGraphs: flow(function* (options?: { selectNewest?: boolean }) {
       const graphs: SnapshotIn<typeof CODAPGraphModel>[] = yield getGraphDetails();
-      const incomingIDs = new Set<number>();
 
       const processedGraphs = yield Promise.all(graphs.map(async snapshot => {
-        incomingIDs.add(snapshot.id);
-
         // Make sure the graph has a valid name and title. As a fallback, use the name of the
         // parent collection in the data context.
         if (!snapshot.title && !snapshot.name) {
@@ -158,8 +156,8 @@ export const GraphSonificationModel = types
             resource: `dataContext[${snapshot.dataContext}]`
           }) as any;
           const dataContext = response.values;
-          // Note: When a user adds a new graph to CODAP it will have no data context
-          // so it won't have any collections.
+          // Note: When a user adds a new graph to CODAP and there is more than one data context
+          // the new graph will not have a data context
           const parentCollection = dataContext.collections?.[0];
           snapshot.name = parentCollection?.name;
           snapshot.title = parentCollection?.name;
@@ -168,23 +166,26 @@ export const GraphSonificationModel = types
         return snapshot;
       }));
 
-      processedGraphs.forEach((graph: SnapshotIn<typeof CODAPGraphModel>) => {
-        const existing = self.allGraphs.find(g => g.id === graph.id);
-        if (existing) {
-          existing.updatePropsFromSnapshot(graph);
-        } else {
-          self.allGraphs.push(CODAPGraphModel.create(graph));
-          if (options?.selectNewest) {
-            self.setSelectedGraphID(graph.id);
-          }
+      // Find the last graph that didn't already exist in allGraphs
+      // This "newest" graph is used if the selectNewest option is enabled
+      let newestGraphId = -1;
+      for (let index=processedGraphs.length - 1; index >= 0; index--) {
+        const graph = processedGraphs[index];
+        if (!self.allGraphs.get(String(graph.id))) {
+          newestGraphId = graph.id;
+          break;
         }
-      });
+      }
 
-      self.allGraphs.forEach((graph, index) => {
-        if (!incomingIDs.has(graph.id)) {
-          self.allGraphs.splice(index, 1);
-        }
+      const allGraphsSnapshot: SnapshotIn<typeof self.allGraphs> = {};
+      processedGraphs.forEach((graph: SnapshotIn<typeof CODAPGraphModel>) => {
+        allGraphsSnapshot[String(graph.id)] = graph;
       });
+      applySnapshot(self.allGraphs, allGraphsSnapshot);
+
+      if (options?.selectNewest && newestGraphId !== -1) {
+        self.setSelectedGraphID(newestGraphId);
+      }
     })
   }))
   .actions((self) => {
@@ -193,10 +194,19 @@ export const GraphSonificationModel = types
     // 2. we receive a data context change notification relevant to the selected graph
     const setGraphItems = flow(function* () {
       const dataContext = self.selectedGraph?.dataContext;
-      if (!dataContext) return;
-      const allItemsRes = yield getAllItems(dataContext);
-      const allItems = allItemsRes.values;
-      self.graphItems = allItems;
+      if (!dataContext || !self.timeAttr) return;
+
+      const dataContextResult = yield getDataContext(dataContext);
+      const dataContextFullObj = dataContextResult.values;
+      const dataContextObj = trimDataset(dataContextFullObj);
+
+      if (self.pitchAttr) {
+        // Get all items for the two attributes (time and pitch)
+        self.graphItems = yield getCollectionItemsForAttributePair(dataContextObj, self.timeAttr, self.pitchAttr);
+      } else {
+        // Univariate graph - get items for the time attribute only
+        self.graphItems = yield getCollectionItemsForAttribute(dataContextObj, self.timeAttr);
+      }
     });
     return { setGraphItems };
   })
