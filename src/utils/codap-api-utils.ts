@@ -194,7 +194,7 @@ export const getCollectionItemsForAttribute = async (
 
 /**
  * Fetch items for two attributes that may be in different collections within a data context.
- * It will return items for each case in the most nested collection with only the the two
+ * It will return items for each case in the most nested collection with only the two
  * specified attributes.
  * Note the item ids will not be the real CODAP item ids, instead they are paths formed from
  * the case ids in each collection separated by slashes.
