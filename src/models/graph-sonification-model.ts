@@ -166,11 +166,26 @@ export const GraphSonificationModel = types
         return snapshot;
       }));
 
+      // Find the last graph that didn't already exist in allGraphs
+      // This "newest" graph is used if the selectNewest option is enabled
+      let newestGraphId = -1;
+      for (let index=processedGraphs.length - 1; index >= 0; index--) {
+        const graph = processedGraphs[index];
+        if (!self.allGraphs.get(String(graph.id))) {
+          newestGraphId = graph.id;
+          break;
+        }
+      }
+
       const allGraphsSnapshot: SnapshotIn<typeof self.allGraphs> = {};
       processedGraphs.forEach((graph: SnapshotIn<typeof CODAPGraphModel>) => {
         allGraphsSnapshot[String(graph.id)] = graph;
       });
       applySnapshot(self.allGraphs, allGraphsSnapshot);
+
+      if (options?.selectNewest && newestGraphId !== -1) {
+        self.setSelectedGraphID(newestGraphId);
+      }
     })
   }))
   .actions((self) => {

@@ -18,7 +18,6 @@ const mockAvailableGraphs = [
   },
   {
     id: 4, name: "Graph 4", plotType: "barChart", dataContext: "context4"
-    // TODO: not sure what should go here
   }
 ];
 
@@ -35,7 +34,6 @@ const mockGraphItemsDotPlot = [
 ];
 
 const mockDataContext = {
-  name,
   collections: [
     { name: "collection0" },
     { name: "collection1" }

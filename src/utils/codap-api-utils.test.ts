@@ -1,6 +1,5 @@
 import { codapInterface } from "@concord-consortium/codap-plugin-api";
 import { getCollectionItemsForAttributePair, trimDataset } from "./codap-api-utils";
-import { before } from "node:test";
 
 // mock Node.js's structuredClone function
 if (!globalThis.structuredClone) {
@@ -176,7 +175,7 @@ describe("getCollectionItems", () => {
     ]);
   });
 
-  it("should retrieve items for attributes the same collection", async () => {
+  it("should retrieve items for attributes in the same collection", async () => {
     const items = await getCollectionItemsForAttributePair(mockDataContext, "attrC", "attrD");
     expect(items).toEqual([
       { id: "3", values: { attrC: "C1", attrD: "D1" } },
