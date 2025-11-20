@@ -1,30 +1,64 @@
 import { types } from "mobx-state-tree";
-import { getAllItems, codapInterface } from "@concord-consortium/codap-plugin-api";
+import { codapInterface } from "@concord-consortium/codap-plugin-api";
 import { GraphSonificationModel, GraphSonificationModelType } from "./graph-sonification-model";
+import { getCollectionItemsForAttributePair, getCollectionItemsForAttribute } from "../utils/codap-api-utils";
 
 const mockAvailableGraphs = [
-  { id: 1, name: "Graph 1", plotType: "scatterPlot", dataContext: "context1" },
-  { id: 2, name: "Graph 2", plotType: "scatterPlot", dataContext: "context2" },
-  { id: 3, name: "Graph 3", plotType: "dotPlot", dataContext: "context3" },
-  { id: 4, name: "Graph 4", plotType: "barChart", dataContext: "context4" }
+  {
+    id: 1, name: "Graph 1", plotType: "scatterPlot", dataContext: "context1",
+    yAttributeName: "y", xAttributeName: "x"
+  },
+  {
+    id: 2, name: "Graph 2", plotType: "scatterPlot", dataContext: "context2",
+    yAttributeName: "y", xAttributeName: "x"
+  },
+  {
+    id: 3, name: "Graph 3", plotType: "dotPlot", dataContext: "context3",
+    xAttributeName: "x"
+  },
+  {
+    id: 4, name: "Graph 4", plotType: "barChart", dataContext: "context4"
+    // TODO: not sure what should go here
+  }
 ];
 
-const mockGraphItems = [
+const mockGraphItemsScatterPlot = [
   { values: { x: 1, y: 2 } },
   { values: { x: 3, y: 4 } },
   { values: { x: 5, y: 6 } }
 ];
 
+const mockGraphItemsDotPlot = [
+  { values: { x: 1 } },
+  { values: { x: 3 } },
+  { values: { x: 5 } }
+];
+
+const mockDataContext = {
+  name,
+  collections: [
+    { name: "collection0" },
+    { name: "collection1" }
+  ]
+};
+
 jest.mock("@concord-consortium/codap-plugin-api", () => ({
-  getAllItems: jest.fn(() => Promise.resolve({ values: mockGraphItems })),
   codapInterface: {
-    sendRequest: jest.fn()
-  }
+    sendRequest: jest.fn(),
+
+  },
+  getDataContext: jest.fn((name: string) => {
+    return Promise.resolve({
+      values: mockDataContext
+    });
+  })
 }));
 
 jest.mock("../utils/codap-api-utils", () => ({
   getGraphDetails: jest.fn(() => Promise.resolve(mockAvailableGraphs)),
-  sendCODAPRequest: jest.fn(),
+  getCollectionItemsForAttributePair: jest.fn(() => Promise.resolve(mockGraphItemsScatterPlot)),
+  getCollectionItemsForAttribute: jest.fn(() => Promise.resolve(mockGraphItemsDotPlot)),
+  trimDataset: jest.fn((dataContext: any) => dataContext),
 }));
 
 jest.mock("../utils/graph-sonification-utils", () => ({
@@ -62,12 +96,11 @@ describe("GraphSonificationModel", () => {
     mockSendCODAPDocumentInfo.mockClear();
     mockSetAssistantState.mockClear();
     mockGetAssistantState.mockClear();
-    (getAllItems as jest.Mock).mockClear();
     (codapInterface.sendRequest as jest.Mock).mockClear();
 
     rootStore = RootStore.create({
       sonificationStore: {
-        allGraphs: [],
+        allGraphs: {},
         selectedGraphID: undefined,
         graphItems: undefined,
         binValues: {
@@ -87,17 +120,17 @@ describe("GraphSonificationModel", () => {
   });
 
   it("should initialize with empty graphs and no selected graph", () => {
-    expect(store.allGraphs.length).toBe(0);
+    expect(store.allGraphs.size).toBe(0);
     expect(store.selectedGraphID).toBeUndefined();
   });
 
   it("should set available graphs", async () => {
     await store.setGraphs();
-    expect(store.allGraphs.length).toBe(4);
-    expect(store.allGraphs[0].id).toBe(1);
-    expect(store.allGraphs[1].id).toBe(2);
-    expect(store.allGraphs[2].id).toBe(3);
-    expect(store.allGraphs[3].id).toBe(4);
+    expect(store.allGraphs.size).toBe(4);
+    expect(store.allGraphs.get("1")).toBeDefined();
+    expect(store.allGraphs.get("2")).toBeDefined();
+    expect(store.allGraphs.get("3")).toBeDefined();
+    expect(store.allGraphs.get("4")).toBeDefined();
   });
 
   it("should only include scatter plots and dot plots in validGraphs", async () => {
@@ -108,14 +141,24 @@ describe("GraphSonificationModel", () => {
     expect(validGraphs.find(g => g.plotType === "barChart")).toBeUndefined();
   });
 
-  it("should set selected graph and update graph items", async () => {
+  it("should set selected graph and update graph items for scatter plot", async () => {
     await store.setGraphs();
     store.setSelectedGraphID(1);
     await new Promise(resolve => setTimeout(resolve, 100));
     expect(store.selectedGraphID).toBe(1);
     expect(store.graphItems).toBeDefined();
     expect(store.graphItems?.length).toBe(3);
-    expect(getAllItems).toHaveBeenCalledWith("context1");
+    expect(getCollectionItemsForAttributePair).toHaveBeenCalledWith(mockDataContext, "x", "y");
+  });
+
+  it("should set selected graph and update graph items for dot plot", async () => {
+    await store.setGraphs();
+    store.setSelectedGraphID(3);
+    await new Promise(resolve => setTimeout(resolve, 100));
+    expect(store.selectedGraphID).toBe(3);
+    expect(store.graphItems).toBeDefined();
+    expect(store.graphItems?.length).toBe(3);
+    expect(getCollectionItemsForAttribute).toHaveBeenCalledWith(mockDataContext, "x");
   });
 
   it("should only allow selecting sonifiable graphs", async () => {
