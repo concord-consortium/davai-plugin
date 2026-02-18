@@ -1,6 +1,7 @@
 process.env.POSTGRES_CONNECTION_STRING = "postgres://user:pass@localhost:5432/testdb";
 process.env.OPENAI_API_KEY = "dummy-openai-key";
 process.env.GOOGLE_API_KEY = "dummy-google-key";
+process.env.ANTHROPIC_API_KEY = "dummy-anthropic-key";
 
 import { TextEncoder } from "util";
 import { ReadableStream } from "web-streams-polyfill";
@@ -44,6 +45,13 @@ jest.mock("@langchain/google-genai", () => ({
   })),
 }));
 
+jest.mock("@langchain/anthropic", () => ({
+  ChatAnthropic: jest.fn(() => ({
+    constructor: { name: "ChatAnthropic" },
+    invoke: jest.fn(() => ({ response: "Mocked response from Anthropic" })),
+  })),
+}));
+
 jest.mock("zod", () => ({
   z: {
     object: jest.fn(() => ({
@@ -76,6 +84,14 @@ describe("createModelInstance", () => {
 
     expect(model).toBeDefined();
     expect(model.constructor.name).toBe("ChatGoogleGenerativeAI");
+  });
+
+  it("should create an Anthropic model instance", async () => {
+    const llmId = JSON.stringify({ id: "claude-sonnet-4-20250514", provider: "Anthropic" });
+    const model = await createModelInstance(llmId);
+
+    expect(model).toBeDefined();
+    expect(model.constructor.name).toBe("ChatAnthropic");
   });
 
   it("should throw an error for unsupported providers", async () => {

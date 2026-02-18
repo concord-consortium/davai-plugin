@@ -36,8 +36,14 @@ export const kDefaultOptions = {
 
 export const LLM_LIST: Record<string, string> = {
   "gpt-4o-mini": "OpenAI",
+  "gpt-4o": "OpenAI",
+  "gpt-4.1": "OpenAI",
+  "gpt-4.1-mini": "OpenAI",
   "gemini-2.0-flash": "Google",
   "gemini-1.5-flash": "Google",
+  "claude-haiku-4-5-20251001": "Anthropic",
+  "claude-opus-4-20250514": "Anthropic",
+  "claude-sonnet-4-20250514": "Anthropic",
   "mock": "Mock Assistant"
 };
 

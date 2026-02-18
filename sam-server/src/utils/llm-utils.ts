@@ -4,6 +4,7 @@ dotenv.config();
 import { ChatOpenAI } from "@langchain/openai";
 import { START, END, StateGraph, Annotation } from "@langchain/langgraph";
 import { ChatGoogleGenerativeAI } from "@langchain/google-genai";
+import { ChatAnthropic } from "@langchain/anthropic";
 import { BaseMessage, trimMessages } from "@langchain/core/messages";
 import { ChatPromptTemplate } from "@langchain/core/prompts";
 import { PostgresSaver } from "@langchain/langgraph-checkpoint-postgres";
@@ -12,7 +13,7 @@ import { codapApiDoc } from "../text/codap-api-documentation.js";
 import { extractToolCalls, toolCallResponse, tools } from "./tool-utils.js";
 import { tokenCounter, escapeCurlyBraces } from "./utils.js";
 import { MAX_TOKENS } from "../constants.js";
-import { getGoogleKey, getOpenAIKey } from "./env-utils.js";
+import { getAnthropicKey, getGoogleKey, getOpenAIKey } from "./env-utils.js";
 
 if (!process.env.POSTGRES_CONNECTION_STRING) {
   throw new Error("POSTGRES_CONNECTION_STRING environment variable is not set.");
@@ -63,13 +64,27 @@ export const createModelInstance = async (llm: string) => {
     });
   }
 
+  if (provider === "Anthropic") {
+    const apiKey = await getAnthropicKey();
+    return new ChatAnthropic({
+      model: id,
+      temperature: 0,
+      apiKey,
+    });
+  }
+
   throw new Error(`Unsupported LLM provider: ${provider}`);
 };
 
 const getOrCreateModelInstance = async (llmId: string): Promise<any> => {
   if (!llmInstances[llmId]) {
     const model = await createModelInstance(llmId);
-    llmInstances[llmId] = model.bind({ tools, parallel_tool_calls: false });
+    const { provider } = JSON.parse(llmId);
+    const bindOptions: Record<string, any> = { tools };
+    if (provider !== "Anthropic") {
+      bindOptions.parallel_tool_calls = false;
+    }
+    llmInstances[llmId] = model.bind(bindOptions);
   }
 
   return llmInstances[llmId];
