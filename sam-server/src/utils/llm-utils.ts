@@ -121,6 +121,10 @@ export const buildResponse = async (message: BaseMessage) => {
 
   // If there are tool calls, we need to handle them first.
   if (toolCalls?.[0]) {
+    if (toolCalls.length > 1) {
+      console.warn(`LLM returned ${toolCalls.length} tool calls but only the first will be processed. ` +
+        `Dropped tool calls: ${toolCalls.slice(1).map((tc: any) => tc.name).join(", ")}`);
+    }
     return await toolCallResponse(toolCalls?.[0]);
   } else {
     return { response: message.content };
