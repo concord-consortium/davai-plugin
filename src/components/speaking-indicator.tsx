@@ -25,7 +25,6 @@ export const SpeakingIndicator: React.FC = () => {
     <div
       className="speaking-indicator"
       role="status"
-      aria-live="polite"
       data-testid="speaking-indicator"
     >
       <span className="speaking-icon" aria-hidden="true"></span>
