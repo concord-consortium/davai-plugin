@@ -27,9 +27,14 @@ export const SpeechServiceProvider = ({ children }: { children: React.ReactNode 
     }
   ));
 
-  // Subscribe to speaking state changes
+  // Subscribe to speaking state changes and clear current text when speech ends
   useEffect(() => {
-    const unsubscribe = speechService.onSpeakingChange(setIsSpeaking);
+    const unsubscribe = speechService.onSpeakingChange((speaking) => {
+      setIsSpeaking(speaking);
+      if (!speaking) {
+        setCurrentSpeechText(null);
+      }
+    });
     return unsubscribe;
   }, [speechService]);
 
