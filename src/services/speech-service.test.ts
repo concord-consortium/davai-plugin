@@ -251,6 +251,17 @@ describe("SpeechService", () => {
 
       expect(onError).not.toHaveBeenCalled();
     });
+
+    it("does not call error callback on interrupted error", () => {
+      const onError = jest.fn();
+      service = new SpeechService(() => true, () => 1, onError);
+      service.speak("Hello");
+
+      const utterance = mockSpeechSynthesis.speak.mock.calls[0][0];
+      utterance.onerror?.({ error: "interrupted" } as SpeechSynthesisErrorEvent);
+
+      expect(onError).not.toHaveBeenCalled();
+    });
   });
 
   describe("dispose", () => {
