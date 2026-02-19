@@ -1,5 +1,5 @@
 import { codapInterface, IResult, getListOfDataContexts, getDataContext } from "@concord-consortium/codap-plugin-api";
-import { ICODAPComponentListItem, IGraphAttrData } from "../types";
+import { CodapItem, CodapItemValues, ICODAPComponentListItem, IGraphAttrData } from "../types";
 import { ICODAPGraphModel } from "../models/codap-graph-model";
 
 export const getGraphComponents = async () => {
@@ -124,6 +124,138 @@ export const trimDataset = (dataset: any): any => {
   }
 
   return newDataset;
+};
+
+export const findAttributeCollectionInfo = (dataContext: any, attributeName: string) => {
+  if (!dataContext.collections || !Array.isArray(dataContext.collections)) {
+    return null;
+  }
+
+  let collectionIndex = -1;
+  let collection: any = null;
+  for (let index = 0; index < dataContext.collections.length; index++) {
+    const _collection = dataContext.collections[index];
+    for (const attr of _collection.attrs) {
+      if (attr.name === attributeName) {
+        collection = _collection;
+        collectionIndex = index;
+        break;
+      }
+    }
+    if (collection) {
+      break;
+    }
+  }
+
+  if (collectionIndex === -1) {
+    return null;
+  }
+
+  return { attributeName, collectionName: collection.name, collectionIndex, collection };
+};
+
+export const getAllCollectionCases = async (dataContextName: string, collectionName: string) => {
+  const collectionResource = `dataContext[${dataContextName}].collection[${collectionName}]`;
+  const allCasesResult = await codapInterface.sendRequest({
+    action: "get",
+    resource: `${collectionResource}.allCases`
+  }) as IResult;
+  if (!allCasesResult.success) {
+    console.warn("Failed to get all cases for collection:", collectionResource);
+    return [];
+  }
+
+  return allCasesResult.values.cases;
+};
+
+export const getCollectionItemsForAttribute = async (
+  dataContext: any,
+  attributeName: string
+) => {
+  const collectionInfo = findAttributeCollectionInfo(dataContext, attributeName);
+
+  if (!collectionInfo) {
+    return [];
+  }
+
+  const cases = await getAllCollectionCases(dataContext.name, collectionInfo.collectionName);
+  const items: CodapItem[] = [];
+  for (const caseItem of cases) {
+    const c = caseItem.case;
+    items.push({ id: String(c.id),
+      values: {
+        [attributeName]: c.values[attributeName]
+      }
+    });
+  }
+
+  return items;
+};
+
+/**
+ * Fetch items for two attributes that may be in different collections within a data context.
+ * It will return items for each case in the most nested collection with only the two
+ * specified attributes.
+ * Note the item ids will not be the real CODAP item ids, instead they are paths formed from
+ * the case ids in each collection separated by slashes.
+ *
+ * @param dataContext
+ * @param attribute1Name
+ * @param attribute2Name
+ * @returns
+ */
+export const getCollectionItemsForAttributePair = async (
+  dataContext: any,
+  attribute1Name: string,
+  attribute2Name: string
+) => {
+  if (!dataContext.collections || !Array.isArray(dataContext.collections)) {
+    return [];
+  }
+
+  // Find collections for the attributes
+  let collectionInfo1 = findAttributeCollectionInfo(dataContext, attribute1Name);
+  let collectionInfo2 = findAttributeCollectionInfo(dataContext, attribute2Name);
+
+  if (!collectionInfo1 || !collectionInfo2) {
+    return [];
+  }
+  const leastNested = collectionInfo1.collectionIndex < collectionInfo2.collectionIndex ? collectionInfo1 : collectionInfo2;
+  const numCollectionsToTraverse = Math.abs(collectionInfo1.collectionIndex - collectionInfo2.collectionIndex) + 1;
+
+  // Get all cases from the least nested down to the most nested collection.
+  // And combine the attribute values from the 2 attributes we are interested in.
+  let lastCollectionItems: Record<number, CodapItem> | null = null;
+  for (let i = 0; i < numCollectionsToTraverse; i++) {
+    const index = leastNested.collectionIndex + i;
+
+    const cases = await getAllCollectionCases(dataContext.name, dataContext.collections[index].name);
+
+    const currentCollection: Record<number, CodapItem> = {};
+    for (const caseItem of cases) {
+      const c = caseItem.case;
+      const caseValues: CodapItemValues = {};
+      let itemParentID = "";
+      if (lastCollectionItems) {
+        // Copy parent attribute values into this item
+        Object.assign(caseValues, lastCollectionItems[c.parent].values);
+        // Make a path out of the case ids to form the item id
+        itemParentID = String(lastCollectionItems[c.parent].id) + "/";
+      }
+      if (collectionInfo1.collectionIndex === index) {
+        caseValues[collectionInfo1.attributeName] = c.values[collectionInfo1.attributeName];
+      }
+      if (collectionInfo2.collectionIndex === index) {
+        caseValues[collectionInfo2.attributeName] = c.values[collectionInfo2.attributeName];
+      }
+      currentCollection[c.id] = { id: itemParentID + String(c.id), values: caseValues };
+    }
+    lastCollectionItems = currentCollection;
+  }
+
+  // At this point lastCollection should have all of the attribute values and cases that we need
+  // We convert it to an array so it matches the value of `getAllItems.values()`
+  return lastCollectionItems ? Object.values(lastCollectionItems) : [];
 };
 
 export const getDataContexts = async () => {
