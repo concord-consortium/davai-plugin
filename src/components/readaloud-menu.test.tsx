@@ -25,6 +25,11 @@ describe("test read aloud menu component", () => {
     );
   });
 
+  beforeEach(() => {
+    mockHandleToggle.mockClear();
+    mockCreateToggleOption.mockClear();
+  });
+
   it("renders a toggle switch to turn readaloud on and off and a select menu to control playback speed", () => {
     render(
       <AppConfigProvider>
@@ -46,9 +51,67 @@ describe("test read aloud menu component", () => {
     expect(readAloudPlaybackSpeed).toHaveAttribute("id", "readaloud-playback-speed");
     expect(readAloudPlaybackSpeed).toHaveValue("1");
     fireEvent.mouseDown(readAloudPlaybackSpeed);
-    const option3 = screen.getByTestId("playback-speed-option-3") as HTMLOptionElement;
-    fireEvent.click(option3);
+    const option5 = screen.getByTestId("playback-speed-option-5") as HTMLOptionElement;
+    fireEvent.click(option5);
     fireEvent.change(readAloudPlaybackSpeed, { target: { value: "1.5" } });
     expect(readAloudPlaybackSpeed).toHaveValue("1.5");
+  });
+
+  it("renders updated labels for Read Responses Aloud", () => {
+    render(
+      <AppConfigProvider>
+        <ReadAloudMenu createToggleOption={mockCreateToggleOption}/>
+      </AppConfigProvider>
+    );
+
+    // Check section heading
+    expect(screen.getByText("Read Responses Aloud")).toBeInTheDocument();
+
+    // Check that toggle was called with new label
+    expect(mockCreateToggleOption).toHaveBeenCalledWith("readAloudEnabled", "Read responses aloud");
+
+    // Check speed label
+    expect(screen.getByTestId("speed-label")).toHaveTextContent("Playback speed:");
+  });
+
+  it("renders 11 speed options from 0.5x to 3x", () => {
+    render(
+      <AppConfigProvider>
+        <ReadAloudMenu createToggleOption={mockCreateToggleOption}/>
+      </AppConfigProvider>
+    );
+
+    const speedOptions = [
+      { testId: "playback-speed-option-1", value: "0.5", label: "0.5x" },
+      { testId: "playback-speed-option-2", value: "0.75", label: "0.75x" },
+      { testId: "playback-speed-option-3", value: "1", label: "1x" },
+      { testId: "playback-speed-option-4", value: "1.25", label: "1.25x" },
+      { testId: "playback-speed-option-5", value: "1.5", label: "1.5x" },
+      { testId: "playback-speed-option-6", value: "1.75", label: "1.75x" },
+      { testId: "playback-speed-option-7", value: "2", label: "2x" },
+      { testId: "playback-speed-option-8", value: "2.25", label: "2.25x" },
+      { testId: "playback-speed-option-9", value: "2.5", label: "2.5x" },
+      { testId: "playback-speed-option-10", value: "2.75", label: "2.75x" },
+      { testId: "playback-speed-option-11", value: "3", label: "3x" },
+    ];
+
+    speedOptions.forEach(({ testId, value, label }) => {
+      const option = screen.getByTestId(testId) as HTMLOptionElement;
+      expect(option).toHaveValue(value);
+      expect(option).toHaveTextContent(label);
+    });
+  });
+
+  it("renders helper text about screen reader compatibility", () => {
+    render(
+      <AppConfigProvider>
+        <ReadAloudMenu createToggleOption={mockCreateToggleOption}/>
+      </AppConfigProvider>
+    );
+
+    const helperText = screen.getByTestId("readaloud-helper-text");
+    expect(helperText).toBeInTheDocument();
+    expect(helperText).toHaveTextContent("screen reader");
+    expect(helperText).toHaveTextContent("Escape");
   });
 });
