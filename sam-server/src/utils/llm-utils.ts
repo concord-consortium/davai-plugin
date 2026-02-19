@@ -76,11 +76,12 @@ export const createModelInstance = async (llm: string) => {
   throw new Error(`Unsupported LLM provider: ${provider}`);
 };
 
-const getOrCreateModelInstance = async (llmId: string): Promise<any> => {
+export const getOrCreateModelInstance = async (llmId: string): Promise<any> => {
   if (!llmInstances[llmId]) {
     const model = await createModelInstance(llmId);
     const { provider } = JSON.parse(llmId);
     const bindOptions: Record<string, any> = { tools };
+    // Anthropic's API does not support the parallel_tool_calls parameter
     if (provider !== "Anthropic") {
       bindOptions.parallel_tool_calls = false;
     }
