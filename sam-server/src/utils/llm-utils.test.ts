@@ -128,11 +128,16 @@ describe("getOrCreateModelInstance", () => {
     );
   });
 
-  it("should bind Anthropic models without parallel_tool_calls", async () => {
+  it("should bind Anthropic models with disable_parallel_tool_use in tool_choice", async () => {
     const llmId = JSON.stringify({ id: "claude-sonnet-4-20250514", provider: "Anthropic" });
     await getOrCreateModelInstance(llmId);
 
     const mockInstance = (ChatAnthropic as unknown as jest.Mock).mock.results[0].value;
+    expect(mockInstance.bind).toHaveBeenCalledWith(
+      expect.objectContaining({
+        tool_choice: { type: "auto", disable_parallel_tool_use: true }
+      })
+    );
     expect(mockInstance.bind).toHaveBeenCalledWith(
       expect.not.objectContaining({ parallel_tool_calls: expect.anything() })
     );

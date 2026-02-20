@@ -13,11 +13,7 @@ const pool = new Pool({
 const buildResponse = async (message: any) => {
   const toolCalls = extractToolCalls(message);
   if (toolCalls?.[0]) {
-    if (toolCalls.length > 1) {
-      console.warn(`LLM returned ${toolCalls.length} tool calls but only the first will be processed. ` +
-        `Dropped tool calls: ${toolCalls.slice(1).map((tc: any) => tc.name).join(", ")}`);
-    }
-    return await toolCallResponse(toolCalls?.[0]);
+    return await toolCallResponse(toolCalls[0]);
   }
   return { response: message.content };
 };

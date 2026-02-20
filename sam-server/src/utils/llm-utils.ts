@@ -81,8 +81,10 @@ export const getOrCreateModelInstance = async (llmId: string): Promise<any> => {
     const model = await createModelInstance(llmId);
     const { provider } = JSON.parse(llmId);
     const bindOptions: Record<string, any> = { tools };
-    // Anthropic's API does not support the parallel_tool_calls parameter
-    if (provider !== "Anthropic") {
+    if (provider === "Anthropic") {
+      // Anthropic uses disable_parallel_tool_use in tool_choice instead of parallel_tool_calls
+      bindOptions.tool_choice = { type: "auto", disable_parallel_tool_use: true };
+    } else {
       bindOptions.parallel_tool_calls = false;
     }
     llmInstances[llmId] = model.bind(bindOptions);
@@ -119,13 +121,8 @@ const callModel = async (state: any, modelConfig: any) => {
 export const buildResponse = async (message: BaseMessage) => {
   const toolCalls = extractToolCalls(message);
 
-  // If there are tool calls, we need to handle them first.
   if (toolCalls?.[0]) {
-    if (toolCalls.length > 1) {
-      console.warn(`LLM returned ${toolCalls.length} tool calls but only the first will be processed. ` +
-        `Dropped tool calls: ${toolCalls.slice(1).map((tc: any) => tc.name).join(", ")}`);
-    }
-    return await toolCallResponse(toolCalls?.[0]);
+    return await toolCallResponse(toolCalls[0]);
   } else {
     return { response: message.content };
   }
