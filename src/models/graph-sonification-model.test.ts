@@ -57,6 +57,7 @@ jest.mock("../utils/codap-api-utils", () => ({
   getCollectionItemsForAttributePair: jest.fn(() => Promise.resolve(mockGraphItemsScatterPlot)),
   getCollectionItemsForAttribute: jest.fn(() => Promise.resolve(mockGraphItemsDotPlot)),
   trimDataset: jest.fn((dataContext: any) => dataContext),
+  getGraphAdornments: jest.fn(() => Promise.resolve([])),
 }));
 
 jest.mock("../utils/graph-sonification-utils", () => ({

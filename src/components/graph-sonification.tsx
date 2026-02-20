@@ -66,15 +66,20 @@ export const GraphSonification = observer(() => {
     });
   }, [selectedGraphID, transportManager]);
 
-  const handlePlayPause = useCallback(() => {
+  const handlePlayPause = useCallback(async () => {
     if (!selectedGraphID) {
       setShowError(true);
       return;
     }
     setShowError(false);
 
+    try {
+      await sonificationStore.setAdornments();
+    } catch (error) {
+      console.warn("Failed to fetch adornments:", error);
+    }
     transportManager.playPause();
-  }, [selectedGraphID, transportManager]);
+  }, [selectedGraphID, sonificationStore, transportManager]);
 
   // Save handlePlayPause as a ref for the shortcut handler. This avoids re-registering the shortcut on
   // every render.

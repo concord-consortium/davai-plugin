@@ -1,5 +1,6 @@
 import { codapInterface } from "@concord-consortium/codap-plugin-api";
 import { ICODAPGraph } from "../types";
+import { IAdornmentData } from "./codap-api-utils";
 
 export function isUnivariateDotPlot(graph: ICODAPGraph): boolean {
   const {
@@ -61,6 +62,50 @@ export const interpolateBins = (bins: number[], stepCount: number): number[] => 
     result.push(value);
   }
   return result;
+};
+
+export interface IAdornmentCue {
+  label: string;
+  timeOffset: number;
+}
+
+export const computeAdornmentCues = (
+  adornments: IAdornmentData[],
+  lowerBound: number,
+  upperBound: number,
+  duration: number
+): IAdornmentCue[] => {
+  const range = upperBound - lowerBound;
+  if (range <= 0) return [];
+
+  const cues: IAdornmentCue[] = [];
+
+  const addCue = (label: string, value: number) => {
+    if (!Number.isFinite(value)) return;
+    const fraction = (value - lowerBound) / range;
+    if (fraction < 0 || fraction > 1) return;
+    cues.push({ label, timeOffset: fraction * duration });
+  };
+
+  const hasMeanAdornment = adornments.some(a => a.type === "Mean");
+
+  for (const adornment of adornments) {
+    switch (adornment.type) {
+      case "Mean":
+        if (adornment.value != null) addCue("mean", adornment.value);
+        break;
+      case "Median":
+        if (adornment.value != null) addCue("median", adornment.value);
+        break;
+      case "Standard Deviation":
+        if (adornment.min != null) addCue("SD lower", adornment.min);
+        if (adornment.max != null) addCue("SD upper", adornment.max);
+        if (!hasMeanAdornment && adornment.mean != null) addCue("mean", adornment.mean);
+        break;
+    }
+  }
+
+  return cues.sort((a, b) => a.timeOffset - b.timeOffset);
 };
 
 export const createRoiAdornment = async (graphId: number) => {

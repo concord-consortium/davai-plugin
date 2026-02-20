@@ -2,6 +2,18 @@ import { codapInterface, IResult, getListOfDataContexts, getDataContext } from "
 import { CodapItem, CodapItemValues, ICODAPComponentListItem, IGraphAttrData } from "../types";
 import { ICODAPGraphModel } from "../models/codap-graph-model";
 
+export const adornmentTypesOfInterest = ["Mean", "Median", "Standard Deviation"] as const;
+export type AdornmentType = typeof adornmentTypesOfInterest[number];
+
+export interface IAdornmentData {
+  isVisible: boolean;
+  max?: number;
+  mean?: number;
+  min?: number;
+  type: AdornmentType;
+  value?: number;
+}
+
 export const getGraphComponents = async () => {
   const response = await codapInterface.sendRequest({ action: "get", resource: "componentList" }) as IResult;
   return response.values.filter((c: any) => c.type === "graph");
@@ -273,4 +285,70 @@ export const getDataContexts = async () => {
 export const sendCODAPRequest = async (request: any) => {
   const response = await codapInterface.sendRequest(request);
   return response;
+};
+
+export const getGraphAdornments = async (graphId: number): Promise<IAdornmentData[]> => {
+  try {
+    const listResponse = await codapInterface.sendRequest({
+      action: "get",
+      resource: `component[${graphId}].adornmentList`
+    }) as IResult;
+
+    if (!listResponse.success || !Array.isArray(listResponse.values)) {
+      return [];
+    }
+
+    const visibleAdornments = listResponse.values.filter(
+      (a: any) => a.isVisible && adornmentTypesOfInterest.includes(a.type)
+    );
+
+    const results: IAdornmentData[] = [];
+    for (const adornment of visibleAdornments) {
+      try {
+        const detailResponse = await codapInterface.sendRequest({
+          action: "get",
+          resource: `component[${graphId}].adornment[${adornment.type}]`
+        }) as IResult;
+
+        if (!detailResponse.success || !detailResponse.values?.data?.[0]) {
+          continue;
+        }
+
+        const data = detailResponse.values.data[0];
+
+        switch (adornment.type) {
+          case "Mean":
+            results.push({
+              type: "Mean",
+              isVisible: true,
+              value: data.mean
+            });
+            break;
+          case "Median":
+            results.push({
+              type: "Median",
+              isVisible: true,
+              value: data.median
+            });
+            break;
+          case "Standard Deviation":
+            results.push({
+              type: "Standard Deviation",
+              isVisible: true,
+              min: data.min,
+              max: data.max,
+              mean: data.mean
+            });
+            break;
+        }
+      } catch (err) {
+        console.warn(`Failed to get adornment data for ${adornment.type}:`, err);
+      }
+    }
+
+    return results;
+  } catch (err) {
+    console.warn("Failed to get graph adornments:", err);
+    return [];
+  }
 };
