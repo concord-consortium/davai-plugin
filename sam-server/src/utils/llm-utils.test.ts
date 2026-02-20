@@ -93,7 +93,7 @@ describe("createModelInstance", () => {
   });
 
   it("should create an Anthropic model instance", async () => {
-    const llmId = JSON.stringify({ id: "claude-sonnet-4-20250514", provider: "Anthropic" });
+    const llmId = JSON.stringify({ id: "claude-sonnet-4-6", provider: "Anthropic" });
     const model = await createModelInstance(llmId);
 
     expect(model).toBeDefined();
@@ -129,7 +129,7 @@ describe("getOrCreateModelInstance", () => {
   });
 
   it("should bind Anthropic models with disable_parallel_tool_use in tool_choice", async () => {
-    const llmId = JSON.stringify({ id: "claude-sonnet-4-20250514", provider: "Anthropic" });
+    const llmId = JSON.stringify({ id: "claude-sonnet-4-6", provider: "Anthropic" });
     await getOrCreateModelInstance(llmId);
 
     const mockInstance = (ChatAnthropic as unknown as jest.Mock).mock.results[0].value;

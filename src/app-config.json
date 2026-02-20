@@ -40,15 +40,27 @@
       "provider": "OpenAI"
     },
     {
-      "id": "claude-haiku-4-5-20251001",
+      "id": "claude-haiku-4-5",
       "provider": "Anthropic"
     },
     {
-      "id": "claude-opus-4-20250514",
+      "id": "claude-sonnet-4-5",
       "provider": "Anthropic"
     },
     {
-      "id": "claude-sonnet-4-20250514",
+      "id": "claude-sonnet-4-6",
+      "provider": "Anthropic"
+    },
+    {
+      "id": "claude-opus-4-0",
+      "provider": "Anthropic"
+    },
+    {
+      "id": "claude-opus-4-5",
+      "provider": "Anthropic"
+    },
+    {
+      "id": "claude-opus-4-6",
       "provider": "Anthropic"
     }
   ],

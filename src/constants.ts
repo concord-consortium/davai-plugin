@@ -41,9 +41,12 @@ export const LLM_LIST: Record<string, string> = {
   "gpt-4.1-mini": "OpenAI",
   "gemini-2.0-flash": "Google",
   "gemini-1.5-flash": "Google",
-  "claude-haiku-4-5-20251001": "Anthropic",
-  "claude-opus-4-20250514": "Anthropic",
-  "claude-sonnet-4-20250514": "Anthropic",
+  "claude-haiku-4-5": "Anthropic",
+  "claude-sonnet-4-5": "Anthropic",
+  "claude-sonnet-4-6": "Anthropic",
+  "claude-opus-4-0": "Anthropic",
+  "claude-opus-4-5": "Anthropic",
+  "claude-opus-4-6": "Anthropic",
   "mock": "Mock Assistant"
 };
 
