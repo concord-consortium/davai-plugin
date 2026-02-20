@@ -2,7 +2,7 @@ import * as Tone from "tone";
 import Loess from "loess";
 import { GraphSonificationModelType, ISonificationData } from "./graph-sonification-model";
 import { ITransportEventScheduler, kStepCount, TransportManager } from "./transport-manager";
-import { computeAdornmentCues, interpolateBins, isUnivariateDotPlot, kLowerFreqBound, mapPitchFractionToFrequency } from "../utils/graph-sonification-utils";
+import { computeAdornmentCues, interpolateBins, isUnivariateDotPlot, kLowerFreqBound, mapPitchFractionToFrequency, speakLabel } from "../utils/graph-sonification-utils";
 import { AppConfigModelType, ScatterPlotContinuousType } from "./app-config-model";
 
 export class GraphSonificationScheduler implements ITransportEventScheduler {
@@ -380,12 +380,4 @@ export class GraphSonificationScheduler implements ITransportEventScheduler {
       speechSynthesis.cancel();
     };
   }
-}
-
-function speakLabel(label: string) {
-  const utterance = new SpeechSynthesisUtterance(label);
-  utterance.rate = 2;
-  utterance.lang = "en-US";
-  utterance.volume = 0.75;
-  speechSynthesis.speak(utterance);
 }

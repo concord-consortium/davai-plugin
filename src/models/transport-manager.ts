@@ -1,5 +1,6 @@
 import * as Tone  from "tone";
 import { action, computed, makeObservable, observable } from "mobx";
+import { speakLabel } from "../utils/graph-sonification-utils";
 
 export interface ITransportEventScheduler {
   scheduleTransportEvents(manager: TransportManager): (() => void) | undefined;
@@ -48,6 +49,7 @@ export class TransportManager {
   animationFrameId: number | null = null;
   panScheduleId: number | null = null;
   endPauseScheduleId: number | null = null;
+  endSpeechTimeoutId: ReturnType<typeof setTimeout> | null = null;
 
   scheduledEventDisposers: (() => void)[] = [];
   transportEventScheduler: ITransportEventScheduler | null = null;
@@ -114,6 +116,13 @@ export class TransportManager {
     }
   }
 
+  clearEndSpeechTimeout() {
+    if (this.endSpeechTimeoutId != null) {
+      clearTimeout(this.endSpeechTimeoutId);
+      this.endSpeechTimeoutId = null;
+    }
+  }
+
   handleStart(eventTime: number) {
     this.updateState(eventTime);
     this.animationFrameId = requestAnimationFrame(this.stepAnimationFrame);
@@ -142,6 +151,18 @@ export class TransportManager {
   handlePause(eventTime: number) {
     this.updateState(eventTime);
     this.stopAnimationFrame();
+    // Speak "end" when playback reaches the end of the sonification.
+    // We detect this here rather than via a transport.schedule() callback because
+    // transport.schedule() can fire multiple times near the end boundary, queuing
+    // duplicate SpeechSynthesis utterances. The pause listener fires exactly once.
+    if (this.isEnded) {
+      // Short delay so the last data tone can ring out before the speech cue
+      this.clearEndSpeechTimeout();
+      this.endSpeechTimeoutId = setTimeout(() => {
+        this.endSpeechTimeoutId = null;
+        speakLabel("end");
+      }, 250);
+    }
   }
 
   updateState(eventTime: number) {
@@ -263,6 +284,9 @@ export class TransportManager {
     // Clear any previously scheduled events, this should have done already
     // But we do it again just to be safe.
     Tone.getTransport().cancel();
+
+    // Cancel any pending end-of-sonification speech cue from a previous playback
+    this.clearEndSpeechTimeout();
 
     // Dispose of any objects created by the schedule functions
     this.disposeSchedulers();
@@ -411,6 +435,11 @@ export class TransportManager {
     Tone.getTransport().cancel();
 
     this.disposeSchedulers();
+    this.clearEndSpeechTimeout();
+
+    if (typeof speechSynthesis !== "undefined") {
+      speechSynthesis.cancel();
+    }
 
     if (this.animationFrameId != null) {
       cancelAnimationFrame(this.animationFrameId);

@@ -1,4 +1,4 @@
-import { computeAdornmentCues } from "./graph-sonification-utils";
+import { computeAdornmentCues, speakLabel } from "./graph-sonification-utils";
 import { IAdornmentData } from "./codap-api-utils";
 
 describe("computeAdornmentCues", () => {
@@ -121,5 +121,46 @@ describe("computeAdornmentCues", () => {
     ];
     const cues = computeAdornmentCues(adornments, 10, 20, duration);
     expect(cues).toEqual([]);
+  });
+});
+
+describe("speakLabel", () => {
+  let mockSpeak: jest.Mock;
+  const originalSpeechSynthesis = global.speechSynthesis;
+  const originalSpeechSynthesisUtterance = global.SpeechSynthesisUtterance;
+
+  beforeEach(() => {
+    mockSpeak = jest.fn();
+    Object.defineProperty(global, "speechSynthesis", {
+      value: { speak: mockSpeak, cancel: jest.fn() },
+      writable: true,
+      configurable: true,
+    });
+    Object.defineProperty(global, "SpeechSynthesisUtterance", {
+      value: jest.fn().mockImplementation((text: string) => ({
+        text,
+        rate: 1,
+        lang: "",
+        volume: 1,
+      })),
+      writable: true,
+      configurable: true,
+    });
+  });
+
+  afterEach(() => {
+    global.speechSynthesis = originalSpeechSynthesis;
+    global.SpeechSynthesisUtterance = originalSpeechSynthesisUtterance;
+  });
+
+  it("should create an utterance with rate 2 and speak it", () => {
+    speakLabel("end");
+
+    expect(SpeechSynthesisUtterance).toHaveBeenCalledWith("end");
+    const utterance = (SpeechSynthesisUtterance as jest.Mock).mock.results[0].value;
+    expect(utterance.rate).toBe(2);
+    expect(utterance.lang).toBe("en-US");
+    expect(utterance.volume).toBe(0.75);
+    expect(speechSynthesis.speak).toHaveBeenCalledWith(utterance);
   });
 });
