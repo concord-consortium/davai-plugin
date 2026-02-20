@@ -121,6 +121,7 @@ const callModel = async (state: any, modelConfig: any) => {
 export const buildResponse = async (message: BaseMessage) => {
   const toolCalls = extractToolCalls(message);
 
+  // If there are tool calls, we need to handle them first.
   if (toolCalls?.[0]) {
     return await toolCallResponse(toolCalls[0]);
   } else {
