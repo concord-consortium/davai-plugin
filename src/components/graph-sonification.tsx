@@ -76,20 +76,11 @@ export const GraphSonification = observer(() => {
     transportManager.playPause();
   }, [selectedGraphID, transportManager]);
 
-  // Save handlePlayPause as a ref for the shortcut handler. This avoids re-registering the shortcut on
-  // every render.
-  // In React 19 this would be better handled by useEffectEvent
-  const handlePlayPauseRef = useRef(handlePlayPause);
-  useEffect(() => {
-    handlePlayPauseRef.current = handlePlayPause;
-  }, [handlePlayPause]);
-
-  // Register keyboard shortcut for play/pause
+  // Register keyboard shortcut for placing focus on play/pause button
   useEffect(() => {
     return shortcutsService.registerShortcutHandler("sonifyGraph", (event) => {
       event.preventDefault();
 
-      handlePlayPauseRef.current();
       playPauseButtonRef.current?.focus();
       playPauseButtonRef.current?.scrollIntoView({behavior: "smooth", block: "nearest"});
     }, { focus: true });
