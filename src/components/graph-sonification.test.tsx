@@ -154,4 +154,46 @@ describe("GraphSonification Component", () => {
     expect(graphSelect).toHaveValue("2");
     expect(mockSonificationStore.selectedGraphID).toBe(2);
   });
+
+  describe("keyboard shortcut", () => {
+    let originalScrollIntoView: typeof window.HTMLElement.prototype.scrollIntoView;
+
+    beforeEach(() => {
+      originalScrollIntoView = window.HTMLElement.prototype.scrollIntoView;
+      window.HTMLElement.prototype.scrollIntoView = jest.fn();
+      mockTransportManager.isPlaying = false;
+    });
+
+    afterEach(() => {
+      window.HTMLElement.prototype.scrollIntoView = originalScrollIntoView;
+    });
+
+    it("moves focus to the play button without starting playback", () => {
+      renderGraphSonification();
+
+      const graphSelect = screen.getByLabelText("Graph to sonify:");
+      fireEvent.change(graphSelect, { target: { value: 1 } });
+
+      const playButton = screen.getByTestId("playback-button");
+      expect(playButton).not.toHaveFocus();
+
+      // Simulate the Control+Shift+Period keyboard shortcut for sonifyGraph
+      window.dispatchEvent(new KeyboardEvent("keydown", {
+        code: "Period",
+        key: ">",
+        ctrlKey: true,
+        shiftKey: true,
+        bubbles: true,
+      }));
+
+      expect(playButton).toHaveFocus();
+      expect(playButton.scrollIntoView).toHaveBeenCalledWith({
+        behavior: "smooth",
+        block: "nearest"
+      });
+      // The button's accessible name switches to "Pause" when playing,
+      // so "Play" confirms the shortcut did not start playback.
+      expect(playButton).toHaveAccessibleName("Play");
+    });
+  });
 });
