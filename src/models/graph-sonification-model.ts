@@ -4,7 +4,7 @@ import { Attribute, CodapItem, CodapItemValues } from "../types";
 import { sendMessage, createTable, createItems, getDataContext } from "@concord-consortium/codap-plugin-api";
 import { CODAPGraphModel, ICODAPGraphModel } from "./codap-graph-model";
 import { BinModel } from "./bin-model";
-import { sendCODAPRequest, getGraphDetails, trimDataset, getCollectionItemsForAttributePair, getCollectionItemsForAttribute } from "../utils/codap-api-utils";
+import { sendCODAPRequest, getGraphDetails, trimDataset, getCollectionItemsForAttributePair, getCollectionItemsForAttribute, getGraphAdornments, IAdornmentData } from "../utils/codap-api-utils";
 import { removeRoiAdornment, isGraphSonifiable } from "../utils/graph-sonification-utils";
 import { leastSquaresLinearRegression } from "../utils/graph-utils";
 
@@ -33,7 +33,8 @@ export const GraphSonificationModel = types
   .volatile((self) => ({
     // a place to store the resulting frequencies and other data from
     // sonification calculations it is only used for debugging.
-    sonificationData: undefined as ISonificationData | undefined
+    sonificationData: undefined as ISonificationData | undefined,
+    adornmentData: undefined as IAdornmentData[] | undefined
   }))
   .views((self) => ({
     get validGraphs() {
@@ -208,7 +209,16 @@ export const GraphSonificationModel = types
         self.graphItems = yield getCollectionItemsForAttribute(dataContextObj, self.timeAttr);
       }
     });
-    return { setGraphItems };
+    const setAdornments = flow(function* () {
+      const graphId = self.selectedGraphID;
+      if (graphId === undefined) {
+        self.adornmentData = undefined;
+        return;
+      }
+      self.adornmentData = yield getGraphAdornments(graphId);
+    });
+
+    return { setGraphItems, setAdornments };
   })
   .actions((self) => ({
     setSonificationData(data: ISonificationData) {

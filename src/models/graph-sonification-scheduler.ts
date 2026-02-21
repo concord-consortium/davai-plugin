@@ -2,7 +2,7 @@ import * as Tone from "tone";
 import Loess from "loess";
 import { GraphSonificationModelType, ISonificationData } from "./graph-sonification-model";
 import { ITransportEventScheduler, kStepCount, TransportManager } from "./transport-manager";
-import { interpolateBins, isUnivariateDotPlot, kLowerFreqBound, mapPitchFractionToFrequency } from "../utils/graph-sonification-utils";
+import { computeAdornmentCues, interpolateBins, isUnivariateDotPlot, kLowerFreqBound, mapPitchFractionToFrequency } from "../utils/graph-sonification-utils";
 import { AppConfigModelType, ScatterPlotContinuousType } from "./app-config-model";
 
 export class GraphSonificationScheduler implements ITransportEventScheduler {
@@ -53,6 +53,10 @@ export class GraphSonificationScheduler implements ITransportEventScheduler {
       addSchedulerDisposer(this.scheduleUnivariateContinual());
     } else if (univariate && dotPlotMode === "each-dot") {
       addSchedulerDisposer(this.scheduleEachDot());
+    }
+
+    if (univariate) {
+      addSchedulerDisposer(this.scheduleAdornmentVoiceCues());
     }
 
     return () => {
@@ -309,5 +313,79 @@ export class GraphSonificationScheduler implements ITransportEventScheduler {
     };
   }
 
+  scheduleAdornmentVoiceCues(): (() => void) | undefined {
+    if (typeof speechSynthesis === "undefined") return;
 
+    const { selectedGraph, primaryBounds } = this.sonificationStore;
+    if (!selectedGraph || !isUnivariateDotPlot(selectedGraph)) return;
+    if (!primaryBounds) return;
+
+    const { lowerBound, upperBound } = primaryBounds;
+    if (lowerBound == null || upperBound == null) return;
+
+    const transport = Tone.getTransport();
+    let scheduledIds: number[] = [];
+
+    const scheduleCues = () => {
+      const { adornmentData } = this.sonificationStore;
+      if (!adornmentData || adornmentData.length === 0) return;
+
+      const cues = computeAdornmentCues(adornmentData, lowerBound, upperBound, this.manager.duration);
+      if (cues.length === 0) return;
+
+      // Stagger cues that are within 100ms of each other so both are audible.
+      // The cues are already sorted by timeOffset from computeAdornmentCues.
+      const kMinGap = 0.1; // 100ms
+      for (let i = 1; i < cues.length; i++) {
+        if (cues[i].timeOffset - cues[i - 1].timeOffset < kMinGap) {
+          cues[i].timeOffset = cues[i - 1].timeOffset + kMinGap;
+        }
+      }
+
+      for (const cue of cues) {
+        this.addValuesAtTime(cue.timeOffset, `Adornment: ${cue.label}`, [cue.timeOffset]);
+        const id = transport.schedule((time) => {
+          Tone.getDraw().schedule(() => {
+            speakLabel(cue.label);
+          }, time);
+        }, cue.timeOffset);
+        scheduledIds.push(id);
+      }
+    };
+
+    // Schedule initial cues
+    scheduleCues();
+
+    // On each loop restart, re-fetch adornments and reschedule cues so newly-activated adornments are handled.
+    let refreshing = false;
+    const handleLoop = () => {
+      if (refreshing) return;
+      refreshing = true;
+
+      scheduledIds.forEach((id) => transport.clear(id));
+      scheduledIds = [];
+      speechSynthesis.cancel();
+
+      this.sonificationStore.setAdornments().then(() => {
+        scheduleCues();
+      }).finally(() => {
+        refreshing = false;
+      });
+    };
+    transport.on("loop", handleLoop);
+
+    return () => {
+      scheduledIds.forEach((id) => transport.clear(id));
+      transport.off("loop", handleLoop);
+      speechSynthesis.cancel();
+    };
+  }
+}
+
+function speakLabel(label: string) {
+  const utterance = new SpeechSynthesisUtterance(label);
+  utterance.rate = 2;
+  utterance.lang = "en-US";
+  utterance.volume = 0.75;
+  speechSynthesis.speak(utterance);
 }

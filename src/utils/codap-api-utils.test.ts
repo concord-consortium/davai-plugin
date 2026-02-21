@@ -1,5 +1,5 @@
 import { codapInterface } from "@concord-consortium/codap-plugin-api";
-import { getCollectionItemsForAttributePair, trimDataset } from "./codap-api-utils";
+import { getCollectionItemsForAttributePair, getGraphAdornments, trimDataset } from "./codap-api-utils";
 
 // mock Node.js's structuredClone function
 if (!globalThis.structuredClone) {
@@ -181,5 +181,145 @@ describe("getCollectionItems", () => {
       { id: "3", values: { attrC: "C1", attrD: "D1" } },
       { id: "4", values: { attrC: "C2", attrD: "D2" } }
     ]);
+  });
+});
+
+describe("getGraphAdornments", () => {
+  /**
+   * Helper to mock CODAP adornment requests.
+   * Each entry describes an adornment on the list.
+   * If `data` is provided, the detail request for that type will return it.
+   * If `error` is true, the detail request will reject with an error.
+   * Otherwise, the detail request returns success: false which should cause the adornment to be skipped.
+   */
+  function mockAdornmentRequests(
+    adornments: Array<{
+      type: string;
+      isVisible: boolean;
+      data?: Record<string, number>;
+      error?: boolean;
+    }>
+  ) {
+    (codapInterface.sendRequest as jest.Mock).mockImplementation(({ resource }: { resource: string }) => {
+      if (resource === "component[1].adornmentList") {
+        return Promise.resolve({
+          success: true,
+          values: adornments.map((a, i) => ({
+            id: `ADRN${i + 1}`, type: a.type, isVisible: a.isVisible
+          }))
+        });
+      }
+
+      for (const adornment of adornments) {
+        if (resource === `component[1].adornment[${adornment.type}]`) {
+          if (adornment.error) {
+            return Promise.reject(new Error(`Error fetching ${adornment.type}`));
+          }
+          if (adornment.data) {
+            return Promise.resolve({
+              success: true,
+              values: {
+                id: `ADRN${adornments.indexOf(adornment) + 1}`,
+                type: adornment.type,
+                isVisible: adornment.isVisible,
+                data: [adornment.data]
+              }
+            });
+          }
+        }
+      }
+
+      return Promise.resolve({ success: false });
+    });
+  }
+
+  beforeEach(() => {
+    jest.clearAllMocks();
+  });
+
+  it("should parse mean, median, and standard deviation adornments", async () => {
+    mockAdornmentRequests([
+      { type: "Mean", isVisible: true, data: { mean: 24.85 } },
+      { type: "Median", isVisible: true, data: { median: 22.0 } },
+      { type: "Standard Deviation", isVisible: true, data: { min: 10.5, max: 39.2, mean: 24.85 } }
+    ]);
+
+    const result = await getGraphAdornments(1);
+    expect(result).toEqual([
+      { type: "Mean", isVisible: true, value: 24.85 },
+      { type: "Median", isVisible: true, value: 22.0 },
+      { type: "Standard Deviation", isVisible: true, min: 10.5, max: 39.2, mean: 24.85 }
+    ]);
+  });
+
+  it("should filter out non-visible adornments", async () => {
+    mockAdornmentRequests([
+      { type: "Mean", isVisible: false, data: { mean: 24.85 } },
+      { type: "Median", isVisible: true, data: { median: 22.0 } }
+    ]);
+
+    const result = await getGraphAdornments(1);
+    expect(result).toEqual([
+      { type: "Median", isVisible: true, value: 22.0 }
+    ]);
+  });
+
+  it("should filter out adornment types not of interest", async () => {
+    mockAdornmentRequests([
+      { type: "Mean", isVisible: true, data: { mean: 24.85 } },
+      { type: "Count", isVisible: true }
+    ]);
+
+    const result = await getGraphAdornments(1);
+    expect(result).toEqual([
+      { type: "Mean", isVisible: true, value: 24.85 }
+    ]);
+  });
+
+  it("should return an empty array when no adornments are visible", async () => {
+    mockAdornmentRequests([
+      { type: "Mean", isVisible: false, data: { mean: 24.85 } }
+    ]);
+
+    const result = await getGraphAdornments(1);
+    expect(result).toEqual([]);
+  });
+
+  it("should skip an adornment whose detail request fails", async () => {
+    mockAdornmentRequests([
+      { type: "Mean", isVisible: true, error: true },
+      { type: "Median", isVisible: true, data: { median: 11.0 } }
+    ]);
+
+    const warnSpy = jest.spyOn(console, "warn").mockImplementation();
+    const result = await getGraphAdornments(1);
+    expect(result).toEqual([
+      { type: "Median", isVisible: true, value: 11.0 }
+    ]);
+    expect(warnSpy).toHaveBeenCalledWith(
+      "Failed to get adornment data for Mean:",
+      expect.any(Error)
+    );
+    warnSpy.mockRestore();
+  });
+
+  it("should return an empty array when the adornment list request fails", async () => {
+    (codapInterface.sendRequest as jest.Mock).mockResolvedValue({ success: false });
+
+    const result = await getGraphAdornments(1);
+    expect(result).toEqual([]);
+  });
+
+  it("should return an empty array when the list request throws", async () => {
+    (codapInterface.sendRequest as jest.Mock).mockRejectedValue(new Error("Network error"));
+
+    const warnSpy = jest.spyOn(console, "warn").mockImplementation();
+    const result = await getGraphAdornments(1);
+    expect(result).toEqual([]);
+    expect(warnSpy).toHaveBeenCalledWith(
+      "Failed to get graph adornments:",
+      expect.any(Error)
+    );
+    warnSpy.mockRestore();
   });
 });

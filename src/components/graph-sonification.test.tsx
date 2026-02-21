@@ -1,6 +1,6 @@
 import React from "react";
 import { types } from "mobx-state-tree";
-import { render, fireEvent, screen } from "@testing-library/react";
+import { render, fireEvent, screen, waitFor } from "@testing-library/react";
 import { GraphSonification } from "./graph-sonification";
 import { GraphSonificationModelType } from "../models/graph-sonification-model";
 import { ICODAPGraph } from "../types";
@@ -41,6 +41,9 @@ const mockSonificationModel = types
   },
   setGraphItems() {
     return [];
+  },
+  setAdornments() {
+    return Promise.resolve();
   },
   removeSelectedGraphID() {
     self.selectedGraphID = undefined;
@@ -96,7 +99,7 @@ describe("GraphSonification Component", () => {
     expect(screen.getByText("Please select a graph to sonify.")).toBeInTheDocument();
   });
 
-  it("toggles play and pause state", () => {
+  it("toggles play and pause state", async () => {
     renderGraphSonification();
 
     const graphSelect = screen.getByLabelText("Graph to sonify:");
@@ -105,7 +108,9 @@ describe("GraphSonification Component", () => {
     expect(resetButton).toHaveAttribute("aria-disabled", "true");
     const playButton = screen.getByTestId("playback-button");
     fireEvent.click(playButton);
-    expect(playButton).toHaveAccessibleName("Pause");
+    await waitFor(() => {
+      expect(playButton).toHaveAccessibleName("Pause");
+    });
   });
 
   it("toggles looping state", () => {
