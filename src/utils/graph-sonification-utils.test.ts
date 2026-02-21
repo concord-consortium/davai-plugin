@@ -163,4 +163,10 @@ describe("speakLabel", () => {
     expect(utterance.volume).toBe(0.75);
     expect(speechSynthesis.speak).toHaveBeenCalledWith(utterance);
   });
+
+  it("should return early without throwing when speechSynthesis is undefined", () => {
+    (global as any).speechSynthesis = undefined;
+    expect(() => speakLabel("end")).not.toThrow();
+    expect(SpeechSynthesisUtterance).not.toHaveBeenCalled();
+  });
 });
