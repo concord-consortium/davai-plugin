@@ -123,7 +123,7 @@ The instructions text for the LLM prompt are in ./sam-server/src/text/instructio
 
 ## LLM Providers
 
-The code currently supports two LLM providers: Google and OpenAI. To add another provider, update the `createModelInstance` function in ./sam-server/utils/llm-utils.ts. Follow the pattern used for Google and OpenAI. You will also need to add a new environment variable for the associated API key. And finally, you will need to update the `llmList` in the client app's app-config.json file.
+The code currently supports three LLM providers: Anthropic, Google and OpenAI. To add another provider, update the `createModelInstance` function in ./sam-server/utils/llm-utils.ts. Follow the pattern used for Google and OpenAI. You will also need to add a new environment variable for the associated API key. And finally, you will need to update the `llmList` in the client app's app-config.json file.
 
 ## Tool Functions
 
