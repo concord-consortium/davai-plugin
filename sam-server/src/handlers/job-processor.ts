@@ -13,7 +13,7 @@ const pool = new Pool({
 const buildResponse = async (message: any) => {
   const toolCalls = extractToolCalls(message);
   if (toolCalls?.[0]) {
-    return await toolCallResponse(toolCalls?.[0]);
+    return await toolCallResponse(toolCalls[0]);
   }
   return { response: message.content };
 };

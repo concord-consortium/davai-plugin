@@ -34,13 +34,6 @@ export const kDefaultOptions = {
   showDebugLog: false,
 };
 
-export const LLM_LIST: Record<string, string> = {
-  "gpt-4o-mini": "OpenAI",
-  "gemini-2.0-flash": "Google",
-  "gemini-1.5-flash": "Google",
-  "mock": "Mock Assistant"
-};
-
 export const DATA_CONTEXT_MESSAGES = {
   CREATED: "New data context {name} created: {context}",
   GRAPH: "Updated graph information: {graph}",

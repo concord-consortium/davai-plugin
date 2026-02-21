@@ -326,6 +326,13 @@ Resources:
       Description: Google API key for DAVAI server
       SecretString: !Sub '{"key": "your-google-key-here"}'
 
+  AnthropicApiKey:
+    Type: AWS::SecretsManager::Secret
+    Properties:
+      Name: !Sub "${Environment}-anthropic-api-key"
+      Description: Anthropic API key for DAVAI server
+      SecretString: !Sub '{"key": "your-anthropic-key-here"}'
+
   LangSmithApiKey:
     Type: AWS::SecretsManager::Secret
     Properties:
@@ -482,6 +489,7 @@ Resources:
             - !Sub "postgresql://${DBUsername}:${DBPassword}@${RdsEndpoint}:${RdsPort}/${DatabaseName}?sslmode=require"
           OPENAI_API_KEY: !Ref OpenAIApiKey
           GOOGLE_API_KEY: !Ref GoogleApiKey
+          ANTHROPIC_API_KEY: !Ref AnthropicApiKey
           LANGSMITH_TRACING: "true"
           LANGSMITH_ENDPOINT: "https://api.smith.langchain.com"
           LANGSMITH_PROJECT: "davai"
@@ -514,6 +522,7 @@ Resources:
                 - !Sub arn:${AWS::Partition}:secretsmanager:${AWS::Region}:${AWS::AccountId}:secret:${Environment}-davai-api-secret-*
                 - !Sub arn:${AWS::Partition}:secretsmanager:${AWS::Region}:${AWS::AccountId}:secret:${Environment}-openai-api-key-*
                 - !Sub arn:${AWS::Partition}:secretsmanager:${AWS::Region}:${AWS::AccountId}:secret:${Environment}-google-api-key-*
+                - !Sub arn:${AWS::Partition}:secretsmanager:${AWS::Region}:${AWS::AccountId}:secret:${Environment}-anthropic-api-key-*
                 - !Sub arn:${AWS::Partition}:secretsmanager:${AWS::Region}:${AWS::AccountId}:secret:${Environment}-langsmith-api-key-*
       Timeout: 300
       MemorySize: 512

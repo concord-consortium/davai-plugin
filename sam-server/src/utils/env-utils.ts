@@ -35,6 +35,8 @@ const fetchSecretValue = async (secretIdOrArn: string, regionHint?: string): Pro
       obj.openaiApiKey ??
       obj.GOOGLE_API_KEY ??
       obj.googleApiKey ??
+      obj.ANTHROPIC_API_KEY ??
+      obj.anthropicApiKey ??
       obj.key ??
       raw;
   } catch {
@@ -68,4 +70,5 @@ export const getApiKey = async (provider: string, opts?: { region?: string }): P
 // Convenience wrappers, if you like:
 export const getOpenAIKey = () => getApiKey("OPENAI");
 export const getGoogleKey = () => getApiKey("GOOGLE");
+export const getAnthropicKey = () => getApiKey("ANTHROPIC");
 export const getLangSmithKey = () => getApiKey("LANGSMITH");

@@ -44,13 +44,13 @@ npm run dev:setup
 
 > **Note:** If you encounter a "permission denied" error when running the above, you may need to make the `./sam-server/dev-setup.sh` script executable.
 >
-> - **On macOS or Linux:**  
+> - **On macOS or Linux:**
 >   Open a terminal and run:
 >   ```bash
 >   chmod +x ./sam-server/dev-setup.sh
 >   ```
 >
-> - **On Windows (using Git Bash, WSL, or similar):**  
+> - **On Windows (using Git Bash, WSL, or similar):**
 >   Use the same command as above in your Unix-like shell:
 >   ```bash
 >   chmod +x ./sam-server/dev-setup.sh
@@ -184,6 +184,7 @@ The `env-local.json` file configures environment variables for local Lambda func
 2. **Edit the file** and replace placeholder values:
    - `your-openai-api-key-here` → Your actual OpenAI API key
    - `your-google-api-key-here` → Your actual Google API key
+   - `your-anthropic-api-key-here` → Your actual Anthropic API key
 
 #### File Structure
 
@@ -195,7 +196,8 @@ The `env-local.json` file configures environment variables for local Lambda func
     "LLM_JOB_QUEUE_URL": "http://host.docker.internal:9324/queue/LLMJobQueue",
     "DAVAI_API_SECRET": "local-dev-secret",
     "OPENAI_API_KEY": "your-openai-api-key-here",
-    "GOOGLE_API_KEY": "your-google-api-key-here"
+    "GOOGLE_API_KEY": "your-google-api-key-here",
+    "ANTHROPIC_API_KEY": "your-anthropic-api-key-here"
   }
 }
 ```
@@ -229,6 +231,7 @@ This redundancy is currently necessary to support the hybrid local development e
 
 - **OpenAI API Key** - For GPT models
 - **Google API Key** - For Gemini models
+- **Anthropic API Key** - For Claude models
 - **LangSmith API Key** - For LLM run tracking (Optional. To keep costs down, it's probably best to omit this unless you want to test tracing.)
 
 ## Database Schema

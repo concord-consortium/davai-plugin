@@ -26,6 +26,42 @@
     {
       "id": "gpt-4o-mini",
       "provider": "OpenAI"
+    },
+    {
+      "id": "gpt-4o",
+      "provider": "OpenAI"
+    },
+    {
+      "id": "gpt-4.1",
+      "provider": "OpenAI"
+    },
+    {
+      "id": "gpt-4.1-mini",
+      "provider": "OpenAI"
+    },
+    {
+      "id": "claude-haiku-4-5",
+      "provider": "Anthropic"
+    },
+    {
+      "id": "claude-sonnet-4-5",
+      "provider": "Anthropic"
+    },
+    {
+      "id": "claude-sonnet-4-6",
+      "provider": "Anthropic"
+    },
+    {
+      "id": "claude-opus-4-0",
+      "provider": "Anthropic"
+    },
+    {
+      "id": "claude-opus-4-5",
+      "provider": "Anthropic"
+    },
+    {
+      "id": "claude-opus-4-6",
+      "provider": "Anthropic"
     }
   ],
   "sonify": {

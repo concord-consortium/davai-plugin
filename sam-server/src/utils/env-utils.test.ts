@@ -1,4 +1,4 @@
-import { getApiKey, getOpenAIKey, getGoogleKey } from "./env-utils";
+import { getApiKey, getOpenAIKey, getGoogleKey, getAnthropicKey } from "./env-utils";
 
 jest.mock("@aws-sdk/client-secrets-manager", () => {
   return {
@@ -68,12 +68,15 @@ describe("env-utils", () => {
     await expect(getApiKey("OPENAI")).rejects.toThrow("Missing OPENAI_API_KEY environment variable");
   });
 
-  it("getOpenAIKey and getGoogleKey call getApiKey with correct provider", async () => {
+  it("convenience wrappers resolve the correct provider key", async () => {
     // eslint-disable-next-line dot-notation
     process.env["OPENAI_API_KEY"] = "direct-key";
     // eslint-disable-next-line dot-notation
     process.env["GOOGLE_API_KEY"] = "direct-google-key";
+    // eslint-disable-next-line dot-notation
+    process.env["ANTHROPIC_API_KEY"] = "direct-anthropic-key";
     await expect(getOpenAIKey()).resolves.toBe("direct-key");
     await expect(getGoogleKey()).resolves.toBe("direct-google-key");
+    await expect(getAnthropicKey()).resolves.toBe("direct-anthropic-key");
   });
 });
