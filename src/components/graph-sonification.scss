@@ -59,6 +59,13 @@
         };
       }
 
+      // Ensures the focus ring appears when focus is set programmatically
+      // via .focus() (e.g. keyboard shortcut).
+      &:focus {
+        outline: auto Highlight; // Firefox
+        outline: auto -webkit-focus-ring-color; // Chrome, Safari, Edge
+      }
+
       svg {
         background: $light-teal-3;
         border-radius: 6px;
