@@ -1,5 +1,6 @@
 import * as Tone  from "tone";
 import { action, computed, makeObservable, observable } from "mobx";
+import { speakLabel } from "../utils/graph-sonification-utils";
 
 export interface ITransportEventScheduler {
   scheduleTransportEvents(manager: TransportManager): (() => void) | undefined;
@@ -48,6 +49,7 @@ export class TransportManager {
   animationFrameId: number | null = null;
   panScheduleId: number | null = null;
   endPauseScheduleId: number | null = null;
+  endSpeechTimeoutId: ReturnType<typeof setTimeout> | null = null;
 
   scheduledEventDisposers: (() => void)[] = [];
   transportEventScheduler: ITransportEventScheduler | null = null;
@@ -114,6 +116,13 @@ export class TransportManager {
     }
   }
 
+  clearEndSpeechTimeout() {
+    if (this.endSpeechTimeoutId != null) {
+      clearTimeout(this.endSpeechTimeoutId);
+      this.endSpeechTimeoutId = null;
+    }
+  }
+
   handleStart(eventTime: number) {
     this.updateState(eventTime);
     this.animationFrameId = requestAnimationFrame(this.stepAnimationFrame);
@@ -142,6 +151,18 @@ export class TransportManager {
   handlePause(eventTime: number) {
     this.updateState(eventTime);
     this.stopAnimationFrame();
+    // Speak "end" when playback reaches the end of the sonification.
+    // We detect this here rather than via a transport.schedule() callback because
+    // transport.schedule() can fire multiple times near the end boundary, queuing
+    // duplicate SpeechSynthesis utterances. The pause listener fires exactly once.
+    if (this.isEnded) {
+      // Short delay so the last data tone can ring out before the speech cue
+      this.clearEndSpeechTimeout();
+      this.endSpeechTimeoutId = setTimeout(() => {
+        this.endSpeechTimeoutId = null;
+        speakLabel("end");
+      }, 250);
+    }
   }
 
   updateState(eventTime: number) {
@@ -255,6 +276,18 @@ export class TransportManager {
   }
 
   /**
+   * Clean up all playback-related state: scheduler-created resources,
+   * pending speech timeouts, and any in-progress speech.
+   */
+  private resetPlaybackState() {
+    this.disposeSchedulers();
+    this.clearEndSpeechTimeout();
+    if (typeof speechSynthesis !== "undefined") {
+      speechSynthesis.cancel();
+    }
+  }
+
+  /**
    * Clear any existing events and schedule all of the relevant events.
    *
    * @returns
@@ -264,8 +297,8 @@ export class TransportManager {
     // But we do it again just to be safe.
     Tone.getTransport().cancel();
 
-    // Dispose of any objects created by the schedule functions
-    this.disposeSchedulers();
+    // Dispose of scheduler resources, pending speech timeouts, and in-progress speech
+    this.resetPlaybackState();
 
     // Schedule the transport to pause at the end of the duration if necessary
     this.updateEndPause();
@@ -410,7 +443,7 @@ export class TransportManager {
     Tone.getTransport().stop();
     Tone.getTransport().cancel();
 
-    this.disposeSchedulers();
+    this.resetPlaybackState();
 
     if (this.animationFrameId != null) {
       cancelAnimationFrame(this.animationFrameId);

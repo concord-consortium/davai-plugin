@@ -139,3 +139,12 @@ export const removeRoiAdornment = async (graphId: number) => {
     values: { type: "Region of Interest" }
   });
 };
+
+export const speakLabel = (label: string) => {
+  if (typeof speechSynthesis === "undefined") return;
+  const utterance = new SpeechSynthesisUtterance(label);
+  utterance.rate = 2;
+  utterance.lang = "en-US";
+  utterance.volume = 0.75;
+  speechSynthesis.speak(utterance);
+};
