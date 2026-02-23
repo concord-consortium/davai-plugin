@@ -276,6 +276,18 @@ export class TransportManager {
   }
 
   /**
+   * Clean up all playback-related state: scheduler-created resources,
+   * pending speech timeouts, and any in-progress speech.
+   */
+  private resetPlaybackState() {
+    this.disposeSchedulers();
+    this.clearEndSpeechTimeout();
+    if (typeof speechSynthesis !== "undefined") {
+      speechSynthesis.cancel();
+    }
+  }
+
+  /**
    * Clear any existing events and schedule all of the relevant events.
    *
    * @returns
@@ -285,11 +297,8 @@ export class TransportManager {
     // But we do it again just to be safe.
     Tone.getTransport().cancel();
 
-    // Cancel any pending end-of-sonification speech cue from a previous playback
-    this.clearEndSpeechTimeout();
-
-    // Dispose of any objects created by the schedule functions
-    this.disposeSchedulers();
+    // Dispose of scheduler resources, pending speech timeouts, and in-progress speech
+    this.resetPlaybackState();
 
     // Schedule the transport to pause at the end of the duration if necessary
     this.updateEndPause();
@@ -434,12 +443,7 @@ export class TransportManager {
     Tone.getTransport().stop();
     Tone.getTransport().cancel();
 
-    this.disposeSchedulers();
-    this.clearEndSpeechTimeout();
-
-    if (typeof speechSynthesis !== "undefined") {
-      speechSynthesis.cancel();
-    }
+    this.resetPlaybackState();
 
     if (this.animationFrameId != null) {
       cancelAnimationFrame(this.animationFrameId);
