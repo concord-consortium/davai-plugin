@@ -3,6 +3,7 @@ import { observer } from "mobx-react-lite";
 import { autorun } from "mobx";
 import { ErrorMessage } from "./error-message";
 import { createRoiAdornment, updateRoiAdornment } from "../utils/graph-sonification-utils";
+import { disposeCuePlayer, loadCueBuffers } from "../utils/cue-audio-player";
 import { useShortcutsService } from "../contexts/shortcuts-service-context";
 import { useRootStore } from "../contexts/root-store-context";
 import { SonificationOptions } from "./sonification-options";
@@ -41,6 +42,7 @@ export const GraphSonification = observer(() => {
     return () => {
       // Ensure the transport and its schedulers are stopped when unmounting
       transportManager.reset();
+      disposeCuePlayer();
     };
    }, [transportManager]);
 
@@ -73,11 +75,10 @@ export const GraphSonification = observer(() => {
     }
     setShowError(false);
 
-    try {
-      await sonificationStore.setAdornments();
-    } catch (error) {
-      console.warn("Failed to fetch adornments:", error);
-    }
+    await Promise.all([
+      sonificationStore.setAdornments().catch((err) => console.warn("Failed to fetch adornments:", err)),
+      loadCueBuffers().catch((err) => console.warn("Failed to load cue buffers:", err)),
+    ]);
     transportManager.playPause();
   }, [selectedGraphID, sonificationStore, transportManager]);
 

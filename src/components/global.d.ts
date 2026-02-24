@@ -1,6 +1,10 @@
 declare module "*.png";
 declare module "*.svg";
 declare module "*.scss";
+declare module "*.mp3" {
+  const src: string;
+  export default src;
+}
 declare module "loess" {
   interface LoessData { x: number[]; y: number[]; }
   interface LoessOptions { span?: number; degree?: number; }

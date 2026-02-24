@@ -1,6 +1,7 @@
 import { codapInterface } from "@concord-consortium/codap-plugin-api";
 import { ICODAPGraph } from "../types";
 import { IAdornmentData } from "./codap-api-utils";
+import { CueLabel } from "./cue-audio-player";
 
 export function isUnivariateDotPlot(graph: ICODAPGraph): boolean {
   const {
@@ -65,7 +66,7 @@ export const interpolateBins = (bins: number[], stepCount: number): number[] => 
 };
 
 export interface IAdornmentCue {
-  label: string;
+  label: CueLabel;
   timeOffset: number;
 }
 
@@ -80,7 +81,7 @@ export const computeAdornmentCues = (
 
   const cues: IAdornmentCue[] = [];
 
-  const addCue = (label: string, value: number) => {
+  const addCue = (label: CueLabel, value: number) => {
     if (!Number.isFinite(value)) return;
     const fraction = (value - lowerBound) / range;
     if (fraction < 0 || fraction > 1) return;
@@ -138,13 +139,4 @@ export const removeRoiAdornment = async (graphId: number) => {
     resource: `component[${graphId}].adornment`,
     values: { type: "Region of Interest" }
   });
-};
-
-export const speakLabel = (label: string) => {
-  if (typeof speechSynthesis === "undefined") return;
-  const utterance = new SpeechSynthesisUtterance(label);
-  utterance.rate = 2;
-  utterance.lang = "en-US";
-  utterance.volume = 0.75;
-  speechSynthesis.speak(utterance);
 };
