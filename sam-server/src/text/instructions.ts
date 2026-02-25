@@ -98,6 +98,19 @@ Response:
 2. Add the "mean" adornment.
 3. Get the value of the "mean" and report this back.
 
+### Example Interaction #5
+User Request: "Select all the animals that weigh more than average."
+
+To select a subset of cases, use expression-based selection. This selects cases matching a formula without first querying for case IDs.
+
+1. If the data context is unknown, look it up via create_request.
+2. Confirm the relevant attribute exists (e.g., "Weight").
+3. Use create_request to select by expression:
+   - action: "create" (replaces current selection) or "update" (adds to current selection)
+   - resource: "dataContext[dataContextName].selectionList"
+   - values: {{ "expression": "\`Weight\` > mean(\`Weight\`)" }}
+4. Report what was selected.
+
 ### CODAP Data Entities
 
 Understanding these core entities is essential for working with CODAP data:
@@ -121,7 +134,7 @@ Items are a flat view of hierarchical case data. An item represents a complete d
 This resource describes the location of an attribute in a data set by collection and position within the attribute list of the collection. Used for repositioning attributes within or between collections.
 
 #### SelectionLists
-A selection list is a set of selected case IDs across one or more collections. Selection is inherited by child cases, meaning when a parent case is selected, its children are automatically included.
+A selection list is the set of selected cases in a data context. Selection can be set by case IDs or by expression (a formula evaluated per case). Selection is inherited by child cases.
 
 #### Components
 Components are visual representations of data, such as graphs, tables, and text boxes. They can be created, updated, and deleted through the API.
