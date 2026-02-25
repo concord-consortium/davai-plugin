@@ -34,10 +34,22 @@ export const App = observer(() => {
   const transcriptStore = assistantStore.transcriptStore;
 
   const handleDataContextChangeNotice = useCallback(async (notification: ClientNotification) => {
-    if (notificationsToIgnore.includes(notification.values.operation)) return;
     // resource is in the form of "dataContextChangeNotice[<dataContextName>]";
     // the dataContext name isn't otherwise available in the notification object
     const dataCtxName = notification.resource.replace("dataContextChangeNotice[", "").replace("]", "");
+
+    // Handle selection changes — fetch updated selection and reset transport if playing
+    if (notification.values.operation === "selectCases") {
+      if (dataCtxName === sonificationStore.selectedGraph?.dataContext) {
+        if (transportManager.isPlaying || transportManager.isPaused) {
+          transportManager.reset();
+        }
+        await sonificationStore.fetchSelection();
+      }
+      return;
+    }
+
+    if (notificationsToIgnore.includes(notification.values.operation)) return;
     const selectedGraph = sonificationStore.selectedGraph;
     if (dataCtxName === selectedGraph?.dataContext) {
       // update the graph items
@@ -45,7 +57,7 @@ export const App = observer(() => {
     }
     assistantStore.updateDataContexts();
     assistantStore.updateGraphs();
-  }, [assistantStore, sonificationStore]);
+  }, [assistantStore, sonificationStore, transportManager]);
 
   // documentation of the documentChangeNotice object here:
   // https://github.com/concord-consortium/codap/wiki/CODAP-Data-Interactive-Plugin-API#documentchangenotice

@@ -1,5 +1,5 @@
 import { codapInterface } from "@concord-consortium/codap-plugin-api";
-import { getCollectionItemsForAttributePair, getGraphAdornments, trimDataset } from "./codap-api-utils";
+import { getCollectionItemsForAttributePair, getGraphAdornments, getSelectionList, trimDataset } from "./codap-api-utils";
 
 // mock Node.js's structuredClone function
 if (!globalThis.structuredClone) {
@@ -321,5 +321,60 @@ describe("getGraphAdornments", () => {
       expect.any(Error)
     );
     warnSpy.mockRestore();
+  });
+});
+
+describe("getSelectionList", () => {
+  beforeEach(() => {
+    jest.clearAllMocks();
+  });
+
+  it("should return selection items for a data context", async () => {
+    (codapInterface.sendRequest as jest.Mock).mockResolvedValue({
+      success: true,
+      values: [
+        { caseID: 10, collectionID: 5, collectionName: "Cases" },
+        { caseID: 20, collectionID: 5, collectionName: "Cases" }
+      ]
+    });
+
+    const result = await getSelectionList("context1");
+    expect(codapInterface.sendRequest).toHaveBeenCalledWith({
+      action: "get",
+      resource: "dataContext[context1].selectionList"
+    });
+    expect(result).toEqual([
+      { caseID: 10, collectionID: 5, collectionName: "Cases" },
+      { caseID: 20, collectionID: 5, collectionName: "Cases" }
+    ]);
+  });
+
+  it("should return an empty array when no cases are selected", async () => {
+    (codapInterface.sendRequest as jest.Mock).mockResolvedValue({
+      success: true,
+      values: []
+    });
+
+    const result = await getSelectionList("context1");
+    expect(result).toEqual([]);
+  });
+
+  it("should return an empty array when the request fails", async () => {
+    (codapInterface.sendRequest as jest.Mock).mockResolvedValue({
+      success: false
+    });
+
+    const result = await getSelectionList("context1");
+    expect(result).toEqual([]);
+  });
+
+  it("should return an empty array when values is not an array", async () => {
+    (codapInterface.sendRequest as jest.Mock).mockResolvedValue({
+      success: true,
+      values: "unexpected"
+    });
+
+    const result = await getSelectionList("context1");
+    expect(result).toEqual([]);
   });
 });

@@ -26,6 +26,7 @@ export const GraphSonification = observer(() => {
     timeValues,
     pitchFractions,
     primaryBounds,
+    sonificationPrimaryBounds,
     binValues
   } = sonificationStore;
   const { bins, minBinEdge, maxBinEdge, binWidth } = binValues || {};
@@ -58,15 +59,34 @@ export const GraphSonification = observer(() => {
   useEffect(() => {
     // reset the sonification state and re-add the ROI adornment when there are updates to the data
     reset();
-  }, [timeFractions, timeValues, pitchFractions, primaryBounds, bins, minBinEdge, maxBinEdge, binWidth, reset]);
+  }, [timeFractions, timeValues, pitchFractions, primaryBounds, sonificationPrimaryBounds, bins, minBinEdge, maxBinEdge, binWidth, reset]);
 
   // Keep Roi Adornment in sync with transport position
   useEffect(() => {
     return autorun(() => {
       if (!selectedGraphID) return;
-      updateRoiAdornment(selectedGraphID, transportManager.position / transportManager.duration);
+
+      // When not playing, reset the ROI to the axis origin so it is effectively invisible.
+      if (!transportManager.isPlaying) {
+        updateRoiAdornment(selectedGraphID, 0);
+        return;
+      }
+
+      // Convert playback progress into an axis position for the ROI indicator.
+      // When cases are selected, playback spans only part of the axis (sonificationPrimaryBounds).
+      const transportFraction = transportManager.duration > 0
+        ? Math.max(0, Math.min(1, transportManager.position / transportManager.duration))
+        : 0;
+      const { lowerBound: axisLower, upperBound: axisUpper } = primaryBounds ?? {};
+      const { lowerBound: sonLower, upperBound: sonUpper } = sonificationPrimaryBounds ?? {};
+      const axisRange = (axisUpper ?? 0) - (axisLower ?? 0);
+      const axisFraction = axisRange > 0
+        ? ((sonLower ?? 0) - (axisLower ?? 0) + transportFraction * ((sonUpper ?? 0) - (sonLower ?? 0))) / axisRange
+        : transportFraction;
+
+      updateRoiAdornment(selectedGraphID, axisFraction);
     });
-  }, [selectedGraphID, transportManager]);
+  }, [selectedGraphID, transportManager, primaryBounds, sonificationPrimaryBounds]);
 
   const handlePlayPause = useCallback(async () => {
     if (!selectedGraphID) {

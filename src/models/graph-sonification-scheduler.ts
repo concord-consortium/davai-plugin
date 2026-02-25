@@ -6,6 +6,10 @@ import { computeAdornmentCues, interpolateBins, isUnivariateDotPlot, kLowerFreqB
 import { cancelAllCues, playCue } from "../utils/cue-audio-player";
 import { AppConfigModelType, ScatterPlotContinuousType } from "./app-config-model";
 
+// Small offset (in seconds) to keep events from landing exactly on the transport
+// end boundary, where Tone.js can silently skip them.
+const kSchedulingMargin = 0.005;
+
 export class GraphSonificationScheduler implements ITransportEventScheduler {
   private _manager: TransportManager | undefined;
   private sonificationData: ISonificationData | undefined;
@@ -27,8 +31,18 @@ export class GraphSonificationScheduler implements ITransportEventScheduler {
       }
     };
 
-    const { selectedGraph } = this.sonificationStore;
+    const { selectedGraph, primaryBounds, sonificationPrimaryBounds } = this.sonificationStore;
     if (!selectedGraph) return;
+
+    // Scale the transport duration so the sweep rate stays consistent regardless of
+    // how much of the axis the selection covers.
+    const axisLower = primaryBounds.lowerBound ?? 0;
+    const axisUpper = primaryBounds.upperBound ?? 0;
+    const sonLower = sonificationPrimaryBounds.lowerBound ?? 0;
+    const sonUpper = sonificationPrimaryBounds.upperBound ?? 0;
+    const axisRange = axisUpper - axisLower;
+    const selRange = sonUpper - sonLower;
+    manager.setDurationScale(axisRange > 0 && selRange > 0 ? selRange / axisRange : 1);
 
     // Reset the sonification data
     this.sonificationData = {
@@ -89,8 +103,8 @@ export class GraphSonificationScheduler implements ITransportEventScheduler {
   }
 
   scheduleUnivariateContinual() {
-    const { binValues, primaryBounds } = this.sonificationStore;
-    if (!binValues || !primaryBounds) return;
+    const { binValues, sonificationPrimaryBounds } = this.sonificationStore;
+    if (!binValues || !sonificationPrimaryBounds) return;
 
     const { bins } = binValues;
     const maxCount = Math.max(...bins) || 1;
@@ -193,9 +207,9 @@ export class GraphSonificationScheduler implements ITransportEventScheduler {
   }
 
   scheduleScatterPlotLSRL() {
-    const { primaryBounds, leastSquaresLinearRegression } = this.sonificationStore;
-    if (!primaryBounds) return;
-    const { lowerBound: timeLowerBound, upperBound: timeUpperBound } = primaryBounds;
+    const { sonificationPrimaryBounds, leastSquaresLinearRegression } = this.sonificationStore;
+    if (!sonificationPrimaryBounds) return;
+    const { lowerBound: timeLowerBound, upperBound: timeUpperBound } = sonificationPrimaryBounds;
     if (timeLowerBound == null || timeUpperBound == null) return;
 
     const { slope, intercept } = leastSquaresLinearRegression;
@@ -265,9 +279,9 @@ export class GraphSonificationScheduler implements ITransportEventScheduler {
   }
 
   scheduleEachDot() {
-    const { primaryBounds, timeFractions, selectedGraph, pitchFractions } = this.sonificationStore;
-    if (!primaryBounds) return;
-    const { lowerBound: timeLowerBound, upperBound: timeUpperBound } = primaryBounds;
+    const { sonificationPrimaryBounds, timeFractions, selectedGraph, pitchFractions } = this.sonificationStore;
+    if (!sonificationPrimaryBounds) return;
+    const { lowerBound: timeLowerBound, upperBound: timeUpperBound } = sonificationPrimaryBounds;
     if (timeLowerBound == null || timeUpperBound == null) return;
 
     const { pointDuration, dotPlotEachDotPitch, maxPolyphony, synthReleaseTime } = this.appConfig.sonify;
@@ -283,7 +297,7 @@ export class GraphSonificationScheduler implements ITransportEventScheduler {
     const uniqueFractions = Object.keys(fractionGroups).map(parseFloat).sort((a, b) => a - b);
 
     const scatterEvents = uniqueFractions.map((fraction) => {
-      const offsetSeconds = fraction * this.manager.duration;
+      const offsetSeconds = Math.min(fraction * this.manager.duration, this.manager.duration - kSchedulingMargin);
       const indices = fractionGroups[fraction];
       if (indices.length === 0) {
         throw new Error("Invalid state: time fraction group contains no data points");
@@ -315,11 +329,11 @@ export class GraphSonificationScheduler implements ITransportEventScheduler {
   }
 
   scheduleAdornmentVoiceCues(): (() => void) | undefined {
-    const { selectedGraph, primaryBounds } = this.sonificationStore;
+    const { selectedGraph, sonificationPrimaryBounds } = this.sonificationStore;
     if (!selectedGraph || !isUnivariateDotPlot(selectedGraph)) return;
-    if (!primaryBounds) return;
+    if (!sonificationPrimaryBounds) return;
 
-    const { lowerBound, upperBound } = primaryBounds;
+    const { lowerBound, upperBound } = sonificationPrimaryBounds;
     if (lowerBound == null || upperBound == null) return;
 
     const transport = Tone.getTransport();
@@ -354,11 +368,6 @@ export class GraphSonificationScheduler implements ITransportEventScheduler {
 
       scheduledIds.forEach((id) => transport.clear(id));
       scheduledIds = [];
-      cancelAllCues();
-
-      // Play the "end" cue at each loop boundary to indicate the end of each
-      // loop in the sonification.
-      playCue("end");
 
       this.sonificationStore.setAdornments().then(() => {
         scheduleCues();
