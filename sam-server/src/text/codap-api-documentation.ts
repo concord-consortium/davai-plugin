@@ -265,20 +265,20 @@ Aggregate: \`mean(attr)\`, \`median(attr)\`, \`min(attr)\`, \`max(attr)\`, \`std
 Arithmetic: \`abs()\`, \`round()\`, \`sqrt()\`
 
 **Attribute names in expressions:**
-Always wrap attribute names in backticks in expression strings, otherwise names containing spaces, parentheses, or operators will be misinterpreted as formula syntax. Example: \`\\\`Height in cm\\\` > mean(\\\`Height in cm\\\`)\`
+Always wrap attribute names in backticks in expression strings, otherwise names containing spaces, parentheses, or operators will be misinterpreted as formula syntax. Example: \`Height in cm\` > mean(\`Height in cm\`)
 
 **Common patterns:**
 
 | Use case | Expression |
 |---|---|
-| Above the mean | \`\\\`Weight\\\` > mean(\\\`Weight\\\`)\` |
-| Top quarter | \`\\\`Weight\\\` >= percentile(\\\`Weight\\\`, 75)\` |
-| Bottom quarter | \`\\\`Weight\\\` <= percentile(\\\`Weight\\\`, 25)\` |
-| Middle 50% | \`\\\`Weight\\\` >= percentile(\\\`Weight\\\`, 25) and \\\`Weight\\\` <= percentile(\\\`Weight\\\`, 75)\` |
-| A range | \`\\\`Weight\\\` > 50 and \\\`Weight\\\` <= 100\` |
-| String match | \`\\\`Name\\\` == "Alice"\` |
-| Outliers (IQR) | \`\\\`Weight\\\` < percentile(\\\`Weight\\\`, 25) - 1.5 * (percentile(\\\`Weight\\\`, 75) - percentile(\\\`Weight\\\`, 25)) or \\\`Weight\\\` > percentile(\\\`Weight\\\`, 75) + 1.5 * (percentile(\\\`Weight\\\`, 75) - percentile(\\\`Weight\\\`, 25))\` |
-| Above 2 std devs | \`abs(\\\`Weight\\\` - mean(\\\`Weight\\\`)) > 2 * stdDev(\\\`Weight\\\`)\` |
+| Above the mean | \`Weight\` > mean(\`Weight\`) |
+| Top quarter | \`Weight\` >= percentile(\`Weight\`, 75) |
+| Bottom quarter | \`Weight\` <= percentile(\`Weight\`, 25) |
+| Middle 50% | \`Weight\` >= percentile(\`Weight\`, 25) and \`Weight\` <= percentile(\`Weight\`, 75) |
+| A range | \`Weight\` > 50 and \`Weight\` <= 100 |
+| String match | \`Name\` == "Alice" |
+| Outliers (IQR) | \`Weight\` < percentile(\`Weight\`, 25) - 1.5 * (percentile(\`Weight\`, 75) - percentile(\`Weight\`, 25)) or \`Weight\` > percentile(\`Weight\`, 75) + 1.5 * (percentile(\`Weight\`, 75) - percentile(\`Weight\`, 25)) |
+| Above 2 std devs | abs(\`Weight\` - mean(\`Weight\`)) > 2 * stdDev(\`Weight\`) |
 
 **Hierarchical data:** Omitting \`collection\` defaults to childmost collection. Selecting a parent case selects all its children.
 
@@ -551,7 +551,7 @@ Always wrap attribute names in backticks in expression strings, otherwise names 
   "action": "create",
   "resource": "dataContext[MyData].selectionList",
   "values": {
-    "expression": "\\\`Weight\\\` > mean(\\\`Weight\\\`)"
+    "expression": "\`Weight\` > mean(\`Weight\`)"
   }
 }
 \`\`\`
@@ -563,7 +563,7 @@ Always wrap attribute names in backticks in expression strings, otherwise names 
   "action": "update",
   "resource": "dataContext[MyData].selectionList",
   "values": {
-    "expression": "\\\`Height\\\` > percentile(\\\`Height\\\`, 90)"
+    "expression": "\`Height\` > percentile(\`Height\`, 90)"
   }
 }
 \`\`\`
