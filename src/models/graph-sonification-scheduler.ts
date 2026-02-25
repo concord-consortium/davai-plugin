@@ -2,7 +2,8 @@ import * as Tone from "tone";
 import Loess from "loess";
 import { GraphSonificationModelType, ISonificationData } from "./graph-sonification-model";
 import { ITransportEventScheduler, kStepCount, TransportManager } from "./transport-manager";
-import { computeAdornmentCues, interpolateBins, isUnivariateDotPlot, kLowerFreqBound, mapPitchFractionToFrequency, speakLabel } from "../utils/graph-sonification-utils";
+import { computeAdornmentCues, interpolateBins, isUnivariateDotPlot, kLowerFreqBound, mapPitchFractionToFrequency } from "../utils/graph-sonification-utils";
+import { cancelAllCues, playCue } from "../utils/cue-audio-player";
 import { AppConfigModelType, ScatterPlotContinuousType } from "./app-config-model";
 
 export class GraphSonificationScheduler implements ITransportEventScheduler {
@@ -314,8 +315,6 @@ export class GraphSonificationScheduler implements ITransportEventScheduler {
   }
 
   scheduleAdornmentVoiceCues(): (() => void) | undefined {
-    if (typeof speechSynthesis === "undefined") return;
-
     const { selectedGraph, primaryBounds } = this.sonificationStore;
     if (!selectedGraph || !isUnivariateDotPlot(selectedGraph)) return;
     if (!primaryBounds) return;
@@ -333,20 +332,11 @@ export class GraphSonificationScheduler implements ITransportEventScheduler {
       const cues = computeAdornmentCues(adornmentData, lowerBound, upperBound, this.manager.duration);
       if (cues.length === 0) return;
 
-      // Stagger cues that are within 100ms of each other so both are audible.
-      // The cues are already sorted by timeOffset from computeAdornmentCues.
-      const kMinGap = 0.1; // 100ms
-      for (let i = 1; i < cues.length; i++) {
-        if (cues[i].timeOffset - cues[i - 1].timeOffset < kMinGap) {
-          cues[i].timeOffset = cues[i - 1].timeOffset + kMinGap;
-        }
-      }
-
       for (const cue of cues) {
         this.addValuesAtTime(cue.timeOffset, `Adornment: ${cue.label}`, [cue.timeOffset]);
         const id = transport.schedule((time) => {
           Tone.getDraw().schedule(() => {
-            speakLabel(cue.label);
+            playCue(cue.label);
           }, time);
         }, cue.timeOffset);
         scheduledIds.push(id);
@@ -364,7 +354,11 @@ export class GraphSonificationScheduler implements ITransportEventScheduler {
 
       scheduledIds.forEach((id) => transport.clear(id));
       scheduledIds = [];
-      speechSynthesis.cancel();
+      cancelAllCues();
+
+      // Play the "end" cue at each loop boundary to indicate the end of each
+      // loop in the sonification.
+      playCue("end");
 
       this.sonificationStore.setAdornments().then(() => {
         scheduleCues();
@@ -377,7 +371,7 @@ export class GraphSonificationScheduler implements ITransportEventScheduler {
     return () => {
       scheduledIds.forEach((id) => transport.clear(id));
       transport.off("loop", handleLoop);
-      speechSynthesis.cancel();
+      cancelAllCues();
     };
   }
 }

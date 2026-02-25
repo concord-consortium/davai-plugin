@@ -9,6 +9,14 @@ import { ShortcutsServiceProvider } from "../contexts/shortcuts-service-context"
 import { RootStoreProvider } from "../contexts/root-store-context";
 import { IRootStore } from "../models/root-store";
 import { mockTransportManager } from "../test-utils/mock-transport-manager";
+import { loadCueBuffers } from "../utils/cue-audio-player";
+
+jest.mock("../utils/cue-audio-player", () => ({
+  loadCueBuffers: jest.fn().mockResolvedValue(undefined),
+  playCue: jest.fn(),
+  cancelAllCues: jest.fn(),
+  disposeCuePlayer: jest.fn(),
+}));
 
 const mockAvailableGraphs = [
   { id: 1, name: "Graph 1", plotType: "scatterPlot" },
@@ -65,6 +73,8 @@ describe("GraphSonification Component", () => {
     jest.clearAllMocks();
     mockSonificationStore.removeSelectedGraphID();
     mockSonificationStore.setGraphs();
+    mockTransportManager.isPlaying = false;
+    mockTransportManager.isAtBeginning = true;
   });
 
   const renderGraphSonification = () => {
@@ -97,6 +107,18 @@ describe("GraphSonification Component", () => {
     fireEvent.click(playButton);
 
     expect(screen.getByText("Please select a graph to sonify.")).toBeInTheDocument();
+  });
+
+  it("loads cue buffers when play is clicked", async () => {
+    renderGraphSonification();
+
+    const graphSelect = screen.getByLabelText("Graph to sonify:");
+    fireEvent.change(graphSelect, { target: { value: 1 } });
+    const playButton = screen.getByTestId("playback-button");
+    fireEvent.click(playButton);
+    await waitFor(() => {
+      expect(loadCueBuffers).toHaveBeenCalled();
+    });
   });
 
   it("toggles play and pause state", async () => {
