@@ -356,8 +356,8 @@ export class GraphSonificationScheduler implements ITransportEventScheduler {
       scheduledIds = [];
       cancelAllCues();
 
-      // Play the "end" cue at each loop boundary so users know the sonification
-      // has restarted.
+      // Play the "end" cue at each loop boundary to indicate the end of each
+      // loop in the sonification.
       playCue("end");
 
       this.sonificationStore.setAdornments().then(() => {
