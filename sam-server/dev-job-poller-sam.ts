@@ -32,10 +32,16 @@ async function pollAndProcessJobs() {
 
       for (const job of result.rows) {
         try {
-          await pool.query(
-            `UPDATE jobs SET status = 'processing', updated_at = NOW() WHERE message_id = $1`,
+          const claimed = await pool.query(
+            `UPDATE jobs SET status = 'processing', updated_at = NOW()
+             WHERE message_id = $1 AND status = 'queued' AND cancelled = false`,
             [job.message_id]
           );
+
+          if (claimed.rowCount === 0) {
+            console.log(`[POLLER] Job ${job.message_id} already claimed, skipping`);
+            continue;
+          }
 
           // Process the job using SAM local invoke
           console.log(`[POLLER] Processing job ${job.message_id} (${job.kind}) with SAM local`);
