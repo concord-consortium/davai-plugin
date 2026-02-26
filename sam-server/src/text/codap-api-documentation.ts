@@ -245,28 +245,50 @@ export const codapApiDoc = `### DataContexts
 
 #### The SelectionList Object
 
-{
-  id:          // {String} Unique identifier for the selection list
-  name:        // {String} Name of the selection list
-  cases:       // {Array<String>} Array of case IDs that are selected
-  collections: // {Array<String>} Array of collection names involved in the selection
+Two formats for \`values\`:
+
+**By case IDs** — array of case ID numbers:
+values: [caseId1, caseId2, ...]
+
+**By expression** — object with formula evaluated per case:
+values: {
+  expression: // {String} Formula; truthy results are selected
+  collection: // {String} Optional. Target collection (defaults to childmost)
 }
+
+Use expressions for analytical selections (thresholds, ranges, conditions). Use case-ID arrays when you already have specific IDs from a prior query.
+
+**Expression syntax:**
+Comparison: \`==\`, \`!=\`, \`<\`, \`<=\`, \`>\`, \`>=\`
+Logical: \`and\`, \`or\`, \`not\`
+Aggregate: \`mean(attr)\`, \`median(attr)\`, \`min(attr)\`, \`max(attr)\`, \`stdDev(attr)\`, \`percentile(attr, p)\`
+Arithmetic: \`abs()\`, \`round()\`, \`sqrt()\`
+
+**Attribute names in expressions:**
+Always wrap attribute names in backticks in expression strings, otherwise names containing spaces, parentheses, or operators will be misinterpreted as formula syntax. Example: \`Height in cm\` > mean(\`Height in cm\`)
+
+**Common patterns:**
+
+| Use case | Expression |
+|---|---|
+| Above the mean | \`Weight\` > mean(\`Weight\`) |
+| Top quarter | \`Weight\` >= percentile(\`Weight\`, 75) |
+| Bottom quarter | \`Weight\` <= percentile(\`Weight\`, 25) |
+| Middle 50% | \`Weight\` >= percentile(\`Weight\`, 25) and \`Weight\` <= percentile(\`Weight\`, 75) |
+| A range | \`Weight\` > 50 and \`Weight\` <= 100 |
+| String match | \`Name\` == "Alice" |
+| Outliers (IQR) | \`Weight\` < percentile(\`Weight\`, 25) - 1.5 * (percentile(\`Weight\`, 75) - percentile(\`Weight\`, 25)) or \`Weight\` > percentile(\`Weight\`, 75) + 1.5 * (percentile(\`Weight\`, 75) - percentile(\`Weight\`, 25)) |
+| Above 2 std devs | abs(\`Weight\` - mean(\`Weight\`)) > 2 * stdDev(\`Weight\`) |
+
+**Hierarchical data:** Omitting \`collection\` defaults to childmost collection. Selecting a parent case selects all its children.
 
 #### **Resource Selector Patterns + Supported Actions**
 
--   **\`selectionList\`**
-    -   Creates a selection list
+-   **\`dataContext[dataContextId].selectionList\`**
     -   Supported actions:
-        -   \`create\`
--   **\`selectionList[id]\`**
-    -   Supported actions:
-        -   \`update\`
-        -   \`get\`
-        -   \`delete\`
--   **\`selectionListList\`**
-    -   List of all selection lists
-    -   Supported actions:
-        -   \`get\`
+        -   \`create\` — replace current selection
+        -   \`update\` — add to current selection
+        -   \`get\` — returns \`[{ caseID, collectionID, collectionName }]\` for selected cases
 
 ### Attribute Locations
 
@@ -519,6 +541,60 @@ export const codapApiDoc = `### DataContexts
 {
   "action": "delete",
   "resource": "case[1]"
+}
+\`\`\`
+
+#### Selecting cases by expression
+
+\`\`\`json
+{
+  "action": "create",
+  "resource": "dataContext[MyData].selectionList",
+  "values": {
+    "expression": "\`Weight\` > mean(\`Weight\`)"
+  }
+}
+\`\`\`
+
+#### Extending selection by expression
+
+\`\`\`json
+{
+  "action": "update",
+  "resource": "dataContext[MyData].selectionList",
+  "values": {
+    "expression": "\`Height\` > percentile(\`Height\`, 90)"
+  }
+}
+\`\`\`
+
+#### Selecting cases by ID
+
+\`\`\`json
+{
+  "action": "create",
+  "resource": "dataContext[MyData].selectionList",
+  "values": [1, 2, 3]
+}
+\`\`\`
+
+#### Getting current selection
+
+\`\`\`json
+{
+  "action": "get",
+  "resource": "dataContext[MyData].selectionList"
+}
+\`\`\`
+
+Response:
+\`\`\`json
+{
+  "success": true,
+  "values": [
+    { "caseID": 1, "collectionID": 5, "collectionName": "Cases" },
+    { "caseID": 2, "collectionID": 5, "collectionName": "Cases" }
+  ]
 }
 \`\`\`
 
@@ -791,7 +867,7 @@ Receive:
 }
 \`\`\`
 
-If a numeric value for the Movable Value is not specified in the request, CODAP will automatically determine a value to use in the same way it does if you click a graph's "Add Movable Value" button in the CODAP UI. 
+If a numeric value for the Movable Value is not specified in the request, CODAP will automatically determine a value to use in the same way it does if you click a graph's "Add Movable Value" button in the CODAP UI.
 
 You can also specify a numeric value for the Movable Value. To do so, you need to supply a cell key for the subplot you want to add the value to in the request. When there is only a single, undivided plot, the cell key is {}.
 
