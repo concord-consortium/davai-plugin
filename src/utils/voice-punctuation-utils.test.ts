@@ -140,6 +140,31 @@ describe("applyPunctuationHeuristics", () => {
     expect(applyPunctuationHeuristics("get,a new")).toBe("Get, a new");
   });
 
+  it("preserves decimals and numeric formats", () => {
+    expect(applyPunctuationHeuristics("the value is 3.14")).toBe("The value is 3.14");
+    expect(applyPunctuationHeuristics("version 2.0 is out")).toBe("Version 2.0 is out");
+  });
+
+  it("does not insert space before closing quotes or brackets", () => {
+    expect(applyPunctuationHeuristics('"hello."')).toBe('"hello."');
+    expect(applyPunctuationHeuristics("(test.)"  )).toBe("(test.)");
+  });
+
+  it("preserves trailing newlines (tabs/spaces only trimmed)", () => {
+    expect(applyPunctuationHeuristics("hello\n")).toBe("Hello\n");
+    expect(applyPunctuationHeuristics("hello\n\n")).toBe("Hello\n\n");
+  });
+
+  it("preserves leading newlines (tabs/spaces only trimmed)", () => {
+    expect(applyPunctuationHeuristics("\nhello")).toBe("\nhello");
+  });
+
+  it("trims leading and trailing spaces and tabs but not newlines", () => {
+    expect(applyPunctuationHeuristics("  hello  ")).toBe("Hello");
+    expect(applyPunctuationHeuristics("\thello\t")).toBe("Hello");
+    expect(applyPunctuationHeuristics("  hello\n")).toBe("Hello\n");
+  });
+
   it("handles empty string", () => {
     expect(applyPunctuationHeuristics("")).toBe("");
   });

@@ -36,9 +36,20 @@ export function replaceVoiceCommands(text: string): string {
  */
 export function applyPunctuationHeuristics(text: string): string {
   return text
-    .trim()
+    .replace(/^[ \t]+|[ \t]+$/g, "")
     .replace(/[ \t]+/g, " ")
     .replace(/^\S/, (m) => m.toUpperCase())
-    .replace(/([.?!,;:])(\S)/g, "$1 $2")
+    .replace(/([.?!,;:])(\S)/g, (match, punct, nextChar, offset, whole) => {
+      const prevChar = offset > 0 ? whole[offset - 1] : "";
+      // Preserve decimals and similar numeric formats (e.g., 3.14)
+      if (punct === "." && /\d/.test(prevChar) && /\d/.test(nextChar)) {
+        return match;
+      }
+      // Avoid inserting spaces before closing quotes/brackets/ellipsis
+      if (/["')\]}…]/.test(nextChar)) {
+        return punct + nextChar;
+      }
+      return `${punct} ${nextChar}`;
+    })
     .replace(/([.?!]) (\S)/g, (_match, punct, nextChar) => `${punct} ${nextChar.toUpperCase()}`);
 }
