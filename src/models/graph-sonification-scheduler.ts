@@ -111,7 +111,9 @@ export class GraphSonificationScheduler implements ITransportEventScheduler {
     const interval = this.manager.duration / kStepCount;
     const smoothBinValues: number[] = interpolateBins(bins, kStepCount);
 
-    const osc = new Tone.Oscillator(kLowerFreqBound, "sine").connect(this.manager.input);
+    // Gain node mutes the oscillator in empty bins so gaps are silent
+    const gain = new Tone.Gain(1).connect(this.manager.input);
+    const osc = new Tone.Oscillator(kLowerFreqBound, "sine").connect(gain);
     // this syncs the oscillator to the transport, so that when we call transport.start or
     // transport.stop, the oscillator will start/stop accordingly
     osc.sync().start(0);
@@ -121,20 +123,22 @@ export class GraphSonificationScheduler implements ITransportEventScheduler {
       const countFraction = count / maxCount;
       const freq = mapPitchFractionToFrequency(countFraction);
       this.addFrequenciesAtTime(offset, "Univariate Continual", freq);
-      return { time: offset, freqValue: freq };
+      return { time: offset, freqValue: freq, hasData: count > 0 };
     });
 
     const part = new Tone.Part((time, value) => {
-      const { freqValue } = value;
+      const { freqValue, hasData } = value;
       // FIXME: The frequency is starting at kLowerFreqBound and then ramped to the first value
       // It should start at least at the first value, and possibly we should skip the first
       // value in this Part.
       osc.frequency.linearRampToValueAtTime(freqValue, time + interval);
+      gain.gain.linearRampToValueAtTime(hasData ? 1 : 0, time + interval);
     }, freqsToSchedule).start(0);
 
     return () => {
       part.dispose();
       osc.dispose();
+      gain.dispose();
     };
   }
 
