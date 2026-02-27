@@ -2,6 +2,7 @@ import React, { FormEvent, useEffect, useRef, useState } from "react";
 import { observer } from "mobx-react-lite";
 import { kDefaultChatInputHeight, START_RECORDING_NOTE, STOP_RECORDING_NOTE } from "../constants";
 import { playSound } from "../utils/utils";
+import { replaceVoiceCommands, applyPunctuationHeuristics } from "../utils/voice-punctuation-utils";
 import { useShortcutsService } from "../contexts/shortcuts-service-context";
 import { ErrorMessage } from "./error-message";
 
@@ -97,22 +98,19 @@ export const ChatInputComponent = observer(function({disabled, isLoading, onCanc
         // Using the state variable dictationEnabled here can lead to incorrect behavior.
         if (!dictationEnabledRef.current) return;
 
-        const capitalize = (s: string) => {
-          const firstChar = /\S/;
-          return s.replace(firstChar, function(m) { return m.toUpperCase(); });
-        };
-
         let interimTranscript = "";
         for (let i = event.resultIndex; i < event.results.length; ++i) {
+          const transcript = replaceVoiceCommands(event.results[i][0].transcript);
           if (event.results[i].isFinal) {
-            finalSpeechTranscript.current += event.results[i][0].transcript;
+            finalSpeechTranscript.current += transcript;
           } else {
-            interimTranscript += event.results[i][0].transcript;
+            interimTranscript += transcript;
           }
         }
-        finalSpeechTranscript.current = capitalize(finalSpeechTranscript.current);
 
-        const output = `${finalSpeechTranscript.current} ${interimTranscript}`;
+        const output = applyPunctuationHeuristics(
+          `${finalSpeechTranscript.current} ${interimTranscript}`
+        );
         setInputValue(output);
       };
 
