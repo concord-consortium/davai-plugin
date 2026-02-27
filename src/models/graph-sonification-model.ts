@@ -134,7 +134,7 @@ export const GraphSonificationModel = types
   })))
   .views((self) => ({
     get sonificationPrimaryBounds() {
-      if (self.selectedCaseIds.length > 0 && self.timeValues.length > 0) {
+      if (self.timeValues.length > 0) {
         const numericTimeValues = self.timeValues.filter(
           (v: unknown): v is number => typeof v === "number"
         );
