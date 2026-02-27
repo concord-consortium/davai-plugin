@@ -105,11 +105,26 @@ export class GraphSonificationScheduler implements ITransportEventScheduler {
   scheduleUnivariateContinual() {
     const { binValues, sonificationPrimaryBounds } = this.sonificationStore;
     if (!binValues || !sonificationPrimaryBounds) return;
+    const { lowerBound: sonLower, upperBound: sonUpper } = sonificationPrimaryBounds;
+    if (sonLower == null || sonUpper == null) return;
 
-    const { bins } = binValues;
-    const maxCount = Math.max(...bins) || 1;
+    const { bins, minBinEdge, maxBinEdge, binWidth } = binValues;
+
+    // Pad bins with zeros to cover the full sonification range.
+    // The bins from BinModel only span the data range; when the sonification
+    // covers a wider range (e.g., full axis when nothing is selected), we
+    // prepend/append zero-count bins so leading/trailing space is silent.
+    const leadingBins = binWidth > 0 ? Math.max(0, Math.round((minBinEdge - sonLower) / binWidth)) : 0;
+    const trailingBins = binWidth > 0 ? Math.max(0, Math.round((sonUpper - maxBinEdge) / binWidth)) : 0;
+    const paddedBins = [
+      ...Array(leadingBins).fill(0),
+      ...bins,
+      ...Array(trailingBins).fill(0)
+    ];
+
+    const maxCount = Math.max(...paddedBins) || 1;
     const interval = this.manager.duration / kStepCount;
-    const smoothBinValues: number[] = interpolateBins(bins, kStepCount);
+    const smoothBinValues: number[] = interpolateBins(paddedBins, kStepCount);
 
     // Gain node mutes the oscillator in empty bins so gaps are silent
     const gain = new Tone.Gain(1).connect(this.manager.input);
@@ -157,12 +172,31 @@ export class GraphSonificationScheduler implements ITransportEventScheduler {
       yValueFunc: (i: number) => number
     }
   ) {
-    const freqsToSchedule: { time: number, freqValue: number }[] = [];
+    const freqsToSchedule: { time: number, freqValue: number, gainTarget: number }[] = [];
     const yRange = yUpper - yLower;
 
     // This is a fence post problem. The number of intervals between the
     // x values is one less than the number of x values.
     const interval = this.manager.duration / ( numberOfPoints - 1 );
+
+    // Compute a gain schedule so the oscillator is silent outside the data range
+    // but plays continuously from the first to the last data point (no internal gaps).
+    const { timeValues, sonificationPrimaryBounds } = this.sonificationStore;
+    let dataStartFraction = 0;
+    let dataEndFraction = 1;
+    if (sonificationPrimaryBounds) {
+      const { lowerBound: sonLower, upperBound: sonUpper } = sonificationPrimaryBounds;
+      if (sonLower != null && sonUpper != null) {
+        const sonRange = sonUpper - sonLower;
+        if (sonRange > 0 && timeValues.length > 0) {
+          const numericTimes = timeValues.filter((v: unknown): v is number => typeof v === "number");
+          if (numericTimes.length > 0) {
+            dataStartFraction = (Math.min(...numericTimes) - sonLower) / sonRange;
+            dataEndFraction = (Math.max(...numericTimes) - sonLower) / sonRange;
+          }
+        }
+      }
+    }
 
     const computeFrequencyAtIndex = (i: number) => {
       const yValue = yValueFunc(i);
@@ -185,17 +219,25 @@ export class GraphSonificationScheduler implements ITransportEventScheduler {
     };
 
     const initialFrequency = computeFrequencyAtIndex(0);
+    const isInDataRange = (i: number) => {
+      const fraction = i / (numberOfPoints - 1);
+      return fraction >= dataStartFraction && fraction <= dataEndFraction;
+    };
+    const initialGain = isInDataRange(0) ? 1 : 0;
 
     for (let i = 1; i < numberOfPoints; i++) {
       // This is the time when the ramp should start to reach the frequency
       const time = (i-1) * interval;
       const freqValue = computeFrequencyAtIndex(i);
-      freqsToSchedule.push({ time, freqValue });
+      const gainTarget = isInDataRange(i) ? 1 : 0;
+      freqsToSchedule.push({ time, freqValue, gainTarget });
     }
 
     // The initial frequency of the oscillator is the first computed frequency
     // Then we schedule ramps to the next frequencies.
-    const osc = new Tone.Oscillator(initialFrequency, "sine").connect(this.manager.input);
+    // Gain node mutes the oscillator in regions with no data points.
+    const gain = new Tone.Gain(initialGain).connect(this.manager.input);
+    const osc = new Tone.Oscillator(initialFrequency, "sine").connect(gain);
     // this syncs the oscillator to the transport, so that when we call transport.start or
     // transport.stop, the oscillator will start/stop accordingly
     osc.sync().start(0);
@@ -203,11 +245,12 @@ export class GraphSonificationScheduler implements ITransportEventScheduler {
     // The time being passed to the callback is the time when the ramp should start.
     // We are setting up 1 ramp for each interval.
     const part = new Tone.Part((time, value) => {
-      const { freqValue } = value;
+      const { freqValue, gainTarget } = value;
       osc.frequency.linearRampTo(freqValue, interval, time);
+      gain.gain.linearRampToValueAtTime(gainTarget, time + interval);
     }, freqsToSchedule).start(0);
 
-    return { part, osc };
+    return { part, osc, gain };
   }
 
   scheduleScatterPlotLSRL() {
@@ -225,7 +268,7 @@ export class GraphSonificationScheduler implements ITransportEventScheduler {
     const yLower = Math.min(yStart, yEnd);
     const yUpper = Math.max(yStart, yEnd);
 
-    const { part, osc } = this.createContinuousOscillatorPart({
+    const { part, osc, gain } = this.createContinuousOscillatorPart({
       yLower, yUpper,
       numberOfPoints: kStepCount,
       label: "Scatter Plot LSRL",
@@ -238,6 +281,7 @@ export class GraphSonificationScheduler implements ITransportEventScheduler {
     return () => {
       part.dispose();
       osc.dispose();
+      gain.dispose();
     };
   }
 
@@ -266,7 +310,7 @@ export class GraphSonificationScheduler implements ITransportEventScheduler {
     const yLower = Math.min(...fitted);
     const yUpper = Math.max(...fitted);
 
-    const { part, osc } = this.createContinuousOscillatorPart({
+    const { part, osc, gain } = this.createContinuousOscillatorPart({
       yLower, yUpper,
       numberOfPoints: fitted.length,
       label: "Scatter Plot LOESS",
@@ -278,6 +322,7 @@ export class GraphSonificationScheduler implements ITransportEventScheduler {
     return () => {
       part.dispose();
       osc.dispose();
+      gain.dispose();
     };
 
   }

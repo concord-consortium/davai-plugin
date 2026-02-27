@@ -266,19 +266,17 @@ describe("GraphSonificationModel", () => {
     expect(store.validItems[1].id).toBe("200/30");
   });
 
-  it("should use data bounds for sonificationPrimaryBounds when nothing is selected", async () => {
+  it("should use axis bounds for sonificationPrimaryBounds when nothing is selected", async () => {
     (getCollectionItemsForAttributePair as jest.Mock).mockResolvedValueOnce(mockGraphItemsWithIds);
 
     await store.setGraphs();
     store.setSelectedGraphID(1);
     await new Promise(resolve => setTimeout(resolve, 100));
 
-    // When nothing is selected, sonificationPrimaryBounds should use data bounds with padding
-    // (same as when all items are selected), not the full axis bounds.
-    // mockGraphItemsWithIds has x values: 1, 3, 5. Axis range is 0-10, so padding = 0.2.
-    const bounds = store.sonificationPrimaryBounds;
-    expect(bounds.lowerBound).toBe(0.8);  // 1 - 0.2
-    expect(bounds.upperBound).toBe(5.2);  // 5 + 0.2
+    // When nothing is selected, sonificationPrimaryBounds should equal primaryBounds
+    // (the full axis range). The scheduler pads bins with zeros to cover the axis range,
+    // so the continual tone is silent in leading/trailing space.
+    expect(store.sonificationPrimaryBounds).toEqual(store.primaryBounds);
   });
 
   it("should compute sonificationPrimaryBounds with 2% padding from axis range", async () => {
