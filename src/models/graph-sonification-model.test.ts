@@ -96,6 +96,9 @@ describe("GraphSonificationModel", () => {
     mockSetAssistantState.mockClear();
     mockGetAssistantState.mockClear();
     (codapInterface.sendRequest as jest.Mock).mockClear();
+    (getGraphDetails as jest.Mock).mockClear();
+    (getCollectionItemsForAttributePair as jest.Mock).mockClear();
+    (getCollectionItemsForAttribute as jest.Mock).mockClear();
 
     rootStore = RootStore.create({
       sonificationStore: {
