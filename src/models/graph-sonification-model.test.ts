@@ -1,7 +1,7 @@
 import { types } from "mobx-state-tree";
 import { codapInterface } from "@concord-consortium/codap-plugin-api";
 import { GraphSonificationModel, GraphSonificationModelType } from "./graph-sonification-model";
-import { getCollectionItemsForAttributePair, getCollectionItemsForAttribute } from "../utils/codap-api-utils";
+import { getCollectionItemsForAttributePair, getCollectionItemsForAttribute, getGraphDetails } from "../utils/codap-api-utils";
 
 const mockAvailableGraphs = [
   {
@@ -158,6 +158,28 @@ describe("GraphSonificationModel", () => {
     expect(store.graphItems).toBeDefined();
     expect(store.graphItems?.length).toBe(3);
     expect(getCollectionItemsForAttribute).toHaveBeenCalledWith(mockDataContext, "x");
+  });
+
+  it("should re-fetch graph items when attributes change on selected graph", async () => {
+    await store.setGraphs();
+    store.setSelectedGraphID(1);
+    await new Promise(resolve => setTimeout(resolve, 100));
+
+    expect(getCollectionItemsForAttributePair).toHaveBeenCalledWith(mockDataContext, "x", "y");
+    (getCollectionItemsForAttributePair as jest.Mock).mockClear();
+
+    // Simulate attribute change: CODAP reports graph 1 now has yAttributeName "z" instead of "y"
+    (getGraphDetails as jest.Mock).mockResolvedValueOnce([
+      {
+        id: 1, name: "Graph 1", plotType: "scatterPlot", dataContext: "context1",
+        yAttributeName: "z", xAttributeName: "x"
+      },
+      ...mockAvailableGraphs.slice(1)
+    ]);
+    await store.setGraphs();
+    await new Promise(resolve => setTimeout(resolve, 100));
+
+    expect(getCollectionItemsForAttributePair).toHaveBeenCalledWith(mockDataContext, "x", "z");
   });
 
   it("should only allow selecting sonifiable graphs", async () => {
