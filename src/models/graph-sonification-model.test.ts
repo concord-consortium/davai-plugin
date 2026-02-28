@@ -1,4 +1,5 @@
 import { types } from "mobx-state-tree";
+import { when } from "mobx";
 import { codapInterface } from "@concord-consortium/codap-plugin-api";
 import { GraphSonificationModel, GraphSonificationModelType } from "./graph-sonification-model";
 import { getCollectionItemsForAttributePair, getCollectionItemsForAttribute, getGraphDetails } from "../utils/codap-api-utils";
@@ -146,7 +147,7 @@ describe("GraphSonificationModel", () => {
   it("should set selected graph and update graph items for scatter plot", async () => {
     await store.setGraphs();
     store.setSelectedGraphID(1);
-    await new Promise(resolve => setTimeout(resolve, 100));
+    await when(() => store.graphItems != null);
     expect(store.selectedGraphID).toBe(1);
     expect(store.graphItems).toBeDefined();
     expect(store.graphItems?.length).toBe(3);
@@ -156,7 +157,7 @@ describe("GraphSonificationModel", () => {
   it("should set selected graph and update graph items for dot plot", async () => {
     await store.setGraphs();
     store.setSelectedGraphID(3);
-    await new Promise(resolve => setTimeout(resolve, 100));
+    await when(() => store.graphItems != null);
     expect(store.selectedGraphID).toBe(3);
     expect(store.graphItems).toBeDefined();
     expect(store.graphItems?.length).toBe(3);
@@ -166,7 +167,7 @@ describe("GraphSonificationModel", () => {
   it("should re-fetch graph items when attributes change on selected graph", async () => {
     await store.setGraphs();
     store.setSelectedGraphID(1);
-    await new Promise(resolve => setTimeout(resolve, 100));
+    await when(() => store.graphItems != null);
 
     expect(getCollectionItemsForAttributePair).toHaveBeenCalledWith(mockDataContext, "x", "y");
     (getCollectionItemsForAttributePair as jest.Mock).mockClear();
@@ -180,7 +181,8 @@ describe("GraphSonificationModel", () => {
       ...mockAvailableGraphs.slice(1)
     ]);
     await store.setGraphs();
-    await new Promise(resolve => setTimeout(resolve, 100));
+    await when(() => (getCollectionItemsForAttributePair as jest.Mock)
+      .mock.calls.some(call => call[2] === "z"));
 
     expect(getCollectionItemsForAttributePair).toHaveBeenCalledWith(mockDataContext, "x", "z");
   });
@@ -189,12 +191,12 @@ describe("GraphSonificationModel", () => {
     await store.setGraphs();
     // Graph 1 is sonifiable (scatterPlot)
     store.setSelectedGraphID(1);
-    await new Promise(resolve => setTimeout(resolve, 100));
+    await when(() => store.graphItems != null);
     expect(store.selectedGraphID).toBe(1);
 
     // Try to select a non-sonifiable graph
     store.setSelectedGraphID(999);
-    await new Promise(resolve => setTimeout(resolve, 100));
+    await when(() => store.selectedGraphID === undefined);
     expect(store.selectedGraphID).toBeUndefined();
   });
 });
