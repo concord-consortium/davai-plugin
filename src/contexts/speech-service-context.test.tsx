@@ -3,17 +3,20 @@ import { render, screen, act } from "@testing-library/react";
 import { SpeechServiceProvider, useSpeechService, useIsSpeaking } from "./speech-service-context";
 import { AppConfigContext, AppConfigProvider } from "./app-config-context";
 import { AriaLiveProvider, useAriaLive } from "./aria-live-context";
-import { setupMockSpeechSynthesis, cleanupMockSpeechSynthesis } from "../test-utils/mock-speech-synthesis";
+import { setupMockSpeechSynthesis, cleanupMockSpeechSynthesis, MockSpeechSynthesis } from "../test-utils/mock-speech-synthesis";
 import { AppConfigModel, AppConfigModelSnapshot } from "../models/app-config-model";
 import { mockAppConfig } from "../test-utils/mock-app-config";
 
 describe("SpeechServiceContext", () => {
+  let mockSynth: MockSpeechSynthesis;
+
   beforeEach(() => {
-    setupMockSpeechSynthesis();
+    mockSynth = setupMockSpeechSynthesis();
   });
 
   afterEach(() => {
     cleanupMockSpeechSynthesis();
+    jest.useRealTimers();
   });
 
   const TestProviders = ({ children }: { children: React.ReactNode }) => (
@@ -39,7 +42,6 @@ describe("SpeechServiceContext", () => {
 
     it("speaks when ariaLiveText changes", () => {
       jest.useFakeTimers();
-      const mockSynth = setupMockSpeechSynthesis();
       const appConfig = AppConfigModel.create({
         ...mockAppConfig,
         readAloudEnabled: true,
@@ -71,7 +73,6 @@ describe("SpeechServiceContext", () => {
       expect(mockSynth.speak).toHaveBeenCalledTimes(1);
       const utterance = mockSynth.speak.mock.calls[0][0];
       expect(utterance.text).toBe("Test message");
-      jest.useRealTimers();
     });
   });
 

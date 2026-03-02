@@ -62,26 +62,33 @@ export class SpeechService implements ISpeechService {
     // Cancel any ongoing speech (but don't call our stopSpeech which resets state)
     window.speechSynthesis.cancel();
 
-    this.utterance = new SpeechSynthesisUtterance(text);
-    this.utterance.rate = this.getPlaybackSpeed();
+    const utterance = new SpeechSynthesisUtterance(text);
+    utterance.rate = this.getPlaybackSpeed();
+    this.utterance = utterance;
 
-    this.utterance.onstart = () => {
-      this.setSpeaking(true);
+    utterance.onstart = () => {
+      if (this.utterance === utterance) {
+        this.setSpeaking(true);
+      }
     };
 
-    this.utterance.onend = () => {
-      this.setSpeaking(false);
+    utterance.onend = () => {
+      if (this.utterance === utterance) {
+        this.setSpeaking(false);
+      }
     };
 
-    this.utterance.onerror = (event) => {
-      this.setSpeaking(false);
+    utterance.onerror = (event) => {
+      if (this.utterance === utterance) {
+        this.setSpeaking(false);
+      }
       // Don't report errors for intentional cancellations (user pressed Escape or new speech started)
       if (event.error !== "canceled" && event.error !== "interrupted") {
         this.onErrorCallback?.(`Speech synthesis error: ${event.error}`);
       }
     };
 
-    window.speechSynthesis.speak(this.utterance);
+    window.speechSynthesis.speak(utterance);
   }
 
   stopSpeech(): void {
