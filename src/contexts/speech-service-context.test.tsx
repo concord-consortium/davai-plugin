@@ -1,9 +1,11 @@
 import React from "react";
 import { render, screen, act } from "@testing-library/react";
 import { SpeechServiceProvider, useSpeechService, useIsSpeaking } from "./speech-service-context";
-import { AppConfigProvider } from "./app-config-context";
+import { AppConfigContext, AppConfigProvider } from "./app-config-context";
 import { AriaLiveProvider, useAriaLive } from "./aria-live-context";
 import { setupMockSpeechSynthesis, cleanupMockSpeechSynthesis } from "../test-utils/mock-speech-synthesis";
+import { AppConfigModel, AppConfigModelSnapshot } from "../models/app-config-model";
+import { mockAppConfig } from "../test-utils/mock-app-config";
 
 describe("SpeechServiceContext", () => {
   beforeEach(() => {
@@ -36,6 +38,12 @@ describe("SpeechServiceContext", () => {
     });
 
     it("speaks when ariaLiveText changes", () => {
+      jest.useFakeTimers();
+      const mockSynth = setupMockSpeechSynthesis();
+      const appConfig = AppConfigModel.create({
+        ...mockAppConfig,
+        readAloudEnabled: true,
+      } as AppConfigModelSnapshot);
       const TestComponent = () => {
         const { setAriaLiveText } = useAriaLive();
         return (
@@ -44,20 +52,26 @@ describe("SpeechServiceContext", () => {
           </button>
         );
       };
-
       render(
-        <TestProviders>
-          <TestComponent />
-        </TestProviders>
+        <AppConfigContext.Provider value={appConfig}>
+          <AriaLiveProvider>
+            <SpeechServiceProvider>
+              <TestComponent />
+            </SpeechServiceProvider>
+          </AriaLiveProvider>
+        </AppConfigContext.Provider>
       );
-
       act(() => {
         screen.getByRole("button").click();
       });
-
-      // Verify the button exists and was rendered correctly
-      // Speech won't actually trigger because readAloudEnabled is false by default
-      expect(screen.getByRole("button")).toBeInTheDocument();
+      // Advance past the 100ms debounce in SpeechServiceProvider
+      act(() => {
+        jest.advanceTimersByTime(100);
+      });
+      expect(mockSynth.speak).toHaveBeenCalledTimes(1);
+      const utterance = mockSynth.speak.mock.calls[0][0];
+      expect(utterance.text).toBe("Test message");
+      jest.useRealTimers();
     });
   });
 
