@@ -1,18 +1,20 @@
+@use "./vars.scss" as *;
+
 .speaking-indicator {
   display: flex;
   align-items: center;
   gap: 0.5rem;
   padding: 0.25rem 0.5rem;
-  background-color: #e3f2fd;
-  border: 1px solid #1976d2;
+  background-color: $light-teal-4;
+  border: 1px solid $dark-teal;
   border-radius: 4px;
   font-size: 0.875rem;
-  color: #1565c0;
+  color: $dark-teal;
 
   .speaking-icon {
     width: 12px;
     height: 12px;
-    background-color: #1976d2;
+    background-color: $dark-teal;
     border-radius: 50%;
     animation: pulse 1s ease-in-out infinite;
   }
@@ -23,7 +25,7 @@
 
   .stop-button {
     padding: 0.125rem 0.5rem;
-    background-color: #1976d2;
+    background-color: $dark-teal;
     color: white;
     border: none;
     border-radius: 3px;
@@ -33,7 +35,7 @@
     min-width: 44px;
 
     &:hover {
-      background-color: #1565c0;
+      background-color: $dark-teal;
     }
 
     &:focus {
