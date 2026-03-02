@@ -279,16 +279,17 @@ describe("SpeechService", () => {
       const callback = jest.fn();
       service.onSpeakingChange(callback);
 
-      service.dispose();
-
-      // Re-setup mock since dispose clears it
-      mockSpeechSynthesis = setupMockSpeechSynthesis();
-      service = new SpeechService(() => true, () => 1);
       service.speak("Hello");
       const utterance = mockSpeechSynthesis.speak.mock.calls[0][0];
       utterance.onstart?.({} as Event);
+      expect(callback).toHaveBeenCalledWith(true);
+      callback.mockClear();
 
-      // Original callback should not be called since it was cleared
+      service.dispose();
+      callback.mockClear();
+
+      // callback should not be called since it was cleared
+      utterance.onstart?.({} as Event);
       expect(callback).not.toHaveBeenCalled();
     });
   });
