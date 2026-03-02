@@ -11,7 +11,8 @@ jest.mock("../contexts/app-config-context", () => ({
 jest.mock("./readaloud-menu", () => ({
   ReadAloudMenu: ({ createToggleOption }: any) => (
     <div data-testid="readaloud-menu">
-      {createToggleOption("mockOption", "Mock Option")}
+      {createToggleOption("mockOption", "Mock Option", "mock-helper-text")}
+      <p id="mock-helper-text">Mock helper text</p>
     </div>
   ),
 }));
@@ -65,6 +66,13 @@ describe("UserOptions Component", () => {
 
     expect(screen.getByTestId("playProcessingTone-toggle-label")).toHaveTextContent("Play loading tone:");
     expect(playToneToggle).not.toBeChecked();
+  });
+
+  it("applies aria-describedby when describedBy is provided", () => {
+    render(<UserOptions assistantStore={mockAssistantStore} onInitializeAssistant={jest.fn()} />);
+
+    const toggle = screen.getByTestId("mockOption-toggle");
+    expect(toggle).toHaveAttribute("aria-describedby", "mock-helper-text");
   });
 
   it("calls toggleOption when a toggle is clicked", () => {

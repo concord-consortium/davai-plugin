@@ -17,6 +17,7 @@ import { getGraphDetails } from "../utils/codap-api-utils";
 import { isGraphSonifiable } from "../utils/graph-sonification-utils";
 import { ICODAPGraph } from "../types";
 import { GraphSonificationScheduler } from "../models/graph-sonification-scheduler";
+import { SpeakingIndicator } from "./speaking-indicator";
 
 import "./App.scss";
 
@@ -183,6 +184,7 @@ export const App = observer(() => {
           <abbr title="Data Analysis through Voice and Artificial Intelligence">DAVAI</abbr>
           <span>(Data Analysis through Voice and Artificial Intelligence)</span>
         </h1>
+        <SpeakingIndicator />
       </header>
       <ChatTranscriptComponent
         chatTranscript={transcriptStore}

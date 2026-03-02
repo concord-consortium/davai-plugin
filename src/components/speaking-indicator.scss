@@ -1,0 +1,61 @@
+@use "./vars.scss" as *;
+
+.speaking-indicator {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.25rem 0.5rem;
+  background-color: $light-teal-4;
+  border: 1px solid $dark-teal;
+  border-radius: 4px;
+  font-size: 0.875rem;
+  color: $dark-teal;
+
+  .speaking-icon {
+    width: 12px;
+    height: 12px;
+    background-color: $dark-teal;
+    border-radius: 50%;
+    animation: pulse 1s ease-in-out infinite;
+  }
+
+  .speaking-text {
+    font-weight: 500;
+  }
+
+  .stop-button {
+    padding: 0.125rem 0.5rem;
+    background-color: $dark-teal;
+    color: white;
+    border: none;
+    border-radius: 3px;
+    font-size: 0.75rem;
+    cursor: pointer;
+    min-height: 24px;
+    min-width: 44px;
+
+    &:hover {
+      background-color: $dark-teal;
+    }
+
+    &:focus {
+      outline: 2px solid #0d47a1;
+      outline-offset: 2px;
+    }
+  }
+}
+
+@keyframes pulse {
+  0%, 100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.4;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .speaking-indicator .speaking-icon {
+    animation: none;
+  }
+}
