@@ -208,7 +208,11 @@ export class GraphSonificationScheduler implements ITransportEventScheduler {
       // range of the continuous oscillator.
       // The yRange can be 0 if the line is flat. In that case we use a pitch fraction
       // of 0.5. This way the pitch is in the middle of the range.
-      const pitchFraction = yRange ? (yValue - yLower) / yRange : 0.5;
+      const rawFraction = yRange ? (yValue - yLower) / yRange : 0.5;
+      // Clamp to [0, 1] so extrapolated regression values outside the data
+      // range don't produce invalid (negative) frequencies. Those steps are
+      // muted by the gain schedule so the clamped value has no audible effect.
+      const pitchFraction = Math.max(0, Math.min(1, rawFraction));
       const frequency = mapPitchFractionToFrequency(pitchFraction);
 
       // This is the time when this frequency should be reached
@@ -254,7 +258,7 @@ export class GraphSonificationScheduler implements ITransportEventScheduler {
   }
 
   scheduleScatterPlotLSRL() {
-    const { sonificationPrimaryBounds, leastSquaresLinearRegression } = this.sonificationStore;
+    const { sonificationPrimaryBounds, leastSquaresLinearRegression, timeValues } = this.sonificationStore;
     if (!sonificationPrimaryBounds) return;
     const { lowerBound: timeLowerBound, upperBound: timeUpperBound } = sonificationPrimaryBounds;
     if (timeLowerBound == null || timeUpperBound == null) return;
@@ -263,10 +267,19 @@ export class GraphSonificationScheduler implements ITransportEventScheduler {
     if (slope == null || intercept == null) return;
 
     const timeRange = timeUpperBound - timeLowerBound;
-    const yStart = slope * timeLowerBound + intercept;
-    const yEnd = slope * timeUpperBound + intercept;
-    const yLower = Math.min(yStart, yEnd);
-    const yUpper = Math.max(yStart, yEnd);
+
+    // Compute y bounds from data range rather than axis range so the pitch
+    // sweeps the full audible range within the data region. When the axis is
+    // wider than the data, the regression extends further but those portions
+    // are muted by the gain schedule, so we don't want them compressing the
+    // pitch range of the audible portion.
+    const numericTimes = timeValues.filter((v: unknown): v is number => typeof v === "number");
+    const dataMin = numericTimes.length > 0 ? Math.min(...numericTimes) : timeLowerBound;
+    const dataMax = numericTimes.length > 0 ? Math.max(...numericTimes) : timeUpperBound;
+    const yAtDataMin = slope * dataMin + intercept;
+    const yAtDataMax = slope * dataMax + intercept;
+    const yLower = Math.min(yAtDataMin, yAtDataMax);
+    const yUpper = Math.max(yAtDataMin, yAtDataMax);
 
     const { part, osc, gain } = this.createContinuousOscillatorPart({
       yLower, yUpper,
@@ -286,8 +299,10 @@ export class GraphSonificationScheduler implements ITransportEventScheduler {
   }
 
   scheduleScatterPlotLOESS() {
-    const { points } = this.sonificationStore;
-    if (!points) return;
+    const { points, sonificationPrimaryBounds } = this.sonificationStore;
+    if (!points || !sonificationPrimaryBounds) return;
+    const { lowerBound: timeLowerBound, upperBound: timeUpperBound } = sonificationPrimaryBounds;
+    if (timeLowerBound == null || timeUpperBound == null) return;
 
     const data = {
       x: [] as number[],
@@ -310,12 +325,27 @@ export class GraphSonificationScheduler implements ITransportEventScheduler {
     const yLower = Math.min(...fitted);
     const yUpper = Math.max(...fitted);
 
+    // Map oscillator steps to axis x-positions, then interpolate the LOESS
+    // predictions at the corresponding data-range position. The fitted array
+    // spans the data x-range, so we need to translate axis positions into
+    // indices within that array.
+    const timeRange = timeUpperBound - timeLowerBound;
+    const dataXMin = Math.min(...data.x);
+    const dataXMax = Math.max(...data.x);
+    const dataXRange = dataXMax - dataXMin || 1;
+
     const { part, osc, gain } = this.createContinuousOscillatorPart({
       yLower, yUpper,
-      numberOfPoints: fitted.length,
+      numberOfPoints: kStepCount,
       label: "Scatter Plot LOESS",
       yValueFunc(i) {
-        return fitted[i];
+        const xValue = timeLowerBound + (i / (kStepCount - 1)) * timeRange;
+        const dataFraction = (xValue - dataXMin) / dataXRange;
+        const fittedIndex = Math.max(0, Math.min(fitted.length - 1, dataFraction * (fitted.length - 1)));
+        const lo = Math.floor(fittedIndex);
+        const hi = Math.min(fitted.length - 1, lo + 1);
+        const t = fittedIndex - lo;
+        return fitted[lo] * (1 - t) + fitted[hi] * t;
       }
     });
 
