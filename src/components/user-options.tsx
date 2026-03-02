@@ -17,7 +17,7 @@ interface IProps {
 export const UserOptions: React.FC<IProps> = observer(function UserOptions({assistantStore, onInitializeAssistant}) {
   const appConfig = useAppConfigContext();
 
-  const createToggleOption = (option: AppConfigToggleOptions, optionLabel: string) => {
+  const createToggleOption = (option: AppConfigToggleOptions, optionLabel: string, describedBy?: string) => {
     return (
       <div className="user-option">
         <label htmlFor={`${option}-toggle`} data-testid={`${option}-toggle-label`}>
@@ -30,6 +30,7 @@ export const UserOptions: React.FC<IProps> = observer(function UserOptions({assi
           role="switch"
           checked={!!appConfig[option]}
           aria-checked={!!appConfig[option]}
+          aria-describedby={describedBy}
           onChange={() => appConfig.toggleOption(option)}
         />
       </div>

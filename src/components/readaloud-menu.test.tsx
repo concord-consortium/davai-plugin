@@ -68,7 +68,7 @@ describe("test read aloud menu component", () => {
     expect(screen.getByText("Read Responses Aloud")).toBeInTheDocument();
 
     // Check that toggle was called with new label
-    expect(mockCreateToggleOption).toHaveBeenCalledWith("readAloudEnabled", "Read responses aloud");
+    expect(mockCreateToggleOption).toHaveBeenCalledWith("readAloudEnabled", "Read responses aloud", "read-aloud-helper-text");
 
     // Check speed label
     expect(screen.getByTestId("speed-label")).toHaveTextContent("Playback speed:");

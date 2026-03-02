@@ -4,11 +4,12 @@ import { useAppConfigContext } from "../contexts/app-config-context";
 import { AppConfigToggleOptions } from "../models/app-config-model";
 
 interface IProps {
-  createToggleOption: (option: AppConfigToggleOptions, optionLabel: string) => React.JSX.Element
+  createToggleOption: (option: AppConfigToggleOptions, optionLabel: string, describedBy?: string) => React.JSX.Element
 }
 
 export const ReadAloudMenu: React.FC<IProps> = observer(function ReadAloudMenu({createToggleOption}) {
   const appConfig = useAppConfigContext();
+  const readAloudHelperTextId = "read-aloud-helper-text";
 
   const handleSelect = (event: React.ChangeEvent<HTMLSelectElement>) => {
     appConfig.update(() => {
@@ -20,7 +21,7 @@ export const ReadAloudMenu: React.FC<IProps> = observer(function ReadAloudMenu({
     <div className="control-panel-section" role="group" aria-labelledby="readaloud-heading" data-testid="readaloud-menu">
       <h3 id="readaloud-heading">Read Responses Aloud</h3>
       <div className="options-list-1">
-        {createToggleOption("readAloudEnabled", "Read responses aloud")}
+        {createToggleOption("readAloudEnabled", "Read responses aloud", readAloudHelperTextId)}
         <div className="user-option">
           <label
             data-testid="speed-label"
@@ -47,7 +48,7 @@ export const ReadAloudMenu: React.FC<IProps> = observer(function ReadAloudMenu({
             <option data-testid="playback-speed-option-11" value={3}>3x</option>
           </select>
         </div>
-        <p className="helper-text" data-testid="readaloud-helper-text">
+        <p className="helper-text" id={readAloudHelperTextId} data-testid="readaloud-helper-text">
           Note: If you use a screen reader, you may hear duplicate audio when this feature is enabled.
           Press Escape to stop speech playback at any time.
         </p>
