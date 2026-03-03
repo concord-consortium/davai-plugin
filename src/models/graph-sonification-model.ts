@@ -1,4 +1,4 @@
-import { applySnapshot, flow, Instance, SnapshotIn, types } from "mobx-state-tree";
+import { addDisposer, applySnapshot, flow, Instance, SnapshotIn, types } from "mobx-state-tree";
 import { reaction } from "mobx";
 import { Attribute, CodapItem, CodapItemValues } from "../types";
 import { sendMessage, createTable, createItems, getDataContext } from "@concord-consortium/codap-plugin-api";
@@ -290,8 +290,10 @@ export const GraphSonificationModel = types
   }))
   .actions((self) => ({
     afterCreate() {
-      // clear selectedGraphID if it no longer points to a valid graph
-      reaction(
+      const disposers: (() => void)[] = [];
+
+      // Clear selectedGraphID if it no longer points to a valid graph.
+      disposers.push(reaction(
         () => ({
           selectedGraphID: self.selectedGraphID,
           validGraphIDs: self.validGraphs.map(g => g.id)
@@ -302,9 +304,10 @@ export const GraphSonificationModel = types
             self.removeSelectedGraphID();
           }
         }
-      );
+      ));
 
-      reaction(
+      // Fetch graphItems when a new graph is selected, or clear them when deselected.
+      disposers.push(reaction(
         () => self.selectedGraphID,
         (graphID) => {
           if (graphID !== undefined) {
@@ -313,9 +316,26 @@ export const GraphSonificationModel = types
             self.clearGraphItems();
           }
         }
-      );
+      ));
 
-      reaction(
+      // Re-fetch graphItems when the selected graph's attributes change.
+      // Tracks graphId so we can skip when the graph selection itself changed,
+      // since the selectedGraphID reaction above already handles that case.
+      disposers.push(reaction(
+        () => ({
+          timeAttr: self.timeAttr,
+          pitchAttr: self.pitchAttr,
+          graphId: self.selectedGraphID
+        }),
+        (curr, prev) => {
+          if (curr.graphId !== undefined && curr.graphId === prev?.graphId) {
+            self.setGraphItems();
+          }
+        }
+      ));
+
+      // Keep binValues in sync with the current timeValues for univariate sonification.
+      disposers.push(reaction(
         () => ({
           timeValues: self.timeValues
         }),
@@ -326,11 +346,12 @@ export const GraphSonificationModel = types
               console.warn("Non-numeric time values found, cannot update binValues");
               return;
             }
-            // update binValues based on timeValues
-            self.binValues?.setValues(timeValues);
+            self.binValues.setValues(timeValues);
           }
         }
-      );
+      ));
+
+      addDisposer(self, () => disposers.forEach(d => d()));
     }
   }));
 
