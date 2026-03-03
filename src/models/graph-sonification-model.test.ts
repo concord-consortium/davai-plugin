@@ -224,7 +224,7 @@ describe("GraphSonificationModel", () => {
 
     await store.setGraphs();
     store.setSelectedGraphID(1);
-    await new Promise(resolve => setTimeout(resolve, 100));
+    await when(() => store.selectedCaseIds.length > 0);
 
     expect(getSelectionList).toHaveBeenCalledWith("context1");
     expect(store.selectedCaseIds).toEqual([10, 20]);
@@ -237,7 +237,7 @@ describe("GraphSonificationModel", () => {
 
     await store.setGraphs();
     store.setSelectedGraphID(1);
-    await new Promise(resolve => setTimeout(resolve, 100));
+    await when(() => store.selectedCaseIds.length > 0);
 
     expect(store.selectedCaseIds).toEqual([10]);
 
@@ -250,7 +250,7 @@ describe("GraphSonificationModel", () => {
 
     await store.setGraphs();
     store.setSelectedGraphID(1);
-    await new Promise(resolve => setTimeout(resolve, 100));
+    await when(() => store.graphItems != null);
 
     expect(store.selectedCaseIds).toEqual([]);
     expect(store.validItems.length).toBe(3);
@@ -265,7 +265,7 @@ describe("GraphSonificationModel", () => {
 
     await store.setGraphs();
     store.setSelectedGraphID(1);
-    await new Promise(resolve => setTimeout(resolve, 100));
+    await when(() => store.selectedCaseIds.length > 0);
 
     expect(store.validItems.length).toBe(2);
     expect(store.validItems[0].id).toBe("10");
@@ -286,7 +286,7 @@ describe("GraphSonificationModel", () => {
 
     await store.setGraphs();
     store.setSelectedGraphID(1);
-    await new Promise(resolve => setTimeout(resolve, 100));
+    await when(() => store.selectedCaseIds.length > 0);
 
     expect(store.validItems.length).toBe(2);
     expect(store.validItems[0].id).toBe("100/10");
@@ -298,7 +298,7 @@ describe("GraphSonificationModel", () => {
 
     await store.setGraphs();
     store.setSelectedGraphID(1);
-    await new Promise(resolve => setTimeout(resolve, 100));
+    await when(() => store.graphItems != null);
 
     // When nothing is selected, sonificationPrimaryBounds should equal primaryBounds
     // (the full axis range). The scheduler pads bins with zeros to cover the axis range,
@@ -316,7 +316,7 @@ describe("GraphSonificationModel", () => {
 
     await store.setGraphs();
     store.setSelectedGraphID(1);
-    await new Promise(resolve => setTimeout(resolve, 100));
+    await when(() => store.selectedCaseIds.length > 0);
 
     // Selected items have x (time) values of 1 and 5
     // Axis range is 0-10, so padding = (10 - 0) * 0.02 = 0.2
@@ -342,7 +342,7 @@ describe("GraphSonificationModel", () => {
 
     await store.setGraphs();
     store.setSelectedGraphID(1);
-    await new Promise(resolve => setTimeout(resolve, 100));
+    await when(() => store.selectedCaseIds.length > 0);
 
     // padding = (10 - 0) * 0.02 = 0.2
     // lowerBound = max(0 - 0.2, 0) = 0 (clamped to axis)
@@ -360,7 +360,7 @@ describe("GraphSonificationModel", () => {
 
     await store.setGraphs();
     store.setSelectedGraphID(1);
-    await new Promise(resolve => setTimeout(resolve, 100));
+    await when(() => store.selectedCaseIds.length > 0);
 
     // Single selected item at x=3, dataMin === dataMax === 3
     // padding = (10 - 0) * 0.02 = 0.2
@@ -378,7 +378,7 @@ describe("GraphSonificationModel", () => {
 
     await store.setGraphs();
     store.setSelectedGraphID(1);
-    await new Promise(resolve => setTimeout(resolve, 100));
+    await when(() => store.selectedCaseIds.length > 0);
     expect(store.selectedCaseIds).toEqual([10]);
 
     // Deselect the graph — selection should be cleared when graph is deselected
@@ -392,7 +392,7 @@ describe("GraphSonificationModel", () => {
 
     await store.setGraphs();
     store.setSelectedGraphID(1);
-    await new Promise(resolve => setTimeout(resolve, 100));
+    await when(() => store.graphItems != null);
 
     expect(store.selectedCaseIds).toEqual([]);
     expect(warnSpy).toHaveBeenCalledWith("Failed to fetch selection list:", expect.any(Error));

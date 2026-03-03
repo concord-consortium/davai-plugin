@@ -66,8 +66,9 @@ export const GraphSonification = observer(() => {
     return autorun(() => {
       if (!selectedGraphID) return;
 
-      // When not playing, reset the ROI to the axis origin so it is effectively invisible.
-      if (!transportManager.isPlaying) {
+      // When not playing and effectively at the beginning (or with no valid duration),
+      // reset the ROI to the axis origin so it is effectively invisible.
+      if (!transportManager.isPlaying && (transportManager.position <= 0 || transportManager.duration <= 0)) {
         updateRoiAdornment(selectedGraphID, 0);
         return;
       }

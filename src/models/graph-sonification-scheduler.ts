@@ -114,8 +114,8 @@ export class GraphSonificationScheduler implements ITransportEventScheduler {
     // The bins from BinModel only span the data range; when the sonification
     // covers a wider range (e.g., full axis when nothing is selected), we
     // prepend/append zero-count bins so leading/trailing space is silent.
-    const leadingBins = binWidth > 0 ? Math.max(0, Math.round((minBinEdge - sonLower) / binWidth)) : 0;
-    const trailingBins = binWidth > 0 ? Math.max(0, Math.round((sonUpper - maxBinEdge) / binWidth)) : 0;
+    const leadingBins = binWidth > 0 ? Math.max(0, Math.ceil((minBinEdge - sonLower) / binWidth)) : 0;
+    const trailingBins = binWidth > 0 ? Math.max(0, Math.ceil((sonUpper - maxBinEdge) / binWidth)) : 0;
     const paddedBins = [
       ...Array(leadingBins).fill(0),
       ...bins,

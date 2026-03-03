@@ -462,7 +462,7 @@ export class TransportManager {
     Tone.getTransport().cancel();
 
     this.resetPlaybackState();
-    this.durationScale = 1;
+    this.setDurationScale(1);
 
     if (this.animationFrameId != null) {
       cancelAnimationFrame(this.animationFrameId);

@@ -124,7 +124,7 @@ export const GraphSonificationModel = types
 
       const bounds = self.secondaryBounds;
       const { upperBound, lowerBound } = bounds;
-      if (!upperBound || !lowerBound) return [];
+      if (upperBound == null || lowerBound == null) return [];
 
       const pitchRange = upperBound - lowerBound || 1;
       const pitchAttr = self.pitchAttr;
@@ -162,7 +162,7 @@ export const GraphSonificationModel = types
     get timeFractions() {
       const bounds = self.sonificationPrimaryBounds;
       const { upperBound, lowerBound } = bounds;
-      if (!upperBound || !lowerBound) return [];
+      if (upperBound == null || lowerBound == null) return [];
 
       const timeRange = upperBound - lowerBound || 1;
       return self.timeValues.map((value: number) => (value - lowerBound) / timeRange);
