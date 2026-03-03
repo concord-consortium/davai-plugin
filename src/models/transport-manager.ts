@@ -193,7 +193,7 @@ export class TransportManager {
   }
 
   get duration () {
-    return kDefaultDuration / this.speed * this.durationScale;
+    return (kDefaultDuration / this.speed) * this.durationScale;
   }
 
   setDurationScale(scale: number) {
