@@ -14,6 +14,12 @@ export interface IAdornmentData {
   value?: number;
 }
 
+export interface ISelectionListItem {
+  caseID: number;
+  collectionID: number;
+  collectionName: string;
+}
+
 export const getGraphComponents = async () => {
   const response = await codapInterface.sendRequest({ action: "get", resource: "componentList" }) as IResult;
   return response.values.filter((c: any) => c.type === "graph");
@@ -285,6 +291,19 @@ export const getDataContexts = async () => {
 export const sendCODAPRequest = async (request: any) => {
   const response = await codapInterface.sendRequest(request);
   return response;
+};
+
+export const getSelectionList = async (dataContextName: string): Promise<ISelectionListItem[]> => {
+  const response = await codapInterface.sendRequest({
+    action: "get",
+    resource: `dataContext[${dataContextName}].selectionList`
+  }) as IResult;
+
+  if (!response.success || !Array.isArray(response.values)) {
+    return [];
+  }
+
+  return response.values;
 };
 
 export const getGraphAdornments = async (graphId: number): Promise<IAdornmentData[]> => {

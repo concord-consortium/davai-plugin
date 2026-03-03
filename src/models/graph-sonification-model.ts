@@ -4,7 +4,10 @@ import { Attribute, CodapItem, CodapItemValues } from "../types";
 import { sendMessage, createTable, createItems, getDataContext } from "@concord-consortium/codap-plugin-api";
 import { CODAPGraphModel, ICODAPGraphModel } from "./codap-graph-model";
 import { BinModel } from "./bin-model";
-import { sendCODAPRequest, getGraphDetails, trimDataset, getCollectionItemsForAttributePair, getCollectionItemsForAttribute, getGraphAdornments, IAdornmentData } from "../utils/codap-api-utils";
+import {
+  sendCODAPRequest, getGraphDetails, trimDataset, getCollectionItemsForAttributePair,
+  getCollectionItemsForAttribute, getGraphAdornments, IAdornmentData, getSelectionList
+} from "../utils/codap-api-utils";
 import { removeRoiAdornment, isGraphSonifiable } from "../utils/graph-sonification-utils";
 import { leastSquaresLinearRegression } from "../utils/graph-utils";
 
@@ -34,7 +37,8 @@ export const GraphSonificationModel = types
     // a place to store the resulting frequencies and other data from
     // sonification calculations it is only used for debugging.
     sonificationData: undefined as ISonificationData | undefined,
-    adornmentData: undefined as IAdornmentData[] | undefined
+    adornmentData: undefined as IAdornmentData[] | undefined,
+    selectedCaseIds: [] as number[],
   }))
   .views((self) => ({
     get validGraphs() {
@@ -80,9 +84,20 @@ export const GraphSonificationModel = types
       const timeAttr = self.timeAttr;
       const pitchAttr = self.pitchAttr;
 
-      const validItems = pitchAttr && timeAttr
+      let validItems = pitchAttr && timeAttr
         ? self.graphItems.filter((item: CodapItem) => item.values[pitchAttr] !== "" && item.values[timeAttr] !== "")
         : self.graphItems.filter((item: CodapItem) => item.values[timeAttr] !== "");
+
+      // When cases are selected in CODAP, only include selected cases
+      if (self.selectedCaseIds.length > 0) {
+        const selectedIds = new Set(
+          self.selectedCaseIds.map((id: number) => String(id))
+        );
+        validItems = validItems.filter((item: CodapItem) => {
+          const segments = String(item.id).split("/");
+          return segments.some(seg => selectedIds.has(seg));
+        });
+      }
 
       return validItems;
     }
@@ -109,7 +124,7 @@ export const GraphSonificationModel = types
 
       const bounds = self.secondaryBounds;
       const { upperBound, lowerBound } = bounds;
-      if (!upperBound || !lowerBound) return [];
+      if (upperBound == null || lowerBound == null) return [];
 
       const pitchRange = upperBound - lowerBound || 1;
       const pitchAttr = self.pitchAttr;
@@ -118,10 +133,36 @@ export const GraphSonificationModel = types
     }
   })))
   .views((self) => ({
+    get sonificationPrimaryBounds() {
+      if (self.selectedCaseIds.length > 0 && self.timeValues.length > 0) {
+        const numericTimeValues = self.timeValues.filter(
+          (v: unknown): v is number => typeof v === "number"
+        );
+        if (numericTimeValues.length > 0) {
+          const dataMin = Math.min(...numericTimeValues);
+          const dataMax = Math.max(...numericTimeValues);
+
+          // Add padding so the sweep starts before and ends after the selected
+          // points, ensuring tones don't fall exactly at the transport boundaries.
+          // 2% of the full axis range keeps the indicator visually clearing each dot.
+          const axisLower = self.primaryBounds.lowerBound ?? dataMin;
+          const axisUpper = self.primaryBounds.upperBound ?? dataMax;
+          const padding = (axisUpper - axisLower) * 0.02;
+
+          return {
+            lowerBound: Math.max(dataMin - padding, axisLower),
+            upperBound: Math.min(dataMax + padding, axisUpper)
+          };
+        }
+      }
+      return self.primaryBounds;
+    }
+  }))
+  .views((self) => ({
     get timeFractions() {
-      const bounds = self.primaryBounds;
+      const bounds = self.sonificationPrimaryBounds;
       const { upperBound, lowerBound } = bounds;
-      if (!upperBound || !lowerBound) return [];
+      if (upperBound == null || lowerBound == null) return [];
 
       const timeRange = upperBound - lowerBound || 1;
       return self.timeValues.map((value: number) => (value - lowerBound) / timeRange);
@@ -142,6 +183,9 @@ export const GraphSonificationModel = types
     },
     clearGraphItems() {
       self.graphItems = undefined;
+    },
+    clearSelection() {
+      self.selectedCaseIds = [];
     }
   }))
   .actions((self) => ({
@@ -218,7 +262,22 @@ export const GraphSonificationModel = types
       self.adornmentData = yield getGraphAdornments(graphId);
     });
 
-    return { setGraphItems, setAdornments };
+    const fetchSelection = flow(function* () {
+      const dataContext = self.selectedGraph?.dataContext;
+      if (!dataContext) {
+        self.selectedCaseIds = [];
+        return;
+      }
+      try {
+        const result: Array<{ caseID: number }> = yield getSelectionList(dataContext);
+        self.selectedCaseIds = result.map((item) => item.caseID);
+      } catch (err) {
+        console.warn("Failed to fetch selection list:", err);
+        self.selectedCaseIds = [];
+      }
+    });
+
+    return { setGraphItems, setAdornments, fetchSelection };
   })
   .actions((self) => ({
     setSonificationData(data: ISonificationData) {
@@ -312,8 +371,10 @@ export const GraphSonificationModel = types
         (graphID) => {
           if (graphID !== undefined) {
             self.setGraphItems();
+            self.fetchSelection();
           } else {
             self.clearGraphItems();
+            self.clearSelection();
           }
         }
       ));

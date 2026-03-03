@@ -24,7 +24,8 @@ export const BinModel = types.model("BinModel", {
       // We subtract 1 because the calculations that result in totalNumberOfBins
       // often result in adding an extra bin.
       const numBins = defaultNumBins > 1 ? defaultNumBins - 1 : 1;
-      return (self.maxValue - self.minValue) / numBins;
+      const range = self.maxValue - self.minValue;
+      return range > 0 ? range / numBins : 1 / numBins;
     }
 
     const kNumBins = 4;

@@ -8,6 +8,10 @@ export interface ITransportEventScheduler {
 
 const kDefaultDuration = 5;
 
+// Small buffer added after the last scheduled event so the final tone can ring out
+// before the transport pauses.
+const kEndBuffer = 0.15;
+
 // Number of intervals to divide the duration into for scheduling
 export const kStepCount = 1000;
 
@@ -42,6 +46,7 @@ export class TransportManager {
   input: Tone.InputNode = this.pan;
 
   speed = 1;
+  durationScale = 1;
   state = Tone.getTransport().state;
   position = Tone.getTransport().seconds;
   looping = Tone.getTransport().loop;
@@ -49,7 +54,6 @@ export class TransportManager {
   animationFrameId: number | null = null;
   panScheduleId: number | null = null;
   endPauseScheduleId: number | null = null;
-  endCueTimeoutId: ReturnType<typeof setTimeout> | null = null;
 
   scheduledEventDisposers: (() => void)[] = [];
   transportEventScheduler: ITransportEventScheduler | null = null;
@@ -57,11 +61,13 @@ export class TransportManager {
   constructor() {
     makeObservable(this, {
       speed: observable,
+      durationScale: observable,
       state: observable,
       updateState: action,
       position: observable,
       setPosition: action,
       setSpeed: action,
+      setDurationScale: action,
       duration: computed,
       isPlaying: computed,
       isPaused: computed,
@@ -85,12 +91,14 @@ export class TransportManager {
     this.handleStart = this.handleStart.bind(this);
     this.handleStop = this.handleStop.bind(this);
     this.handlePause = this.handlePause.bind(this);
+    this.handleLoop = this.handleLoop.bind(this);
     transport.on("start", this.handleStart);
     transport.on("stop", this.handleStop);
     transport.on("pause", this.handlePause);
+    transport.on("loop", this.handleLoop);
 
     // Set the transport loop end to match the duration, in case looping is enabled
-    transport.loopEnd = this.duration;
+    transport.loopEnd = this.duration + kEndBuffer;
   }
 
   setTransportEventScheduler(scheduler: ITransportEventScheduler) {
@@ -105,7 +113,15 @@ export class TransportManager {
     }
     // We use the immediate time to get the current transport time without the lookAhead.
     // See tone-js.md for more details.
-    this.setPosition(Tone.getTransport().getSecondsAtTime(Tone.immediate()));
+    const rawPosition = Tone.getTransport().getSecondsAtTime(Tone.immediate());
+    // Guard against stale position reads from a previous play-through. When the
+    // transport restarts with a delayed start (kStartDelayTime), Tone.immediate() can
+    // briefly return a time before the new start, causing getSecondsAtTime to return
+    // the old paused position. During active playback, position should stay within
+    // [0, duration]. The transport pauses at the end, stopping this animation loop.
+    if (rawPosition >= 0 && rawPosition <= this.duration) {
+      this.setPosition(rawPosition);
+    }
     this.animationFrameId = requestAnimationFrame(this.stepAnimationFrame);
   }
 
@@ -113,13 +129,6 @@ export class TransportManager {
     if (this.animationFrameId != null) {
       cancelAnimationFrame(this.animationFrameId);
       this.animationFrameId = null;
-    }
-  }
-
-  clearEndCueTimeout() {
-    if (this.endCueTimeoutId != null) {
-      clearTimeout(this.endCueTimeoutId);
-      this.endCueTimeoutId = null;
     }
   }
 
@@ -143,6 +152,11 @@ export class TransportManager {
     this.stopAnimationFrame();
   }
 
+  handleLoop() {
+    // Play the "end" cue when the transport loops back to the beginning.
+    playCue("end");
+  }
+
   // Note: There is a bug in Tone.js where the underlying oscillator node can become
   // orphaned from the ToneOscillator. This results in the sound still playing after
   // the transport is paused or stopped. https://github.com/Tonejs/Tone.js/issues/1382
@@ -156,12 +170,7 @@ export class TransportManager {
     // transport.schedule() can fire multiple times near the end boundary, queuing
     // duplicate cues. The pause listener fires exactly once.
     if (this.isEnded) {
-      // Short delay so the last data tone can ring out before the audio cue
-      this.clearEndCueTimeout();
-      this.endCueTimeoutId = setTimeout(() => {
-        this.endCueTimeoutId = null;
-        playCue("end");
-      }, 250);
+      playCue("end");
     }
   }
 
@@ -184,7 +193,12 @@ export class TransportManager {
   }
 
   get duration () {
-    return kDefaultDuration / this.speed;
+    return (kDefaultDuration / this.speed) * this.durationScale;
+  }
+
+  setDurationScale(scale: number) {
+    this.durationScale = Math.max(scale, 0.05);
+    Tone.getTransport().loopEnd = this.duration + kEndBuffer;
   }
 
   get isPlaying() {
@@ -253,7 +267,7 @@ export class TransportManager {
     }
     this.endPauseScheduleId = Tone.getTransport().schedule((time) => {
       Tone.getTransport().pause(time);
-    }, this.duration);
+    }, this.duration + kEndBuffer);
   }
 
   dispose() {
@@ -261,6 +275,7 @@ export class TransportManager {
     Tone.getTransport().off("start", this.handleStart);
     Tone.getTransport().off("stop", this.handleStop);
     Tone.getTransport().off("pause", this.handlePause);
+    Tone.getTransport().off("loop", this.handleLoop);
     this.pan.dispose();
   }
 
@@ -276,12 +291,11 @@ export class TransportManager {
   }
 
   /**
-   * Clean up all playback-related state: scheduler-created resources,
-   * pending end-cue timeouts, and any in-progress audio cues.
+   * Clean up all playback-related state: scheduler-created resources
+   * and any in-progress audio cues.
    */
   private resetPlaybackState() {
     this.disposeSchedulers();
-    this.clearEndCueTimeout();
     cancelAllCues();
   }
 
@@ -298,16 +312,17 @@ export class TransportManager {
     // Dispose of scheduler resources, pending audio cue timeouts, and in-progress audio cues
     this.resetPlaybackState();
 
+    // Call the scheduler first so it can set durationScale before endPause/pan use duration
+    if (this.transportEventScheduler) {
+      const disposer = this.transportEventScheduler.scheduleTransportEvents(this);
+      this.addSchedulerDisposer(disposer);
+    }
+
     // Schedule the transport to pause at the end of the duration if necessary
     this.updateEndPause();
 
     // Schedule the pan ramping
     this.updateSyncedPan();
-
-    if (this.transportEventScheduler) {
-      const disposer = this.transportEventScheduler.scheduleTransportEvents(this);
-      this.addSchedulerDisposer(disposer);
-    }
   }
 
   //
@@ -325,6 +340,11 @@ export class TransportManager {
 
   playPause() {
     if (this.isEnded || this.isAtBeginning) {
+      // Reset position to 0 before scheduling so any MobX reactions triggered by
+      // scheduleTransportEvents (e.g. durationScale changes) see position=0
+      // instead of a stale ended position.
+      this.setPosition(0);
+
       // We call scheduleTransportEvents here to handle:
       // - the first time we are started
       // - when the speed is changed while it is stopped
@@ -365,7 +385,7 @@ export class TransportManager {
     this.speed = newSpeed;
 
     // In all cases we need to update the transport loop end to match the new duration
-    Tone.getTransport().loopEnd = this.duration;
+    Tone.getTransport().loopEnd = this.duration + kEndBuffer;
 
     if (this.isStopped) {
       // We reschedule the transport events when playback starts after it has
@@ -442,6 +462,7 @@ export class TransportManager {
     Tone.getTransport().cancel();
 
     this.resetPlaybackState();
+    this.setDurationScale(1);
 
     if (this.animationFrameId != null) {
       cancelAnimationFrame(this.animationFrameId);
