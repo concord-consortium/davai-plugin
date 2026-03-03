@@ -5,7 +5,10 @@ import { App } from "./App";
 import { mockAppConfig } from "../test-utils/mock-app-config";
 import { MockAppConfigProvider } from "../test-utils/app-config-provider";
 import { ShortcutsServiceProvider } from "../contexts/shortcuts-service-context";
+import { AriaLiveProvider } from "../contexts/aria-live-context";
+import { SpeechServiceProvider } from "../contexts/speech-service-context";
 import { mockTransportManager } from "../test-utils/mock-transport-manager";
+import { setupMockSpeechSynthesis, cleanupMockSpeechSynthesis } from "../test-utils/mock-speech-synthesis";
 
 jest.mock("../contexts/root-store-context", () => ({
   useRootStore: jest.fn(() => ({
@@ -40,11 +43,23 @@ jest.mock("../models/app-config-model", () => ({
 }));
 
 describe("test load app", () => {
+  beforeEach(() => {
+    setupMockSpeechSynthesis();
+  });
+
+  afterEach(() => {
+    cleanupMockSpeechSynthesis();
+  });
+
   it("renders without crashing", () => {
     render(
       <MockAppConfigProvider>
         <ShortcutsServiceProvider>
-          <App />
+          <AriaLiveProvider>
+            <SpeechServiceProvider>
+              <App />
+            </SpeechServiceProvider>
+          </AriaLiveProvider>
         </ShortcutsServiceProvider>
       </MockAppConfigProvider>
     );

@@ -1,8 +1,9 @@
 import { types } from "mobx-state-tree";
+import { when } from "mobx";
 import { codapInterface } from "@concord-consortium/codap-plugin-api";
 import { GraphSonificationModel, GraphSonificationModelType } from "./graph-sonification-model";
 import {
-  getCollectionItemsForAttributePair, getCollectionItemsForAttribute, getSelectionList
+  getCollectionItemsForAttributePair, getCollectionItemsForAttribute, getGraphDetails, getSelectionList
 } from "../utils/codap-api-utils";
 
 const mockAvailableGraphs = [
@@ -108,6 +109,9 @@ describe("GraphSonificationModel", () => {
     (codapInterface.sendRequest as jest.Mock).mockClear();
     (getSelectionList as jest.Mock).mockReset();
     (getSelectionList as jest.Mock).mockResolvedValue([]);
+    (getGraphDetails as jest.Mock).mockClear();
+    (getCollectionItemsForAttributePair as jest.Mock).mockClear();
+    (getCollectionItemsForAttribute as jest.Mock).mockClear();
 
     rootStore = RootStore.create({
       sonificationStore: {
@@ -155,7 +159,7 @@ describe("GraphSonificationModel", () => {
   it("should set selected graph and update graph items for scatter plot", async () => {
     await store.setGraphs();
     store.setSelectedGraphID(1);
-    await new Promise(resolve => setTimeout(resolve, 100));
+    await when(() => store.graphItems != null);
     expect(store.selectedGraphID).toBe(1);
     expect(store.graphItems).toBeDefined();
     expect(store.graphItems?.length).toBe(3);
@@ -165,23 +169,46 @@ describe("GraphSonificationModel", () => {
   it("should set selected graph and update graph items for dot plot", async () => {
     await store.setGraphs();
     store.setSelectedGraphID(3);
-    await new Promise(resolve => setTimeout(resolve, 100));
+    await when(() => store.graphItems != null);
     expect(store.selectedGraphID).toBe(3);
     expect(store.graphItems).toBeDefined();
     expect(store.graphItems?.length).toBe(3);
     expect(getCollectionItemsForAttribute).toHaveBeenCalledWith(mockDataContext, "x");
   });
 
+  it("should re-fetch graph items when attributes change on selected graph", async () => {
+    await store.setGraphs();
+    store.setSelectedGraphID(1);
+    await when(() => store.graphItems != null);
+
+    expect(getCollectionItemsForAttributePair).toHaveBeenCalledWith(mockDataContext, "x", "y");
+    (getCollectionItemsForAttributePair as jest.Mock).mockClear();
+
+    // Simulate attribute change: CODAP reports graph 1 now has yAttributeName "z" instead of "y"
+    (getGraphDetails as jest.Mock).mockResolvedValueOnce([
+      {
+        id: 1, name: "Graph 1", plotType: "scatterPlot", dataContext: "context1",
+        yAttributeName: "z", xAttributeName: "x"
+      },
+      ...mockAvailableGraphs.slice(1)
+    ]);
+    await store.setGraphs();
+    await when(() => (getCollectionItemsForAttributePair as jest.Mock)
+      .mock.calls.some(call => call[2] === "z"));
+
+    expect(getCollectionItemsForAttributePair).toHaveBeenCalledWith(mockDataContext, "x", "z");
+  });
+
   it("should only allow selecting sonifiable graphs", async () => {
     await store.setGraphs();
     // Graph 1 is sonifiable (scatterPlot)
     store.setSelectedGraphID(1);
-    await new Promise(resolve => setTimeout(resolve, 100));
+    await when(() => store.graphItems != null);
     expect(store.selectedGraphID).toBe(1);
 
     // Try to select a non-sonifiable graph
     store.setSelectedGraphID(999);
-    await new Promise(resolve => setTimeout(resolve, 100));
+    await when(() => store.selectedGraphID === undefined);
     expect(store.selectedGraphID).toBeUndefined();
   });
 

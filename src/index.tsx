@@ -4,6 +4,7 @@ import { App } from "./components/App";
 import { AppConfigProvider } from "./contexts/app-config-context";
 import { AriaLiveProvider } from "./contexts/aria-live-context";
 import { ShortcutsServiceProvider } from "./contexts/shortcuts-service-context";
+import { SpeechServiceProvider } from "./contexts/speech-service-context";
 import { RootStoreProvider } from "./contexts/root-store-context";
 
 import "./index.scss";
@@ -17,7 +18,9 @@ if (container) {
       <RootStoreProvider>
         <ShortcutsServiceProvider>
           <AriaLiveProvider>
-            <App />
+            <SpeechServiceProvider>
+              <App />
+            </SpeechServiceProvider>
           </AriaLiveProvider>
         </ShortcutsServiceProvider>
       </RootStoreProvider>
