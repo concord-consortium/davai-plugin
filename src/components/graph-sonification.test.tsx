@@ -1,6 +1,7 @@
 import React from "react";
+import { runInAction } from "mobx";
 import { types } from "mobx-state-tree";
-import { render, fireEvent, screen, waitFor } from "@testing-library/react";
+import { act, render, fireEvent, screen, waitFor } from "@testing-library/react";
 import { GraphSonification } from "./graph-sonification";
 import { GraphSonificationModelType } from "../models/graph-sonification-model";
 import { ICODAPGraph } from "../types";
@@ -10,6 +11,12 @@ import { RootStoreProvider } from "../contexts/root-store-context";
 import { IRootStore } from "../models/root-store";
 import { mockTransportManager } from "../test-utils/mock-transport-manager";
 import { loadCueBuffers } from "../utils/cue-audio-player";
+import { updateRoiAdornment } from "../utils/graph-sonification-utils";
+
+jest.mock("../utils/graph-sonification-utils", () => ({
+  createRoiAdornment: jest.fn(),
+  updateRoiAdornment: jest.fn(),
+}));
 
 jest.mock("../utils/cue-audio-player", () => ({
   loadCueBuffers: jest.fn().mockResolvedValue(undefined),
@@ -75,6 +82,9 @@ describe("GraphSonification Component", () => {
     mockSonificationStore.setGraphs();
     mockTransportManager.isPlaying = false;
     mockTransportManager.isAtBeginning = true;
+    mockTransportManager.isEnded = false;
+    mockTransportManager.position = 0;
+    mockTransportManager.duration = 5;
   });
 
   const renderGraphSonification = () => {
@@ -180,6 +190,44 @@ describe("GraphSonification Component", () => {
     fireEvent.change(graphSelect, { target: { value: 2 } });
     expect(graphSelect).toHaveValue("2");
     expect(mockSonificationStore.selectedGraphID).toBe(2);
+  });
+
+  describe("ROI adornment visibility", () => {
+    beforeEach(() => {
+      mockSonificationStore.setSelectedGraphID(1);
+    });
+
+    it("hides the ROI when sonification has ended", () => {
+      renderGraphSonification();
+      (updateRoiAdornment as jest.Mock).mockClear();
+
+      // Simulate the transport reaching the end of playback
+      act(() => runInAction(() => {
+        mockTransportManager.isPlaying = false;
+        mockTransportManager.isEnded = true;
+        mockTransportManager.position = 5;
+      }));
+
+      expect(updateRoiAdornment).toHaveBeenCalledWith(1, 0);
+    });
+
+    it("does not hide the ROI when paused mid-playback", () => {
+      renderGraphSonification();
+      (updateRoiAdornment as jest.Mock).mockClear();
+
+      act(() => runInAction(() => {
+        mockTransportManager.isPlaying = false;
+        mockTransportManager.isEnded = false;
+        mockTransportManager.position = 2.5;
+      }));
+
+      expect(updateRoiAdornment).toHaveBeenCalled();
+      // Should have been called with a non-zero fraction (not hidden)
+      const lastCall = (updateRoiAdornment as jest.Mock).mock.calls.at(-1);
+      expect(lastCall?.[0]).toBe(1); // graphID
+      expect(lastCall?.[1]).toBeGreaterThan(0);
+      expect(lastCall?.[1]).toBe(0.5); // position / duration = 2.5 / 5
+    });
   });
 
   describe("keyboard shortcut", () => {

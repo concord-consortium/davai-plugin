@@ -5,6 +5,9 @@ export const mockTransportManager = observable({
   looping: false,
   isPlaying: false,
   isAtBeginning: true,
+  isEnded: false,
+  position: 0,
+  duration: 5,
   playPause() {
     this.isPlaying = true;
     this.isAtBeginning = false;
