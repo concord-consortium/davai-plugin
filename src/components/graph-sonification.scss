@@ -59,9 +59,9 @@
         };
       }
 
-      // Ensures the focus ring appears when focus is set programmatically
-      // via .focus() (e.g. keyboard shortcut).
-      &:focus {
+      // Shows the focus ring only when focus was set via keyboard shortcut,
+      // not on mouse click. The class is added programmatically and removed on blur.
+      &.keyboard-focused:focus {
         outline: auto Highlight; // Firefox
         outline: auto -webkit-focus-ring-color; // Chrome, Safari, Edge
       }

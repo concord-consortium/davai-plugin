@@ -36,6 +36,7 @@ export const GraphSonification = observer(() => {
   const playPauseButtonRef = useRef<HTMLButtonElement>(null);
 
   const [showError, setShowError] = useState(false);
+  const [keyboardFocused, setKeyboardFocused] = useState(false);
 
   const selectedGraphID = selectedGraph?.id;
 
@@ -112,6 +113,7 @@ export const GraphSonification = observer(() => {
     return shortcutsService.registerShortcutHandler("sonifyGraph", (event) => {
       event.preventDefault();
 
+      setKeyboardFocused(true);
       playPauseButtonRef.current?.focus();
       playPauseButtonRef.current?.scrollIntoView({behavior: "smooth", block: "nearest"});
     }, { focus: true });
@@ -170,9 +172,10 @@ export const GraphSonification = observer(() => {
       <div className="sonification-buttons">
         <button
           ref={playPauseButtonRef}
-          className="play"
+          className={`play${keyboardFocused ? " keyboard-focused" : ""}`}
           data-testid="playback-button"
           onClick={handlePlayPause}
+          onBlur={() => setKeyboardFocused(false)}
           aria-disabled={!selectedGraphID}
         >
           { isPlaying ? <PauseIcon /> : <PlayIcon /> }
