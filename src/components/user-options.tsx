@@ -38,8 +38,8 @@ export const UserOptions: React.FC<IProps> = observer(function UserOptions({assi
   };
 
   return (
-    <div className="user-options control-panel" role="group" aria-labelledby="control-panel-heading">
-      <h2 id="control-panel-heading">Options</h2>
+    <div className="user-options control-panel" role="group" aria-labelledby="options-heading">
+      <h2 id="options-heading">Options</h2>
       <ReadAloudMenu createToggleOption={createToggleOption}/>
       <div className="control-panel-section" role="group" aria-labelledby="loading-indicators-heading">
         <h3 id="loading-indicators-heading">Loading Indicators</h3>
