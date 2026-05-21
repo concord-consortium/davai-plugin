@@ -109,6 +109,10 @@ jobs:
       - build_test
       - cypress
     runs-on: ubuntu-latest
+    permissions:
+      id-token: write
+      contents: read
+      deployments: write
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
@@ -118,7 +122,11 @@ jobs:
           # skip installing cypress since it isn't needed for just building
           # This decreases the deploy time quite a bit
           CYPRESS_INSTALL_BINARY: 0
-      - uses: concord-consortium/s3-deploy-action@v1
+      - uses: aws-actions/configure-aws-credentials@7474bc4690e29a8392af63c5b98e7449536d5c3a # v4
+        with:
+          role-to-assume: arn:aws:iam::612297603577:role/davai-plugin
+          aws-region: us-east-1
+      - uses: concord-consortium/s3-deploy-action@4909d521b8957b6f8015fc08a3609c95974bc1ca # v1
         id: s3-deploy
         env:
           REACT_APP_OPENAI_BASE_URL: ${{ secrets.REACT_APP_OPENAI_BASE_URL }}
@@ -127,8 +135,6 @@ jobs:
         with:
           bucket: models-resources
           prefix: davai-plugin
-          awsAccessKeyId: ${{ secrets.AWS_ACCESS_KEY_ID }}
-          awsSecretAccessKey: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
           githubToken: ${{ secrets.GITHUB_TOKEN }}
           deployRunUrl: https://codap3.concord.org/branch/main/index.html?sample=mammals&di=https://codap3.concord.org/davai-plugin/__deployPath__/index.html
           # Parameters to GHActions have to be strings, so a regular yaml array cannot
