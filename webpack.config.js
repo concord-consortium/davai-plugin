@@ -206,6 +206,7 @@ module.exports = (env, argv) => {
         LANGCHAIN_SERVER_URL: undefined,       // required env langchain server url
         REACT_APP_OPENAI_BASE_URL: null,       // optional openai url
         REACT_APP_OPENAI_API_KEY: null,        // optional openai api
+        ABLY_API_KEY: null,                    // optional ably api key
       }),
     ]
   };
