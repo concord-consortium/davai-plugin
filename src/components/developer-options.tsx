@@ -68,7 +68,6 @@ export const DeveloperOptionsComponent = observer(({assistantStore, createToggle
           >
             {appConfig.llmList.map((llm) => (
               <option
-                aria-selected={appConfig.llmId === JSON.stringify(llm)}
                 key={llm.id}
                 value={JSON.stringify(llm)}
               >

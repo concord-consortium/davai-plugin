@@ -160,8 +160,8 @@ export const GraphSonification = observer(() => {
   const { speed, looping, isPlaying, isAtBeginning } = transportManager;
 
   return (
-    <div className="graph-sonification control-panel" role="group" aria-labelledby="control-panel-heading">
-      <h2 id="control-panel-heading">Sonification</h2>
+    <div className="graph-sonification control-panel" role="group" aria-labelledby="sonification-heading">
+      <h2 id="sonification-heading">Sonification</h2>
       <div className="graph-selection">
         <label htmlFor="graph-select">Graph to sonify:</label>
         <select id="graph-select" value={selectedGraphID || ""} onChange={(e) => handleSelectGraph(e.target.value)}>
