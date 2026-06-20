@@ -9,11 +9,19 @@
   "playProcessingTone": false,
   "playbackSpeed": 1,
   "readAloudEnabled": false,
-  "llmId": "{\"id\":\"gpt-4o-mini\",\"provider\":\"OpenAI\"}",
+  "llmId": "{\"id\":\"claude-haiku-4-5\",\"provider\":\"Anthropic\"}",
   "llmList": [
     {
       "id": "mock",
       "provider": "Mock"
+    },
+    {
+      "id": "gemini-3.5-flash",
+      "provider": "Google"
+    },
+    {
+      "id": "gemini-3.1-flash-lite",
+      "provider": "Google"
     },
     {
       "id": "gemini-3-flash-preview",
@@ -28,11 +36,11 @@
       "provider": "Google"
     },
     {
-      "id": "gemini-2.0-flash",
+      "id": "gemma-4-31b-it",
       "provider": "Google"
     },
     {
-      "id": "gemini-1.5-flash",
+      "id": "gemma-4-26b-a4b-it",
       "provider": "Google"
     },
     {
