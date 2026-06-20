@@ -40,6 +40,10 @@
       "provider": "OpenAI"
     },
     {
+      "id": "gpt-4o-mini",
+      "provider": "OpenAI"
+    },
+    {
       "id": "claude-haiku-4-5",
       "provider": "Anthropic"
     },
