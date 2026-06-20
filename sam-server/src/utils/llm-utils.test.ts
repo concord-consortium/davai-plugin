@@ -100,6 +100,16 @@ describe("createModelInstance", () => {
     expect(model.constructor.name).toBe("ChatAnthropic");
   });
 
+  it("should omit top_p for Anthropic models (newer Claude models reject temperature+top_p together)", async () => {
+    await createModelInstance(JSON.stringify({ id: "claude-sonnet-4-6", provider: "Anthropic" }));
+
+    const callArgs = (ChatAnthropic as unknown as jest.Mock).mock.calls[0][0];
+    expect(callArgs.temperature).toBe(0);
+    // top_p is overridden to undefined via invocationKwargs so it is omitted from the request.
+    expect(Object.keys(callArgs.invocationKwargs)).toContain("top_p");
+    expect(callArgs.invocationKwargs.top_p).toBeUndefined();
+  });
+
   it("should throw an error for unsupported providers", async () => {
     const llmId = JSON.stringify({ id: "unknown", provider: "Unsupported" });
 

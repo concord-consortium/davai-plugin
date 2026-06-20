@@ -74,6 +74,11 @@ export const createModelInstance = async (llm: string) => {
     return new ChatAnthropic({
       model: id,
       temperature: 0,
+      // @langchain/anthropic 0.3.x always sends top_p (default sentinel -1). Newer
+      // Claude models reject `top_p: -1` AND reject temperature+top_p together, so we
+      // override top_p to undefined via invocationKwargs (which is spread last into the
+      // messages.create() request) to omit it entirely and send only temperature.
+      invocationKwargs: { top_p: undefined },
       apiKey,
     });
   }
