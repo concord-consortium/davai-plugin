@@ -140,7 +140,7 @@ describe("createModelInstance", () => {
 describe("createModelInstance temperature handling", () => {
   // Reasoning models (gpt-5 family, o-series) reject any non-default temperature,
   // so they must be built with the only supported value (1) rather than 0.
-  it.each(["gpt-5-mini", "gpt-5-nano", "o3-mini", "o1"])(
+  it.each(["gpt-5.5", "gpt-5.4", "gpt-5.4-nano", "o3-mini", "o1"])(
     "builds reasoning OpenAI model %s with temperature 1",
     async (id) => {
       await createModelInstance(JSON.stringify({ id, provider: "OpenAI" }));

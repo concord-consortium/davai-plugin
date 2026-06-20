@@ -16,18 +16,6 @@
       "provider": "Mock"
     },
     {
-      "id": "gemini-3.5-flash",
-      "provider": "Google"
-    },
-    {
-      "id": "gemini-3.1-flash-lite",
-      "provider": "Google"
-    },
-    {
-      "id": "gemini-3-flash-preview",
-      "provider": "Google"
-    },
-    {
       "id": "gemini-2.5-flash",
       "provider": "Google"
     },
@@ -36,35 +24,19 @@
       "provider": "Google"
     },
     {
-      "id": "gemma-4-31b-it",
-      "provider": "Google"
-    },
-    {
-      "id": "gemma-4-26b-a4b-it",
-      "provider": "Google"
-    },
-    {
-      "id": "gpt-5-mini",
+      "id": "gpt-5.5",
       "provider": "OpenAI"
     },
     {
-      "id": "gpt-5-nano",
+      "id": "gpt-5.4",
       "provider": "OpenAI"
     },
     {
-      "id": "gpt-4o-mini",
+      "id": "gpt-5.4-mini",
       "provider": "OpenAI"
     },
     {
-      "id": "gpt-4o",
-      "provider": "OpenAI"
-    },
-    {
-      "id": "gpt-4.1",
-      "provider": "OpenAI"
-    },
-    {
-      "id": "gpt-4.1-mini",
+      "id": "gpt-5.4-nano",
       "provider": "OpenAI"
     },
     {
@@ -73,10 +45,6 @@
     },
     {
       "id": "claude-sonnet-4-6",
-      "provider": "Anthropic"
-    },
-    {
-      "id": "claude-opus-4-6",
       "provider": "Anthropic"
     },
     {
