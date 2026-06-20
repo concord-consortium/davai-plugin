@@ -110,6 +110,26 @@ describe("createModelInstance", () => {
     expect(callArgs.invocationKwargs.top_p).toBeUndefined();
   });
 
+  it("should keep temperature 0 for Opus 4.6 and earlier (still accept sampling params)", async () => {
+    await createModelInstance(JSON.stringify({ id: "claude-opus-4-6", provider: "Anthropic" }));
+
+    const callArgs = (ChatAnthropic as unknown as jest.Mock).mock.calls[0][0];
+    expect(callArgs.temperature).toBe(0);
+    expect(callArgs.invocationKwargs.top_p).toBeUndefined();
+  });
+
+  it("should omit all sampling params for Opus 4.7+ (which reject temperature/top_p/top_k)", async () => {
+    await createModelInstance(JSON.stringify({ id: "claude-opus-4-8", provider: "Anthropic" }));
+
+    const callArgs = (ChatAnthropic as unknown as jest.Mock).mock.calls[0][0];
+    // No temperature passed to the constructor; all three sampling params overridden to undefined.
+    expect(callArgs.temperature).toBeUndefined();
+    expect(Object.keys(callArgs.invocationKwargs).sort()).toEqual(["temperature", "top_k", "top_p"]);
+    expect(callArgs.invocationKwargs.temperature).toBeUndefined();
+    expect(callArgs.invocationKwargs.top_p).toBeUndefined();
+    expect(callArgs.invocationKwargs.top_k).toBeUndefined();
+  });
+
   it("should throw an error for unsupported providers", async () => {
     const llmId = JSON.stringify({ id: "unknown", provider: "Unsupported" });
 

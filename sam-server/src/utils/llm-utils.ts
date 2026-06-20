@@ -47,6 +47,11 @@ const promptTemplate = ChatPromptTemplate.fromMessages([
 // supported value (1) rather than the 0 we use for standard chat models.
 const isOpenAIReasoningModel = (id: string) => /^(gpt-5|o\d)/i.test(id);
 
+// Opus 4.7+ removed the sampling parameters entirely — sending temperature, top_p, or
+// top_k returns a 400. (Opus 4.6 and earlier still accept temperature.) The 0.3.x library
+// always sends all three, so for these models we override them to undefined to omit them.
+const isAnthropicNoSamplingModel = (id: string) => /^claude-opus-4-(?:[7-9]|\d\d)/.test(id);
+
 export const createModelInstance = async (llm: string) => {
   const llmObj = JSON.parse(llm);
   const { id, provider } = llmObj;
@@ -71,13 +76,21 @@ export const createModelInstance = async (llm: string) => {
 
   if (provider === "Anthropic") {
     const apiKey = await getAnthropicKey();
+    if (isAnthropicNoSamplingModel(id)) {
+      // Opus 4.7+ reject temperature/top_p/top_k entirely; omit all sampling params.
+      return new ChatAnthropic({
+        model: id,
+        invocationKwargs: { temperature: undefined, top_p: undefined, top_k: undefined },
+        apiKey,
+      });
+    }
     return new ChatAnthropic({
       model: id,
       temperature: 0,
-      // @langchain/anthropic 0.3.x always sends top_p (default sentinel -1). Newer
-      // Claude models reject `top_p: -1` AND reject temperature+top_p together, so we
-      // override top_p to undefined via invocationKwargs (which is spread last into the
-      // messages.create() request) to omit it entirely and send only temperature.
+      // @langchain/anthropic 0.3.x always sends top_p (default sentinel -1). Newer Claude
+      // models reject `top_p: -1` AND reject temperature+top_p together, so we override
+      // top_p to undefined via invocationKwargs (spread last into messages.create()) to
+      // omit it and send only temperature.
       invocationKwargs: { top_p: undefined },
       apiKey,
     });
