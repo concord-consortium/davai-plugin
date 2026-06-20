@@ -63,9 +63,11 @@ export const handler = async (event: SQSEvent): Promise<SQSBatchResponse> => {
   const batchItemFailures: SQSBatchItemFailure[] = [];
 
   for (const record of event.Records) {
+    let messageId: string | undefined;
     try {
       const body = JSON.parse(record.body);
-      const { messageId } = body;
+      messageId = body.messageId;
+      if (!messageId) continue;
 
       const controller = new AbortController();
       runningJobs.set(messageId, { abort: () => controller.abort() });
@@ -143,9 +145,23 @@ export const handler = async (event: SQSEvent): Promise<SQSBatchResponse> => {
       }
     } catch (error) {
       console.error(`Error processing job:`, error);
-      batchItemFailures.push({
-        itemIdentifier: record.messageId
-      });
+      // Mark the job as failed so the client surfaces a real error immediately
+      // instead of polling until it times out. These errors are typically
+      // deterministic (e.g. an unsupported model parameter), so we do not retry
+      // via SQS (no batchItemFailures entry).
+      if (messageId) {
+        const message = error instanceof Error ? error.message : String(error);
+        try {
+          await pool.query(
+            `UPDATE jobs
+            SET status = $1, output = $2, updated_at = NOW()
+            WHERE message_id = $3`,
+            ["error", { error: message }, messageId]
+          );
+        } catch (dbError) {
+          console.error(`Failed to mark job ${messageId} as errored:`, dbError);
+        }
+      }
     }
   }
 

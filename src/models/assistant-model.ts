@@ -216,6 +216,10 @@ export const AssistantModel = types
           } else if (status === "cancelled") {
             self.addDbgMsg("Tool call job was cancelled on the server", messageId);
             return;
+          } else if (status === "error") {
+            self.addDbgMsg("Server error processing tool output", output?.error || "Unknown error");
+            self.addDavaiMsg("Sorry, I ran into an error processing that request.");
+            return;
           }
 
           yield new Promise((res) => setTimeout(res, 1000));
@@ -287,6 +291,10 @@ export const AssistantModel = types
               break;
             } else if (status === "cancelled") {
               self.addDbgMsg("Job was cancelled on the server", messageId);
+              return;
+            } else if (status === "error") {
+              self.addDbgMsg("Server error processing message", output?.error || "Unknown error");
+              self.addDavaiMsg("Sorry, I ran into an error processing that request.");
               return;
             }
 

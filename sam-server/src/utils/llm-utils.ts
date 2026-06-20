@@ -42,6 +42,11 @@ const promptTemplate = ChatPromptTemplate.fromMessages([
     ["placeholder", "{messages}"],
 ]);
 
+// OpenAI reasoning models (the gpt-5 family and the o-series) reject any
+// non-default temperature, returning a 400. They must be created with the only
+// supported value (1) rather than the 0 we use for standard chat models.
+const isOpenAIReasoningModel = (id: string) => /^(gpt-5|o\d)/i.test(id);
+
 export const createModelInstance = async (llm: string) => {
   const llmObj = JSON.parse(llm);
   const { id, provider } = llmObj;
@@ -50,7 +55,7 @@ export const createModelInstance = async (llm: string) => {
     const apiKey = await getOpenAIKey();
     return new ChatOpenAI({
       model: id,
-      temperature: 0,
+      temperature: isOpenAIReasoningModel(id) ? 1 : 0,
       apiKey,
     });
   }

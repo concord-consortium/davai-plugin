@@ -107,6 +107,30 @@ describe("createModelInstance", () => {
   });
 });
 
+describe("createModelInstance temperature handling", () => {
+  // Reasoning models (gpt-5 family, o-series) reject any non-default temperature,
+  // so they must be built with the only supported value (1) rather than 0.
+  it.each(["gpt-5-mini", "gpt-5-nano", "o3-mini", "o1"])(
+    "builds reasoning OpenAI model %s with temperature 1",
+    async (id) => {
+      await createModelInstance(JSON.stringify({ id, provider: "OpenAI" }));
+      expect(ChatOpenAI).toHaveBeenCalledWith(
+        expect.objectContaining({ model: id, temperature: 1 })
+      );
+    }
+  );
+
+  it.each(["gpt-4o-mini", "gpt-4o", "gpt-4.1-mini"])(
+    "builds non-reasoning OpenAI model %s with temperature 0",
+    async (id) => {
+      await createModelInstance(JSON.stringify({ id, provider: "OpenAI" }));
+      expect(ChatOpenAI).toHaveBeenCalledWith(
+        expect.objectContaining({ model: id, temperature: 0 })
+      );
+    }
+  );
+});
+
 describe("getOrCreateModelInstance", () => {
   it("should bind OpenAI models with parallel_tool_calls disabled", async () => {
     const llmId = JSON.stringify({ id: "gpt-4o", provider: "OpenAI" });
