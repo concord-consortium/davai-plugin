@@ -103,14 +103,12 @@ export const getOrCreateModelInstance = async (llmId: string): Promise<any> => {
   if (!llmInstances[llmId]) {
     const model = await createModelInstance(llmId);
     const { provider } = JSON.parse(llmId);
-    const bindOptions: Record<string, any> = { tools };
-    if (provider === "Anthropic") {
-      // Anthropic uses disable_parallel_tool_use in tool_choice instead of parallel_tool_calls
-      bindOptions.tool_choice = { type: "auto", disable_parallel_tool_use: true };
-    } else {
-      bindOptions.parallel_tool_calls = false;
-    }
-    llmInstances[llmId] = model.bind(bindOptions);
+    const callOptions: Record<string, any> =
+      provider === "Anthropic"
+        // Anthropic uses disable_parallel_tool_use in tool_choice instead of parallel_tool_calls
+        ? { tool_choice: { type: "auto", disable_parallel_tool_use: true } }
+        : { parallel_tool_calls: false };
+    llmInstances[llmId] = (model as any).bindTools(tools, callOptions);
   }
 
   return llmInstances[llmId];

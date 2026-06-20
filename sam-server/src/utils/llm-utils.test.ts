@@ -32,6 +32,7 @@ jest.mock("@langchain/openai", () => ({
     constructor: { name: "ChatOpenAI" },
     invoke: jest.fn(() => ({ response: "Mocked response from OpenAI" })),
     bind: jest.fn(),
+    bindTools: jest.fn(),
   })),
   OpenAIEmbeddings: jest.fn(() => ({
     embedQuery: jest.fn(),
@@ -44,6 +45,7 @@ jest.mock("@langchain/google-genai", () => ({
     constructor: { name: "ChatGoogleGenerativeAI" },
     invoke: jest.fn(() => ({ response: "Mocked response from Google Generative AI" })),
     bind: jest.fn(),
+    bindTools: jest.fn(),
   })),
 }));
 
@@ -52,6 +54,7 @@ jest.mock("@langchain/anthropic", () => ({
     constructor: { name: "ChatAnthropic" },
     invoke: jest.fn(() => ({ response: "Mocked response from Anthropic" })),
     bind: jest.fn(),
+    bindTools: jest.fn(),
   })),
 }));
 
@@ -167,7 +170,8 @@ describe("getOrCreateModelInstance", () => {
     await getOrCreateModelInstance(llmId);
 
     const mockInstance = (ChatOpenAI as unknown as jest.Mock).mock.results[0].value;
-    expect(mockInstance.bind).toHaveBeenCalledWith(
+    expect(mockInstance.bindTools).toHaveBeenCalledWith(
+      expect.any(Array),
       expect.objectContaining({ parallel_tool_calls: false })
     );
   });
@@ -177,7 +181,8 @@ describe("getOrCreateModelInstance", () => {
     await getOrCreateModelInstance(llmId);
 
     const mockInstance = (ChatGoogleGenerativeAI as unknown as jest.Mock).mock.results[0].value;
-    expect(mockInstance.bind).toHaveBeenCalledWith(
+    expect(mockInstance.bindTools).toHaveBeenCalledWith(
+      expect.any(Array),
       expect.objectContaining({ parallel_tool_calls: false })
     );
   });
@@ -187,12 +192,14 @@ describe("getOrCreateModelInstance", () => {
     await getOrCreateModelInstance(llmId);
 
     const mockInstance = (ChatAnthropic as unknown as jest.Mock).mock.results[0].value;
-    expect(mockInstance.bind).toHaveBeenCalledWith(
+    expect(mockInstance.bindTools).toHaveBeenCalledWith(
+      expect.any(Array),
       expect.objectContaining({
         tool_choice: { type: "auto", disable_parallel_tool_use: true }
       })
     );
-    expect(mockInstance.bind).toHaveBeenCalledWith(
+    expect(mockInstance.bindTools).toHaveBeenCalledWith(
+      expect.any(Array),
       expect.not.objectContaining({ parallel_tool_calls: expect.anything() })
     );
   });

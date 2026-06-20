@@ -9,13 +9,13 @@ import { createRequestTool,
 describe("createRequestTool", () => {
   it("should return a JSON string with action, resource, and values", async () => {
     const params = { action: "create", resource: "dataset", values: { name: "test" } };
-    const result = await createRequestTool.func(JSON.stringify(params));
+    const result = await createRequestTool.func(JSON.stringify(params)) as string;
     expect(JSON.parse(result)).toEqual(params);
   });
 
   it("should handle missing values", async () => {
     const params = { action: "delete", resource: "dataset" };
-    const result = await createRequestTool.func(JSON.stringify(params));
+    const result = await createRequestTool.func(JSON.stringify(params)) as string;
     expect(JSON.parse(result)).toEqual({ ...params, values: undefined });
   });
 });
@@ -23,7 +23,7 @@ describe("createRequestTool", () => {
 describe("sonifyGraphTool", () => {
   it("should return a JSON string with graphID", async () => {
     const params = { graphID: 42 };
-    const result = await sonifyGraphTool.func(JSON.stringify(params));
+    const result = await sonifyGraphTool.func(JSON.stringify(params)) as string;
     expect(JSON.parse(result)).toEqual(params);
   });
 });
