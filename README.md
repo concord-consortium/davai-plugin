@@ -4,16 +4,16 @@ The Data Analysis through Voice and Artificial Intelligence (DAVAI) CODAP plugin
 
 ## Development
 
-The code consists of a React-based client app (in `/src`) and a Node-based server app (in `/server`).
+The code consists of a React-based client app (in `/src`) and an AWS SAM / Lambda backend (in `/sam-server`) that brokers all LLM calls. During development you run the **client** locally; the **server** is a deployed AWS stack — you do not run it locally. See [Environments and the LLM server](#environments-and-the-llm-server) below.
 
 ### Initial steps
 
 1. Clone this repo and `cd` into it
 2. Run `npm install` to pull dependencies
 3. Run `npm start` to run `webpack-dev-server` in development mode with hot module replacement
-4. In a separate terminal, `cd` into the `/server` directory
-5. Run `npm install` to pull dependencies
-6. Run `npm start` to start the server app
+4. Load the plugin into CODAP (see [Testing the plugin in CODAP](#testing-the-plugin-in-codap) below)
+
+To work on the client without any server or API keys, enable development mode (append `?mode=development` to the plugin URL, or set `davai:mode | development` in local storage) and choose **Mock LLM** from the model picker in the Developer Options panel. In mock mode the client returns canned assistant replies and never calls the server — ideal for UI, sonification, voice input, and CODAP-integration work. To exercise a real LLM, point the client at a deployed server (see [Environments and the LLM server](#environments-and-the-llm-server)).
 
 ## Testing the plugin in CODAP
 
@@ -38,6 +38,34 @@ to see the plugin running in CODAP.
 5. In CODAP, go to **Options** > **Load web page**, and enter the local DAVAI plugin URL (for example, `http://localhost:8081/?mode=development`).
 
 This method allows you to test the plugin locally in CODAP, bypassing browser security restrictions that normally prevent loading local resources.
+
+## Environments and the LLM server
+
+All LLM calls go through the server in [`/sam-server`](sam-server), an AWS SAM / Lambda app; the client never calls an LLM provider directly. There are three independent, manually-deployed server stacks — **production**, **staging-a**, and **staging-b** — each with its own Lambdas, database, and secrets. See [docs/deploy.md](docs/deploy.md) for how each is deployed.
+
+### How the client picks a server
+
+The client reads two values **at build time** and bakes them into the bundle (via webpack's `EnvironmentPlugin`):
+
+- `LANGCHAIN_SERVER_URL` — the server's base URL
+- `AUTH_TOKEN` — must match that server stack's `DAVAI_API_SECRET`
+
+There is **no runtime override**: the server a build talks to is fixed when it is built. The values come from:
+
+- **Local builds** (`npm start` / `npm run build`): your `.env` file (gitignored — copy `.env.example`). Set `LANGCHAIN_SERVER_URL` + `AUTH_TOKEN` to the stack you want (commonly staging-a). Stack names are in [`sam-server/samconfig.toml`](sam-server/samconfig.toml); get the actual endpoint URLs and tokens from the team and **do not commit them**.
+- **CI builds**: a single shared `LANGCHAIN_SERVER_URL` GitHub Actions secret, used for every branch.
+
+### Two independent choices when developing
+
+1. **Mock vs. real LLM.** The `Mock` provider (selectable in Developer Options) makes the client return canned replies and never contact the server — fully client-side, no keys. Use it for UI, sonification, voice, and CODAP-integration work.
+2. **Which server a real-LLM build talks to.** Set `LANGCHAIN_SERVER_URL` in `.env` to a deployed **staging** stack (staging-a/b) for development and testing, or **prod**. You always run the client locally during development; only the server location changes.
+
+### Which server is each build using?
+
+- The deployed **`main`** build — and, because CI uses one shared secret, **every branch preview** — points at the **production** server.
+- A local `npm start` points wherever your `.env` says (commonly **staging-a**).
+
+So a branch preview deployed by CI talks to **production**, not staging. There is currently **no shareable URL** of a branch's frontend that points at a staging server. If you need one, build locally with a staging `.env` (`npm run build`) and host the static `dist/` on any **https** host (CODAP requires https), then load it in CODAP via `di=<that-url>`.
 
 ## Configuration Settings
 
