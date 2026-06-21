@@ -16,6 +16,18 @@
       "provider": "Mock"
     },
     {
+      "id": "gemini-3-pro",
+      "provider": "Google"
+    },
+    {
+      "id": "gemini-3.5-flash",
+      "provider": "Google"
+    },
+    {
+      "id": "gemini-3-flash-preview",
+      "provider": "Google"
+    },
+    {
       "id": "gemini-2.5-flash",
       "provider": "Google"
     },
