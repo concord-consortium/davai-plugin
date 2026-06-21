@@ -18,8 +18,8 @@ jobs:
         run: npm run build
         env:
           REACT_APP_OPENAI_BASE_URL: ${{ secrets.REACT_APP_OPENAI_BASE_URL }}
-          LANGCHAIN_SERVER_URL: ${{ secrets.LANGCHAIN_SERVER_URL }}
-          AUTH_TOKEN: ${{ secrets.AUTH_TOKEN }}
+          LANGCHAIN_SERVER_URL: ${{ startsWith(github.ref, 'refs/tags/') && secrets.LANGCHAIN_SERVER_URL || secrets.STAGING_LANGCHAIN_SERVER_URL }}
+          AUTH_TOKEN: ${{ startsWith(github.ref, 'refs/tags/') && secrets.AUTH_TOKEN || secrets.STAGING_AUTH_TOKEN }}
       - name: Generate docs
         run: npm run gen:config-docs
       - name: Verify docs up to date
@@ -96,8 +96,8 @@ jobs:
           # by default.
           CYPRESS_coverage: true
           # Environment variables needed when running `npm start`
-          LANGCHAIN_SERVER_URL: ${{ secrets.LANGCHAIN_SERVER_URL }}
-          AUTH_TOKEN: ${{ secrets.AUTH_TOKEN }}
+          LANGCHAIN_SERVER_URL: ${{ startsWith(github.ref, 'refs/tags/') && secrets.LANGCHAIN_SERVER_URL || secrets.STAGING_LANGCHAIN_SERVER_URL }}
+          AUTH_TOKEN: ${{ startsWith(github.ref, 'refs/tags/') && secrets.AUTH_TOKEN || secrets.STAGING_AUTH_TOKEN }}
       - name: Upload coverage to Codecov
         uses: codecov/codecov-action@v4
         with:
@@ -130,8 +130,8 @@ jobs:
         id: s3-deploy
         env:
           REACT_APP_OPENAI_BASE_URL: ${{ secrets.REACT_APP_OPENAI_BASE_URL }}
-          LANGCHAIN_SERVER_URL: ${{ secrets.LANGCHAIN_SERVER_URL }}
-          AUTH_TOKEN: ${{ secrets.AUTH_TOKEN }}
+          LANGCHAIN_SERVER_URL: ${{ startsWith(github.ref, 'refs/tags/') && secrets.LANGCHAIN_SERVER_URL || secrets.STAGING_LANGCHAIN_SERVER_URL }}
+          AUTH_TOKEN: ${{ startsWith(github.ref, 'refs/tags/') && secrets.AUTH_TOKEN || secrets.STAGING_AUTH_TOKEN }}
         with:
           bucket: models-resources
           prefix: davai-plugin
