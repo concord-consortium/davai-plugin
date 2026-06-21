@@ -6,7 +6,7 @@ Releases — promoting a built version's `index-top.html` to top-level `index.ht
 
 ## The frontend's server URL
 
-The client talks to the LLM backend at a URL baked in **at build time** from the `LANGCHAIN_SERVER_URL` environment variable (with `AUTH_TOKEN` for auth), via webpack's `EnvironmentPlugin`. There is no runtime override. In CI this comes from a **single shared `LANGCHAIN_SERVER_URL` GitHub Actions secret**, so every build CI produces — `main` and all branch previews alike — bakes in the **same** server URL (currently the **production** stack). There is no per-branch server. See [Environments and the LLM server](../README.md#environments-and-the-llm-server) for the developer-facing view.
+The client talks to the LLM backend at a URL baked in **at build time** from the `LANGCHAIN_SERVER_URL` environment variable (with `AUTH_TOKEN` for auth), via webpack's `EnvironmentPlugin`. There is no runtime override. In CI the value is **chosen by git ref**: **version tags** (production releases) use the prod `LANGCHAIN_SERVER_URL` / `AUTH_TOKEN` secrets, while **every other ref — all branches, including `main`** — uses the `STAGING_LANGCHAIN_SERVER_URL` / `STAGING_AUTH_TOKEN` secrets (staging-a). So branch previews talk to **staging-a** and only a **tagged release** talks to **prod**. See [Environments and the LLM server](../README.md#environments-and-the-llm-server) for the developer-facing view.
 
 ## Server (sam-server) deployment
 
@@ -22,11 +22,11 @@ The exact endpoints, database names, and parameters per stack are in [`../sam-se
 
 ## Promoting a change to production
 
-Frontend and server promote through **separate** paths, and there is no atomic frontend+server release:
+Frontend and server promote through **separate** paths, and there is no atomic frontend+server release. Because only a **tagged release** points the frontend at the prod server, deploy the server first:
 
-1. **Frontend** — merge the branch to `main` (PR). CI builds and deploys it to `branch/main/`. To cut the canonical released `index.html`, run the manual **Release** workflow (above) with a git tag.
-2. **Server** — merging to `main` does **nothing** to any server. Separately run `npm run sam:deploy` (from `sam-server/`) to deploy your changes to the production stack `davai-server`, plus any production DB migration.
-3. **Sequence for compatibility** — production is live and shared, and `sam deploy` takes effect immediately. Deploy backward-compatible server changes before the frontend that depends on them, and validate on staging-a/b first.
+1. **Server first** — deploy any required server changes to production: from `sam-server/`, `npm run sam:build` then `npm run sam:deploy` (the `[default]` / `davai-server` stack), plus any production DB migration. Validate on staging-a first. (Merging to `main` does **nothing** to any server.)
+2. **Then tag & release the frontend** — push a version tag; its CI build bakes in the **prod** server URL (branch builds, including `branch/main/`, point at staging-a). Run the manual **Release** workflow (above) to promote that tagged build to the production `index.html`.
+3. **Why this order** — production is live and shared, and the released frontend hits prod immediately. If you tag before the prod server is updated, the new frontend talks to an out-of-date server. Deploy backward-compatible server changes ahead of the frontend that depends on them.
 
 ## AWS Access
 

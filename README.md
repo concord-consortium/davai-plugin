@@ -53,7 +53,7 @@ The client reads two values **at build time** and bakes them into the bundle (vi
 There is **no runtime override**: the server a build talks to is fixed when it is built. The values come from:
 
 - **Local builds** (`npm start` / `npm run build`): your `.env` file (gitignored — copy `.env.example`). Set `LANGCHAIN_SERVER_URL` + `AUTH_TOKEN` to the stack you want (commonly staging-a). Stack names are in [`sam-server/samconfig.toml`](sam-server/samconfig.toml); get the actual endpoint URLs and tokens from the team and **do not commit them**.
-- **CI builds**: a single shared `LANGCHAIN_SERVER_URL` GitHub Actions secret, used for every branch.
+- **CI builds**: chosen by git ref in [`.github/workflows/ci.yml`](.github/workflows/ci.yml) — **version tags** (production releases) use the prod `LANGCHAIN_SERVER_URL` / `AUTH_TOKEN` secrets; **all other refs (branches, including `main`)** use the `STAGING_LANGCHAIN_SERVER_URL` / `STAGING_AUTH_TOKEN` secrets (staging-a).
 
 ### Two independent choices when developing
 
@@ -62,10 +62,20 @@ There is **no runtime override**: the server a build talks to is fixed when it i
 
 ### Which server is each build using?
 
-- The deployed **`main`** build — and, because CI uses one shared secret, **every branch preview** — points at the **production** server.
-- A local `npm start` points wherever your `.env` says (commonly **staging-a**).
+- **Local `npm start` / `npm run build`** → wherever your `.env` says. **Point it at staging-a** — this is the recommended target for testing local changes against a real LLM. (Copy `.env.example`; get the staging-a `LANGCHAIN_SERVER_URL` + `AUTH_TOKEN` from the team, and do not commit them.)
+- **CI branch builds** (every branch, including `main`'s `branch/main/` preview) → **staging-a**. Pushing a branch produces a shareable preview at `…/davai-plugin/branch/<branch>/index.html` that talks to staging-a, so reviewers can try your changes end-to-end.
+- **CI release builds** (a version **tag**, promoted to the production `index.html` by the Release workflow) → **production**. This is the only build that talks to the prod server.
 
-So a branch preview deployed by CI talks to **production**, not staging. There is currently **no shareable URL** of a branch's frontend that points at a staging server. If you need one, build locally with a staging `.env` (`npm run build`) and host the static `dist/` on any **https** host (CODAP requires https), then load it in CODAP via `di=<that-url>`.
+In short: **all branches, including `main`, point at staging-a; only a tagged release points at prod.** The mapping is keyed on `github.ref` in [`.github/workflows/ci.yml`](.github/workflows/ci.yml).
+
+### Cutting a production release
+
+The **frontend** and the **sam-server** deploy through independent paths, and a tagged release's frontend points at the **prod** server — so **deploy the server before tagging**:
+
+1. **Build & deploy the prod sam-server** for any server changes the release depends on: from `sam-server/`, run `npm run sam:build` then `npm run sam:deploy` (the `[default]` / prod stack). See [docs/deploy.md](docs/deploy.md).
+2. **Tag & release the frontend**: push a version tag (its CI build bakes in the **prod** server URL), then run the **Release** workflow (Actions → Release → Run workflow) to promote that tagged build to the production `index.html`.
+
+If you tag before the prod server is updated, the freshly released production frontend will talk to an out-of-date prod server.
 
 ## Configuration Settings
 
