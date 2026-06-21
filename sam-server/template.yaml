@@ -369,6 +369,10 @@ Resources:
             - CreateInfrastructure
             # The two values below are Fn::If branches: create new RDS vs reuse existing.
             # Only one branch is selected at deploy-time, but both must be provided here.
+            # sslmode=no-verify: TLS-encrypt but skip RDS server-cert verification (the
+            # Lambdas reach RDS within the VPC and we don't ship the Amazon RDS CA bundle).
+            # pg 8.x rejects the RDS cert under sslmode=require ("self-signed certificate
+            # in certificate chain").
             - !Sub "postgresql://${DBUsername}:${DBPassword}@${PostgreSQLDB.Endpoint.Address}:${PostgreSQLDB.Endpoint.Port}/${DatabaseName}?sslmode=no-verify"
             - !Sub "postgresql://${DBUsername}:${DBPassword}@${RdsEndpoint}:${RdsPort}/${DatabaseName}?sslmode=no-verify"
       VpcConfig:
@@ -427,6 +431,10 @@ Resources:
             - CreateInfrastructure
             # The two values below are Fn::If branches: create new RDS vs reuse existing.
             # Only one branch is selected at deploy-time, but both must be provided here.
+            # sslmode=no-verify: TLS-encrypt but skip RDS server-cert verification (the
+            # Lambdas reach RDS within the VPC and we don't ship the Amazon RDS CA bundle).
+            # pg 8.x rejects the RDS cert under sslmode=require ("self-signed certificate
+            # in certificate chain").
             - !Sub "postgresql://${DBUsername}:${DBPassword}@${PostgreSQLDB.Endpoint.Address}:${PostgreSQLDB.Endpoint.Port}/${DatabaseName}?sslmode=no-verify"
             - !Sub "postgresql://${DBUsername}:${DBPassword}@${RdsEndpoint}:${RdsPort}/${DatabaseName}?sslmode=no-verify"
           DAVAI_API_SECRET: !Ref DavaiApiSecret
@@ -485,6 +493,10 @@ Resources:
             - CreateInfrastructure
             # The two values below are Fn::If branches: create new RDS vs reuse existing.
             # Only one branch is selected at deploy-time, but both must be provided here.
+            # sslmode=no-verify: TLS-encrypt but skip RDS server-cert verification (the
+            # Lambdas reach RDS within the VPC and we don't ship the Amazon RDS CA bundle).
+            # pg 8.x rejects the RDS cert under sslmode=require ("self-signed certificate
+            # in certificate chain").
             - !Sub "postgresql://${DBUsername}:${DBPassword}@${PostgreSQLDB.Endpoint.Address}:${PostgreSQLDB.Endpoint.Port}/${DatabaseName}?sslmode=no-verify"
             - !Sub "postgresql://${DBUsername}:${DBPassword}@${RdsEndpoint}:${RdsPort}/${DatabaseName}?sslmode=no-verify"
           OPENAI_API_KEY: !Ref OpenAIApiKey
@@ -557,6 +569,10 @@ Resources:
             - CreateInfrastructure
             # The two values below are Fn::If branches: create new RDS vs reuse existing.
             # Only one branch is selected at deploy-time, but both must be provided here.
+            # sslmode=no-verify: TLS-encrypt but skip RDS server-cert verification (the
+            # Lambdas reach RDS within the VPC and we don't ship the Amazon RDS CA bundle).
+            # pg 8.x rejects the RDS cert under sslmode=require ("self-signed certificate
+            # in certificate chain").
             - !Sub "postgresql://${DBUsername}:${DBPassword}@${PostgreSQLDB.Endpoint.Address}:${PostgreSQLDB.Endpoint.Port}/${DatabaseName}?sslmode=no-verify"
             - !Sub "postgresql://${DBUsername}:${DBPassword}@${RdsEndpoint}:${RdsPort}/${DatabaseName}?sslmode=no-verify"
       VpcConfig:
@@ -607,6 +623,10 @@ Resources:
             - CreateInfrastructure
             # The two values below are Fn::If branches: create new RDS vs reuse existing.
             # Only one branch is selected at deploy-time, but both must be provided here.
+            # sslmode=no-verify: TLS-encrypt but skip RDS server-cert verification (the
+            # Lambdas reach RDS within the VPC and we don't ship the Amazon RDS CA bundle).
+            # pg 8.x rejects the RDS cert under sslmode=require ("self-signed certificate
+            # in certificate chain").
             - !Sub "postgresql://${DBUsername}:${DBPassword}@${PostgreSQLDB.Endpoint.Address}:${PostgreSQLDB.Endpoint.Port}/${DatabaseName}?sslmode=no-verify"
             - !Sub "postgresql://${DBUsername}:${DBPassword}@${RdsEndpoint}:${RdsPort}/${DatabaseName}?sslmode=no-verify"
           LLM_JOB_QUEUE_URL: !Ref LLMJobQueue
@@ -669,6 +689,10 @@ Resources:
             - CreateInfrastructure
             # The two values below are Fn::If branches: create new RDS vs reuse existing.
             # Only one branch is selected at deploy-time, but both must be provided here.
+            # sslmode=no-verify: TLS-encrypt but skip RDS server-cert verification (the
+            # Lambdas reach RDS within the VPC and we don't ship the Amazon RDS CA bundle).
+            # pg 8.x rejects the RDS cert under sslmode=require ("self-signed certificate
+            # in certificate chain").
             - !Sub "postgresql://${DBUsername}:${DBPassword}@${PostgreSQLDB.Endpoint.Address}:${PostgreSQLDB.Endpoint.Port}/${DatabaseName}?sslmode=no-verify"
             - !Sub "postgresql://${DBUsername}:${DBPassword}@${RdsEndpoint}:${RdsPort}/${DatabaseName}?sslmode=no-verify"
           LLM_JOB_QUEUE_URL: !Ref LLMJobQueue
