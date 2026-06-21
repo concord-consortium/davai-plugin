@@ -4,7 +4,7 @@ process.env.GOOGLE_API_KEY = "dummy-google-key";
 process.env.ANTHROPIC_API_KEY = "dummy-anthropic-key";
 
 import { TextEncoder } from "util";
-import { ReadableStream } from "web-streams-polyfill";
+import { ReadableStream } from "node:stream/web";
 global.TextEncoder = TextEncoder as any;
 global.ReadableStream = ReadableStream as any;
 
