@@ -4,7 +4,7 @@ process.env.GOOGLE_API_KEY = "dummy-google-key";
 process.env.ANTHROPIC_API_KEY = "dummy-anthropic-key";
 
 import { TextEncoder } from "util";
-import { ReadableStream } from "web-streams-polyfill";
+import { ReadableStream } from "node:stream/web";
 global.TextEncoder = TextEncoder as any;
 global.ReadableStream = ReadableStream as any;
 
@@ -32,6 +32,7 @@ jest.mock("@langchain/openai", () => ({
     constructor: { name: "ChatOpenAI" },
     invoke: jest.fn(() => ({ response: "Mocked response from OpenAI" })),
     bind: jest.fn(),
+    bindTools: jest.fn(),
   })),
   OpenAIEmbeddings: jest.fn(() => ({
     embedQuery: jest.fn(),
@@ -44,6 +45,7 @@ jest.mock("@langchain/google-genai", () => ({
     constructor: { name: "ChatGoogleGenerativeAI" },
     invoke: jest.fn(() => ({ response: "Mocked response from Google Generative AI" })),
     bind: jest.fn(),
+    bindTools: jest.fn(),
   })),
 }));
 
@@ -52,6 +54,7 @@ jest.mock("@langchain/anthropic", () => ({
     constructor: { name: "ChatAnthropic" },
     invoke: jest.fn(() => ({ response: "Mocked response from Anthropic" })),
     bind: jest.fn(),
+    bindTools: jest.fn(),
   })),
 }));
 
@@ -100,11 +103,63 @@ describe("createModelInstance", () => {
     expect(model.constructor.name).toBe("ChatAnthropic");
   });
 
+  it("should set temperature 0 for Anthropic models that accept sampling params (e.g. Sonnet 4.6)", async () => {
+    await createModelInstance(JSON.stringify({ id: "claude-sonnet-4-6", provider: "Anthropic" }));
+
+    const callArgs = (ChatAnthropic as unknown as jest.Mock).mock.calls[0][0];
+    expect(callArgs.temperature).toBe(0);
+    // No top_p / invocationKwargs: @langchain/anthropic 1.x omits top_p unless explicitly set.
+    expect(callArgs.topP).toBeUndefined();
+    expect(callArgs.invocationKwargs).toBeUndefined();
+  });
+
+  it("should set temperature 0 for Opus 4.6 (not adaptive-only)", async () => {
+    await createModelInstance(JSON.stringify({ id: "claude-opus-4-6", provider: "Anthropic" }));
+
+    const callArgs = (ChatAnthropic as unknown as jest.Mock).mock.calls[0][0];
+    expect(callArgs.temperature).toBe(0);
+    expect(callArgs.invocationKwargs).toBeUndefined();
+  });
+
+  it("should not set sampling params for Opus 4.7+ (adaptive-only; 1.x omits/rejects them)", async () => {
+    await createModelInstance(JSON.stringify({ id: "claude-opus-4-8", provider: "Anthropic" }));
+
+    const callArgs = (ChatAnthropic as unknown as jest.Mock).mock.calls[0][0];
+    // Leave all sampling params unset; 1.x auto-omits them for adaptive-only models.
+    expect(callArgs.temperature).toBeUndefined();
+    expect(callArgs.topP).toBeUndefined();
+    expect(callArgs.invocationKwargs).toBeUndefined();
+  });
+
   it("should throw an error for unsupported providers", async () => {
     const llmId = JSON.stringify({ id: "unknown", provider: "Unsupported" });
 
     await expect(() => createModelInstance(llmId)).rejects.toThrow("Unsupported LLM provider: Unsupported");
   });
+});
+
+describe("createModelInstance temperature handling", () => {
+  // Reasoning models (gpt-5 family, o-series) reject any non-default temperature,
+  // so they must be built with the only supported value (1) rather than 0.
+  it.each(["gpt-5.5", "gpt-5.4", "gpt-5.4-nano", "o3-mini", "o1"])(
+    "builds reasoning OpenAI model %s with temperature 1",
+    async (id) => {
+      await createModelInstance(JSON.stringify({ id, provider: "OpenAI" }));
+      expect(ChatOpenAI).toHaveBeenCalledWith(
+        expect.objectContaining({ model: id, temperature: 1 })
+      );
+    }
+  );
+
+  it.each(["gpt-4o-mini", "gpt-4o", "gpt-4.1-mini"])(
+    "builds non-reasoning OpenAI model %s with temperature 0",
+    async (id) => {
+      await createModelInstance(JSON.stringify({ id, provider: "OpenAI" }));
+      expect(ChatOpenAI).toHaveBeenCalledWith(
+        expect.objectContaining({ model: id, temperature: 0 })
+      );
+    }
+  );
 });
 
 describe("getOrCreateModelInstance", () => {
@@ -113,7 +168,8 @@ describe("getOrCreateModelInstance", () => {
     await getOrCreateModelInstance(llmId);
 
     const mockInstance = (ChatOpenAI as unknown as jest.Mock).mock.results[0].value;
-    expect(mockInstance.bind).toHaveBeenCalledWith(
+    expect(mockInstance.bindTools).toHaveBeenCalledWith(
+      expect.any(Array),
       expect.objectContaining({ parallel_tool_calls: false })
     );
   });
@@ -123,7 +179,8 @@ describe("getOrCreateModelInstance", () => {
     await getOrCreateModelInstance(llmId);
 
     const mockInstance = (ChatGoogleGenerativeAI as unknown as jest.Mock).mock.results[0].value;
-    expect(mockInstance.bind).toHaveBeenCalledWith(
+    expect(mockInstance.bindTools).toHaveBeenCalledWith(
+      expect.any(Array),
       expect.objectContaining({ parallel_tool_calls: false })
     );
   });
@@ -133,12 +190,14 @@ describe("getOrCreateModelInstance", () => {
     await getOrCreateModelInstance(llmId);
 
     const mockInstance = (ChatAnthropic as unknown as jest.Mock).mock.results[0].value;
-    expect(mockInstance.bind).toHaveBeenCalledWith(
+    expect(mockInstance.bindTools).toHaveBeenCalledWith(
+      expect.any(Array),
       expect.objectContaining({
         tool_choice: { type: "auto", disable_parallel_tool_use: true }
       })
     );
-    expect(mockInstance.bind).toHaveBeenCalledWith(
+    expect(mockInstance.bindTools).toHaveBeenCalledWith(
+      expect.any(Array),
       expect.not.objectContaining({ parallel_tool_calls: expect.anything() })
     );
   });

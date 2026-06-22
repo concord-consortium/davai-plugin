@@ -9,7 +9,7 @@ Generated from source comments and MST runtime introspection. Do not edit manual
 | keyboardShortcuts.replayLastDavaiMessage | string   | "Control+Shift+Comma"                       |
 | keyboardShortcuts.sonifyGraph           | string   | "Control+Shift+Period"                      |
 | keyboardShortcutsEnabled                | boolean  | true                                        |
-| llmId                                   | string   | "{\"id\":\"gpt-4o-mini\",\"provider\":\"OpenAI\"}" |
+| llmId                                   | string   | "{\"id\":\"claude-haiku-4-5\",\"provider\":\"Anthropic\"}" |
 | llmList                                 | frozen[] |                                             |
 | mode                                    | enum     | "production"                                |
 | playbackSpeed                           | number   | 1                                           |

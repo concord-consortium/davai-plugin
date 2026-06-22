@@ -347,14 +347,14 @@ Resources:
       BuildMethod: esbuild
       BuildProperties:
         Format: cjs
-        Target: node18
+        Target: node22
         Minify: false
         External:
           - pg-native
     Properties:
       CodeUri: .
       Handler: src/handlers/status.handler
-      Runtime: nodejs18.x
+      Runtime: nodejs22.x
       Events:
         StatusApi:
           Type: Api
@@ -369,8 +369,12 @@ Resources:
             - CreateInfrastructure
             # The two values below are Fn::If branches: create new RDS vs reuse existing.
             # Only one branch is selected at deploy-time, but both must be provided here.
-            - !Sub "postgresql://${DBUsername}:${DBPassword}@${PostgreSQLDB.Endpoint.Address}:${PostgreSQLDB.Endpoint.Port}/${DatabaseName}?sslmode=require"
-            - !Sub "postgresql://${DBUsername}:${DBPassword}@${RdsEndpoint}:${RdsPort}/${DatabaseName}?sslmode=require"
+            # sslmode=no-verify: TLS-encrypt but skip RDS server-cert verification (the
+            # Lambdas reach RDS within the VPC and we don't ship the Amazon RDS CA bundle).
+            # pg 8.x rejects the RDS cert under sslmode=require ("self-signed certificate
+            # in certificate chain").
+            - !Sub "postgresql://${DBUsername}:${DBPassword}@${PostgreSQLDB.Endpoint.Address}:${PostgreSQLDB.Endpoint.Port}/${DatabaseName}?sslmode=no-verify"
+            - !Sub "postgresql://${DBUsername}:${DBPassword}@${RdsEndpoint}:${RdsPort}/${DatabaseName}?sslmode=no-verify"
       VpcConfig:
         SecurityGroupIds:
           - !If
@@ -405,14 +409,14 @@ Resources:
       BuildMethod: esbuild
       BuildProperties:
         Format: cjs
-        Target: node18
+        Target: node22
         Minify: false
         External:
           - pg-native
     Properties:
       CodeUri: .
       Handler: src/handlers/cancel.handler
-      Runtime: nodejs18.x
+      Runtime: nodejs22.x
       Events:
         CancelApi:
           Type: Api
@@ -427,8 +431,12 @@ Resources:
             - CreateInfrastructure
             # The two values below are Fn::If branches: create new RDS vs reuse existing.
             # Only one branch is selected at deploy-time, but both must be provided here.
-            - !Sub "postgresql://${DBUsername}:${DBPassword}@${PostgreSQLDB.Endpoint.Address}:${PostgreSQLDB.Endpoint.Port}/${DatabaseName}?sslmode=require"
-            - !Sub "postgresql://${DBUsername}:${DBPassword}@${RdsEndpoint}:${RdsPort}/${DatabaseName}?sslmode=require"
+            # sslmode=no-verify: TLS-encrypt but skip RDS server-cert verification (the
+            # Lambdas reach RDS within the VPC and we don't ship the Amazon RDS CA bundle).
+            # pg 8.x rejects the RDS cert under sslmode=require ("self-signed certificate
+            # in certificate chain").
+            - !Sub "postgresql://${DBUsername}:${DBPassword}@${PostgreSQLDB.Endpoint.Address}:${PostgreSQLDB.Endpoint.Port}/${DatabaseName}?sslmode=no-verify"
+            - !Sub "postgresql://${DBUsername}:${DBPassword}@${RdsEndpoint}:${RdsPort}/${DatabaseName}?sslmode=no-verify"
           DAVAI_API_SECRET: !Ref DavaiApiSecret
       VpcConfig:
         SecurityGroupIds:
@@ -464,14 +472,14 @@ Resources:
       BuildMethod: esbuild
       BuildProperties:
         Format: cjs
-        Target: node18
+        Target: node22
         Minify: false
         External:
           - pg-native
     Properties:
       CodeUri: .
       Handler: src/handlers/job-processor.handler
-      Runtime: nodejs18.x
+      Runtime: nodejs22.x
       Events:
         SQSEvent:
           Type: SQS
@@ -485,8 +493,12 @@ Resources:
             - CreateInfrastructure
             # The two values below are Fn::If branches: create new RDS vs reuse existing.
             # Only one branch is selected at deploy-time, but both must be provided here.
-            - !Sub "postgresql://${DBUsername}:${DBPassword}@${PostgreSQLDB.Endpoint.Address}:${PostgreSQLDB.Endpoint.Port}/${DatabaseName}?sslmode=require"
-            - !Sub "postgresql://${DBUsername}:${DBPassword}@${RdsEndpoint}:${RdsPort}/${DatabaseName}?sslmode=require"
+            # sslmode=no-verify: TLS-encrypt but skip RDS server-cert verification (the
+            # Lambdas reach RDS within the VPC and we don't ship the Amazon RDS CA bundle).
+            # pg 8.x rejects the RDS cert under sslmode=require ("self-signed certificate
+            # in certificate chain").
+            - !Sub "postgresql://${DBUsername}:${DBPassword}@${PostgreSQLDB.Endpoint.Address}:${PostgreSQLDB.Endpoint.Port}/${DatabaseName}?sslmode=no-verify"
+            - !Sub "postgresql://${DBUsername}:${DBPassword}@${RdsEndpoint}:${RdsPort}/${DatabaseName}?sslmode=no-verify"
           OPENAI_API_KEY: !Ref OpenAIApiKey
           GOOGLE_API_KEY: !Ref GoogleApiKey
           ANTHROPIC_API_KEY: !Ref AnthropicApiKey
@@ -534,14 +546,14 @@ Resources:
       BuildMethod: esbuild
       BuildProperties:
         Format: cjs
-        Target: node18
+        Target: node22
         Minify: false
         External:
           - pg-native
     Properties:
       CodeUri: .
       Handler: src/handlers/setup.handler
-      Runtime: nodejs18.x
+      Runtime: nodejs22.x
       Events:
         SetupApi:
           Type: Api
@@ -557,8 +569,12 @@ Resources:
             - CreateInfrastructure
             # The two values below are Fn::If branches: create new RDS vs reuse existing.
             # Only one branch is selected at deploy-time, but both must be provided here.
-            - !Sub "postgresql://${DBUsername}:${DBPassword}@${PostgreSQLDB.Endpoint.Address}:${PostgreSQLDB.Endpoint.Port}/${DatabaseName}?sslmode=require"
-            - !Sub "postgresql://${DBUsername}:${DBPassword}@${RdsEndpoint}:${RdsPort}/${DatabaseName}?sslmode=require"
+            # sslmode=no-verify: TLS-encrypt but skip RDS server-cert verification (the
+            # Lambdas reach RDS within the VPC and we don't ship the Amazon RDS CA bundle).
+            # pg 8.x rejects the RDS cert under sslmode=require ("self-signed certificate
+            # in certificate chain").
+            - !Sub "postgresql://${DBUsername}:${DBPassword}@${PostgreSQLDB.Endpoint.Address}:${PostgreSQLDB.Endpoint.Port}/${DatabaseName}?sslmode=no-verify"
+            - !Sub "postgresql://${DBUsername}:${DBPassword}@${RdsEndpoint}:${RdsPort}/${DatabaseName}?sslmode=no-verify"
       VpcConfig:
         SecurityGroupIds:
           - !If
@@ -585,14 +601,14 @@ Resources:
       BuildMethod: esbuild
       BuildProperties:
         Format: cjs
-        Target: node18
+        Target: node22
         Minify: false
         External:
           - pg-native
     Properties:
       CodeUri: .
       Handler: src/handlers/message.handler
-      Runtime: nodejs18.x
+      Runtime: nodejs22.x
       Events:
         MessageApi:
           Type: Api
@@ -607,8 +623,12 @@ Resources:
             - CreateInfrastructure
             # The two values below are Fn::If branches: create new RDS vs reuse existing.
             # Only one branch is selected at deploy-time, but both must be provided here.
-            - !Sub "postgresql://${DBUsername}:${DBPassword}@${PostgreSQLDB.Endpoint.Address}:${PostgreSQLDB.Endpoint.Port}/${DatabaseName}?sslmode=require"
-            - !Sub "postgresql://${DBUsername}:${DBPassword}@${RdsEndpoint}:${RdsPort}/${DatabaseName}?sslmode=require"
+            # sslmode=no-verify: TLS-encrypt but skip RDS server-cert verification (the
+            # Lambdas reach RDS within the VPC and we don't ship the Amazon RDS CA bundle).
+            # pg 8.x rejects the RDS cert under sslmode=require ("self-signed certificate
+            # in certificate chain").
+            - !Sub "postgresql://${DBUsername}:${DBPassword}@${PostgreSQLDB.Endpoint.Address}:${PostgreSQLDB.Endpoint.Port}/${DatabaseName}?sslmode=no-verify"
+            - !Sub "postgresql://${DBUsername}:${DBPassword}@${RdsEndpoint}:${RdsPort}/${DatabaseName}?sslmode=no-verify"
           LLM_JOB_QUEUE_URL: !Ref LLMJobQueue
           DAVAI_API_SECRET: !Ref DavaiApiSecret
       VpcConfig:
@@ -647,14 +667,14 @@ Resources:
       BuildMethod: esbuild
       BuildProperties:
         Format: cjs
-        Target: node18
+        Target: node22
         Minify: false
         External:
           - pg-native
     Properties:
       CodeUri: .
       Handler: src/handlers/tool.handler
-      Runtime: nodejs18.x
+      Runtime: nodejs22.x
       Events:
         ToolApi:
           Type: Api
@@ -669,8 +689,12 @@ Resources:
             - CreateInfrastructure
             # The two values below are Fn::If branches: create new RDS vs reuse existing.
             # Only one branch is selected at deploy-time, but both must be provided here.
-            - !Sub "postgresql://${DBUsername}:${DBPassword}@${PostgreSQLDB.Endpoint.Address}:${PostgreSQLDB.Endpoint.Port}/${DatabaseName}?sslmode=require"
-            - !Sub "postgresql://${DBUsername}:${DBPassword}@${RdsEndpoint}:${RdsPort}/${DatabaseName}?sslmode=require"
+            # sslmode=no-verify: TLS-encrypt but skip RDS server-cert verification (the
+            # Lambdas reach RDS within the VPC and we don't ship the Amazon RDS CA bundle).
+            # pg 8.x rejects the RDS cert under sslmode=require ("self-signed certificate
+            # in certificate chain").
+            - !Sub "postgresql://${DBUsername}:${DBPassword}@${PostgreSQLDB.Endpoint.Address}:${PostgreSQLDB.Endpoint.Port}/${DatabaseName}?sslmode=no-verify"
+            - !Sub "postgresql://${DBUsername}:${DBPassword}@${RdsEndpoint}:${RdsPort}/${DatabaseName}?sslmode=no-verify"
           LLM_JOB_QUEUE_URL: !Ref LLMJobQueue
           DAVAI_API_SECRET: !Ref DavaiApiSecret
       VpcConfig:

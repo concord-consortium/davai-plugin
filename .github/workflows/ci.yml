@@ -18,8 +18,8 @@ jobs:
         run: npm run build
         env:
           REACT_APP_OPENAI_BASE_URL: ${{ secrets.REACT_APP_OPENAI_BASE_URL }}
-          LANGCHAIN_SERVER_URL: ${{ secrets.LANGCHAIN_SERVER_URL }}
-          AUTH_TOKEN: ${{ secrets.AUTH_TOKEN }}
+          LANGCHAIN_SERVER_URL: ${{ startsWith(github.ref, 'refs/tags/') && secrets.LANGCHAIN_SERVER_URL || secrets.STAGING_LANGCHAIN_SERVER_URL }}
+          AUTH_TOKEN: ${{ startsWith(github.ref, 'refs/tags/') && secrets.AUTH_TOKEN || secrets.STAGING_AUTH_TOKEN }}
       - name: Generate docs
         run: npm run gen:config-docs
       - name: Verify docs up to date
@@ -96,8 +96,8 @@ jobs:
           # by default.
           CYPRESS_coverage: true
           # Environment variables needed when running `npm start`
-          LANGCHAIN_SERVER_URL: ${{ secrets.LANGCHAIN_SERVER_URL }}
-          AUTH_TOKEN: ${{ secrets.AUTH_TOKEN }}
+          LANGCHAIN_SERVER_URL: ${{ startsWith(github.ref, 'refs/tags/') && secrets.LANGCHAIN_SERVER_URL || secrets.STAGING_LANGCHAIN_SERVER_URL }}
+          AUTH_TOKEN: ${{ startsWith(github.ref, 'refs/tags/') && secrets.AUTH_TOKEN || secrets.STAGING_AUTH_TOKEN }}
       - name: Upload coverage to Codecov
         uses: codecov/codecov-action@v4
         with:
@@ -122,6 +122,16 @@ jobs:
           # skip installing cypress since it isn't needed for just building
           # This decreases the deploy time quite a bit
           CYPRESS_INSTALL_BINARY: 0
+      - name: Require prod server secrets on release (tag) builds
+        if: startsWith(github.ref, 'refs/tags/')
+        env:
+          LANGCHAIN_SERVER_URL: ${{ secrets.LANGCHAIN_SERVER_URL }}
+          AUTH_TOKEN: ${{ secrets.AUTH_TOKEN }}
+        run: |
+          if [ -z "$LANGCHAIN_SERVER_URL" ] || [ -z "$AUTH_TOKEN" ]; then
+            echo "::error::Production LANGCHAIN_SERVER_URL/AUTH_TOKEN secret is empty on a tag build; refusing to build a release that would silently fall back to staging."
+            exit 1
+          fi
       - uses: aws-actions/configure-aws-credentials@7474bc4690e29a8392af63c5b98e7449536d5c3a # v4
         with:
           role-to-assume: arn:aws:iam::612297603577:role/davai-plugin
@@ -130,8 +140,8 @@ jobs:
         id: s3-deploy
         env:
           REACT_APP_OPENAI_BASE_URL: ${{ secrets.REACT_APP_OPENAI_BASE_URL }}
-          LANGCHAIN_SERVER_URL: ${{ secrets.LANGCHAIN_SERVER_URL }}
-          AUTH_TOKEN: ${{ secrets.AUTH_TOKEN }}
+          LANGCHAIN_SERVER_URL: ${{ startsWith(github.ref, 'refs/tags/') && secrets.LANGCHAIN_SERVER_URL || secrets.STAGING_LANGCHAIN_SERVER_URL }}
+          AUTH_TOKEN: ${{ startsWith(github.ref, 'refs/tags/') && secrets.AUTH_TOKEN || secrets.STAGING_AUTH_TOKEN }}
         with:
           bucket: models-resources
           prefix: davai-plugin

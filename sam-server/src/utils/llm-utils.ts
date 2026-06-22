@@ -42,6 +42,16 @@ const promptTemplate = ChatPromptTemplate.fromMessages([
     ["placeholder", "{messages}"],
 ]);
 
+// OpenAI reasoning models (the gpt-5 family and the o-series) reject any
+// non-default temperature, returning a 400. They must be created with the only
+// supported value (1) rather than the 0 we use for standard chat models.
+const isOpenAIReasoningModel = (id: string) => /^(gpt-5|o\d)/i.test(id);
+
+// Opus 4.7+ removed the sampling parameters entirely — sending temperature, top_p, or
+// top_k returns a 400. (Opus 4.6 and earlier still accept temperature.) The 0.3.x library
+// always sends all three, so for these models we override them to undefined to omit them.
+const isAnthropicNoSamplingModel = (id: string) => /^claude-opus-4-(?:[7-9]|\d\d)/.test(id);
+
 export const createModelInstance = async (llm: string) => {
   const llmObj = JSON.parse(llm);
   const { id, provider } = llmObj;
@@ -50,7 +60,7 @@ export const createModelInstance = async (llm: string) => {
     const apiKey = await getOpenAIKey();
     return new ChatOpenAI({
       model: id,
-      temperature: 0,
+      temperature: isOpenAIReasoningModel(id) ? 1 : 0,
       apiKey,
     });
   }
@@ -66,9 +76,12 @@ export const createModelInstance = async (llm: string) => {
 
   if (provider === "Anthropic") {
     const apiKey = await getAnthropicKey();
+    // @langchain/anthropic 1.x omits top_p/top_k unless explicitly set, and auto-omits all
+    // sampling params for adaptive-only models (Opus 4.7+) — throwing if any are passed. So
+    // set temperature: 0 only for models that accept it; leave it unset for Opus 4.7+.
     return new ChatAnthropic({
       model: id,
-      temperature: 0,
+      ...(isAnthropicNoSamplingModel(id) ? {} : { temperature: 0 }),
       apiKey,
     });
   }
@@ -80,14 +93,12 @@ export const getOrCreateModelInstance = async (llmId: string): Promise<any> => {
   if (!llmInstances[llmId]) {
     const model = await createModelInstance(llmId);
     const { provider } = JSON.parse(llmId);
-    const bindOptions: Record<string, any> = { tools };
-    if (provider === "Anthropic") {
-      // Anthropic uses disable_parallel_tool_use in tool_choice instead of parallel_tool_calls
-      bindOptions.tool_choice = { type: "auto", disable_parallel_tool_use: true };
-    } else {
-      bindOptions.parallel_tool_calls = false;
-    }
-    llmInstances[llmId] = model.bind(bindOptions);
+    const callOptions: Record<string, any> =
+      provider === "Anthropic"
+        // Anthropic uses disable_parallel_tool_use in tool_choice instead of parallel_tool_calls
+        ? { tool_choice: { type: "auto", disable_parallel_tool_use: true } }
+        : { parallel_tool_calls: false };
+    llmInstances[llmId] = (model as any).bindTools(tools, callOptions);
   }
 
   return llmInstances[llmId];

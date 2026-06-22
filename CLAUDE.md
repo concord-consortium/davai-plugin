@@ -4,90 +4,114 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-DAVAI (Data Analysis through Voice and Artificial Intelligence) is a CODAP plugin that helps blind/low-vision users work with graphs and datasets. It consists of a React client app (`/src`) and a Node server (`/server` or `/sam-server` for AWS Lambda).
+DAVAI (Data Analysis through Voice and Artificial Intelligence) is a CODAP plugin that helps blind/low-vision users work with graphs and datasets through voice, chat, and audio (sonification). It consists of:
+- A React client app in `/src` (the plugin that loads inside CODAP).
+- An AWS SAM / Lambda backend in `/sam-server` that brokers all LLM calls.
+
+The client never talks to an LLM provider directly — it posts to the server, which routes to the configured provider (OpenAI, Google/Gemini, or Anthropic) via LangChain/LangGraph.
 
 ## Commands
 
-### Development
+### Client development
 ```bash
-npm start                    # Dev server on port 8081 (HTTP)
+npm start                    # webpack-dev-server on port 8081 (HTTP)
 npm run start:secure         # Dev server with HTTPS
 ```
 
 ### Building
 ```bash
 npm run build                # Production build (runs lint:build + webpack)
-npm run build:webpack        # Direct webpack build
+npm run build:webpack        # Direct webpack build (no lint)
+npm run gen:config-docs      # Regenerate docs/configuration.md from app-config-model.ts
 ```
 
 ### Testing
 ```bash
-npm test                     # Run Jest unit tests
+npm test                     # Jest unit tests
+npm test -- path/to/file.test.ts   # Run a single test file
+npm test -- -t "test name"   # Run tests matching a name
 npm run test:watch           # Jest in watch mode
 npm run test:coverage        # Jest with coverage report
-npm run test:cypress         # Run Cypress E2E tests
+npm run test:cypress         # Cypress E2E tests
 npm run test:cypress:open    # Open Cypress UI
-npm run test:full            # All tests (unit + E2E)
+npm run test:full            # Unit + E2E
 ```
 
 ### Linting
 ```bash
-npm run lint                 # ESLint check
+npm run lint                 # ESLint check (src + cypress)
 npm run lint:fix             # Auto-fix lint issues
-npm run lint:build           # Strict lint (used in CI)
+npm run lint:build           # Strict lint config used in CI (.eslintrc.build.js)
 ```
+
+### Server (`/sam-server`)
+Has its own `package.json`/`node_modules` — run `npm install` inside `sam-server/` first.
+```bash
+npm test                     # Server unit tests (run from sam-server/)
+npm run sam:build            # Build the SAM application
+npm run sam:deploy           # Guided deploy to AWS (prod stack: davai-server)
+npm run sam:deploy:staging-a # Deploy to staging-a (also staging-b)
+```
+The `/sam-server` backend is deployed manually — CI never deploys it. See [docs/deploy.md](docs/deploy.md).
 
 ## Architecture
 
-### State Management (MobX State Tree)
-The app uses MobX State Tree for state management with this hierarchy:
-- **RootStore** (`src/models/root-store.ts`) - Top-level container
-  - `assistantStore` (AssistantModel) - AI assistant state, threading, messages
-  - `sonificationStore` (GraphSonificationModel) - Audio graph representation
-  - `transportManager` (volatile) - Communication layer, not persisted
+### Client ⇄ server request lifecycle (the core flow)
+LLM requests are **asynchronous and polled**, not request/response. Driven from `assistant-model.ts`:
+1. Client POSTs to the `message` (or `tool`) endpoint via `postMessage()` in `src/utils/llm-utils.ts`. Server returns a `messageId`.
+2. Server (`sam-server/src/handlers/message.ts`) writes a job row to Postgres (`jobs` table) and enqueues `{messageId}` to SQS.
+3. `job-processor.ts` (SQS-triggered Lambda) runs the LLM call via LangGraph and writes the result back to the job row.
+4. Client polls the `status?messageId=...` endpoint until `status` is `completed` / `cancelled` / it times out.
+5. Tool calls (`requires_action`) repeat the same submit-then-poll loop; `cancel.ts` cancels an in-flight job.
 
-Key model files:
-- `assistant-model.ts` - LLM interactions, message queue, chat transcript
-- `graph-sonification-model.ts` - Tone.js audio synthesis for graphs
-- `chat-transcript-model.ts` - Message history
-- `app-config-model.ts` - Configuration with runtime validation
+`src/utils/llm-utils.ts` is just the HTTP client for these endpoints (plus helpers like base64→image). The actual **LLM provider abstraction lives server-side** in `sam-server/src/utils/llm-utils.ts`: `createModelInstance()` switches on `provider` to build a `ChatOpenAI` / `ChatGoogleGenerativeAI` / Anthropic model, and `getLangApp()` wraps it in a LangGraph app.
 
-### React Components
-Main components in `src/components/`:
-- `App.tsx` - Root component, CODAP integration
-- `chat-input.tsx` - Message input with voice support
-- `chat-transcript.tsx` - Message history display
-- `graph-sonification.tsx` - Audio controls for graphs
-- `user-options.tsx` - Settings UI
-- `developer-options.tsx` - Debug tools (dev mode only)
+### LLM selection (`llmId`)
+`llmId` is a JSON **string**, e.g. `{"id":"gpt-4o-mini","provider":"OpenAI"}`. The list of selectable models is `llmList` in `app-config.json` (providers: `OpenAI`, `Google`, `Anthropic`, `Mock`). A `provider`/`id` of `Mock`/`mock` short-circuits everything: `assistant-model.ts` (`isAssistantMocked`) replies locally without hitting the server — useful for offline/dev work.
 
-### Context Providers
-- `AppConfigContext` - Access config via `useAppConfigContext()`
-- `AriaLiveContext` - Screen reader announcements
-- `RootStoreContext` - MobX store access
+### State management (MobX State Tree)
+- **RootStore** (`src/models/root-store.ts`)
+  - `assistantStore` (`AssistantModel`) — LLM threading, message submission/polling, chat transcript, mock handling.
+  - `sonificationStore` (`GraphSonificationModel`) — describes how a CODAP graph maps to audio.
+  - `transportManager` (volatile, `transport-manager.ts`) — the Tone.js audio **playback transport** (panning, scheduling, play/pause). Volatile = not persisted. *(This is audio, not networking.)*
 
-### Utilities
-- `src/utils/codap-api-utils.ts` - CODAP Plugin API helpers
-- `src/utils/graph-sonification-utils.ts` - Sonification logic
-- `src/utils/llm-utils.ts` - LLM provider abstraction (OpenAI, Gemini, mock)
+Other notable models: `chat-transcript-model.ts` (message history), `app-config-model.ts` (config with runtime validation), `bin-model.ts` / `codap-graph-model.ts` (graph data), `graph-sonification-scheduler.ts` (schedules sonification events on the transport).
+
+### Components, contexts, services
+- Components in `src/components/` — functional, wrapped in `observer()` for MobX reactivity. Entry is `App.tsx` (CODAP integration); `chat-input.tsx`, `chat-transcript.tsx`, `graph-sonification.tsx`, `user-options.tsx`, `developer-options.tsx` (dev-mode debug tools).
+- Contexts: `AppConfigContext` (`useAppConfigContext()`), `AriaLiveContext` (screen-reader announcements — important for the a11y mission), `RootStoreContext`.
+- `src/services/speech-service.ts` — text-to-speech via the Web Speech API (`speechSynthesis`).
+- CODAP integration helpers: `src/utils/codap-api-utils.ts`; sonification logic: `src/utils/graph-sonification-utils.ts`.
 
 ## Configuration
 
-Settings defined in `app-config.json` with schema in `app-config-model.ts`. Override via:
+Settings are defined in `app-config.json`, validated by the schema in `app-config-model.ts`, and accessed via `useAppConfigContext()`. Generated docs live in `docs/configuration.md` (regenerate with `npm run gen:config-docs`).
+
+Override any setting via:
 - URL parameter: `?mode=development`
-- localStorage: `davai:mode` = `development`
+- localStorage with a `davai:` prefix: `davai:mode` = `development`
 
-Nested settings use JSON in localStorage: `davai:keyboardShortcuts` = `{"focusChatInput": "value"}`
+Nested settings: the UI saves only top-level keys, with nested values as JSON — `davai:keyboardShortcuts` = `{"focusChatInput": "value"}`. Manually you can instead use dot notation: `davai:keyboardShortcuts.focusChatInput` = `value`.
 
-## Testing in CODAP
+## Local development & environments
 
-Run local CODAP (from codap repo v3 directory) and this plugin, then either:
-1. Use local CODAP at `http://127.0.0.1:8080/static/dg/en/cert/index.html?di=http://localhost:8081`
-2. Open Chrome with disabled security: `open -na "Google Chrome" --args --disable-web-security --user-data-dir=/tmp`
+See [README.md](README.md#environments-and-the-llm-server) and [docs/deploy.md](docs/deploy.md) for the full picture. Load-bearing points:
 
-## Key Patterns
+- **Mock mode** runs the whole client with no server and no API keys: dev mode (`?mode=development`) → pick **Mock LLM**. It returns canned replies and never calls the server. Real LLM behavior requires pointing the client at a deployed server (staging or prod).
+- The server URL (`LANGCHAIN_SERVER_URL`) and `AUTH_TOKEN` are **baked in at build time** — no runtime override. Local builds read them from gitignored `.env`; CI builds read them from a single shared GitHub secret.
+- **CI deploys only the frontend.** The `/sam-server` backend is deployed **manually** (`npm run sam:deploy`, or `sam:deploy:staging-a` / `:staging-b` for the staging stacks) to three independent stacks. Consequently, deployed `main` and all CI branch previews currently talk to the **production** server.
 
-- Functional components with hooks, wrapped in `observer()` for MobX reactivity
-- Test files co-located with source (`.test.tsx`)
-- Volatile MST properties for non-persisted state
-- Tone.js mocked in tests (`src/test-utils/`)
+## Testing the plugin in CODAP
+
+CODAP forces `https`, so loading the local `http` plugin requires one of:
+1. Local CODAP at `http://127.0.0.1:8080/static/dg/en/cert/index.html?di=http://localhost:8081`
+2. Chrome with web security disabled: `open -na "Google Chrome" --args --disable-web-security --user-data-dir=/tmp`, then in CODAP **Options → Load web page** enter `http://localhost:8081/?mode=development`.
+
+## AI assistant settings (`/ai-assistant-settings`)
+Version-controlled copies of OpenAI-platform assistant instructions/functions. Sync the latest from platform.openai.com with `npm run sync:assistant-settings` before editing, then commit.
+
+## Key patterns
+- Functional components with hooks, wrapped in `observer()`.
+- Test files co-located with source (`.test.ts`/`.test.tsx`).
+- Volatile MST properties for non-persisted state (e.g. `transportManager`).
+- Tone.js is mocked in tests (`src/test-utils/`, `__mocks__/`).

@@ -9,38 +9,38 @@
   "playProcessingTone": false,
   "playbackSpeed": 1,
   "readAloudEnabled": false,
-  "llmId": "{\"id\":\"gpt-4o-mini\",\"provider\":\"OpenAI\"}",
+  "llmId": "{\"id\":\"claude-haiku-4-5\",\"provider\":\"Anthropic\"}",
   "llmList": [
     {
       "id": "mock",
       "provider": "Mock"
     },
     {
-      "id": "gemini-3-flash-preview",
+      "id": "gemini-3.5-flash",
       "provider": "Google"
     },
     {
-      "id": "gemini-2.5-flash",
+      "id": "gemini-3.1-flash-lite",
       "provider": "Google"
     },
     {
-      "id": "gemini-2.5-flash-lite",
+      "id": "gemini-3.1-pro-preview",
       "provider": "Google"
     },
     {
-      "id": "gemini-2.0-flash",
-      "provider": "Google"
-    },
-    {
-      "id": "gemini-1.5-flash",
-      "provider": "Google"
-    },
-    {
-      "id": "gpt-5-mini",
+      "id": "gpt-5.5",
       "provider": "OpenAI"
     },
     {
-      "id": "gpt-5-nano",
+      "id": "gpt-5.4",
+      "provider": "OpenAI"
+    },
+    {
+      "id": "gpt-5.4-mini",
+      "provider": "OpenAI"
+    },
+    {
+      "id": "gpt-5.4-nano",
       "provider": "OpenAI"
     },
     {
@@ -48,23 +48,7 @@
       "provider": "OpenAI"
     },
     {
-      "id": "gpt-4o",
-      "provider": "OpenAI"
-    },
-    {
-      "id": "gpt-4.1",
-      "provider": "OpenAI"
-    },
-    {
-      "id": "gpt-4.1-mini",
-      "provider": "OpenAI"
-    },
-    {
       "id": "claude-haiku-4-5",
-      "provider": "Anthropic"
-    },
-    {
-      "id": "claude-sonnet-4-5",
       "provider": "Anthropic"
     },
     {
@@ -72,15 +56,11 @@
       "provider": "Anthropic"
     },
     {
-      "id": "claude-opus-4-0",
+      "id": "claude-opus-4-7",
       "provider": "Anthropic"
     },
     {
-      "id": "claude-opus-4-5",
-      "provider": "Anthropic"
-    },
-    {
-      "id": "claude-opus-4-6",
+      "id": "claude-opus-4-8",
       "provider": "Anthropic"
     }
   ],
