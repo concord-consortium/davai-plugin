@@ -2,7 +2,7 @@ import { types, flow, Instance, getRoot, onSnapshot } from "mobx-state-tree";
 import { nanoid } from "nanoid";
 import { codapInterface } from "@concord-consortium/codap-plugin-api";
 import { DAVAI_SPEAKER, DEBUG_SPEAKER } from "../constants";
-import { formatJsonMessage } from "../utils/utils";
+import { formatJsonMessage, formatElapsedTime } from "../utils/utils";
 import { getDataContexts, getGraphAttrData, getGraphByID, getTrimmedGraphDetails } from "../utils/codap-api-utils";
 import { isGraphSonifiable } from "../utils/graph-sonification-utils";
 import { ChatTranscriptModel } from "./chat-transcript-model";
@@ -240,6 +240,17 @@ export const AssistantModel = types
     });
 
     const handleMessageSubmit = flow(function* (messageText: string) {
+      // Time from when real processing begins to when a terminal outcome is
+      // reached. logResponseTime posts exactly one debug entry (it disarms
+      // itself), and is called just before each terminal output so the entry
+      // appears directly above the response in the transcript.
+      let startTime: number | undefined;
+      const logResponseTime = () => {
+        if (startTime === undefined) return;
+        const elapsed = formatElapsedTime(performance.now() - startTime);
+        self.addDbgMsg(`Response time: ${elapsed}`, elapsed);
+        startTime = undefined;
+      };
       try {
         self.setShowLoadingIndicator(true);
         if (self.isCancelling || self.isResetting) {
@@ -247,6 +258,7 @@ export const AssistantModel = types
           self.addDbgMsg(description, `User message added to queue: ${messageText}`);
           self.messageQueue.push(messageText);
         } else {
+          startTime = performance.now();
           self.isLoadingResponse = true;
 
           // Generate a unique message ID for this request. This lets us cancel the message if needed.
@@ -290,9 +302,11 @@ export const AssistantModel = types
               data = output;
               break;
             } else if (status === "cancelled") {
+              logResponseTime();
               self.addDbgMsg("Job was cancelled on the server", messageId);
               return;
             } else if (status === "error") {
+              logResponseTime();
               self.addDbgMsg("Server error processing message", output?.error || "Unknown error");
               self.addDavaiMsg("Sorry, I ran into an error processing that request.");
               return;
@@ -304,6 +318,7 @@ export const AssistantModel = types
           }
 
           if (!data) {
+            logResponseTime();
             self.addDbgMsg("Polling expired before response received", messageId);
             return;
           }
@@ -325,16 +340,23 @@ export const AssistantModel = types
 
           // Once we're out of the tool call chain, handle the final response.
           if (data?.response) {
+            logResponseTime();
             self.addDavaiMsg(data.response);
           }
         }
       } catch (err) {
+        // Log before the error message so the timing row sits above it, like the
+        // other terminal branches. Disarms itself, so the finally call is a no-op.
+        logResponseTime();
         console.error("Failed to handle message submit:", err);
         self.addDbgMsg("Failed to handle message submit", formatJsonMessage(err));
       } finally {
         self.isLoadingResponse = false;
         self.setShowLoadingIndicator(false);
         self.currentMessageId = null;
+        // Backstop for a success that produced no chat output (tool-only end).
+        // No-op if an inline call already logged (including the catch path).
+        logResponseTime();
       }
     });
 
