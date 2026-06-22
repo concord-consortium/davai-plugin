@@ -1,4 +1,4 @@
-import { SQSEvent, SQSBatchResponse, SQSBatchItemFailure } from "aws-lambda";
+import { SQSEvent } from "aws-lambda";
 import { Pool } from "pg";
 import { HumanMessage, ToolMessage } from "@langchain/core/messages";
 import { getLangApp } from "../utils/llm-utils";
@@ -50,7 +50,7 @@ async function listenForCancellations() {
 // listen for job cancellations
 listenForCancellations();
 
-export const handler = async (event: SQSEvent): Promise<SQSBatchResponse> => {
+export const handler = async (event: SQSEvent): Promise<void> => {
   // Set LangSmith API key for LangChain integration if available. When set,
   // data about DAVAI usage will be sent to the related LangSmith account.
   try {
@@ -59,8 +59,6 @@ export const handler = async (event: SQSEvent): Promise<SQSBatchResponse> => {
   } catch (error) {
     console.warn("Failed to set LangSmith API key:", error);
   }
-
-  const batchItemFailures: SQSBatchItemFailure[] = [];
 
   for (const record of event.Records) {
     let messageId: string | undefined;
@@ -164,8 +162,4 @@ export const handler = async (event: SQSEvent): Promise<SQSBatchResponse> => {
       }
     }
   }
-
-  return {
-    batchItemFailures
-  };
 };

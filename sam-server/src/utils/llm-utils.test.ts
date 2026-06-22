@@ -103,34 +103,32 @@ describe("createModelInstance", () => {
     expect(model.constructor.name).toBe("ChatAnthropic");
   });
 
-  it("should omit top_p for Anthropic models (newer Claude models reject temperature+top_p together)", async () => {
+  it("should set temperature 0 for Anthropic models that accept sampling params (e.g. Sonnet 4.6)", async () => {
     await createModelInstance(JSON.stringify({ id: "claude-sonnet-4-6", provider: "Anthropic" }));
 
     const callArgs = (ChatAnthropic as unknown as jest.Mock).mock.calls[0][0];
     expect(callArgs.temperature).toBe(0);
-    // top_p is overridden to undefined via invocationKwargs so it is omitted from the request.
-    expect(Object.keys(callArgs.invocationKwargs)).toContain("top_p");
-    expect(callArgs.invocationKwargs.top_p).toBeUndefined();
+    // No top_p / invocationKwargs: @langchain/anthropic 1.x omits top_p unless explicitly set.
+    expect(callArgs.topP).toBeUndefined();
+    expect(callArgs.invocationKwargs).toBeUndefined();
   });
 
-  it("should keep temperature 0 for Opus 4.6 and earlier (still accept sampling params)", async () => {
+  it("should set temperature 0 for Opus 4.6 (not adaptive-only)", async () => {
     await createModelInstance(JSON.stringify({ id: "claude-opus-4-6", provider: "Anthropic" }));
 
     const callArgs = (ChatAnthropic as unknown as jest.Mock).mock.calls[0][0];
     expect(callArgs.temperature).toBe(0);
-    expect(callArgs.invocationKwargs.top_p).toBeUndefined();
+    expect(callArgs.invocationKwargs).toBeUndefined();
   });
 
-  it("should omit all sampling params for Opus 4.7+ (which reject temperature/top_p/top_k)", async () => {
+  it("should not set sampling params for Opus 4.7+ (adaptive-only; 1.x omits/rejects them)", async () => {
     await createModelInstance(JSON.stringify({ id: "claude-opus-4-8", provider: "Anthropic" }));
 
     const callArgs = (ChatAnthropic as unknown as jest.Mock).mock.calls[0][0];
-    // No temperature passed to the constructor; all three sampling params overridden to undefined.
+    // Leave all sampling params unset; 1.x auto-omits them for adaptive-only models.
     expect(callArgs.temperature).toBeUndefined();
-    expect(Object.keys(callArgs.invocationKwargs).sort()).toEqual(["temperature", "top_k", "top_p"]);
-    expect(callArgs.invocationKwargs.temperature).toBeUndefined();
-    expect(callArgs.invocationKwargs.top_p).toBeUndefined();
-    expect(callArgs.invocationKwargs.top_k).toBeUndefined();
+    expect(callArgs.topP).toBeUndefined();
+    expect(callArgs.invocationKwargs).toBeUndefined();
   });
 
   it("should throw an error for unsupported providers", async () => {

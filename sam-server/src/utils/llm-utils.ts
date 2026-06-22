@@ -76,22 +76,12 @@ export const createModelInstance = async (llm: string) => {
 
   if (provider === "Anthropic") {
     const apiKey = await getAnthropicKey();
-    if (isAnthropicNoSamplingModel(id)) {
-      // Opus 4.7+ reject temperature/top_p/top_k entirely; omit all sampling params.
-      return new ChatAnthropic({
-        model: id,
-        invocationKwargs: { temperature: undefined, top_p: undefined, top_k: undefined },
-        apiKey,
-      });
-    }
+    // @langchain/anthropic 1.x omits top_p/top_k unless explicitly set, and auto-omits all
+    // sampling params for adaptive-only models (Opus 4.7+) — throwing if any are passed. So
+    // set temperature: 0 only for models that accept it; leave it unset for Opus 4.7+.
     return new ChatAnthropic({
       model: id,
-      temperature: 0,
-      // @langchain/anthropic 0.3.x always sends top_p (default sentinel -1). Newer Claude
-      // models reject `top_p: -1` AND reject temperature+top_p together, so we override
-      // top_p to undefined via invocationKwargs (spread last into messages.create()) to
-      // omit it and send only temperature.
-      invocationKwargs: { top_p: undefined },
+      ...(isAnthropicNoSamplingModel(id) ? {} : { temperature: 0 }),
       apiKey,
     });
   }
