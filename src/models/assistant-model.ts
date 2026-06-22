@@ -345,14 +345,17 @@ export const AssistantModel = types
           }
         }
       } catch (err) {
+        // Log before the error message so the timing row sits above it, like the
+        // other terminal branches. Disarms itself, so the finally call is a no-op.
+        logResponseTime();
         console.error("Failed to handle message submit:", err);
         self.addDbgMsg("Failed to handle message submit", formatJsonMessage(err));
       } finally {
         self.isLoadingResponse = false;
         self.setShowLoadingIndicator(false);
         self.currentMessageId = null;
-        // Backstop: covers the catch path and a success that produced no chat
-        // output (tool-only end). No-op if an inline call already logged.
+        // Backstop for a success that produced no chat output (tool-only end).
+        // No-op if an inline call already logged (including the catch path).
         logResponseTime();
       }
     });
