@@ -1,5 +1,5 @@
 import React from "react";
-import { render, screen, within } from "@testing-library/react";
+import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 
 import { AppConfigProvider } from "../contexts/app-config-context";
 import { ChatTranscriptComponent } from "./chat-transcript";
@@ -49,5 +49,31 @@ describe("test chat transcript component", () => {
       const content = within(message).getByTestId("chat-message-content");
       expect(content).toHaveTextContent(chatTranscript.messages[index].messageContent.content);
     });
+  });
+
+  it("copies the transcript and downloads it when the capture button is clicked", async () => {
+    const writeText = jest.fn().mockResolvedValue(undefined);
+    Object.assign(navigator, { clipboard: { writeText } });
+    (global.URL as any).createObjectURL = jest.fn(() => "blob:url");
+    (global.URL as any).revokeObjectURL = jest.fn();
+    const clickSpy = jest.spyOn(HTMLAnchorElement.prototype, "click").mockImplementation(() => undefined);
+
+    render(
+      <AppConfigProvider>
+        <ShortcutsServiceProvider>
+          <ChatTranscriptComponent chatTranscript={chatTranscript}/>
+        </ShortcutsServiceProvider>
+      </AppConfigProvider>
+    );
+
+    fireEvent.click(screen.getByTestId("capture-transcript-button"));
+
+    await waitFor(() => expect(writeText).toHaveBeenCalledTimes(1));
+    expect(clickSpy).toHaveBeenCalledTimes(1);
+    const copiedText = writeText.mock.calls[0][0] as string;
+    expect(copiedText).toContain("DAVAI Chat Transcript");
+    expect(copiedText).toContain("Hello. How can I help you today?");
+
+    clickSpy.mockRestore();
   });
 });
