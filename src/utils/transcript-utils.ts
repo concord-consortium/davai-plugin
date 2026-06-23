@@ -1,46 +1,35 @@
 import { ChatMessage } from "../types";
 import { DEBUG_SPEAKER } from "../constants";
 
-interface CaptureMeta {
-  capturedAt: string;
-  llmLabel: string;
-}
+// CSV columns. Debug-log rows put their event description in "debug event";
+// DAVAI/User rows leave it blank.
+const CSV_HEADER = ["timestamp", "speaker", "debug event", "message"];
 
-export function formatTranscriptForCapture(messages: ChatMessage[], meta: CaptureMeta): string {
-  const header = [
-    "DAVAI Chat Transcript",
-    `Captured: ${meta.capturedAt}`,
-    `LLM: ${meta.llmLabel}`,
-  ].join("\n");
-
-  const blocks = messages.map((message) => {
-    const heading = `${message.speaker} (${message.timestamp}):`;
-    if (message.speaker === DEBUG_SPEAKER) {
-      const { description, content } = message.messageContent;
-      return [heading, description, content].filter(Boolean).join("\n");
-    }
-    return `${heading}\n${message.plainTextContent}`;
+export function formatTranscriptForCapture(messages: ChatMessage[]): string {
+  const rows = messages.map((message) => {
+    const isDebug = message.speaker === DEBUG_SPEAKER;
+    const debugEvent = isDebug ? message.messageContent.description ?? "" : "";
+    const body = isDebug ? message.messageContent.content : message.plainTextContent;
+    return [message.timestamp, message.speaker, debugEvent, body];
   });
 
-  return [header, ...blocks].join("\n\n") + "\n";
+  return [CSV_HEADER, ...rows].map(toCsvRow).join("\r\n") + "\r\n";
 }
 
-export function getLlmLabel(llmId: string): string {
-  try {
-    const parsed = JSON.parse(llmId);
-    if (parsed && typeof parsed.id === "string") {
-      return parsed.provider ? `${parsed.provider}: ${parsed.id}` : parsed.id;
-    }
-  } catch {
-    // fall through to default
-  }
-  return "Unknown LLM";
+function toCsvRow(fields: string[]): string {
+  return fields.map(escapeCsvField).join(",");
+}
+
+// RFC 4180: wrap every field in double quotes and double any internal quotes,
+// so commas, quotes, and newlines in messages or debug JSON don't break columns.
+function escapeCsvField(value: string): string {
+  return `"${(value ?? "").replace(/"/g, '""')}"`;
 }
 
 export function getTranscriptFilename(llmId: string, now: Date): string {
   const datePart = formatDateForFilename(now);
   const idPart = sanitizeForFilename(parseLlmIdForFilename(llmId));
-  return `davai-transcript-${datePart}-${idPart}.txt`;
+  return `davai-transcript-${datePart}-${idPart}.csv`;
 }
 
 function formatDateForFilename(now: Date): string {

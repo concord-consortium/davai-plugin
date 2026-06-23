@@ -1,5 +1,5 @@
 import { ChatMessage } from "../types";
-import { copyTextToClipboard, downloadTextFile, formatTranscriptForCapture, getLlmLabel, getTranscriptFilename } from "./transcript-utils";
+import { copyTextToClipboard, downloadTextFile, formatTranscriptForCapture, getTranscriptFilename } from "./transcript-utils";
 
 const messages: ChatMessage[] = [
   {
@@ -26,36 +26,34 @@ const messages: ChatMessage[] = [
 ];
 
 describe("formatTranscriptForCapture", () => {
-  const text = formatTranscriptForCapture(messages, {
-    capturedAt: "CAPTURE_TIME",
-    llmLabel: "Anthropic: claude-haiku-4-5",
+  const csv = formatTranscriptForCapture(messages);
+  const lines = csv.replace(/\r\n$/, "").split("\r\n");
+
+  it("starts with a CSV header row", () => {
+    expect(lines[0]).toBe('"timestamp","speaker","debug event","message"');
   });
 
-  it("includes a header with capture time and LLM label", () => {
-    expect(text).toContain("DAVAI Chat Transcript");
-    expect(text).toContain("Captured: CAPTURE_TIME");
-    expect(text).toContain("LLM: Anthropic: claude-haiku-4-5");
+  it("renders normal messages with a blank debug event and markdown-stripped text", () => {
+    expect(lines[1]).toBe('"T1","User","","bold question"');
+    expect(lines[2]).toBe('"T2","DAVAI","","the answer"');
+    expect(csv).not.toContain("**bold**");
   });
 
-  it("renders normal messages as speaker + timestamp + stripped text", () => {
-    expect(text).toContain("User (T1):\nbold question");
-    expect(text).toContain("DAVAI (T2):\nthe answer");
-    expect(text).not.toContain("**bold**");
+  it("renders debug-log entries with the description in debug event and raw content in message", () => {
+    expect(lines[3]).toBe('"T3","Debug Log","tool call","{""a"":1}"');
   });
 
-  it("includes debug-log entries with description and raw content", () => {
-    expect(text).toContain("Debug Log (T3):\ntool call\n{\"a\":1}");
-  });
-});
-
-describe("getLlmLabel", () => {
-  it("formats provider and id", () => {
-    expect(getLlmLabel("{\"id\":\"claude-haiku-4-5\",\"provider\":\"Anthropic\"}"))
-      .toBe("Anthropic: claude-haiku-4-5");
-  });
-
-  it("falls back to Unknown LLM for bad JSON", () => {
-    expect(getLlmLabel("not json")).toBe("Unknown LLM");
+  it("quotes every field and escapes embedded quotes and commas", () => {
+    const out = formatTranscriptForCapture([
+      {
+        speaker: "User",
+        timestamp: "T",
+        id: "x",
+        messageContent: { content: 'has "quote", and comma' },
+        plainTextContent: 'has "quote", and comma',
+      },
+    ]);
+    expect(out).toContain('"T","User","","has ""quote"", and comma"');
   });
 });
 
@@ -65,7 +63,7 @@ describe("getTranscriptFilename", () => {
       "{\"id\":\"claude-haiku-4-5\",\"provider\":\"Anthropic\"}",
       new Date(2026, 5, 23)
     );
-    expect(name).toBe("davai-transcript-2026-06-23-claude-haiku-4-5.txt");
+    expect(name).toBe("davai-transcript-2026-06-23-claude-haiku-4-5.csv");
   });
 
   it("sanitizes unsafe characters in the id", () => {
@@ -73,12 +71,12 @@ describe("getTranscriptFilename", () => {
       "{\"id\":\"gpt-4o/mini\",\"provider\":\"OpenAI\"}",
       new Date(2026, 0, 5)
     );
-    expect(name).toBe("davai-transcript-2026-01-05-gpt-4o-mini.txt");
+    expect(name).toBe("davai-transcript-2026-01-05-gpt-4o-mini.csv");
   });
 
   it("falls back to unknown-llm for unparseable llmId", () => {
     const name = getTranscriptFilename("not json", new Date(2026, 5, 23));
-    expect(name).toBe("davai-transcript-2026-06-23-unknown-llm.txt");
+    expect(name).toBe("davai-transcript-2026-06-23-unknown-llm.csv");
   });
 });
 

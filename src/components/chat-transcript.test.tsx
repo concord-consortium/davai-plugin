@@ -71,7 +71,7 @@ describe("test chat transcript component", () => {
     await waitFor(() => expect(writeText).toHaveBeenCalledTimes(1));
     expect(clickSpy).toHaveBeenCalledTimes(1);
     const copiedText = writeText.mock.calls[0][0] as string;
-    expect(copiedText).toContain("DAVAI Chat Transcript");
+    expect(copiedText).toContain('"timestamp","speaker","debug event","message"');
     expect(copiedText).toContain("Hello. How can I help you today?");
 
     clickSpy.mockRestore();

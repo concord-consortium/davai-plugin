@@ -6,12 +6,10 @@ import { LoadingMessage } from "./loading-message";
 import { useAppConfigContext } from "../contexts/app-config-context";
 import { useShortcutsService } from "../contexts/shortcuts-service-context";
 import { useAriaLive } from "../contexts/aria-live-context";
-import { timeStamp } from "../utils/utils";
 import {
   copyTextToClipboard,
   downloadTextFile,
   formatTranscriptForCapture,
-  getLlmLabel,
   getTranscriptFilename,
 } from "../utils/transcript-utils";
 
@@ -40,10 +38,7 @@ export const ChatTranscriptComponent = observer(({chatTranscript, isLoading}: IP
   }, [chatTranscript.messages.length, isLoading]);
 
   const handleCaptureTranscript = useCallback(async () => {
-    const text = formatTranscriptForCapture(chatTranscript.messages, {
-      capturedAt: timeStamp(),
-      llmLabel: getLlmLabel(appConfig.llmId),
-    });
+    const text = formatTranscriptForCapture(chatTranscript.messages);
     const filename = getTranscriptFilename(appConfig.llmId, new Date());
 
     let copied = true;
