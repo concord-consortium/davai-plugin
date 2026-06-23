@@ -81,3 +81,44 @@ describe("getTranscriptFilename", () => {
     expect(name).toBe("davai-transcript-2026-06-23-unknown-llm.txt");
   });
 });
+
+import { copyTextToClipboard, downloadTextFile } from "./transcript-utils";
+
+describe("downloadTextFile", () => {
+  it("creates an object URL, clicks a download anchor, and revokes the URL", () => {
+    const createObjectURL = jest.fn(() => "blob:url");
+    const revokeObjectURL = jest.fn();
+    (global.URL as any).createObjectURL = createObjectURL;
+    (global.URL as any).revokeObjectURL = revokeObjectURL;
+
+    let anchor: HTMLAnchorElement | undefined;
+    const realCreate = document.createElement.bind(document);
+    const createElementSpy = jest.spyOn(document, "createElement").mockImplementation((tag: string) => {
+      const el = realCreate(tag);
+      if (tag === "a") anchor = el as HTMLAnchorElement;
+      return el;
+    });
+    const clickSpy = jest.spyOn(HTMLAnchorElement.prototype, "click").mockImplementation(() => undefined);
+
+    downloadTextFile("my-file.txt", "hello");
+
+    expect(createObjectURL).toHaveBeenCalledTimes(1);
+    expect(anchor?.download).toBe("my-file.txt");
+    expect(clickSpy).toHaveBeenCalledTimes(1);
+    expect(revokeObjectURL).toHaveBeenCalledWith("blob:url");
+
+    createElementSpy.mockRestore();
+    clickSpy.mockRestore();
+  });
+});
+
+describe("copyTextToClipboard", () => {
+  it("writes the text via the clipboard API", async () => {
+    const writeText = jest.fn().mockResolvedValue(undefined);
+    Object.assign(navigator, { clipboard: { writeText } });
+
+    await copyTextToClipboard("hello clipboard");
+
+    expect(writeText).toHaveBeenCalledWith("hello clipboard");
+  });
+});
