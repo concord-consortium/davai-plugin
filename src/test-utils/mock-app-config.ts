@@ -5,7 +5,8 @@ export const mockAppConfig: AppConfigModelSnapshot = {
   keyboardShortcuts: {
     focusChatInput: "Control+Shift+Slash",
     replayLastDavaiMessage: "Control+Shift+Comma",
-    sonifyGraph: "Control+Shift+Period"
+    sonifyGraph: "Control+Shift+Period",
+    captureTranscript: "Control+Shift+Semicolon"
   },
   keyboardShortcutsEnabled: true,
   playProcessingMessage: true,
