@@ -25,8 +25,8 @@ export const KeyboardShortcutControls = observer(function KeyboardShortcutContro
   };
 
   const handleCustomizeShortcut = (shortcutKey: AppConfigKeyboardShortcutKeys) => (event: FormEvent) => {
-    if (!keyboardShortcutsEnabled) return;
     event.preventDefault();
+    if (!keyboardShortcutsEnabled) return;
     const form = event.target as HTMLFormElement;
     const shortcut = form.querySelector("input")?.value.trim();
     if (shortcut) {
