@@ -4,22 +4,24 @@ import { cleanup, fireEvent, render, screen, within } from "@testing-library/rea
 import { AppConfigProvider } from "../contexts/app-config-context";
 import { KeyboardShortcutControls } from "./keyboard-shortcut-controls";
 
-
 describe("test keyboard shortcut controls component", () => {
-  const defaultShortcut = "Control+Shift+Slash";
   const customShortcut = "Control+b";
+  const shortcutRows = [
+    { key: "focusChatInput", description: "Focus the chat input", value: "Control+Shift+Slash" },
+    { key: "replayLastDavaiMessage", description: "Replay the last DAVAI message", value: "Control+Shift+Comma" },
+    { key: "sonifyGraph", description: "Play the graph sonification", value: "Control+Shift+Period" },
+    { key: "captureTranscript", description: "Capture the chat transcript", value: "Control+Shift+Semicolon" },
+  ];
 
   afterEach(cleanup);
 
-  const WrapperComponent = () => {
-    return (
-      <AppConfigProvider>
-        <KeyboardShortcutControls/>
-      </AppConfigProvider>
-    );
-  };
+  const WrapperComponent = () => (
+    <AppConfigProvider>
+      <KeyboardShortcutControls/>
+    </AppConfigProvider>
+  );
 
-  it("renders a button for disabling/enabling the keyboard shortcut", () => {
+  it("renders a button for disabling/enabling the keyboard shortcuts", () => {
     render(<WrapperComponent />);
     const button = screen.getByTestId("keyboard-shortcut-toggle");
     expect(button).toHaveTextContent("Disable Shortcut");
@@ -29,38 +31,41 @@ describe("test keyboard shortcut controls component", () => {
     expect(button).toHaveTextContent("Disable Shortcut");
   });
 
-  it("renders a form for customizing the keyboard shortcut", async () => {
+  it("renders a labeled customize form for every shortcut", () => {
     render(<WrapperComponent />);
-    const form = screen.getByTestId("custom-keyboard-shortcut-form");
-    const input = within(form).getByTestId("custom-keyboard-shortcut");
-    expect(input).not.toHaveAttribute("aria-describedby");
-    expect(screen.queryByTestId("custom-keyboard-shortcut-confirmation")).toBeNull();
-    const submitButton = within(form).getByTestId("custom-keyboard-shortcut-submit");
-    expect(input).toHaveValue(defaultShortcut);
-    fireEvent.change(input, {target: {value: customShortcut}});
-    fireEvent.click(submitButton);
-    expect(input).toHaveValue(customShortcut);
-    expect(input).toHaveAttribute("aria-describedby", "custom-keyboard-shortcut-confirmation");
-    expect(screen.getByTestId("custom-keyboard-shortcut-confirmation")).toBeInTheDocument();
-    const confirmationMsg = screen.getByTestId("custom-keyboard-shortcut-confirmation").textContent;
-    expect(confirmationMsg).toContain(`Keyboard shortcut changed to ${customShortcut}`);
-    const dismissButton = screen.getByTestId("custom-keyboard-shortcut-confirmation-dismiss");
-    expect(dismissButton).toHaveTextContent("Dismiss this message.");
+    shortcutRows.forEach(({ key, description, value }) => {
+      const form = screen.getByTestId(`custom-keyboard-shortcut-${key}-form`);
+      expect(within(form).getByText(`${description}:`)).toBeInTheDocument();
+      expect(within(form).getByTestId(`custom-keyboard-shortcut-${key}`)).toHaveValue(value);
+    });
   });
 
-  it("shows an error message if the custom keyboard shortcut input is empty", () => {
+  it("customizes a single shortcut and shows that row's confirmation", () => {
     render(<WrapperComponent />);
-    const form = screen.getByTestId("custom-keyboard-shortcut-form");
-    const input = within(form).getByTestId("custom-keyboard-shortcut");
-    expect(input).toHaveAttribute("aria-invalid", "false");
-    expect(input).not.toHaveAttribute("aria-describedby");
-    expect(screen.queryByTestId("custom-keyboard-shortcut-error")).toBeNull();
+    const form = screen.getByTestId("custom-keyboard-shortcut-focusChatInput-form");
+    const input = within(form).getByTestId("custom-keyboard-shortcut-focusChatInput");
+    fireEvent.change(input, {target: {value: customShortcut}});
+    fireEvent.click(within(form).getByTestId("custom-keyboard-shortcut-focusChatInput-submit"));
+
+    expect(input).toHaveValue(customShortcut);
+    expect(input).toHaveAttribute("aria-describedby", "custom-keyboard-shortcut-focusChatInput-confirmation");
+    const confirmation = screen.getByTestId("custom-keyboard-shortcut-focusChatInput-confirmation");
+    expect(confirmation).toHaveTextContent(`Focus the chat input shortcut changed to ${customShortcut}`);
+
+    // other rows are unaffected
+    expect(screen.queryByTestId("custom-keyboard-shortcut-sonifyGraph-confirmation")).toBeNull();
+  });
+
+  it("shows an error message when a shortcut input is emptied", () => {
+    render(<WrapperComponent />);
+    const form = screen.getByTestId("custom-keyboard-shortcut-sonifyGraph-form");
+    const input = within(form).getByTestId("custom-keyboard-shortcut-sonifyGraph");
     fireEvent.change(input, {target: {value: ""}});
-    const submitButton = within(form).getByTestId("custom-keyboard-shortcut-submit");
-    fireEvent.click(submitButton);
+    fireEvent.click(within(form).getByTestId("custom-keyboard-shortcut-sonifyGraph-submit"));
+
     expect(input).toHaveAttribute("aria-invalid", "true");
-    expect(input).toHaveAttribute("aria-describedby", "custom-keyboard-shortcut-error");
-    expect(screen.getByTestId("custom-keyboard-shortcut-error")).toBeInTheDocument();
-    expect(screen.getByTestId("custom-keyboard-shortcut-error")).toHaveTextContent("Please enter a value for the keyboard shortcut.");
+    expect(input).toHaveAttribute("aria-describedby", "custom-keyboard-shortcut-sonifyGraph-error");
+    expect(screen.getByTestId("custom-keyboard-shortcut-sonifyGraph-error"))
+      .toHaveTextContent("Please enter a value for the keyboard shortcut.");
   });
 });

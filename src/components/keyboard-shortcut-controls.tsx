@@ -2,42 +2,44 @@ import React, { FormEvent, useState } from "react";
 import { observer } from "mobx-react-lite";
 import { ErrorMessage } from "./error-message";
 import { useAppConfigContext } from "../contexts/app-config-context";
+import { AppConfigKeyboardShortcutKeys } from "../models/app-config-model";
 
 import "./keyboard-shortcut-controls.scss";
 
+const KEYBOARD_SHORTCUT_OPTIONS: { key: AppConfigKeyboardShortcutKeys; description: string }[] = [
+  { key: "focusChatInput", description: "Focus the chat input" },
+  { key: "replayLastDavaiMessage", description: "Replay the last DAVAI message" },
+  { key: "sonifyGraph", description: "Play the graph sonification" },
+  { key: "captureTranscript", description: "Capture the chat transcript" },
+];
+
 export const KeyboardShortcutControls = observer(function KeyboardShortcutControls() {
   const appConfig = useAppConfigContext();
-  const { keyboardShortcutsEnabled, keyboardShortcuts: { focusChatInput } } = appConfig;
+  const { keyboardShortcutsEnabled, keyboardShortcuts } = appConfig;
   const toggleButtonLabel = keyboardShortcutsEnabled ? "Disable Shortcut" : "Enable Shortcut";
-  const [showError, setShowError] = useState(false);
-  const [showConfirmation, setShowConfirmation] = useState(false);
+  const [confirmedKey, setConfirmedKey] = useState<AppConfigKeyboardShortcutKeys | null>(null);
+  const [erroredKey, setErroredKey] = useState<AppConfigKeyboardShortcutKeys | null>(null);
 
   const handleToggleShortcut = () => {
     appConfig.toggleOption("keyboardShortcutsEnabled");
   };
 
-  const handleCustomizeShortcut = (event: FormEvent) => {
+  const handleCustomizeShortcut = (shortcutKey: AppConfigKeyboardShortcutKeys) => (event: FormEvent) => {
     if (!keyboardShortcutsEnabled) return;
     event.preventDefault();
-    const form = event.target as HTMLInputElement;
+    const form = event.target as HTMLFormElement;
     const shortcut = form.querySelector("input")?.value.trim();
     if (shortcut) {
       appConfig.update(() => {
-        appConfig.keyboardShortcuts.focusChatInput = shortcut;
+        appConfig.keyboardShortcuts[shortcutKey] = shortcut;
       });
-      setShowError(false);
-      setShowConfirmation(true);
+      setErroredKey(null);
+      setConfirmedKey(shortcutKey);
     } else {
-      setShowError(true);
-      setShowConfirmation(false);
+      setConfirmedKey(null);
+      setErroredKey(shortcutKey);
     }
   };
-
-  const customShortcutInputDescribedBy = showConfirmation
-    ? "custom-keyboard-shortcut-confirmation"
-    : showError
-      ? "custom-keyboard-shortcut-error"
-      : undefined;
 
   return (
     <div
@@ -53,38 +55,55 @@ export const KeyboardShortcutControls = observer(function KeyboardShortcutContro
             {toggleButtonLabel}
           </button>
         </div>
-        <form data-testid="custom-keyboard-shortcut-form" onSubmit={handleCustomizeShortcut}>
-          <fieldset aria-disabled={!keyboardShortcutsEnabled}>
-            <label htmlFor="custom-keyboard-shortcut">Customize Shortcut:</label>
-            <input
-              aria-describedby={customShortcutInputDescribedBy}
-              aria-invalid={showError}
-              data-testid="custom-keyboard-shortcut"
-              defaultValue={focusChatInput}
-              id="custom-keyboard-shortcut"
-              type="text"
-            />
-            <button data-testid="custom-keyboard-shortcut-submit" type="submit">Customize</button>
-            {showConfirmation &&
-              <div
-                aria-live="polite"
-                className="confirmation-message"
-                data-testid="custom-keyboard-shortcut-confirmation"
-                id="custom-keyboard-shortcut-confirmation"
-                role="status"
-              >
-                Keyboard shortcut changed to {focusChatInput}
-                <button
-                  className="dismiss"
-                  data-testid="custom-keyboard-shortcut-confirmation-dismiss"
-                  onClick={() => setShowConfirmation(false)}>
-                    <span className="visually-hidden">Dismiss this message.</span>
-                </button>
-              </div>
-            }
-            { showError && <ErrorMessage slug="custom-keyboard-shortcut" message="Please enter a value for the keyboard shortcut." /> }
-          </fieldset>
-        </form>
+        {KEYBOARD_SHORTCUT_OPTIONS.map(({ key, description }) => {
+          const inputId = `custom-keyboard-shortcut-${key}`;
+          const confirmationId = `${inputId}-confirmation`;
+          const showConfirmation = confirmedKey === key;
+          const showError = erroredKey === key;
+          const describedBy = showConfirmation
+            ? confirmationId
+            : showError
+              ? `${inputId}-error`
+              : undefined;
+          return (
+            <form
+              key={key}
+              data-testid={`${inputId}-form`}
+              onSubmit={handleCustomizeShortcut(key)}
+            >
+              <fieldset aria-disabled={!keyboardShortcutsEnabled}>
+                <label htmlFor={inputId}>{description}:</label>
+                <input
+                  aria-describedby={describedBy}
+                  aria-invalid={showError}
+                  data-testid={inputId}
+                  defaultValue={keyboardShortcuts[key]}
+                  id={inputId}
+                  type="text"
+                />
+                <button data-testid={`${inputId}-submit`} type="submit">Customize</button>
+                {showConfirmation &&
+                  <div
+                    aria-live="polite"
+                    className="confirmation-message"
+                    data-testid={confirmationId}
+                    id={confirmationId}
+                    role="status"
+                  >
+                    {description} shortcut changed to {keyboardShortcuts[key]}
+                    <button
+                      className="dismiss"
+                      data-testid={`${confirmationId}-dismiss`}
+                      onClick={() => setConfirmedKey(null)}>
+                        <span className="visually-hidden">Dismiss this message.</span>
+                    </button>
+                  </div>
+                }
+                { showError && <ErrorMessage slug={inputId} message="Please enter a value for the keyboard shortcut." /> }
+              </fieldset>
+            </form>
+          );
+        })}
       </div>
     </div>
   );
