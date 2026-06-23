@@ -1,5 +1,5 @@
 import { ChatMessage } from "../types";
-import { formatTranscriptForCapture, getLlmLabel, getTranscriptFilename } from "./transcript-utils";
+import { copyTextToClipboard, downloadTextFile, formatTranscriptForCapture, getLlmLabel, getTranscriptFilename } from "./transcript-utils";
 
 const messages: ChatMessage[] = [
   {
@@ -81,8 +81,6 @@ describe("getTranscriptFilename", () => {
     expect(name).toBe("davai-transcript-2026-06-23-unknown-llm.txt");
   });
 });
-
-import { copyTextToClipboard, downloadTextFile } from "./transcript-utils";
 
 describe("downloadTextFile", () => {
   it("creates an object URL, clicks a download anchor, and revokes the URL", () => {
