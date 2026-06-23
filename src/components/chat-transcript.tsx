@@ -74,7 +74,7 @@ export const ChatTranscriptComponent = observer(({chatTranscript, isLoading}: IP
       // We toggle an invisible character to force the screen reader to read the same message again.
       // We tried to clear the live text, wait, and set it again, but that didn't work
       replayHiddenCharToggleRef.current = !replayHiddenCharToggleRef.current;
-      const suffix = replayHiddenCharToggleRef.current ? "​" : "‌";
+      const suffix = replayHiddenCharToggleRef.current ? "\u200B" : "\u200C";
       if (lastDavaiMessage) {
         setAriaLiveText(`Last Message: ${lastDavaiMessage.plainTextContent}${suffix}`);
       } else {
