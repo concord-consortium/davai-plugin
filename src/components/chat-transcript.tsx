@@ -42,12 +42,7 @@ export const ChatTranscriptComponent = observer(({chatTranscript, isLoading}: IP
     const { csv, images } = buildTranscriptCsv(chatTranscript.messages);
 
     // The clipboard always gets the readable CSV (with images/ references).
-    let copied = true;
-    try {
-      await copyTextToClipboard(csv);
-    } catch {
-      copied = false;
-    }
+    const copied = await copyTextToClipboard(csv).then(() => true, () => false);
 
     // Download a zip (CSV + extracted images) when images are present, else a plain CSV.
     if (images.length > 0) {

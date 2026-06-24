@@ -66,6 +66,24 @@ describe("buildTranscriptCsv", () => {
     expect(out).toContain('"T","User","","has ""quote"", and comma"');
   });
 
+  it("neutralizes spreadsheet formula injection by prefixing dangerous fields with '", () => {
+    const { csv } = buildTranscriptCsv([
+      { speaker: "User", timestamp: "T1", id: "a", messageContent: { content: "=SUM(A1:A2)" }, plainTextContent: "=SUM(A1:A2)" },
+      { speaker: "DAVAI", timestamp: "T2", id: "b", messageContent: { content: "- bullet point" }, plainTextContent: "- bullet point" },
+      { speaker: "User", timestamp: "T3", id: "c", messageContent: { content: "@handle" }, plainTextContent: "@handle" },
+    ]);
+    expect(csv).toContain(`"T1","User","","'=SUM(A1:A2)"`);
+    expect(csv).toContain(`"T2","DAVAI","","'- bullet point"`);
+    expect(csv).toContain(`"T3","User","","'@handle"`);
+  });
+
+  it("does not prefix fields that start with a safe character", () => {
+    const { csv } = buildTranscriptCsv([
+      { speaker: "User", timestamp: "T", id: "d", messageContent: { content: "hello = world" }, plainTextContent: "hello = world" },
+    ]);
+    expect(csv).toContain('"T","User","","hello = world"');
+  });
+
   it("returns no images when the transcript has none", () => {
     const { images } = buildTranscriptCsv(messages);
     expect(images).toHaveLength(0);

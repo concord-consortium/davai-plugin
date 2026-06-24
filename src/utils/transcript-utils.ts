@@ -82,8 +82,15 @@ function toCsvRow(fields: string[]): string {
 
 // RFC 4180: wrap every field in double quotes and double any internal quotes,
 // so commas, quotes, and newlines in messages or debug JSON don't break columns.
+// Also guard against CSV injection: spreadsheet apps evaluate a cell whose first
+// character is = + - @ (or a leading tab/CR) as a formula, and quoting alone does
+// not prevent that. Prefix such fields with ' to force literal text. (Side effect:
+// markdown bullets like "- x" also get the ' — invisible in spreadsheets, literal
+// only on programmatic re-parse.)
 function escapeCsvField(value: string): string {
-  return `"${(value ?? "").replace(/"/g, '""')}"`;
+  const normalized = value ?? "";
+  const safe = /^[=+\-@\t\r]/.test(normalized) ? `'${normalized}` : normalized;
+  return `"${safe.replace(/"/g, '""')}"`;
 }
 
 export function getTranscriptFilename(llmId: string, now: Date, ext = "csv"): string {
