@@ -51,7 +51,7 @@ export const KeyboardShortcutControls = observer(function KeyboardShortcutContro
       <h3 id="keyboard-shortcuts-heading">Keyboard Shortcuts</h3>
       <div className="options-list-1">
         <div className="user-option">
-          <button onClick={handleToggleShortcut} data-testid="keyboard-shortcut-toggle">
+          <button type="button" onClick={handleToggleShortcut} data-testid="keyboard-shortcut-toggle">
             {toggleButtonLabel}
           </button>
         </div>
@@ -92,6 +92,7 @@ export const KeyboardShortcutControls = observer(function KeyboardShortcutContro
                   >
                     {description} shortcut changed to {keyboardShortcuts[key]}
                     <button
+                      type="button"
                       className="dismiss"
                       data-testid={`${confirmationId}-dismiss`}
                       onClick={() => setConfirmedKey(null)}>

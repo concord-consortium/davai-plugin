@@ -56,6 +56,21 @@ describe("test keyboard shortcut controls component", () => {
     expect(screen.queryByTestId("custom-keyboard-shortcut-sonifyGraph-confirmation")).toBeNull();
   });
 
+  it("dismiss button is type=button and removes the confirmation without resubmitting", () => {
+    render(<WrapperComponent />);
+    const form = screen.getByTestId("custom-keyboard-shortcut-focusChatInput-form");
+    fireEvent.change(within(form).getByTestId("custom-keyboard-shortcut-focusChatInput"), {target: {value: customShortcut}});
+    fireEvent.click(within(form).getByTestId("custom-keyboard-shortcut-focusChatInput-submit"));
+
+    const dismiss = screen.getByTestId("custom-keyboard-shortcut-focusChatInput-confirmation-dismiss");
+    // A bare <button> in a <form> defaults to type=submit, which would re-fire the
+    // form instead of dismissing. It must be type=button.
+    expect(dismiss).toHaveAttribute("type", "button");
+
+    fireEvent.click(dismiss);
+    expect(screen.queryByTestId("custom-keyboard-shortcut-focusChatInput-confirmation")).toBeNull();
+  });
+
   it("shows an error message when a shortcut input is emptied", () => {
     render(<WrapperComponent />);
     const form = screen.getByTestId("custom-keyboard-shortcut-sonifyGraph-form");
