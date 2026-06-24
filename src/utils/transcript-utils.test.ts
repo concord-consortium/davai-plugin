@@ -1,5 +1,15 @@
+import { strFromU8, unzipSync } from "fflate";
 import { ChatMessage } from "../types";
-import { copyTextToClipboard, downloadTextFile, formatTranscriptForCapture, getTranscriptFilename } from "./transcript-utils";
+import { buildTranscriptCsv, buildTranscriptZip, copyTextToClipboard, downloadTextFile, getTranscriptFilename } from "./transcript-utils";
+
+const imageDataUri = "data:image/png;base64,aGVsbG8=";
+const debugWithImage: ChatMessage = {
+  speaker: "Debug Log",
+  timestamp: "T4",
+  id: "4",
+  messageContent: { description: "Response from CODAP", content: `{"exportDataUri":"${imageDataUri}"}` },
+  plainTextContent: "",
+};
 
 const messages: ChatMessage[] = [
   {
@@ -25,8 +35,8 @@ const messages: ChatMessage[] = [
   },
 ];
 
-describe("formatTranscriptForCapture", () => {
-  const csv = formatTranscriptForCapture(messages);
+describe("buildTranscriptCsv", () => {
+  const { csv } = buildTranscriptCsv(messages);
   const lines = csv.replace(/\r\n$/, "").split("\r\n");
 
   it("starts with a CSV header row", () => {
@@ -44,7 +54,7 @@ describe("formatTranscriptForCapture", () => {
   });
 
   it("quotes every field and escapes embedded quotes and commas", () => {
-    const out = formatTranscriptForCapture([
+    const { csv: out } = buildTranscriptCsv([
       {
         speaker: "User",
         timestamp: "T",
@@ -54,6 +64,55 @@ describe("formatTranscriptForCapture", () => {
       },
     ]);
     expect(out).toContain('"T","User","","has ""quote"", and comma"');
+  });
+
+  it("returns no images when the transcript has none", () => {
+    const { images } = buildTranscriptCsv(messages);
+    expect(images).toHaveLength(0);
+  });
+});
+
+describe("buildTranscriptCsv image extraction", () => {
+  it("replaces a base64 image with an images/ reference and returns its bytes", () => {
+    const { csv, images } = buildTranscriptCsv([debugWithImage]);
+    expect(csv).toContain("images/image-001.png");
+    expect(csv).not.toContain("aGVsbG8=");
+    expect(images).toHaveLength(1);
+    expect(images[0].filename).toBe("image-001.png");
+    expect(images[0].bytes.length).toBeGreaterThan(0);
+  });
+
+  it("de-duplicates an identical image into one file referenced from both rows", () => {
+    const second: ChatMessage = {
+      ...debugWithImage,
+      id: "5",
+      timestamp: "T5",
+      messageContent: { description: "Tool output generated", content: `{"url":"${imageDataUri}"}` },
+    };
+    const { csv, images } = buildTranscriptCsv([debugWithImage, second]);
+    expect(images).toHaveLength(1);
+    expect((csv.match(/images\/image-001\.png/g) || []).length).toBe(2);
+  });
+
+  it("numbers distinct images sequentially with an extension from the mime type", () => {
+    const jpeg: ChatMessage = {
+      ...debugWithImage,
+      id: "6",
+      timestamp: "T6",
+      messageContent: { description: "img", content: "data:image/jpeg;base64,d29ybGQ=" },
+    };
+    const { images } = buildTranscriptCsv([debugWithImage, jpeg]);
+    expect(images.map((i) => i.filename)).toEqual(["image-001.png", "image-002.jpg"]);
+  });
+});
+
+describe("buildTranscriptZip", () => {
+  it("bundles the CSV and images and round-trips via unzip", () => {
+    const capture = buildTranscriptCsv([debugWithImage]);
+    const entries = unzipSync(buildTranscriptZip(capture));
+    expect(Object.keys(entries).sort()).toEqual(["images/image-001.png", "transcript.csv"]);
+    expect(strFromU8(entries["transcript.csv"])).toContain("images/image-001.png");
+    expect(strFromU8(entries["images/image-001.png"])).toBe("hello");
   });
 });
 
@@ -77,6 +136,15 @@ describe("getTranscriptFilename", () => {
   it("falls back to unknown-llm for unparseable llmId", () => {
     const name = getTranscriptFilename("not json", new Date(2026, 5, 23));
     expect(name).toBe("davai-transcript-2026-06-23-unknown-llm.csv");
+  });
+
+  it("uses the given extension", () => {
+    const name = getTranscriptFilename(
+      "{\"id\":\"mock\",\"provider\":\"Mock\"}",
+      new Date(2026, 5, 23),
+      "zip"
+    );
+    expect(name).toBe("davai-transcript-2026-06-23-mock.zip");
   });
 });
 

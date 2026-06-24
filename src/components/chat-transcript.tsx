@@ -7,9 +7,11 @@ import { useAppConfigContext } from "../contexts/app-config-context";
 import { useShortcutsService } from "../contexts/shortcuts-service-context";
 import { useAriaLive } from "../contexts/aria-live-context";
 import {
+  buildTranscriptCsv,
+  buildTranscriptZip,
   copyTextToClipboard,
+  downloadBlob,
   downloadTextFile,
-  formatTranscriptForCapture,
   getTranscriptFilename,
 } from "../utils/transcript-utils";
 
@@ -38,16 +40,26 @@ export const ChatTranscriptComponent = observer(({chatTranscript, isLoading}: IP
   }, [chatTranscript.messages.length, isLoading]);
 
   const handleCaptureTranscript = useCallback(async () => {
-    const text = formatTranscriptForCapture(chatTranscript.messages);
-    const filename = getTranscriptFilename(appConfig.llmId, new Date());
+    const { csv, images } = buildTranscriptCsv(chatTranscript.messages);
 
+    // The clipboard always gets the readable CSV (with images/ references).
     let copied = true;
     try {
-      await copyTextToClipboard(text);
+      await copyTextToClipboard(csv);
     } catch {
       copied = false;
     }
-    downloadTextFile(filename, text);
+
+    // Download a zip (CSV + extracted images) when images are present, else a plain CSV.
+    if (images.length > 0) {
+      const zipBytes = buildTranscriptZip({ csv, images });
+      downloadBlob(
+        getTranscriptFilename(appConfig.llmId, new Date(), "zip"),
+        new Blob([zipBytes], { type: "application/zip" })
+      );
+    } else {
+      downloadTextFile(getTranscriptFilename(appConfig.llmId, new Date(), "csv"), csv);
+    }
 
     setAriaLiveText(copied
       ? "Transcript copied to clipboard and downloaded."

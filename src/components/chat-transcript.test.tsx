@@ -76,4 +76,47 @@ describe("test chat transcript component", () => {
 
     clickSpy.mockRestore();
   });
+
+  it("downloads a zip and references the image when the transcript contains a base64 image", async () => {
+    const writeText = jest.fn().mockResolvedValue(undefined);
+    Object.assign(navigator, { clipboard: { writeText } });
+    const createObjectURL = jest.fn((_blob: Blob) => "blob:url");
+    (global.URL as any).createObjectURL = createObjectURL;
+    (global.URL as any).revokeObjectURL = jest.fn();
+    const clickSpy = jest.spyOn(HTMLAnchorElement.prototype, "click").mockImplementation(() => undefined);
+
+    const transcriptWithImage = {
+      messages: [
+        {
+          messageContent: {
+            description: "Response from CODAP",
+            content: '{"exportDataUri":"data:image/png;base64,aGVsbG8="}',
+          },
+          speaker: "Debug Log",
+          timestamp: "2021-07-01T12:00:10Z",
+          id: "img-1",
+          plainTextContent: "",
+        },
+      ],
+    };
+
+    render(
+      <AppConfigProvider>
+        <ShortcutsServiceProvider>
+          <ChatTranscriptComponent chatTranscript={transcriptWithImage}/>
+        </ShortcutsServiceProvider>
+      </AppConfigProvider>
+    );
+
+    fireEvent.click(screen.getByTestId("capture-transcript-button"));
+
+    await waitFor(() => expect(createObjectURL).toHaveBeenCalledTimes(1));
+    const blob = createObjectURL.mock.calls[0][0] as Blob;
+    expect(blob.type).toBe("application/zip");
+    // The clipboard still gets the readable CSV with an images/ reference, not the base64.
+    expect(writeText.mock.calls[0][0]).toContain("images/image-001.png");
+    expect(writeText.mock.calls[0][0]).not.toContain("aGVsbG8=");
+
+    clickSpy.mockRestore();
+  });
 });
