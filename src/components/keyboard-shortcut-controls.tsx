@@ -71,7 +71,7 @@ export const KeyboardShortcutControls = observer(function KeyboardShortcutContro
               data-testid={`${inputId}-form`}
               onSubmit={handleCustomizeShortcut(key)}
             >
-              <fieldset aria-disabled={!keyboardShortcutsEnabled}>
+              <fieldset disabled={!keyboardShortcutsEnabled}>
                 <label htmlFor={inputId}>{description}:</label>
                 <input
                   aria-describedby={describedBy}

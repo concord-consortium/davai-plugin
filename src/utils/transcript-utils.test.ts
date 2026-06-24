@@ -1,6 +1,6 @@
 import { strFromU8, unzipSync } from "fflate";
 import { ChatMessage } from "../types";
-import { buildTranscriptCsv, buildTranscriptZip, copyTextToClipboard, downloadTextFile, getTranscriptFilename } from "./transcript-utils";
+import { buildTranscriptCsv, buildTranscriptZip, copyTextToClipboard, downloadBlob, getTranscriptFilename } from "./transcript-utils";
 
 const imageDataUri = "data:image/png;base64,aGVsbG8=";
 const debugWithImage: ChatMessage = {
@@ -148,9 +148,9 @@ describe("getTranscriptFilename", () => {
   });
 });
 
-describe("downloadTextFile", () => {
+describe("downloadBlob", () => {
   it("creates an object URL, clicks a download anchor, and revokes the URL", () => {
-    const createObjectURL = jest.fn(() => "blob:url");
+    const createObjectURL = jest.fn((_blob: Blob) => "blob:url");
     const revokeObjectURL = jest.fn();
     (global.URL as any).createObjectURL = createObjectURL;
     (global.URL as any).revokeObjectURL = revokeObjectURL;
@@ -164,10 +164,11 @@ describe("downloadTextFile", () => {
     });
     const clickSpy = jest.spyOn(HTMLAnchorElement.prototype, "click").mockImplementation(() => undefined);
 
-    downloadTextFile("my-file.txt", "hello");
+    downloadBlob("my-file.csv", new Blob(["hello"], { type: "text/csv;charset=utf-8" }));
 
     expect(createObjectURL).toHaveBeenCalledTimes(1);
-    expect(anchor?.download).toBe("my-file.txt");
+    expect(createObjectURL.mock.calls[0][0].type).toBe("text/csv;charset=utf-8");
+    expect(anchor?.download).toBe("my-file.csv");
     expect(clickSpy).toHaveBeenCalledTimes(1);
     expect(revokeObjectURL).toHaveBeenCalledWith("blob:url");
 

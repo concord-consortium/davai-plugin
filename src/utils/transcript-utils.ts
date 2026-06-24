@@ -126,10 +126,6 @@ export function downloadBlob(filename: string, blob: Blob): void {
   URL.revokeObjectURL(url);
 }
 
-export function downloadTextFile(filename: string, text: string): void {
-  downloadBlob(filename, new Blob([text], { type: "text/plain" }));
-}
-
 export async function copyTextToClipboard(text: string): Promise<void> {
   await navigator.clipboard.writeText(text);
 }

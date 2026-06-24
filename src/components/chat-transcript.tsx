@@ -11,7 +11,6 @@ import {
   buildTranscriptZip,
   copyTextToClipboard,
   downloadBlob,
-  downloadTextFile,
   getTranscriptFilename,
 } from "../utils/transcript-utils";
 
@@ -58,7 +57,10 @@ export const ChatTranscriptComponent = observer(({chatTranscript, isLoading}: IP
         new Blob([zipBytes], { type: "application/zip" })
       );
     } else {
-      downloadTextFile(getTranscriptFilename(appConfig.llmId, new Date(), "csv"), csv);
+      downloadBlob(
+        getTranscriptFilename(appConfig.llmId, new Date(), "csv"),
+        new Blob([csv], { type: "text/csv;charset=utf-8" })
+      );
     }
 
     setAriaLiveText(copied
