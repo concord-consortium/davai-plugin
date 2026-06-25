@@ -147,17 +147,23 @@ export interface IGraphAttrData {
   y2Axis?: Record<string, any>;
 }
 
+export interface IToolRequest {
+  action: string;
+  resource: string;
+  graphID?: string;
+  values?: any;
+}
+
+// Returned when the server could not prepare the tool call (e.g. the model's
+// arguments failed the tool schema). The client forwards this straight back as
+// the tool result instead of calling CODAP, so the tool_use is still answered.
+export interface IToolRequestError {
+  status: "error";
+  error: string;
+}
+
 export interface IToolCallData {
-  request: {
-    action: string;
-    resource: string;
-    graphID?: string;
-    values?: any;
-    // Present when the server could not prepare the tool call; the client forwards
-    // this straight back as the tool result instead of calling CODAP.
-    status?: string;
-    error?: string;
-  };
+  request: IToolRequest | IToolRequestError;
   tool_call_id: string;
   type: string;
 }

@@ -6,8 +6,14 @@ import { formatJsonMessage, formatElapsedTime } from "../utils/utils";
 import { getDataContexts, getGraphAttrData, getGraphByID, getTrimmedGraphDetails } from "../utils/codap-api-utils";
 import { isGraphSonifiable } from "../utils/graph-sonification-utils";
 import { ChatTranscriptModel } from "./chat-transcript-model";
-import { IToolCallData, IMessageResponse, ToolOutput } from "../types";
+import { IToolCallData, IToolRequestError, IMessageResponse, ToolOutput } from "../types";
 import { postMessage } from "../utils/llm-utils";
+
+// A tool call the server could not prepare comes back as an error payload rather
+// than a normal CODAP request. This guard narrows the union so the normal path can
+// safely use action/resource/etc.
+const isToolRequestError = (request: IToolCallData["request"]): request is IToolRequestError =>
+  "status" in request && request.status === "error";
 
 /**
  * AssistantModel encapsulates the AI assistant and its interactions with the user.
@@ -121,7 +127,7 @@ export const AssistantModel = types
         // A tool call the server couldn't prepare comes back as an error payload.
         // Forward it straight back as the tool result (no CODAP round-trip) so the
         // tool_use is still answered and the model can recover in this same turn.
-        if (data.request?.status === "error") {
+        if (isToolRequestError(data.request)) {
           self.addDbgMsg("Tool call could not be prepared", formatJsonMessage(data.request));
           return JSON.stringify(data.request);
         }
