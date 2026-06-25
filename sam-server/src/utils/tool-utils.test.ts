@@ -4,7 +4,9 @@ import { createRequestTool,
          tools,
          toolCallResponse,
          extractToolCalls,
-         getUnansweredToolCallIds
+         getUnansweredToolCallIds,
+         buildToolRepairMessages,
+         TOOL_NOT_COMPLETED_ERROR
        } from "./tool-utils";
 
 describe("createRequestTool", () => {
@@ -109,5 +111,39 @@ describe("getUnansweredToolCallIds", () => {
 
   it("returns [] for an empty history", () => {
     expect(getUnansweredToolCallIds([])).toEqual([]);
+  });
+});
+
+describe("buildToolRepairMessages", () => {
+  it("creates one error ToolMessage per unanswered tool call", () => {
+    const messages = [
+      new AIMessage({ content: "", tool_calls: [{ name: "create_request", args: {}, id: "call-1" }] }),
+    ];
+    const repairs = buildToolRepairMessages(messages);
+    expect(repairs).toHaveLength(1);
+    expect(repairs[0].tool_call_id).toBe("call-1");
+    expect(JSON.parse(repairs[0].content as string)).toEqual({
+      status: "error",
+      error: TOOL_NOT_COMPLETED_ERROR,
+    });
+  });
+
+  it("excludes the tool call the current job is answering", () => {
+    const messages = [
+      new AIMessage({ content: "", tool_calls: [
+        { name: "create_request", args: {}, id: "call-1" },
+        { name: "create_request", args: {}, id: "call-2" },
+      ]}),
+    ];
+    const repairs = buildToolRepairMessages(messages, "call-1");
+    expect(repairs.map((r) => r.tool_call_id)).toEqual(["call-2"]);
+  });
+
+  it("returns [] when every tool call is already answered", () => {
+    const messages = [
+      new AIMessage({ content: "", tool_calls: [{ name: "create_request", args: {}, id: "call-1" }] }),
+      new ToolMessage({ content: "ok", tool_call_id: "call-1" }),
+    ];
+    expect(buildToolRepairMessages(messages)).toEqual([]);
   });
 });

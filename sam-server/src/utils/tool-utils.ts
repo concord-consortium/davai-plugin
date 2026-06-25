@@ -1,4 +1,4 @@
-import type { BaseMessage } from "@langchain/core/messages";
+import { ToolMessage, type BaseMessage } from "@langchain/core/messages";
 import { tool } from "@langchain/core/tools";
 
 type SimpleTool = {
@@ -158,4 +158,27 @@ export function getUnansweredToolCallIds(messages: BaseMessage[]): string[] {
     }
   }
   return unanswered;
+}
+
+export const TOOL_NOT_COMPLETED_ERROR =
+  "The previous tool call did not complete and produced no result.";
+
+/**
+ * Synthesize an error tool_result (ToolMessage) for every tool_use in the thread
+ * that was never answered, so the next model call satisfies Anthropic's
+ * "every tool_use needs a tool_result" rule. Pass the id the current tool-job is
+ * already answering as `answeringToolCallId` so it is not double-answered.
+ */
+export function buildToolRepairMessages(
+  priorMessages: BaseMessage[],
+  answeringToolCallId?: string
+): ToolMessage[] {
+  return getUnansweredToolCallIds(priorMessages)
+    .filter((id) => id !== answeringToolCallId)
+    .map((id) =>
+      new ToolMessage({
+        tool_call_id: id,
+        content: JSON.stringify({ status: "error", error: TOOL_NOT_COMPLETED_ERROR }),
+      })
+    );
 }
