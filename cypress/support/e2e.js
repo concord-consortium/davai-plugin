@@ -30,15 +30,18 @@ import "@cypress/code-coverage/support";
 //   2. a TypeError "Cannot read properties of undefined (reading 'success')" thrown when
 //      selectSelf's callback receives the undefined timeout result.
 // For (1) the rejection reason is a string, so err.stack is Cypress's runner stack, not
-// codap-plugin-api — match on the message as well as the stack. Errors from our own code
-// still fail the test.
+// codap-plugin-api, and a non-Error reason has no .message — so search String(err) too.
+// Only these two no-host cases are ignored (the TypeError must come from the CODAP comms
+// layer); real bugs in our code, or elsewhere in those libraries, still fail the test.
 Cypress.on("uncaught:exception", (err) => {
-  const text = `${err?.message || ""}\n${err?.stack || ""}`;
-  const fromCodapNoHost =
+  const text = `${err?.message || ""}\n${err?.stack || ""}\n${String(err)}`;
+  const fromCodapComms = text.includes("codap-plugin-api") || text.includes("iframe-phone");
+  const isNoHostTimeout =
+    // (1) the rejected promise whose reason is the timeout string
     text.includes("CODAP request timed out") ||
-    text.includes("Cannot read properties of undefined (reading 'success')") ||
-    text.includes("codap-plugin-api") ||
-    text.includes("iframe-phone");
+    // (2) selectSelf reading `success` off the undefined timeout result — only when the
+    //     throw actually originates in the CODAP comms layer
+    (fromCodapComms && /reading '?success'?/.test(text));
   // Returning false tells Cypress to ignore the error; anything else lets it fail.
-  return !fromCodapNoHost;
+  return !isNoHostTimeout;
 });
