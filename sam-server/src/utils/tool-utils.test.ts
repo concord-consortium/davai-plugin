@@ -70,6 +70,7 @@ describe("toolCallResponse", () => {
     const response = await toolCallResponse(toolCall);
     expect(response.status).toBe("requires_action");
     expect(response.tool_call_id).toBe("bad-1");
+    expect(response.request).toMatchObject({ status: "error" });
   });
 });
 
