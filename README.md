@@ -17,9 +17,9 @@ To work on the client without any server or API keys, enable development mode (a
 
 ## Testing the plugin in CODAP
 
-CODAP forces `https`, which normally makes it awkward to load a plugin from a local `http` dev server. The dev server solves this with a proxy: `npm start` serves the plugin on **http://localhost:8080** and forwards anything it doesn't serve to `codap3.concord.org` (see `devServer.proxy` in `webpack.config.js`). That puts CODAP and the local plugin on the **same origin**, so there is no mixed-content problem:
+CODAP forces `https`, which normally makes it awkward to load a plugin from a local `http` dev server. The dev server solves this with a proxy: `npm start` serves the plugin on **http://localhost:8080** and forwards anything it doesn't serve to `codap.concord.org` (production CODAP, served at `/app/`; see `devServer.proxy` in `webpack.config.js`). That puts CODAP and the local plugin on the **same origin**, so there is no mixed-content problem:
 
-- CODAP (proxied from codap3.concord.org): `http://localhost:8080/branch/main/`
+- CODAP (proxied from codap.concord.org): `http://localhost:8080/app/`
 - The plugin (served by webpack): `http://localhost:8080/`
 
 ### Recommended: load via the `di` URL param
@@ -27,10 +27,10 @@ CODAP forces `https`, which normally makes it awkward to load a plugin from a lo
 Start the dev server (`npm start`) and open CODAP with the plugin embedded via the `di` (data-interactive) parameter — all on `localhost:8080`:
 
 ```
-http://localhost:8080/branch/main/?di=http%3A%2F%2Flocalhost%3A8080%2F%3Fmode%3Ddevelopment
+http://localhost:8080/app/?di=http%3A%2F%2Flocalhost%3A8080%2F%3Fmode%3Ddevelopment
 ```
 
-The `di` value above is `http://localhost:8080/?mode=development`, URL-encoded so the nested query string (`?mode=development`, which enables the Developer Options panel and Mock LLM) survives. If CODAP doesn't auto-add the plugin, open `http://localhost:8080/branch/main/` and add the plugin URL `http://localhost:8080/?mode=development` from CODAP's plugin menu.
+The `di` value above is `http://localhost:8080/?mode=development`, URL-encoded so the nested query string (`?mode=development`, which enables the Developer Options panel and Mock LLM) survives. If CODAP doesn't auto-add the plugin, open `http://localhost:8080/app/` and add the plugin URL `http://localhost:8080/?mode=development` from CODAP's plugin menu.
 
 Run `npm run start:secure` instead if you need the dev server over HTTPS (it uses the certs in `~/.localhost-ssl/`).
 
@@ -43,7 +43,7 @@ If you need to point CODAP at a plugin URL that isn't covered by the proxy, you 
    ```
    open -na "Google Chrome" --args --disable-web-security --user-data-dir=/tmp
    ```
-3. In that window, open CODAP (e.g. `http://localhost:8080/branch/main/`) and a sample document.
+3. In that window, open CODAP (e.g. `http://localhost:8080/app/`) and a sample document.
 4. In CODAP, go to **Options** > **Load web page** and enter `http://localhost:8080/?mode=development`.
 
 ## Environments and the LLM server

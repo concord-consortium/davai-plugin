@@ -14,7 +14,7 @@ The client never talks to an LLM provider directly — it posts to the server, w
 
 ### Client development
 ```bash
-npm start                    # webpack-dev-server on port 8080 (HTTP); proxies CODAP from codap3.concord.org
+npm start                    # webpack-dev-server on port 8080 (HTTP); proxies CODAP from codap.concord.org
 npm run start:secure         # Same, but HTTPS (uses certs in ~/.localhost-ssl/)
 ```
 
@@ -103,14 +103,14 @@ See [README.md](README.md#environments-and-the-llm-server) and [docs/deploy.md](
 
 ## Testing the plugin in CODAP
 
-`npm start` serves the plugin on **http://localhost:8080** and proxies everything it doesn't serve to `codap3.concord.org` (`devServer.proxy` in `webpack.config.js`). That makes CODAP and the local plugin **same-origin**, sidestepping CODAP's https/mixed-content restriction:
-- CODAP (proxied): `http://localhost:8080/branch/main/`
+`npm start` serves the plugin on **http://localhost:8080** and proxies everything it doesn't serve to `codap.concord.org` (production CODAP, served at `/app/`; see `devServer.proxy` in `webpack.config.js`). That makes CODAP and the local plugin **same-origin**, sidestepping CODAP's https/mixed-content restriction:
+- CODAP (proxied): `http://localhost:8080/app/`
 - The plugin (served by webpack): `http://localhost:8080/`
 
 Load the plugin into CODAP with the `di` (data-interactive) URL param, all on the same origin:
 
 ```
-http://localhost:8080/branch/main/?di=http%3A%2F%2Flocalhost%3A8080%2F%3Fmode%3Ddevelopment
+http://localhost:8080/app/?di=http%3A%2F%2Flocalhost%3A8080%2F%3Fmode%3Ddevelopment
 ```
 
 (That `di` value is `http://localhost:8080/?mode=development`, URL-encoded so the nested query string survives.) Use `npm run start:secure` if you need the dev server over HTTPS instead.
