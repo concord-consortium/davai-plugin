@@ -2,7 +2,7 @@ import { SQSEvent } from "aws-lambda";
 import { Pool } from "pg";
 import { HumanMessage, ToolMessage } from "@langchain/core/messages";
 import { getLangApp } from "../utils/llm-utils";
-import { extractToolCalls, toolCallResponse } from "../utils/tool-utils";
+import { buildToolRepairMessages, extractToolCalls, toolCallResponse } from "../utils/tool-utils";
 import { Job, ToolJob, MessageJob } from "../types";
 import { getLangSmithKey } from "../utils/env-utils";
 
@@ -88,14 +88,33 @@ export const handler = async (event: SQSEvent): Promise<void> => {
         configurable: { llmId: job.input.llmId, thread_id: job.input.threadId },
         signal: controller.signal
       };
-      const messages: any[] = [];
+
+      const app = await getLangApp();
+
+      // Self-heal: if the thread already holds a tool_use that never received a
+      // tool_result (e.g. a prior tool call threw before its result was submitted),
+      // inject synthetic error tool_results FIRST so this call doesn't 400 on the
+      // dangling tool_use. The reducer concatenates [prior..., these, new...], so
+      // they land immediately after the orphaned AIMessage(tool_use) at the tail.
+      // https://docs.langchain.com/oss/javascript/langchain/errors/INVALID_TOOL_RESULTS/
+      let priorMessages: any[] = [];
+      try {
+        const priorState = await app.getState(config);
+        priorMessages = priorState?.values?.messages ?? [];
+      } catch (stateError) {
+        console.warn(`Could not load thread state for ${messageId}; skipping tool-call repair:`, stateError);
+      }
+
+      const answeringToolCallId =
+        job.kind === "tool" ? (job as ToolJob).input.message.tool_call_id : undefined;
+      const messages: any[] = [...buildToolRepairMessages(priorMessages, answeringToolCallId)];
       let dataContexts: any = {};
       let graphs: any = [];
 
       if (job.kind === "tool") {
 
         const toolJob = job as ToolJob;
-        
+
         let toolMessageContent: string;
         let humanMessage;
 
@@ -121,7 +140,7 @@ export const handler = async (event: SQSEvent): Promise<void> => {
       }
 
       // Process with LangGraph
-      const result = await (await getLangApp()).invoke(
+      const result = await app.invoke(
         { messages, dataContexts, graphs },
         config
       );

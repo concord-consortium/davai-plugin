@@ -1,4 +1,4 @@
-import type { BaseMessage } from "@langchain/core/messages";
+import { ToolMessage, type BaseMessage } from "@langchain/core/messages";
 import { tool } from "@langchain/core/tools";
 
 type SimpleTool = {
@@ -110,18 +110,32 @@ export const sonifyGraphTool = tool(
 export const tools: SimpleTool[] = [createRequestTool as any, sonifyGraphTool as any];
 
 export const toolCallResponse = async (toolCall: any) => {
-  const definedTool = tools.find((t) => t.name === toolCall.name);
-  if (!definedTool) throw new Error(`Tool ${toolCall.name} not found`);
+  try {
+    const definedTool = tools.find((t) => t.name === toolCall.name);
+    if (!definedTool) throw new Error(`Tool ${toolCall.name} not found`);
 
-  const toolResult = await (definedTool as any).invoke(toolCall.args);
-  const parsedResult = JSON.parse(toolResult);
+    const toolResult = await (definedTool as any).invoke(toolCall.args);
+    const parsedResult = JSON.parse(toolResult);
 
-  return {
-    request: parsedResult,
-    status: "requires_action",
-    tool_call_id: toolCall.id,
-    type: definedTool.name,
-  };
+    return {
+      request: parsedResult,
+      status: "requires_action",
+      tool_call_id: toolCall.id,
+      type: definedTool.name,
+    };
+  } catch (error) {
+    // A tool_use MUST be answered by a tool_result or the Anthropic thread is left
+    // permanently broken (INVALID_TOOL_RESULTS). Throwing here would skip the client's
+    // tool round-trip and orphan the tool_use. Instead return an answerable error
+    // response: the client forwards it back as the tool result and the model recovers.
+    const message = error instanceof Error ? error.message : String(error);
+    return {
+      request: { status: "error", error: message },
+      status: "requires_action",
+      tool_call_id: toolCall?.id,
+      type: toolCall?.name ?? "unknown",
+    };
+  }
 };
 
 export const extractToolCalls = (lastMessage: BaseMessage | undefined): any[] => {
@@ -130,3 +144,55 @@ export const extractToolCalls = (lastMessage: BaseMessage | undefined): any[] =>
   }
   return (lastMessage as any).tool_calls;
 };
+
+/**
+ * Find tool_call ids in the thread that were never answered by a ToolMessage.
+ * Anthropic rejects any thread where a tool_use lacks a following tool_result, so
+ * these are the ids the server must synthesize results for. Order = first
+ * appearance; duplicates removed. Pure: accepts plain message-shaped objects.
+ */
+export function getUnansweredToolCallIds(messages: BaseMessage[]): string[] {
+  const answered = new Set<string>();
+  for (const message of messages) {
+    const toolCallId = (message as any).tool_call_id;
+    if (typeof toolCallId === "string") answered.add(toolCallId);
+  }
+
+  const unanswered: string[] = [];
+  const seen = new Set<string>();
+  for (const message of messages) {
+    const toolCalls = (message as any).tool_calls;
+    if (!Array.isArray(toolCalls)) continue;
+    for (const toolCall of toolCalls) {
+      const id = toolCall?.id;
+      if (typeof id === "string" && !answered.has(id) && !seen.has(id)) {
+        seen.add(id);
+        unanswered.push(id);
+      }
+    }
+  }
+  return unanswered;
+}
+
+export const TOOL_NOT_COMPLETED_ERROR =
+  "The previous tool call did not complete and produced no result.";
+
+/**
+ * Synthesize an error tool_result (ToolMessage) for every tool_use in the thread
+ * that was never answered, so the next model call satisfies Anthropic's
+ * "every tool_use needs a tool_result" rule. Pass the id the current tool-job is
+ * already answering as `answeringToolCallId` so it is not double-answered.
+ */
+export function buildToolRepairMessages(
+  priorMessages: BaseMessage[],
+  answeringToolCallId?: string
+): ToolMessage[] {
+  return getUnansweredToolCallIds(priorMessages)
+    .filter((id) => id !== answeringToolCallId)
+    .map((id) =>
+      new ToolMessage({
+        tool_call_id: id,
+        content: JSON.stringify({ status: "error", error: TOOL_NOT_COMPLETED_ERROR }),
+      })
+    );
+}
