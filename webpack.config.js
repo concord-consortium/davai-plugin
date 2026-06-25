@@ -64,13 +64,13 @@ module.exports = (env, argv) => {
         cert: path.resolve(os.homedir(), '.localhost-ssl/localhost.pem'),
       },
       proxy: [
-        // Proxy anything not available locally to codap3.concord.org
-        // This makes it possible to load CODAP at https://localhost:8080/branch/main
-        // and the plugin at https://localhost:8080/ this way the plugin can be
-        // embedded in CODAP during development.
+        // Proxy anything not available locally to codap.concord.org (production CODAP,
+        // served at /app/). This makes it possible to load CODAP at
+        // https://localhost:8080/app/ and the plugin at https://localhost:8080/ so the
+        // plugin can be embedded in CODAP same-origin during development.
         {
           context: ['/'],
-          target: 'https://codap3.concord.org',
+          target: 'https://codap.concord.org',
           secure: true,
           changeOrigin: true,
         }

@@ -17,27 +17,34 @@ To work on the client without any server or API keys, enable development mode (a
 
 ## Testing the plugin in CODAP
 
-Currently there is no trivial way to load a plugin running on a local server with `http` into the online CODAP, which forces `https`.
+CODAP forces `https`, which normally makes it awkward to load a plugin from a local `http` dev server. The dev server solves this with a proxy: `npm start` serves the plugin on **http://localhost:8080** and forwards anything it doesn't serve to `codap.concord.org` (production CODAP, served at `/app/`; see `devServer.proxy` in `webpack.config.js`). That puts CODAP and the local plugin on the **same origin**, so there is no mixed-content problem:
 
-### Method one
-One simple solution is to download the latest `build_[...].zip` file from https://codap.concord.org/releases/zips/, extract it to a folder and run it locally. If CODAP is running on port 8080, and this project is running by default on 8081, you can go to
+- CODAP (proxied from codap.concord.org): `http://localhost:8080/app/`
+- The plugin (served by webpack): `http://localhost:8080/`
 
-http://127.0.0.1:8080/static/dg/en/cert/index.html?di=http://localhost:8081
+### Recommended: load via the `di` URL param
 
-to see the plugin running in CODAP.
+Start the dev server (`npm start`) and open CODAP with the plugin embedded via the `di` (data-interactive) parameter — all on `localhost:8080`:
 
-### Method two
+```
+http://localhost:8080/app/?di=http%3A%2F%2Flocalhost%3A8080%2F%3Fmode%3Ddevelopment
+```
 
-1. Start the DAVAI plugin by running `npm start` in this codebase.
-2. Open the CODAP repository, navigate to the `v3` directory, and run `npm start` to launch CODAP locally.
-3. Open a new Chrome window with web security disabled by running:
-  ```
-  open -na "Google Chrome" --args --disable-web-security --user-data-dir=/tmp
-  ```
-4. In this Chrome window, go to the local CODAP URL (e.g., `http://localhost:8080`) and open a sample file (such as "Mammals").
-5. In CODAP, go to **Options** > **Load web page**, and enter the local DAVAI plugin URL (for example, `http://localhost:8081/?mode=development`).
+The `di` value above is `http://localhost:8080/?mode=development`, URL-encoded so the nested query string (`?mode=development`, which enables the Developer Options panel and Mock LLM) survives. If CODAP doesn't auto-add the plugin, open `http://localhost:8080/app/` and add the plugin URL `http://localhost:8080/?mode=development` from CODAP's plugin menu.
 
-This method allows you to test the plugin locally in CODAP, bypassing browser security restrictions that normally prevent loading local resources.
+Run `npm run start:secure` instead if you need the dev server over HTTPS (it uses the certs in `~/.localhost-ssl/`).
+
+### Fallback: Chrome with web security disabled
+
+If you need to point CODAP at a plugin URL that isn't covered by the proxy, you can bypass browser security:
+
+1. Start the DAVAI plugin with `npm start`.
+2. Open a Chrome window with web security disabled:
+   ```
+   open -na "Google Chrome" --args --disable-web-security --user-data-dir=/tmp
+   ```
+3. In that window, open CODAP (e.g. `http://localhost:8080/app/`) and a sample document.
+4. In CODAP, go to **Options** > **Load web page** and enter `http://localhost:8080/?mode=development`.
 
 ## Environments and the LLM server
 

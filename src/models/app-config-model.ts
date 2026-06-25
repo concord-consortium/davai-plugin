@@ -132,6 +132,10 @@ export const AppConfigModel = types.model("AppConfigModel", {
      * The shortcut key combination to play the graph sonification. This is in tinykeys format.
      */
     sonifyGraph: types.string,
+    /**
+     * The shortcut key combination to capture (copy + download) the chat transcript.
+     */
+    captureTranscript: types.string,
   }),
   /**
    * Whether keyboard shortcuts are enabled. If false, keyboard shortcuts will be ignored.

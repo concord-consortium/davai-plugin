@@ -146,7 +146,7 @@ jobs:
           bucket: models-resources
           prefix: davai-plugin
           githubToken: ${{ secrets.GITHUB_TOKEN }}
-          deployRunUrl: https://codap3.concord.org/branch/main/index.html?sample=mammals&di=https://codap3.concord.org/davai-plugin/__deployPath__/index.html
+          deployRunUrl: https://codap.concord.org/app/index.html?sample=mammals&di=https://codap.concord.org/davai-plugin/__deployPath__/index.html
           # Parameters to GHActions have to be strings, so a regular yaml array cannot
           # be used. Instead the `|` turns the following lines into a string
           topBranches: |

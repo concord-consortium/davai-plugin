@@ -9,5 +9,7 @@ $medium-gray: #030303;
 $medium-gray-2: #949494;
 $dark-gray: #222;
 
-$confirmation-color: #093;
-$error-color: #f00;
+// Darkened from #093 / #f00 so 12px message text meets WCAG 2.1 AA contrast
+// (4.5:1) on the white panel: #007a29 ≈ 5.5:1, #d40000 ≈ 5.1:1.
+$confirmation-color: #007a29;
+$error-color: #d40000;

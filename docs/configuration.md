@@ -5,6 +5,7 @@ Generated from source comments and MST runtime introspection. Do not edit manual
 | --------------------------------------- | -------- | ------------------------------------------- |
 | dimensions.height                       | number   | 680                                         |
 | dimensions.width                        | number   | 380                                         |
+| keyboardShortcuts.captureTranscript     | string   | "Control+Shift+Semicolon"                   |
 | keyboardShortcuts.focusChatInput        | string   | "Control+Shift+Slash"                       |
 | keyboardShortcuts.replayLastDavaiMessage | string   | "Control+Shift+Comma"                       |
 | keyboardShortcuts.sonifyGraph           | string   | "Control+Shift+Period"                      |
@@ -34,6 +35,10 @@ Height of the plugin in CODAP (in pixels).
 ## `dimensions.width`
 
 Width of the plugin in CODAP (in pixels).
+
+## `keyboardShortcuts.captureTranscript`
+
+The shortcut key combination to capture (copy + download) the chat transcript.
 
 ## `keyboardShortcuts.focusChatInput`
 

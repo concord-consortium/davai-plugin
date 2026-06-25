@@ -1,4 +1,4 @@
-import React, { useRef, useEffect } from "react";
+import React, { useRef, useEffect, useCallback } from "react";
 import { observer } from "mobx-react-lite";
 import { ChatTranscriptMessage } from "./chat-transcript-message";
 import { ChatTranscript, ChatMessage } from "../types";
@@ -6,6 +6,13 @@ import { LoadingMessage } from "./loading-message";
 import { useAppConfigContext } from "../contexts/app-config-context";
 import { useShortcutsService } from "../contexts/shortcuts-service-context";
 import { useAriaLive } from "../contexts/aria-live-context";
+import {
+  buildTranscriptCsv,
+  buildTranscriptZip,
+  copyTextToClipboard,
+  downloadBlob,
+  getTranscriptFilename,
+} from "../utils/transcript-utils";
 
 import "./chat-transcript.scss";
 
@@ -15,7 +22,8 @@ interface IProps {
 }
 
 export const ChatTranscriptComponent = observer(({chatTranscript, isLoading}: IProps) => {
-  const { showDebugLog } = useAppConfigContext();
+  const appConfig = useAppConfigContext();
+  const { showDebugLog } = appConfig;
   const shortcutsService = useShortcutsService();
   const chatTranscriptRef = useRef<HTMLDivElement>(null);
   const { setAriaLiveText } = useAriaLive();
@@ -29,6 +37,38 @@ export const ChatTranscriptComponent = observer(({chatTranscript, isLoading}: IP
       lastMessage?.scrollIntoView({behavior: "smooth", block: "nearest"});
     }
   }, [chatTranscript.messages.length, isLoading]);
+
+  const handleCaptureTranscript = useCallback(async () => {
+    const { csv, images } = buildTranscriptCsv(chatTranscript.messages);
+
+    // The clipboard always gets the readable CSV (with images/ references).
+    const copied = await copyTextToClipboard(csv).then(() => true, () => false);
+
+    // Download a zip (CSV + extracted images) when images are present, else a plain CSV.
+    if (images.length > 0) {
+      const zipBytes = buildTranscriptZip({ csv, images });
+      downloadBlob(
+        getTranscriptFilename(appConfig.llmId, new Date(), "zip"),
+        new Blob([zipBytes], { type: "application/zip" })
+      );
+    } else {
+      downloadBlob(
+        getTranscriptFilename(appConfig.llmId, new Date(), "csv"),
+        new Blob([csv], { type: "text/csv;charset=utf-8" })
+      );
+    }
+
+    setAriaLiveText(copied
+      ? "Transcript copied to clipboard and downloaded."
+      : "Transcript downloaded. Could not copy to clipboard.");
+  }, [chatTranscript, appConfig, setAriaLiveText]);
+
+  useEffect(() => {
+    return shortcutsService.registerShortcutHandler("captureTranscript", (event) => {
+      event.preventDefault();
+      handleCaptureTranscript();
+    }, { focus: true });
+  }, [shortcutsService, handleCaptureTranscript]);
 
   useEffect(() => {
     // A shortcut to set the last message in the live aria region
@@ -48,23 +88,41 @@ export const ChatTranscriptComponent = observer(({chatTranscript, isLoading}: IP
   }, [chatTranscript.messages, setAriaLiveText, shortcutsService]);
 
   return (
-    <div ref={chatTranscriptRef} id="chat-transcript" className="chat-transcript" data-testid="chat-transcript" role="group">
-      <h2 className="visually-hidden">Chat Transcript</h2>
-      <div
-        className="chat-transcript__messages"
-        data-testid="chat-transcript__messages"
-        role="list"
-      >
-        {chatTranscript.messages.map((message: ChatMessage) => {
-          return (
-            <ChatTranscriptMessage
-              key={`${message.id}`}
-              message={message}
-              showDebugLog={showDebugLog}
-            />
-          );
-        })}
-        {isLoading && <LoadingMessage/>}
+    <div
+      className="chat-transcript-wrapper"
+      data-testid="chat-transcript"
+      role="group"
+      aria-labelledby="chat-transcript-heading"
+    >
+      <h2 id="chat-transcript-heading" className="visually-hidden">Chat Transcript</h2>
+      <div className="chat-transcript__toolbar">
+        <button
+          type="button"
+          className="capture-transcript"
+          data-testid="capture-transcript-button"
+          aria-label="Capture transcript"
+          onClick={handleCaptureTranscript}
+        >
+          Capture Transcript
+        </button>
+      </div>
+      <div ref={chatTranscriptRef} id="chat-transcript" className="chat-transcript">
+        <div
+          className="chat-transcript__messages"
+          data-testid="chat-transcript__messages"
+          role="list"
+        >
+          {chatTranscript.messages.map((message: ChatMessage) => {
+            return (
+              <ChatTranscriptMessage
+                key={`${message.id}`}
+                message={message}
+                showDebugLog={showDebugLog}
+              />
+            );
+          })}
+          {isLoading && <LoadingMessage/>}
+        </div>
       </div>
     </div>
   );
