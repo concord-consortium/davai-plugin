@@ -24,12 +24,21 @@ import "@cypress/code-coverage/support";
 
 // The plugin talks to CODAP through the CODAP plugin API (iframe-phone). These specs
 // load the plugin standalone, with no CODAP host, so codap-plugin-api requests time
-// out and call back with `undefined` — and the library then throws asynchronously
-// (e.g. selectSelf reading `result.success`). Those library-level errors are expected
-// here and unrelated to whether the app renders, so don't let them fail the spec.
-// Errors originating in our own code still fail the test.
+// out after iframe-phone's 2s limit. That surfaces two expected, app-level errors that
+// are unrelated to whether the app renders:
+//   1. a rejected promise whose reason is the string "...CODAP request timed out...",
+//   2. a TypeError "Cannot read properties of undefined (reading 'success')" thrown when
+//      selectSelf's callback receives the undefined timeout result.
+// For (1) the rejection reason is a string, so err.stack is Cypress's runner stack, not
+// codap-plugin-api — match on the message as well as the stack. Errors from our own code
+// still fail the test.
 Cypress.on("uncaught:exception", (err) => {
-  const fromCodapComms = err.stack?.includes("codap-plugin-api") || err.stack?.includes("iframe-phone");
+  const text = `${err?.message || ""}\n${err?.stack || ""}`;
+  const fromCodapNoHost =
+    text.includes("CODAP request timed out") ||
+    text.includes("Cannot read properties of undefined (reading 'success')") ||
+    text.includes("codap-plugin-api") ||
+    text.includes("iframe-phone");
   // Returning false tells Cypress to ignore the error; anything else lets it fail.
-  return !fromCodapComms;
+  return !fromCodapNoHost;
 });
