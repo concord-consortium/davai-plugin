@@ -153,6 +153,10 @@ export interface IToolCallData {
     resource: string;
     graphID?: string;
     values?: any;
+    // Present when the server could not prepare the tool call; the client forwards
+    // this straight back as the tool result instead of calling CODAP.
+    status?: string;
+    error?: string;
   };
   tool_call_id: string;
   type: string;

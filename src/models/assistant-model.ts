@@ -118,6 +118,14 @@ export const AssistantModel = types
 
     const processToolCall = flow(function* (data: IToolCallData) {
       try {
+        // A tool call the server couldn't prepare comes back as an error payload.
+        // Forward it straight back as the tool result (no CODAP round-trip) so the
+        // tool_use is still answered and the model can recover in this same turn.
+        if (data.request?.status === "error") {
+          self.addDbgMsg("Tool call could not be prepared", formatJsonMessage(data.request));
+          return JSON.stringify(data.request);
+        }
+
         if (data.type === "create_request") {
           const { action, resource, values } = data.request;
           const request = { action, resource, values };
