@@ -110,18 +110,32 @@ export const sonifyGraphTool = tool(
 export const tools: SimpleTool[] = [createRequestTool as any, sonifyGraphTool as any];
 
 export const toolCallResponse = async (toolCall: any) => {
-  const definedTool = tools.find((t) => t.name === toolCall.name);
-  if (!definedTool) throw new Error(`Tool ${toolCall.name} not found`);
+  try {
+    const definedTool = tools.find((t) => t.name === toolCall.name);
+    if (!definedTool) throw new Error(`Tool ${toolCall.name} not found`);
 
-  const toolResult = await (definedTool as any).invoke(toolCall.args);
-  const parsedResult = JSON.parse(toolResult);
+    const toolResult = await (definedTool as any).invoke(toolCall.args);
+    const parsedResult = JSON.parse(toolResult);
 
-  return {
-    request: parsedResult,
-    status: "requires_action",
-    tool_call_id: toolCall.id,
-    type: definedTool.name,
-  };
+    return {
+      request: parsedResult,
+      status: "requires_action",
+      tool_call_id: toolCall.id,
+      type: definedTool.name,
+    };
+  } catch (error) {
+    // A tool_use MUST be answered by a tool_result or the Anthropic thread is left
+    // permanently broken (INVALID_TOOL_RESULTS). Throwing here would skip the client's
+    // tool round-trip and orphan the tool_use. Instead return an answerable error
+    // response: the client forwards it back as the tool result and the model recovers.
+    const message = error instanceof Error ? error.message : String(error);
+    return {
+      request: { status: "error", error: message },
+      status: "requires_action",
+      tool_call_id: toolCall?.id,
+      type: toolCall?.name ?? "unknown",
+    };
+  }
 };
 
 export const extractToolCalls = (lastMessage: BaseMessage | undefined): any[] => {

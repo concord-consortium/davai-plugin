@@ -54,9 +54,22 @@ describe("toolCallResponse", () => {
     });
   });
 
-  it("should throw error if tool not found", async () => {
+  it("returns an answerable error response if the tool is not found (does not throw)", async () => {
     const toolCall = { name: "unknown_tool", args: {}, id: "xyz" };
-    await expect(toolCallResponse(toolCall)).rejects.toThrow("Tool unknown_tool not found");
+    const response = await toolCallResponse(toolCall);
+    expect(response).toMatchObject({
+      request: { status: "error" },
+      status: "requires_action",
+      tool_call_id: "xyz",
+      type: "unknown_tool",
+    });
+  });
+
+  it("never throws on schema-violating args and still yields an answerable response", async () => {
+    const toolCall = { name: "create_request", args: { unexpected: true }, id: "bad-1" };
+    const response = await toolCallResponse(toolCall);
+    expect(response.status).toBe("requires_action");
+    expect(response.tool_call_id).toBe("bad-1");
   });
 });
 
