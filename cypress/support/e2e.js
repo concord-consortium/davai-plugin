@@ -24,12 +24,24 @@ import "@cypress/code-coverage/support";
 
 // The plugin talks to CODAP through the CODAP plugin API (iframe-phone). These specs
 // load the plugin standalone, with no CODAP host, so codap-plugin-api requests time
-// out and call back with `undefined` — and the library then throws asynchronously
-// (e.g. selectSelf reading `result.success`). Those library-level errors are expected
-// here and unrelated to whether the app renders, so don't let them fail the spec.
-// Errors originating in our own code still fail the test.
+// out after iframe-phone's 2s limit. That surfaces two expected, app-level errors that
+// are unrelated to whether the app renders:
+//   1. a rejected promise whose reason is the string "...CODAP request timed out...",
+//   2. a TypeError "Cannot read properties of undefined (reading 'success')" thrown when
+//      selectSelf's callback receives the undefined timeout result.
+// For (1) the rejection reason is a string, so err.stack is Cypress's runner stack, not
+// codap-plugin-api, and a non-Error reason has no .message — so search String(err) too.
+// Only these two no-host cases are ignored (the TypeError must come from the CODAP comms
+// layer); real bugs in our code, or elsewhere in those libraries, still fail the test.
 Cypress.on("uncaught:exception", (err) => {
-  const fromCodapComms = err.stack?.includes("codap-plugin-api") || err.stack?.includes("iframe-phone");
+  const text = `${err?.message || ""}\n${err?.stack || ""}\n${String(err)}`;
+  const fromCodapComms = text.includes("codap-plugin-api") || text.includes("iframe-phone");
+  const isNoHostTimeout =
+    // (1) the rejected promise whose reason is the timeout string
+    text.includes("CODAP request timed out") ||
+    // (2) selectSelf reading `success` off the undefined timeout result — only when the
+    //     throw actually originates in the CODAP comms layer
+    (fromCodapComms && /reading '?success'?/.test(text));
   // Returning false tells Cypress to ignore the error; anything else lets it fail.
-  return !fromCodapComms;
+  return !isNoHostTimeout;
 });
