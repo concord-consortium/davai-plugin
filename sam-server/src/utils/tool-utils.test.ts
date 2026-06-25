@@ -1,9 +1,10 @@
-import { BaseMessage } from "@langchain/core/messages";
+import { AIMessage, BaseMessage, HumanMessage, ToolMessage } from "@langchain/core/messages";
 import { createRequestTool,
          sonifyGraphTool,
          tools,
          toolCallResponse,
-         extractToolCalls
+         extractToolCalls,
+         getUnansweredToolCallIds
        } from "./tool-utils";
 
 describe("createRequestTool", () => {
@@ -75,5 +76,38 @@ describe("extractToolCalls", () => {
   it("should return empty array if tool_calls is not an array", () => {
     const msg = { tool_calls: "not-an-array" } as unknown as BaseMessage;
     expect(extractToolCalls(msg)).toEqual([]);
+  });
+});
+
+describe("getUnansweredToolCallIds", () => {
+  it("returns a tool_call id that has no following ToolMessage", () => {
+    const messages = [
+      new HumanMessage({ content: "hi" }),
+      new AIMessage({ content: "", tool_calls: [{ name: "create_request", args: {}, id: "call-1" }] }),
+    ];
+    expect(getUnansweredToolCallIds(messages)).toEqual(["call-1"]);
+  });
+
+  it("excludes tool calls that already have a matching ToolMessage", () => {
+    const messages = [
+      new AIMessage({ content: "", tool_calls: [{ name: "create_request", args: {}, id: "call-1" }] }),
+      new ToolMessage({ content: "ok", tool_call_id: "call-1" }),
+    ];
+    expect(getUnansweredToolCallIds(messages)).toEqual([]);
+  });
+
+  it("returns only the still-unanswered ids from a multi-tool-call message, in order", () => {
+    const messages = [
+      new AIMessage({ content: "", tool_calls: [
+        { name: "create_request", args: {}, id: "call-1" },
+        { name: "sonify_graph", args: {}, id: "call-2" },
+      ]}),
+      new ToolMessage({ content: "ok", tool_call_id: "call-2" }),
+    ];
+    expect(getUnansweredToolCallIds(messages)).toEqual(["call-1"]);
+  });
+
+  it("returns [] for an empty history", () => {
+    expect(getUnansweredToolCallIds([])).toEqual([]);
   });
 });

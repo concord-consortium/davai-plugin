@@ -130,3 +130,32 @@ export const extractToolCalls = (lastMessage: BaseMessage | undefined): any[] =>
   }
   return (lastMessage as any).tool_calls;
 };
+
+/**
+ * Find tool_call ids in the thread that were never answered by a ToolMessage.
+ * Anthropic rejects any thread where a tool_use lacks a following tool_result, so
+ * these are the ids the server must synthesize results for. Order = first
+ * appearance; duplicates removed. Pure: accepts plain message-shaped objects.
+ */
+export function getUnansweredToolCallIds(messages: BaseMessage[]): string[] {
+  const answered = new Set<string>();
+  for (const message of messages) {
+    const toolCallId = (message as any).tool_call_id;
+    if (typeof toolCallId === "string") answered.add(toolCallId);
+  }
+
+  const unanswered: string[] = [];
+  const seen = new Set<string>();
+  for (const message of messages) {
+    const toolCalls = (message as any).tool_calls;
+    if (!Array.isArray(toolCalls)) continue;
+    for (const toolCall of toolCalls) {
+      const id = toolCall?.id;
+      if (typeof id === "string" && !answered.has(id) && !seen.has(id)) {
+        seen.add(id);
+        unanswered.push(id);
+      }
+    }
+  }
+  return unanswered;
+}
