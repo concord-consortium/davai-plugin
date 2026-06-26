@@ -58,6 +58,15 @@ it("after a finished stream, a new streamed turn is still announced", () => {
   void idB;
 });
 
+it("strips markdown from the spoken/announced text", () => {
+  const t = ChatTranscriptModel.create({ messages: [] });
+  const enqueue = jest.fn();
+  t.addStreamingMessage("DAVAI", { content: "This is **bold** text." });
+  render(provider(t, enqueue));
+  expect(enqueue).toHaveBeenCalledWith("This is bold text.");
+  expect(enqueue).not.toHaveBeenCalledWith(expect.stringContaining("*"));
+});
+
 it("removing the tracked message stops queued speech", () => {
   const t = ChatTranscriptModel.create({ messages: [] });
   const enqueue = jest.fn();

@@ -1,10 +1,17 @@
 import React, { useEffect, useRef, useState } from "react";
 import { observer } from "mobx-react-lite";
+import removeMarkdown from "remove-markdown";
 import { ChatTranscript } from "../types";
 import { useSpeechService } from "../contexts/speech-service-context";
 import { extractCompletedChunks } from "../utils/stream-utils";
 
 interface IProps { transcript: ChatTranscript; }
+
+// Strip markdown so the screen reader and TTS don't read formatting symbols aloud
+// (e.g. "asterisk asterisk bold asterisk asterisk"). Matches the options used by
+// the transcript's plainTextContent so spoken text matches the captured chat.
+const forSpeech = (text: string): string =>
+  removeMarkdown(text, { stripListLeaders: false, useImgAltText: true });
 
 // Observes the single streaming DAVAI message and drives streamed a11y output:
 // each newly-completed sentence/bullet is spoken (queued, never interrupting) and
@@ -46,22 +53,29 @@ export const StreamingAnnouncer = observer(({ transcript }: IProps) => {
     if (!idRef.current || !tracked) return;
     const pending = trackedContent.slice(consumedRef.current);
     const { chunks, remainder } = extractCompletedChunks(pending);
-    const tail = trackedDone && remainder.trim() ? [remainder.trim()] : [];
-    const toEmit = [...chunks, ...tail];
-    if (toEmit.length > 0) {
+    const rawToEmit = [...chunks, ...(trackedDone && remainder.trim() ? [remainder.trim()] : [])];
+    if (rawToEmit.length > 0) {
+      // Advance consumption by the RAW extraction (independent of markdown stripping),
+      // so a markdown-only chunk can't stall progress.
       consumedRef.current = trackedDone ? trackedContent.length : trackedContent.length - remainder.length;
-      for (const text of toEmit) speechService.enqueue(text);
-      const base = consumedRef.current;
-      setNodes((prev) => [
-        ...prev.slice(-9), // prune to keep the DOM small
-        ...toEmit.map((text, i) => ({ key: `${idRef.current}-${base}-${i}`, text })),
-      ]);
+      // Strip markdown for the spoken/announced text; drop chunks that are empty once stripped.
+      const spoken = rawToEmit.map(forSpeech).filter((t) => t.trim());
+      if (spoken.length > 0) {
+        for (const text of spoken) speechService.enqueue(text);
+        const base = consumedRef.current;
+        setNodes((prev) => [
+          ...prev.slice(-9), // prune to keep the DOM small
+          ...spoken.map((text, i) => ({ key: `${idRef.current}-${base}-${i}`, text })),
+        ]);
+      }
     }
     if (trackedDone) idRef.current = undefined; // stop tracking once finalized + flushed
   }, [tracked, trackedContent, trackedDone, speechService]);
 
+  // role="log" makes additions announced in order (better cross-AT, esp. VoiceOver,
+  // which clobbers plain aria-live="polite" regions on rapid updates).
   return (
-    <div className="visually-hidden" aria-live="polite" aria-atomic="false">
+    <div className="visually-hidden" role="log" aria-live="polite" aria-atomic="false">
       {nodes.map((n) => <div key={n.key}>{n.text}</div>)}
     </div>
   );
