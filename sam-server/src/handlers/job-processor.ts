@@ -194,6 +194,15 @@ export const handler = async (event: SQSEvent): Promise<void> => {
 
       if (controller.signal.aborted) {
         console.log(`Job ${messageId} aborted during streaming`);
+        // The loop can exit via the cooperative `break` without the iterator
+        // throwing, so mirror the catch-path cancelled write here. Guard on
+        // status <> 'completed' (NOT cancelled=false): cancel.ts has already set
+        // cancelled=true, so a cancelled=false guard would match zero rows.
+        await pool.query(
+          `UPDATE jobs SET status='cancelled', updated_at=NOW()
+           WHERE message_id=$1 AND status <> 'completed'`,
+          [messageId]
+        );
       } else {
         // Prefer the final graph state's message (preserves tool_calls); fall back to
         // the accumulated text if no "values" snapshot arrived.
