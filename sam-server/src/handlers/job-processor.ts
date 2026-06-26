@@ -195,6 +195,13 @@ export const handler = async (event: SQSEvent): Promise<void> => {
         throw streamError;
       }
 
+      // Flush any trailing text not yet written, so user-facing text that precedes a
+      // tool call (a mixed text+tool turn, whose final write is requires_action and
+      // carries no text) reaches the client complete.
+      if (!controller.signal.aborted && accumulated.length > lastWrittenLength) {
+        await writePartial();
+      }
+
       if (controller.signal.aborted) {
         console.log(`Job ${messageId} aborted during streaming`);
         // The loop can exit via the cooperative `break` without the iterator

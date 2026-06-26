@@ -16,6 +16,13 @@ import { postMessage } from "../utils/llm-utils";
 const isToolRequestError = (request: IToolCallData["request"]): request is IToolRequestError =>
   "status" in request && request.status === "error";
 
+// Post a timing debug entry (e.g. "Begin response time"/"Completed response time")
+// measured from the user-submit start. No-op if no start time is recorded.
+const timingDebug = (transcriptStore: any, label: string, startMs: number | null) => {
+  if (startMs == null) return;
+  transcriptStore.addMessage(DEBUG_SPEAKER, { description: label, content: formatElapsedTime(performance.now() - startMs) });
+};
+
 /**
  * AssistantModel encapsulates the AI assistant and its interactions with the user.
  * It includes properties and methods for configuring the assistant, handling chat interactions, and maintaining the assistant's
@@ -47,6 +54,7 @@ export const AssistantModel = types
     graphs: null as any,
     currentStreamingMessageId: null as string | null,
     streamEnabled: true as boolean,
+    responseStartTime: null as number | null,
   }))
   .views((self) => ({
     get isAssistantMocked() {
@@ -75,9 +83,10 @@ export const AssistantModel = types
     },
     ingestStreamChunk(cumulative: string) {
       if (!self.currentStreamingMessageId) {
-        self.showLoadingIndicator = false; // replace the Processing row with the streamed message
+        self.showLoadingIndicator = false; // text has begun; hide the Processing indicator
         self.currentStreamingMessageId =
           self.transcriptStore.addStreamingMessage(DAVAI_SPEAKER, { content: "" });
+        timingDebug(self.transcriptStore, "Begin response time", self.responseStartTime);
       }
       const id = self.currentStreamingMessageId;
       const msg = self.transcriptStore.messages.find((m) => m.id === id);
@@ -88,21 +97,21 @@ export const AssistantModel = types
     finalizeStream(fullText: string) {
       if (self.currentStreamingMessageId) {
         self.transcriptStore.finalizeStreamingMessage(self.currentStreamingMessageId, fullText);
+        timingDebug(self.transcriptStore, "Completed response time", self.responseStartTime);
         self.currentStreamingMessageId = null;
       } else {
         self.transcriptStore.addMessage(DAVAI_SPEAKER, { content: fullText });
       }
     },
-    discardStream() {
-      if (self.currentStreamingMessageId) {
-        self.transcriptStore.removeMessage(self.currentStreamingMessageId);
-        self.currentStreamingMessageId = null;
-      }
-    },
-    finishStream() {
+    // Finalize the in-progress streamed message in place, keeping its already-shown
+    // text (used for cancel/error/timeout and for user-facing text that precedes a
+    // follow-up tool call). Pass logCompleted=true when the text is a completed
+    // user-facing message (so it gets a "Completed response time" entry).
+    finishStream(logCompleted = false) {
       if (self.currentStreamingMessageId) {
         const msg = self.transcriptStore.messages.find((m) => m.id === self.currentStreamingMessageId);
         self.transcriptStore.finalizeStreamingMessage(self.currentStreamingMessageId, msg?.messageContent.content ?? "");
+        if (logCompleted) timingDebug(self.transcriptStore, "Completed response time", self.responseStartTime);
         self.currentStreamingMessageId = null;
       }
     },
@@ -326,6 +335,7 @@ export const AssistantModel = types
           self.messageQueue.push(messageText);
         } else {
           startTime = performance.now();
+          self.responseStartTime = startTime;
           self.isLoadingResponse = true;
 
           // Generate a unique message ID for this request. This lets us cancel the message if needed.
@@ -402,9 +412,10 @@ export const AssistantModel = types
 
           self.addDbgMsg("Response from server", formatJsonMessage(data));
 
-          // Tool calls: a streamed message (if any) is discarded for this turn.
+          // Tool calls: any user-facing text streamed before this tool call is kept
+          // (finalized in place) and counted as a completed response, not discarded.
           while (data?.status === "requires_action" && data?.tool_call_id) {
-            self.discardStream();
+            self.finishStream(true);
             const toolOutput = yield processToolCall(data as IToolCallData);
             self.addDbgMsg("Tool output generated", formatJsonMessage(toolOutput));
             const toolResponseResult: any = yield sendToolOutputToLlm(data.tool_call_id, toolOutput);
