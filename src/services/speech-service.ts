@@ -50,6 +50,7 @@ export class SpeechService implements ISpeechService {
   }
 
   speak(text: string): void {
+    // An interrupt discards any pending streamed chunks.
     this.queue = [];
     this.utterance = null;
     if (!this.getReadAloudEnabled()) {
@@ -63,36 +64,15 @@ export class SpeechService implements ISpeechService {
       return;
     }
 
-    // Cancel any ongoing speech (but don't call our stopSpeech which resets state)
+    // Cancel any ongoing speech, then play through the SAME queue mechanism that
+    // enqueue() uses (speakNext). This is what makes streamed chunks work: chunks
+    // enqueued while this utterance is speaking would otherwise strand, because
+    // enqueue() only starts speakNext when no utterance is active and speak()'s own
+    // onend never advanced the queue. Routing speak() through speakNext means its
+    // onend drains whatever was enqueued in the meantime.
     window.speechSynthesis.cancel();
-
-    const utterance = new SpeechSynthesisUtterance(text);
-    utterance.rate = this.getPlaybackSpeed();
-    this.utterance = utterance;
-
-    utterance.onstart = () => {
-      if (this.utterance === utterance) {
-        this.setSpeaking(true);
-      }
-    };
-
-    utterance.onend = () => {
-      if (this.utterance === utterance) {
-        this.setSpeaking(false);
-      }
-    };
-
-    utterance.onerror = (event) => {
-      if (this.utterance === utterance) {
-        this.setSpeaking(false);
-      }
-      // Don't report errors for intentional cancellations (user pressed Escape or new speech started)
-      if (event.error !== "canceled" && event.error !== "interrupted") {
-        this.onErrorCallback?.(`Speech synthesis error: ${event.error}`);
-      }
-    };
-
-    window.speechSynthesis.speak(utterance);
+    this.queue = [text];
+    this.speakNext();
   }
 
   stopSpeech(): void {

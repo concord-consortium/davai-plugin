@@ -349,4 +349,15 @@ describe("SpeechService.enqueue", () => {
     expect(mock.spoken).not.toContain("two.");
     svc.dispose();
   });
+
+  it("drains chunks enqueued during a speak() utterance (no stranding)", () => {
+    const mock = installSpeechMock();
+    const svc = new SpeechService(() => true, () => 1);
+    svc.speak("Processing.");        // legacy interrupt path (e.g. the loading announcement)
+    svc.enqueue("Sentence one.");    // streamed chunk enqueued while "Processing." is speaking
+    expect(mock.spoken).toEqual(["Processing."]); // sentence waits, does not start yet
+    mock.end();                      // "Processing." onend must drain the queue
+    expect(mock.spoken).toEqual(["Processing.", "Sentence one."]);
+    svc.dispose();
+  });
 });

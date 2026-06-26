@@ -248,12 +248,16 @@ export const AssistantModel = types
 
         const { messageId } = yield submissionResponse.json();
 
-        // Poll for the tool response
+        // Poll for the tool response. A tool result triggers the next model turn,
+        // which produces user-facing text (e.g. a graph description) and ALSO streams,
+        // so this loop must handle STREAMING_STATUS the same way the message loop does
+        // (no-progress budget so a long streamed description isn't cut off).
         let data: IMessageResponse | null = null;
-        const deadlineMs = 60_000;
-        const startedAt = performance.now();
+        const idleBudgetMs = 60_000;
+        let lastProgressAt = performance.now();
+        let lastLen = 0;
 
-        while (performance.now() - startedAt < deadlineMs) {
+        while (performance.now() - lastProgressAt < idleBudgetMs) {
           if (self.isCancelling) break;
 
           const statusResponse = yield postMessage({}, `status?messageId=${messageId}`, "GET");
@@ -267,18 +271,29 @@ export const AssistantModel = types
             data = output;
             break;
           } else if (status === "cancelled") {
+            self.finishStream();
             self.addDbgMsg("Tool call job was cancelled on the server", messageId);
             return;
           } else if (status === "error") {
+            self.finishStream();
             self.addDbgMsg("Server error processing tool output", output?.error || "Unknown error");
             self.addDavaiMsg("Sorry, I ran into an error processing that request.");
             return;
+          } else if (status === STREAMING_STATUS && self.streamEnabled && typeof output?.response === "string") {
+            if (output.response.length > lastLen) {
+              lastLen = output.response.length;
+              lastProgressAt = performance.now();
+            }
+            self.ingestStreamChunk(output.response);
+            yield new Promise((res) => setTimeout(res, 500));
+            continue;
           }
 
           yield new Promise((res) => setTimeout(res, 1000));
         }
 
         if (!data) {
+          self.finishStream();
           self.addDbgMsg("Polling expired before tool response received", messageId);
           return;
         }
