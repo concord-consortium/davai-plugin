@@ -4,9 +4,33 @@ import { fireEvent, render, screen, waitFor, within } from "@testing-library/rea
 import { AppConfigProvider } from "../contexts/app-config-context";
 import { ChatTranscriptComponent } from "./chat-transcript";
 import { ShortcutsServiceProvider } from "../contexts/shortcuts-service-context";
+import { AriaLiveProvider } from "../contexts/aria-live-context";
+import { SpeechServiceProvider } from "../contexts/speech-service-context";
+import { setupMockSpeechSynthesis, cleanupMockSpeechSynthesis } from "../test-utils/mock-speech-synthesis";
+
+const TestProviders = ({ children }: { children: React.ReactNode }) => (
+  <AppConfigProvider>
+    <AriaLiveProvider>
+      <SpeechServiceProvider>
+        <ShortcutsServiceProvider>
+          {children}
+        </ShortcutsServiceProvider>
+      </SpeechServiceProvider>
+    </AriaLiveProvider>
+  </AppConfigProvider>
+);
 
 describe("test chat transcript component", () => {
   window.HTMLElement.prototype.scrollIntoView = jest.fn();
+
+  beforeEach(() => {
+    setupMockSpeechSynthesis();
+  });
+
+  afterEach(() => {
+    cleanupMockSpeechSynthesis();
+  });
+
   const chatTranscript = {
     messages: [
       {
@@ -28,11 +52,9 @@ describe("test chat transcript component", () => {
 
   it("renders a chat transcript that lists all chat messages", () => {
     render(
-      <AppConfigProvider>
-        <ShortcutsServiceProvider>
-          <ChatTranscriptComponent chatTranscript={chatTranscript}/>
-        </ShortcutsServiceProvider>
-      </AppConfigProvider>
+      <TestProviders>
+        <ChatTranscriptComponent chatTranscript={chatTranscript}/>
+      </TestProviders>
     );
 
     const transcript = screen.getByTestId("chat-transcript");
@@ -59,11 +81,9 @@ describe("test chat transcript component", () => {
     const clickSpy = jest.spyOn(HTMLAnchorElement.prototype, "click").mockImplementation(() => undefined);
 
     render(
-      <AppConfigProvider>
-        <ShortcutsServiceProvider>
-          <ChatTranscriptComponent chatTranscript={chatTranscript}/>
-        </ShortcutsServiceProvider>
-      </AppConfigProvider>
+      <TestProviders>
+        <ChatTranscriptComponent chatTranscript={chatTranscript}/>
+      </TestProviders>
     );
 
     fireEvent.click(screen.getByTestId("capture-transcript-button"));
@@ -101,11 +121,9 @@ describe("test chat transcript component", () => {
     };
 
     render(
-      <AppConfigProvider>
-        <ShortcutsServiceProvider>
-          <ChatTranscriptComponent chatTranscript={transcriptWithImage}/>
-        </ShortcutsServiceProvider>
-      </AppConfigProvider>
+      <TestProviders>
+        <ChatTranscriptComponent chatTranscript={transcriptWithImage}/>
+      </TestProviders>
     );
 
     fireEvent.click(screen.getByTestId("capture-transcript-button"));

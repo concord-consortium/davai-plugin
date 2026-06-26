@@ -6,6 +6,7 @@ import { LoadingMessage } from "./loading-message";
 import { useAppConfigContext } from "../contexts/app-config-context";
 import { useShortcutsService } from "../contexts/shortcuts-service-context";
 import { useAriaLive } from "../contexts/aria-live-context";
+import { useSpeechService } from "../contexts/speech-service-context";
 import {
   buildTranscriptCsv,
   buildTranscriptZip,
@@ -27,16 +28,20 @@ export const ChatTranscriptComponent = observer(({chatTranscript, isLoading}: IP
   const shortcutsService = useShortcutsService();
   const chatTranscriptRef = useRef<HTMLDivElement>(null);
   const { setAriaLiveText } = useAriaLive();
+  const speechService = useSpeechService();
   const replayHiddenCharToggleRef = useRef(true);
+
+  const lastMessage = chatTranscript.messages[chatTranscript.messages.length - 1];
+  const streamingLen = lastMessage?.isStreaming ? lastMessage.messageContent.content.length : 0;
 
   useEffect(() => {
     // Autoscroll to the top of the latest message in the transcript.
     const chatTranscriptContainer = chatTranscriptRef.current;
     if (chatTranscriptContainer) {
-      const lastMessage = chatTranscriptContainer.querySelector(".chat-transcript__message:last-of-type");
-      lastMessage?.scrollIntoView({behavior: "smooth", block: "nearest"});
+      const lastTranscriptMessage = chatTranscriptContainer.querySelector(".chat-transcript__message:last-of-type");
+      lastTranscriptMessage?.scrollIntoView({behavior: "smooth", block: "nearest"});
     }
-  }, [chatTranscript.messages.length, isLoading]);
+  }, [chatTranscript.messages.length, isLoading, streamingLen]);
 
   const handleCaptureTranscript = useCallback(async () => {
     const { csv, images } = buildTranscriptCsv(chatTranscript.messages);
@@ -74,6 +79,7 @@ export const ChatTranscriptComponent = observer(({chatTranscript, isLoading}: IP
     // A shortcut to set the last message in the live aria region
     return shortcutsService.registerShortcutHandler("replayLastDavaiMessage", (event) => {
       event.preventDefault();
+      speechService.stopSpeech();
       const lastDavaiMessage = chatTranscript.messages.filter(msg => msg.speaker === "DAVAI").pop();
       // We toggle an invisible character to force the screen reader to read the same message again.
       // We tried to clear the live text, wait, and set it again, but that didn't work
@@ -85,7 +91,7 @@ export const ChatTranscriptComponent = observer(({chatTranscript, isLoading}: IP
         setAriaLiveText(`No previous message from DAVAI to replay.${suffix}`);
       }
     }, { focus: true });
-  }, [chatTranscript.messages, setAriaLiveText, shortcutsService]);
+  }, [chatTranscript.messages, setAriaLiveText, shortcutsService, speechService]);
 
   return (
     <div
