@@ -51,6 +51,7 @@ export class SpeechService implements ISpeechService {
 
   speak(text: string): void {
     this.queue = [];
+    this.utterance = null;
     if (!this.getReadAloudEnabled()) {
       return;
     }

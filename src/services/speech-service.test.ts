@@ -339,4 +339,14 @@ describe("SpeechService.enqueue", () => {
     expect(mock.spoken).toEqual(["one."]);
     svc.dispose();
   });
+
+  it("speak() discards queued chunks (interrupt clears the queue)", () => {
+    const mock = installSpeechMock();
+    const svc = new SpeechService(() => true, () => 1);
+    svc.enqueue("one."); svc.enqueue("two."); // "one." speaking, "two." queued
+    svc.speak("interrupt!");                   // interrupt clears the queue
+    mock.end();                                // onend must NOT start "two."
+    expect(mock.spoken).not.toContain("two.");
+    svc.dispose();
+  });
 });
