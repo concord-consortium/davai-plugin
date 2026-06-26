@@ -1,5 +1,5 @@
 import React from "react";
-import { render } from "@testing-library/react";
+import { act, render } from "@testing-library/react";
 import { StreamingAnnouncer } from "./streaming-announcer";
 import { SpeechServiceContext } from "../contexts/speech-service-context";
 import { ChatTranscriptModel } from "../models/chat-transcript-model";
@@ -16,8 +16,10 @@ it("enqueues each completed sentence as the streaming message grows", () => {
   const id = t.addStreamingMessage("DAVAI", { content: "One." });
   const { rerender } = render(provider(t, enqueue));
   expect(enqueue).toHaveBeenCalledWith("One.");
-  t.appendToMessage(id, " Two.");
-  rerender(provider(t, enqueue));
+  act(() => {
+    t.appendToMessage(id, " Two.");
+    rerender(provider(t, enqueue));
+  });
   expect(enqueue).toHaveBeenCalledWith("Two.");
 });
 
@@ -27,7 +29,9 @@ it("flushes the final remainder when the message finalizes (even without trailin
   const id = t.addStreamingMessage("DAVAI", { content: "All done" });
   const { rerender } = render(provider(t, enqueue));
   expect(enqueue).not.toHaveBeenCalled(); // no completed sentence yet
-  t.finalizeStreamingMessage(id, "All done now");
-  rerender(provider(t, enqueue));
+  act(() => {
+    t.finalizeStreamingMessage(id, "All done now");
+    rerender(provider(t, enqueue));
+  });
   expect(enqueue).toHaveBeenCalledWith("All done now");
 });
