@@ -100,8 +100,11 @@ export const AssistantModel = types
       }
     },
     finishStream() {
-      // Leave already-shown partial text; just stop tracking the streaming message.
-      self.currentStreamingMessageId = null;
+      if (self.currentStreamingMessageId) {
+        const msg = self.transcriptStore.messages.find((m) => m.id === self.currentStreamingMessageId);
+        self.transcriptStore.finalizeStreamingMessage(self.currentStreamingMessageId, msg?.messageContent.content ?? "");
+        self.currentStreamingMessageId = null;
+      }
     },
   }))
   .actions((self) => ({

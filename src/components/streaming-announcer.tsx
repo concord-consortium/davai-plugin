@@ -31,6 +31,16 @@ export const StreamingAnnouncer = observer(({ transcript }: IProps) => {
     setNodes([]);
   }, [streaming?.id]);
 
+  // If the tracked streaming message was removed (discarded on a mixed text+tool
+  // turn), stop any queued speech for it and reset.
+  useEffect(() => {
+    if (idRef.current && !tracked) {
+      speechService.stopSpeech();
+      idRef.current = undefined;
+      setNodes([]);
+    }
+  }, [tracked, speechService]);
+
   // Emit newly-completed chunks; on finalize, force-flush the remaining tail.
   useEffect(() => {
     if (!idRef.current || !tracked) return;
