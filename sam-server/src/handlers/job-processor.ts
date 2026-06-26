@@ -16,7 +16,10 @@ const buildResponse = async (message: any) => {
   if (toolCalls?.[0]) {
     return await toolCallResponse(toolCalls[0]);
   }
-  return { response: message.content };
+  // Coerce to a string: app.stream's assembled final message can carry an
+  // Anthropic content-block array, which the client renders via react-markdown
+  // (string-only). Mirrors the streaming partials, which already coerce.
+  return { response: messageTextToString(message.content) };
 };
 
 // Track currently running jobs
