@@ -8,10 +8,19 @@ import { extractCompletedChunks } from "../utils/stream-utils";
 interface IProps { transcript: ChatTranscript; }
 
 // Strip markdown so the screen reader and TTS don't read formatting symbols aloud
-// (e.g. "asterisk asterisk bold asterisk asterisk"). Matches the options used by
-// the transcript's plainTextContent so spoken text matches the captured chat.
-const forSpeech = (text: string): string =>
-  removeMarkdown(text, { stripListLeaders: false, useImgAltText: true });
+// (e.g. "asterisk asterisk bold asterisk asterisk"), but KEEP an indication of list
+// structure: a bullet marker (-, *, +) becomes "•" (voiced "bullet") and a numbered
+// marker (e.g. "1.") is preserved, with the rest of the item's markdown stripped.
+const BULLET_RE = /^(\s*)[-*+]\s+(.*)$/;
+const NUMBER_RE = /^(\s*)(\d+)[.)]\s+(.*)$/;
+const forSpeech = (text: string): string => {
+  const strip = (s: string) => removeMarkdown(s, { useImgAltText: true });
+  const bullet = text.match(BULLET_RE);
+  if (bullet) return `• ${strip(bullet[2])}`;
+  const numbered = text.match(NUMBER_RE);
+  if (numbered) return `${numbered[2]}. ${strip(numbered[3])}`;
+  return removeMarkdown(text, { stripListLeaders: false, useImgAltText: true });
+};
 
 // Observes the single streaming DAVAI message and drives streamed a11y output:
 // each newly-completed sentence/bullet is spoken (queued, never interrupting) and

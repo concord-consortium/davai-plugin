@@ -67,6 +67,23 @@ it("strips markdown from the spoken/announced text", () => {
   expect(enqueue).not.toHaveBeenCalledWith(expect.stringContaining("*"));
 });
 
+it("voices a bullet marker as • instead of reading the raw symbol", () => {
+  const t = ChatTranscriptModel.create({ messages: [] });
+  const enqueue = jest.fn();
+  t.addStreamingMessage("DAVAI", { content: "* First item\n" });
+  render(provider(t, enqueue));
+  expect(enqueue).toHaveBeenCalledWith("• First item");
+  expect(enqueue).not.toHaveBeenCalledWith(expect.stringContaining("*"));
+});
+
+it("preserves a numbered list marker", () => {
+  const t = ChatTranscriptModel.create({ messages: [] });
+  const enqueue = jest.fn();
+  t.addStreamingMessage("DAVAI", { content: "1. Numbered item\n" });
+  render(provider(t, enqueue));
+  expect(enqueue).toHaveBeenCalledWith("1. Numbered item");
+});
+
 it("removing the tracked message stops queued speech", () => {
   const t = ChatTranscriptModel.create({ messages: [] });
   const enqueue = jest.fn();

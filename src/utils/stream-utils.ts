@@ -25,13 +25,20 @@ export function extractCompletedChunks(buffer: string): { chunks: string[]; rema
       continue;
     }
 
-    // Find the next sentence end or newline.
-    const match = trimmedStart.match(/[.!?](?=\s|$)|\n/);
-    if (!match || match.index === undefined) break;
-    const end = match[0] === "\n" ? match.index : match.index + 1;
+    // Skip a leading numbered-list marker (e.g. "1." / "2)") so its period isn't
+    // treated as a sentence end — keep "1. Item" together as one chunk.
+    const marker = trimmedStart.match(/^\d+[.)]\s+/);
+    const searchFrom = marker ? marker[0].length : 0;
+
+    // Find the next sentence end or newline (after any list marker).
+    const rel = trimmedStart.slice(searchFrom).match(/[.!?](?=\s|$)|\n/);
+    if (!rel || rel.index === undefined) break;
+    const isNewline = rel[0] === "\n";
+    const matchIndex = searchFrom + rel.index;
+    const end = isNewline ? matchIndex : matchIndex + 1;
     const piece = trimmedStart.slice(0, end).trim();
     if (piece) chunks.push(piece);
-    rest = trimmedStart.slice(end + (match[0] === "\n" ? 1 : 0));
+    rest = trimmedStart.slice(end + (isNewline ? 1 : 0));
     if (leadWs && chunks.length === 0) rest = leadWs + rest;
   }
 
