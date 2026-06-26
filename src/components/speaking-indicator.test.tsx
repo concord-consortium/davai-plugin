@@ -11,6 +11,7 @@ const createMockSpeechService = (): ISpeechService => ({
   speak: jest.fn(),
   stopSpeech: jest.fn(),
   enqueue: jest.fn(),
+  speakIfIdle: jest.fn(),
   isSpeaking: jest.fn(() => false),
   dispose: jest.fn(),
   onSpeakingChange: jest.fn(() => jest.fn()),

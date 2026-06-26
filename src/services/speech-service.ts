@@ -9,6 +9,7 @@ export interface ISpeechService {
   dispose(): void;
   onSpeakingChange(callback: (speaking: boolean) => void): () => void;
   enqueue(text: string): void;
+  speakIfIdle(text: string): void;
 }
 
 export class SpeechService implements ISpeechService {
@@ -82,6 +83,18 @@ export class SpeechService implements ISpeechService {
       window.speechSynthesis.cancel();
     }
     this.setSpeaking(false);
+  }
+
+  // True when nothing is being spoken and the queue is empty.
+  private isIdle(): boolean {
+    return !this.utterance && this.queue.length === 0;
+  }
+
+  // Speak only if idle — used for the non-interrupting, looping "Processing"
+  // announcement so it never cuts off streamed speech (it simply skips while
+  // anything else is being spoken/queued, and resumes once idle).
+  speakIfIdle(text: string): void {
+    if (this.isIdle()) this.speak(text);
   }
 
   enqueue(text: string): void {

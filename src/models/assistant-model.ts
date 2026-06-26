@@ -416,6 +416,7 @@ export const AssistantModel = types
           // (finalized in place) and counted as a completed response, not discarded.
           while (data?.status === "requires_action" && data?.tool_call_id) {
             self.finishStream(true);
+            self.setShowLoadingIndicator(true); // re-show "Processing" for this tool phase
             const toolOutput = yield processToolCall(data as IToolCallData);
             self.addDbgMsg("Tool output generated", formatJsonMessage(toolOutput));
             const toolResponseResult: any = yield sendToolOutputToLlm(data.tool_call_id, toolOutput);
