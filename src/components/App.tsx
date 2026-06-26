@@ -18,6 +18,7 @@ import { isGraphSonifiable } from "../utils/graph-sonification-utils";
 import { ICODAPGraph } from "../types";
 import { GraphSonificationScheduler } from "../models/graph-sonification-scheduler";
 import { SpeakingIndicator } from "./speaking-indicator";
+import { StreamingAnnouncer } from "./streaming-announcer";
 
 import "./App.scss";
 
@@ -149,7 +150,7 @@ export const App = observer(() => {
     const { messages } = transcriptStore;
     if (transcriptStore.messages.length > 0) {
       const lastMessage = messages[messages.length - 1];
-      if (lastMessage.speaker === DAVAI_SPEAKER) {
+      if (lastMessage.speaker === DAVAI_SPEAKER && !lastMessage.isStreaming) {
         setAriaLiveText(lastMessage.plainTextContent);
       }
     }
@@ -202,6 +203,7 @@ export const App = observer(() => {
         chatTranscript={transcriptStore}
         isLoading={assistantStore.showLoadingIndicator}
       />
+      <StreamingAnnouncer transcript={transcriptStore} />
       <ChatInputComponent
         disabled={(!assistantStore.threadId && !appConfig.isAssistantMocked) || assistantStore.showLoadingIndicator}
         isLoading={assistantStore.showLoadingIndicator}

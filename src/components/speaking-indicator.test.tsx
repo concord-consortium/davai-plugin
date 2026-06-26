@@ -10,6 +10,7 @@ import { mockAppConfig } from "../test-utils/mock-app-config";
 const createMockSpeechService = (): ISpeechService => ({
   speak: jest.fn(),
   stopSpeech: jest.fn(),
+  enqueue: jest.fn(),
   isSpeaking: jest.fn(() => false),
   dispose: jest.fn(),
   onSpeakingChange: jest.fn(() => jest.fn()),

@@ -18,8 +18,8 @@ it("enqueues each completed sentence as the streaming message grows", () => {
   expect(enqueue).toHaveBeenCalledWith("One.");
   act(() => {
     t.appendToMessage(id, " Two.");
-    rerender(provider(t, enqueue));
   });
+  rerender(provider(t, enqueue));
   expect(enqueue).toHaveBeenCalledWith("Two.");
 });
 
@@ -31,7 +31,7 @@ it("flushes the final remainder when the message finalizes (even without trailin
   expect(enqueue).not.toHaveBeenCalled(); // no completed sentence yet
   act(() => {
     t.finalizeStreamingMessage(id, "All done now");
-    rerender(provider(t, enqueue));
   });
+  rerender(provider(t, enqueue));
   expect(enqueue).toHaveBeenCalledWith("All done now");
 });
