@@ -294,3 +294,49 @@ describe("SpeechService", () => {
     });
   });
 });
+
+// Minimal speechSynthesis mock that fires onstart immediately and lets the test
+// drive onend to advance the queue.
+function installSpeechMock() {
+  const spoken: string[] = [];
+  let current: any = null;
+  (global as any).SpeechSynthesisUtterance = class {
+    text: string; rate = 1; onstart: any; onend: any; onerror: any;
+    constructor(t: string) { this.text = t; }
+  };
+  (window as any).speechSynthesis = {
+    speak: (u: any) => { spoken.push(u.text); current = u; u.onstart?.(); },
+    cancel: () => { current = null; },
+  };
+  return { spoken, end: () => current?.onend?.() };
+}
+
+describe("SpeechService.enqueue", () => {
+  it("speaks queued chunks in order, advancing only on onend (no cancel between)", () => {
+    const mock = installSpeechMock();
+    const svc = new SpeechService(() => true, () => 1);
+    svc.enqueue("one."); svc.enqueue("two.");
+    expect(mock.spoken).toEqual(["one."]); // second waits
+    mock.end();
+    expect(mock.spoken).toEqual(["one.", "two."]);
+    svc.dispose();
+  });
+
+  it("no-ops when read-aloud is disabled", () => {
+    const mock = installSpeechMock();
+    const svc = new SpeechService(() => false, () => 1);
+    svc.enqueue("hello.");
+    expect(mock.spoken).toEqual([]);
+    svc.dispose();
+  });
+
+  it("stopSpeech clears the queue so a queued chunk cannot leak after Escape", () => {
+    const mock = installSpeechMock();
+    const svc = new SpeechService(() => true, () => 1);
+    svc.enqueue("one."); svc.enqueue("two.");
+    svc.stopSpeech();
+    mock.end(); // onend from the cancelled utterance must not start "two."
+    expect(mock.spoken).toEqual(["one."]);
+    svc.dispose();
+  });
+});

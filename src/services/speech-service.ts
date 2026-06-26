@@ -8,10 +8,12 @@ export interface ISpeechService {
   isSpeaking(): boolean;
   dispose(): void;
   onSpeakingChange(callback: (speaking: boolean) => void): () => void;
+  enqueue(text: string): void;
 }
 
 export class SpeechService implements ISpeechService {
   private utterance: SpeechSynthesisUtterance | null = null;
+  private queue: string[] = [];
   private keydownHandler: ((event: KeyboardEvent) => void) | null = null;
   private speaking = false;
   private speakingChangeCallbacks: Set<(speaking: boolean) => void> = new Set();
@@ -48,6 +50,7 @@ export class SpeechService implements ISpeechService {
   }
 
   speak(text: string): void {
+    this.queue = [];
     if (!this.getReadAloudEnabled()) {
       return;
     }
@@ -92,10 +95,44 @@ export class SpeechService implements ISpeechService {
   }
 
   stopSpeech(): void {
+    this.queue = [];
+    this.utterance = null;
     if (typeof window !== "undefined" && window.speechSynthesis) {
       window.speechSynthesis.cancel();
     }
     this.setSpeaking(false);
+  }
+
+  enqueue(text: string): void {
+    if (!this.getReadAloudEnabled()) return;
+    if (!text || text.trim() === "") return;
+    if (typeof window === "undefined" || !window.speechSynthesis) {
+      this.onErrorCallback?.("Speech synthesis is not available in this browser.");
+      return;
+    }
+    this.queue.push(text);
+    if (!this.utterance) this.speakNext();
+  }
+
+  private speakNext(): void {
+    const next = this.queue.shift();
+    if (next === undefined) {
+      this.utterance = null;
+      this.setSpeaking(false); // drained
+      return;
+    }
+    const utterance = new SpeechSynthesisUtterance(next);
+    utterance.rate = this.getPlaybackSpeed();
+    this.utterance = utterance;
+    utterance.onstart = () => { if (this.utterance === utterance) this.setSpeaking(true); };
+    utterance.onend = () => { if (this.utterance === utterance) this.speakNext(); };
+    utterance.onerror = (event) => {
+      if (this.utterance === utterance && event.error !== "canceled" && event.error !== "interrupted") {
+        this.onErrorCallback?.(`Speech synthesis error: ${event.error}`);
+      }
+      if (this.utterance === utterance) this.speakNext();
+    };
+    window.speechSynthesis.speak(utterance);
   }
 
   isSpeaking(): boolean {
