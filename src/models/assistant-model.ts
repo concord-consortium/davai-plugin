@@ -1,7 +1,8 @@
 import { types, flow, Instance, getRoot, onSnapshot } from "mobx-state-tree";
 import { nanoid } from "nanoid";
 import { codapInterface } from "@concord-consortium/codap-plugin-api";
-import { DAVAI_SPEAKER, DEBUG_SPEAKER } from "../constants";
+import { DAVAI_SPEAKER, DEBUG_SPEAKER, STREAMING_STATUS } from "../constants";
+import { appendedText } from "../utils/stream-utils";
 import { formatJsonMessage, formatElapsedTime } from "../utils/utils";
 import { getDataContexts, getGraphAttrData, getGraphByID, getTrimmedGraphDetails } from "../utils/codap-api-utils";
 import { isGraphSonifiable } from "../utils/graph-sonification-utils";
@@ -44,6 +45,8 @@ export const AssistantModel = types
     currentMessageId: null as string | null,
     dataContexts: null as any,
     graphs: null as any,
+    currentStreamingMessageId: null as string | null,
+    streamEnabled: true as boolean,
   }))
   .views((self) => ({
     get isAssistantMocked() {
@@ -66,7 +69,40 @@ export const AssistantModel = types
     },
     setThreadId(threadId: string) {
       self.threadId = threadId;
-    }
+    },
+    setStreamEnabled(enabled: boolean) {
+      self.streamEnabled = enabled;
+    },
+    ingestStreamChunk(cumulative: string) {
+      if (!self.currentStreamingMessageId) {
+        self.showLoadingIndicator = false; // replace the Processing row with the streamed message
+        self.currentStreamingMessageId =
+          self.transcriptStore.addStreamingMessage(DAVAI_SPEAKER, { content: "" });
+      }
+      const id = self.currentStreamingMessageId;
+      const msg = self.transcriptStore.messages.find((m) => m.id === id);
+      const shown = msg?.messageContent.content ?? "";
+      const added = appendedText(shown, cumulative);
+      if (added) self.transcriptStore.appendToMessage(id, added);
+    },
+    finalizeStream(fullText: string) {
+      if (self.currentStreamingMessageId) {
+        self.transcriptStore.finalizeStreamingMessage(self.currentStreamingMessageId, fullText);
+        self.currentStreamingMessageId = null;
+      } else {
+        self.transcriptStore.addMessage(DAVAI_SPEAKER, { content: fullText });
+      }
+    },
+    discardStream() {
+      if (self.currentStreamingMessageId) {
+        self.transcriptStore.removeMessage(self.currentStreamingMessageId);
+        self.currentStreamingMessageId = null;
+      }
+    },
+    finishStream() {
+      // Leave already-shown partial text; just stop tracking the streaming message.
+      self.currentStreamingMessageId = null;
+    },
   }))
   .actions((self) => ({
     handleMessageSubmitMockAssistant() {
@@ -211,10 +247,10 @@ export const AssistantModel = types
 
         // Poll for the tool response
         let data: IMessageResponse | null = null;
-        let maxAttempts = 30;
-        let attempt = 0;
+        const deadlineMs = 60_000;
+        const startedAt = performance.now();
 
-        while (attempt < maxAttempts) {
+        while (performance.now() - startedAt < deadlineMs) {
           if (self.isCancelling) break;
 
           const statusResponse = yield postMessage({}, `status?messageId=${messageId}`, "GET");
@@ -237,7 +273,6 @@ export const AssistantModel = types
           }
 
           yield new Promise((res) => setTimeout(res, 1000));
-          attempt++;
         }
 
         if (!data) {
@@ -296,20 +331,21 @@ export const AssistantModel = types
           const { messageId: _messageId } = yield submissionResponse.json();
           self.currentMessageId = _messageId;
 
-          // 2. Poll server until response is ready
+          // 2. Poll server until response is ready. No-progress budget (reset whenever
+          // streamed bytes arrive) instead of a fixed attempt count, so long streams
+          // aren't dropped mid-flight.
           let data: IMessageResponse | null = null;
-          let maxAttempts = 30;
-          let attempt = 0;
+          const idleBudgetMs = 60_000;
+          let lastProgressAt = performance.now();
+          let lastLen = 0;
 
-          while (attempt < maxAttempts) {
+          while (performance.now() - lastProgressAt < idleBudgetMs) {
             if (self.isCancelling) break;
 
             const statusResponse = yield postMessage({}, `status?messageId=${_messageId}`, "GET");
-
             if (!statusResponse.ok) {
               throw new Error(`Failed to fetch status: ${statusResponse.statusText}`);
             }
-
             const { status, output } = yield statusResponse.json();
 
             if (status === "completed") {
@@ -317,45 +353,50 @@ export const AssistantModel = types
               break;
             } else if (status === "cancelled") {
               logResponseTime();
+              self.finishStream();
               self.addDbgMsg("Job was cancelled on the server", messageId);
               return;
             } else if (status === "error") {
               logResponseTime();
+              self.finishStream();
               self.addDbgMsg("Server error processing message", output?.error || "Unknown error");
               self.addDavaiMsg("Sorry, I ran into an error processing that request.");
               return;
+            } else if (status === STREAMING_STATUS && self.streamEnabled && typeof output?.response === "string") {
+              if (output.response.length > lastLen) {
+                lastLen = output.response.length;
+                lastProgressAt = performance.now(); // progress → extend the budget
+              }
+              self.ingestStreamChunk(output.response);
+              yield new Promise((res) => setTimeout(res, 500)); // faster cadence while streaming
+              continue;
             }
 
-            // Wait a moment before retrying
             yield new Promise((res) => setTimeout(res, 1000));
-            attempt++;
           }
 
           if (!data) {
             logResponseTime();
+            self.finishStream();
             self.addDbgMsg("Polling expired before response received", messageId);
             return;
           }
 
           self.addDbgMsg("Response from server", formatJsonMessage(data));
 
-          // Keep processing tool calls until we get a final response
+          // Tool calls: a streamed message (if any) is discarded for this turn.
           while (data?.status === "requires_action" && data?.tool_call_id) {
+            self.discardStream();
             const toolOutput = yield processToolCall(data as IToolCallData);
             self.addDbgMsg("Tool output generated", formatJsonMessage(toolOutput));
-
-            // Send tool response back to server
             const toolResponseResult: any = yield sendToolOutputToLlm(data.tool_call_id, toolOutput);
             self.addDbgMsg("Response to tool output from server", formatJsonMessage(toolResponseResult));
-
-            // Get the next response in the chain
             data = toolResponseResult;
           }
 
-          // Once we're out of the tool call chain, handle the final response.
           if (data?.response) {
             logResponseTime();
-            self.addDavaiMsg(data.response);
+            self.finalizeStream(data.response);
           }
         }
       } catch (err) {

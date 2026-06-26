@@ -181,6 +181,7 @@ export const App = observer(() => {
     if (appConfig.isAssistantMocked) {
       assistantStore.handleMessageSubmitMockAssistant();
     } else {
+      assistantStore.setStreamEnabled(appConfig.streamResponses);
       await assistantStore.handleMessageSubmit(messageText);
     }
 
