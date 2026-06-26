@@ -1,5 +1,6 @@
 import React, { useState } from "react";
 import Markdown from "react-markdown";
+import remarkGfm from "remark-gfm";
 import { DEBUG_SPEAKER } from "../constants";
 import { ChatMessage } from "../types";
 import { useAriaLive } from "../contexts/aria-live-context";
@@ -79,7 +80,7 @@ export const ChatTranscriptMessage = ({message, showDebugLog}: IProps) => {
       >
         {speaker === DEBUG_SPEAKER ?
           renderDebugPreview() :
-          <Markdown>{toMarkdownString(messageContent.content)}</Markdown>
+          <Markdown remarkPlugins={[remarkGfm]}>{toMarkdownString(messageContent.content)}</Markdown>
         }
       </div>
     </div>
