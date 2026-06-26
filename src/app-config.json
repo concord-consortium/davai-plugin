@@ -10,6 +10,7 @@
   "playProcessingTone": false,
   "playbackSpeed": 1,
   "readAloudEnabled": false,
+  "streamResponses": true,
   "llmId": "{\"id\":\"claude-haiku-4-5\",\"provider\":\"Anthropic\"}",
   "llmList": [
     {

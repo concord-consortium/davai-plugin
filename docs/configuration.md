@@ -27,6 +27,7 @@ Generated from source comments and MST runtime introspection. Do not edit manual
 | sonify.scatterPlotContinuousType        | enum     | "lsrl"                                      |
 | sonify.scatterPlotEachDot               | boolean  | true                                        |
 | sonify.synthReleaseTime                 | number   | 0.24                                        |
+| streamResponses                         | boolean  | true                                        |
 
 ## `dimensions.height`
 
