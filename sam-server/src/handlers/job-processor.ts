@@ -3,6 +3,7 @@ import { Pool } from "pg";
 import { HumanMessage, ToolMessage } from "@langchain/core/messages";
 import { getLangApp } from "../utils/llm-utils";
 import { buildToolRepairMessages, extractToolCalls, toolCallResponse } from "../utils/tool-utils";
+import { messageTextToString, shouldFlush, isAbortError } from "../utils/stream-utils";
 import { Job, ToolJob, MessageJob } from "../types";
 import { getLangSmithKey } from "../utils/env-utils";
 
@@ -139,25 +140,71 @@ export const handler = async (event: SQSEvent): Promise<void> => {
         messages.push(new HumanMessage({ content: messageJob.input.message }));
       }
 
-      // Process with LangGraph
-      const result = await app.invoke(
-        { messages, dataContexts, graphs },
-        config
-      );
+      // Stream the model. "messages" surfaces token chunks (user-facing text only);
+      // "values" yields the final graph state, whose last message we hand to
+      // buildResponse (preserving tool_calls/content-block structure).
+      let accumulated = "";
+      let lastWrittenLength = 0;
+      let finalMessage: any;
+
+      const writePartial = async () => {
+        const text = messageTextToString(accumulated);
+        // Guard on cancelled=false so a cancel landing between flushes is not resurrected.
+        await pool.query(
+          `UPDATE jobs SET status='streaming', output=$1, updated_at=NOW()
+           WHERE message_id=$2 AND cancelled=false`,
+          [{ response: text }, messageId]
+        );
+        lastWrittenLength = accumulated.length;
+      };
+
+      try {
+        const stream = await app.stream(
+          { messages, dataContexts, graphs },
+          { ...config, streamMode: ["messages", "values"] }
+        );
+        for await (const [mode, payload] of stream) {
+          if (controller.signal.aborted) break;
+          if (mode === "messages") {
+            // payload is [AIMessageChunk, metadata]; accumulate only text content.
+            const chunkText = messageTextToString((payload as any)[0]?.content);
+            if (chunkText) {
+              accumulated += chunkText;
+              if (shouldFlush(accumulated, lastWrittenLength)) {
+                await writePartial();
+              }
+            }
+          } else if (mode === "values") {
+            const msgs = (payload as any)?.messages;
+            if (Array.isArray(msgs) && msgs.length) finalMessage = msgs[msgs.length - 1];
+          }
+        }
+      } catch (streamError) {
+        if (isAbortError(streamError, controller.signal)) {
+          // User/cancel-initiated abort: leave the job cancelled, not errored.
+          await pool.query(
+            `UPDATE jobs SET status='cancelled', updated_at=NOW()
+             WHERE message_id=$1 AND status <> 'completed'`,
+            [messageId]
+          );
+          continue;
+        }
+        throw streamError;
+      }
 
       if (controller.signal.aborted) {
-        console.log(`Job ${messageId} aborted before completion`);
+        console.log(`Job ${messageId} aborted during streaming`);
       } else {
-
-        const lastMessage = result.messages[result.messages.length - 1];
-        const output = await buildResponse(lastMessage);
-
-        // Update job status
+        // Prefer the final graph state's message (preserves tool_calls); fall back to
+        // the accumulated text if no "values" snapshot arrived.
+        const output = finalMessage
+          ? await buildResponse(finalMessage)
+          : { response: messageTextToString(accumulated) };
+        // Guard the terminal write too, so a late completion can't clobber a cancel.
         await pool.query(
-          `UPDATE jobs
-          SET status = $1, output = $2, updated_at = NOW()
-          WHERE message_id = $3`,
-          ["completed", output, messageId]
+          `UPDATE jobs SET status='completed', output=$1, updated_at=NOW()
+           WHERE message_id=$2 AND cancelled=false`,
+          [output, messageId]
         );
       }
     } catch (error) {
