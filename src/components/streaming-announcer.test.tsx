@@ -5,7 +5,7 @@ import { SpeechServiceContext } from "../contexts/speech-service-context";
 import { ChatTranscriptModel } from "../models/chat-transcript-model";
 
 const provider = (t: any, enqueue: jest.Mock, stopSpeech?: jest.Mock) => (
-  <SpeechServiceContext.Provider value={{ speechService: { enqueue, stopSpeech: stopSpeech ?? jest.fn() } as any, isSpeaking: false, currentSpeechText: null }}>
+  <SpeechServiceContext.Provider value={{ speechService: { enqueue, stopSpeech: stopSpeech ?? jest.fn(), resumeSpeech: jest.fn() } as any, isSpeaking: false, currentSpeechText: null }}>
     <StreamingAnnouncer transcript={t} />
   </SpeechServiceContext.Provider>
 );

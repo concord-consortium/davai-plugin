@@ -10,6 +10,7 @@ export interface ISpeechService {
   onSpeakingChange(callback: (speaking: boolean) => void): () => void;
   enqueue(text: string): void;
   speakIfIdle(text: string): void;
+  resumeSpeech(): void;
 }
 
 export class SpeechService implements ISpeechService {
@@ -17,6 +18,10 @@ export class SpeechService implements ISpeechService {
   private queue: string[] = [];
   private keydownHandler: ((event: KeyboardEvent) => void) | null = null;
   private speaking = false;
+  // Set by Escape: stop reading the rest of the current response. enqueue()/speakIfIdle()
+  // become no-ops until resumeSpeech() (called when a new response starts) or an explicit
+  // speak(). Without this, streamed chunks enqueued after Escape would resume reading.
+  private suppressed = false;
   private speakingChangeCallbacks: Set<(speaking: boolean) => void> = new Set();
   private onErrorCallback: ((error: string) => void) | null = null;
 
@@ -31,16 +36,26 @@ export class SpeechService implements ISpeechService {
 
   private setupEscapeHandler(): void {
     this.keydownHandler = (event: KeyboardEvent) => {
-      // Only handle Escape when speech is playing
-      if (!this.speaking) return;
-
-      if (event.code === "Escape" || event.key === "Escape") {
-        event.preventDefault();
-        this.stopSpeech();
-      }
+      if (event.code !== "Escape" && event.key !== "Escape") return;
+      // Only act when something is being spoken or queued (so Escape passes through
+      // for other uses otherwise).
+      if (!this.speaking && this.queue.length === 0) return;
+      event.preventDefault();
+      this.suppressed = true; // stop reading the rest of this response, not just the current chunk
+      this.stopSpeech();
     };
 
     window.addEventListener("keydown", this.keydownHandler);
+    // DAVAI runs in an iframe; also listen on the parent so Escape works when focus is
+    // in CODAP (mirrors the keyboard-shortcuts service). Guarded for cross-origin.
+    if (window.parent && window.parent !== window) {
+      try { window.parent.addEventListener("keydown", this.keydownHandler); } catch { /* cross-origin */ }
+    }
+  }
+
+  // Re-enable speaking after an Escape suppression (called when a new response begins).
+  resumeSpeech(): void {
+    this.suppressed = false;
   }
 
   private setSpeaking(value: boolean): void {
@@ -51,9 +66,11 @@ export class SpeechService implements ISpeechService {
   }
 
   speak(text: string): void {
-    // An interrupt discards any pending streamed chunks.
+    // An interrupt discards any pending streamed chunks and clears Escape suppression
+    // (an explicit announcement — error, replay, message — should always play).
     this.queue = [];
     this.utterance = null;
+    this.suppressed = false;
     if (!this.getReadAloudEnabled()) {
       return;
     }
@@ -94,10 +111,12 @@ export class SpeechService implements ISpeechService {
   // announcement so it never cuts off streamed speech (it simply skips while
   // anything else is being spoken/queued, and resumes once idle).
   speakIfIdle(text: string): void {
+    if (this.suppressed) return;
     if (this.isIdle()) this.speak(text);
   }
 
   enqueue(text: string): void {
+    if (this.suppressed) return;
     if (!this.getReadAloudEnabled()) return;
     if (!text || text.trim() === "") return;
     if (typeof window === "undefined" || !window.speechSynthesis) {
@@ -145,6 +164,9 @@ export class SpeechService implements ISpeechService {
     this.speakingChangeCallbacks.clear();
     if (this.keydownHandler) {
       window.removeEventListener("keydown", this.keydownHandler);
+      if (window.parent && window.parent !== window) {
+        try { window.parent.removeEventListener("keydown", this.keydownHandler); } catch { /* cross-origin */ }
+      }
       this.keydownHandler = null;
     }
   }

@@ -29,10 +29,12 @@ export const StreamingAnnouncer = observer(({ transcript }: IProps) => {
   const trackedContent = tracked?.messageContent.content ?? "";
   const trackedDone = tracked ? !tracked.isStreaming : false;
 
-  // New streaming message → clear the previous nodes.
+  // New streaming message → clear the previous nodes and clear any Escape suppression
+  // from a prior response (so the new response is read).
   useEffect(() => {
     setNodes([]);
-  }, [streaming?.id]);
+    if (streaming?.id) speechService.resumeSpeech();
+  }, [streaming?.id, speechService]);
 
   // If the tracked streaming message was removed (discarded on a mixed text+tool
   // turn), stop any queued speech for it and reset.

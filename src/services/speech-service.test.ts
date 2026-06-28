@@ -360,4 +360,18 @@ describe("SpeechService.enqueue", () => {
     expect(mock.spoken).toEqual(["Processing.", "Sentence one."]);
     svc.dispose();
   });
+
+  it("Escape suppresses the rest of the response until resumeSpeech", () => {
+    const mock = installSpeechMock();
+    const svc = new SpeechService(() => true, () => 1);
+    svc.enqueue("one.");
+    expect(mock.spoken).toEqual(["one."]);
+    window.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape" })); // stop + suppress
+    svc.enqueue("two.");             // suppressed → ignored
+    expect(mock.spoken).toEqual(["one."]);
+    svc.resumeSpeech();             // a new response clears suppression
+    svc.enqueue("three.");
+    expect(mock.spoken).toEqual(["one.", "three."]);
+    svc.dispose();
+  });
 });
