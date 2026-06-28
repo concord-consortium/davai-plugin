@@ -41,17 +41,6 @@ export const UserOptions: React.FC<IProps> = observer(function UserOptions({assi
     <div className="user-options control-panel" role="group" aria-labelledby="control-panel-heading">
       <h2 id="control-panel-heading">Options</h2>
       <ReadAloudMenu createToggleOption={createToggleOption}/>
-      <div className="control-panel-section" role="group" aria-labelledby="responses-heading">
-        <h3 id="responses-heading">Responses</h3>
-        <div className="options-list-1">
-          {createToggleOption("streamResponses", "Stream responses", "stream-responses-helper-text")}
-        </div>
-        <p className="helper-text" id="stream-responses-helper-text" data-testid="stream-responses-helper-text">
-          Show and read responses sentence by sentence as they are generated. If your screen
-          reader only announces the last line of a response (for example, VoiceOver), turn this
-          off to receive the full response at once.
-        </p>
-      </div>
       <div className="control-panel-section" role="group" aria-labelledby="loading-indicators-heading">
         <h3 id="loading-indicators-heading">Loading Indicators</h3>
         <div className="options-list-1">

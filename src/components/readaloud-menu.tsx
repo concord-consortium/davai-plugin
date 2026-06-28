@@ -10,6 +10,7 @@ interface IProps {
 export const ReadAloudMenu: React.FC<IProps> = observer(function ReadAloudMenu({createToggleOption}) {
   const appConfig = useAppConfigContext();
   const readAloudHelperTextId = "read-aloud-helper-text";
+  const streamResponsesHelperTextId = "stream-responses-helper-text";
 
   const handleSelect = (event: React.ChangeEvent<HTMLSelectElement>) => {
     appConfig.update(() => {
@@ -22,6 +23,7 @@ export const ReadAloudMenu: React.FC<IProps> = observer(function ReadAloudMenu({
       <h3 id="readaloud-heading">Read Responses Aloud</h3>
       <div className="options-list-1">
         {createToggleOption("readAloudEnabled", "Read responses aloud", readAloudHelperTextId)}
+        {createToggleOption("streamResponses", "Stream responses", streamResponsesHelperTextId)}
         <div className="user-option">
           <label
             data-testid="speed-label"
@@ -51,6 +53,11 @@ export const ReadAloudMenu: React.FC<IProps> = observer(function ReadAloudMenu({
         <p className="helper-text" id={readAloudHelperTextId} data-testid="readaloud-helper-text">
           Note: If you use a screen reader, you may hear duplicate audio when this feature is enabled.
           Press Escape to stop speech playback at any time.
+        </p>
+        <p className="helper-text" id={streamResponsesHelperTextId} data-testid="stream-responses-helper-text">
+          Show and read responses sentence by sentence as they are generated. If your screen
+          reader only announces the last line of a response (for example, VoiceOver), turn this
+          off to receive the full response at once.
         </p>
       </div>
     </div>
