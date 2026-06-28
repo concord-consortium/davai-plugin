@@ -184,6 +184,12 @@ module.exports = (env, argv) => {
     plugins: [
       new ESLintPlugin({
         extensions: ['ts', 'tsx', 'js', 'jsx'],
+        // Always lint fresh. The result cache is keyed on file content, but the
+        // import/no-extraneous-dependencies rule depends on package.json — so after
+        // adding a dependency, an unchanged importing file would keep showing a stale
+        // "should be listed in dependencies" warning in the dev overlay. Linting this
+        // small codebase each rebuild is cheap and avoids that recurring false alarm.
+        cache: false,
       }),
       new MiniCssExtractPlugin({
         filename: devMode ? 'assets/[name].css' : 'assets/[name].[contenthash].css',
