@@ -1,6 +1,7 @@
 @use "./vars.scss" as *;
 
 .App {
+  position: relative; // positioning context for the floating speaking indicator
   background-color: white;
   color: rgb(110,109,95);
   text-align: center;

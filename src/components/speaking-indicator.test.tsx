@@ -12,6 +12,7 @@ const createMockSpeechService = (): ISpeechService => ({
   stopSpeech: jest.fn(),
   enqueue: jest.fn(),
   speakIfIdle: jest.fn(),
+  resumeSpeech: jest.fn(),
   isSpeaking: jest.fn(() => false),
   dispose: jest.fn(),
   onSpeakingChange: jest.fn(() => jest.fn()),
@@ -22,6 +23,7 @@ interface RenderOptions {
   isSpeaking?: boolean;
   currentSpeechText?: string | null;
   speechService?: ISpeechService;
+  isProcessing?: boolean;
 }
 
 const renderSpeakingIndicator = ({
@@ -29,6 +31,7 @@ const renderSpeakingIndicator = ({
   isSpeaking = false,
   currentSpeechText = null,
   speechService,
+  isProcessing = false,
 }: RenderOptions = {}) => {
   const appConfig = AppConfigModel.create({
     ...mockAppConfig,
@@ -39,7 +42,7 @@ const renderSpeakingIndicator = ({
   render(
     <AppConfigContext.Provider value={appConfig}>
       <SpeechServiceContext.Provider value={{ speechService: mockService, isSpeaking, currentSpeechText }}>
-        <SpeakingIndicator />
+        <SpeakingIndicator isProcessing={isProcessing} />
       </SpeechServiceContext.Provider>
     </AppConfigContext.Provider>
   );
@@ -66,6 +69,11 @@ describe("SpeakingIndicator", () => {
 
   it("does not render when current speech text is a processing message", () => {
     renderSpeakingIndicator({ readAloudEnabled: true, isSpeaking: true, currentSpeechText: "Processing your request" });
+    expect(screen.queryByTestId("speaking-indicator")).not.toBeInTheDocument();
+  });
+
+  it("does not render while processing (loading), even if speaking", () => {
+    renderSpeakingIndicator({ readAloudEnabled: true, isSpeaking: true, currentSpeechText: "Hello", isProcessing: true });
     expect(screen.queryByTestId("speaking-indicator")).not.toBeInTheDocument();
   });
 

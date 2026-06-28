@@ -198,7 +198,7 @@ export const App = observer(() => {
           <abbr title="Data Analysis through Voice and Artificial Intelligence">DAVAI</abbr>
           <span>(Data Analysis through Voice and Artificial Intelligence)</span>
         </h1>
-        <SpeakingIndicator />
+        <SpeakingIndicator isProcessing={assistantStore.showLoadingIndicator} />
       </header>
       <ChatTranscriptComponent
         chatTranscript={transcriptStore}
