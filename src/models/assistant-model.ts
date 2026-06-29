@@ -60,6 +60,13 @@ export const AssistantModel = types
     get isAssistantMocked() {
       const llmData = JSON.parse(self.llmId || "");
       return llmData.id === "mock";
+    },
+    // True whenever a response is being produced and the chat input should stay busy
+    // (disabled, showing Cancel). isLoadingResponse spans the whole real-LLM turn
+    // (including tool calls and streaming, after the "Processing" indicator is cleared);
+    // showLoadingIndicator covers the mock assistant, which never sets isLoadingResponse.
+    get isResponding() {
+      return self.isLoadingResponse || self.showLoadingIndicator;
     }
   }))
   .actions((self) => ({
@@ -327,6 +334,16 @@ export const AssistantModel = types
         self.addDbgMsg(`Response time: ${elapsed}`, elapsed);
         startTime = undefined;
       };
+      // A response is already in flight: queue this message to send once the current turn
+      // finishes, and bail out *before* the request lifecycle below. Its finally block
+      // clears the in-flight flags (isLoadingResponse/currentMessageId), so running it for
+      // a mere queue would prematurely tear down the live request; and starting a second
+      // job here would overwrite currentMessageId and corrupt polling/cancellation.
+      if (self.isLoadingResponse) {
+        self.addDbgMsg("Processing", `User message added to queue: ${messageText}`);
+        self.messageQueue.push(messageText);
+        return;
+      }
       try {
         self.setShowLoadingIndicator(true);
         if (self.isCancelling || self.isResetting) {

@@ -206,8 +206,8 @@ export const App = observer(() => {
       />
       <StreamingAnnouncer transcript={transcriptStore} />
       <ChatInputComponent
-        disabled={(!assistantStore.threadId && !appConfig.isAssistantMocked) || assistantStore.showLoadingIndicator}
-        isLoading={assistantStore.showLoadingIndicator}
+        disabled={(!assistantStore.threadId && !appConfig.isAssistantMocked) || assistantStore.isResponding}
+        isLoading={assistantStore.isResponding}
         onCancel={handleCancel}
         onSubmit={handleChatInputSubmit}
       />

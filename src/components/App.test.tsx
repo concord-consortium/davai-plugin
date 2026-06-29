@@ -10,15 +10,24 @@ import { SpeechServiceProvider } from "../contexts/speech-service-context";
 import { mockTransportManager } from "../test-utils/mock-transport-manager";
 import { setupMockSpeechSynthesis, cleanupMockSpeechSynthesis } from "../test-utils/mock-speech-synthesis";
 
+// Mutable so individual tests can vary the busy/streaming state the App reads.
+const mockAssistantStore: any = {
+  initializeAssistant: jest.fn(),
+  updateDataContexts: jest.fn(),
+  updateGraphs: jest.fn(),
+  handleCancel: jest.fn(),
+  handleMessageSubmit: jest.fn(),
+  setStreamEnabled: jest.fn(),
+  transcriptStore: { messages: [], addMessage: jest.fn() },
+  threadId: "thread-1",
+  showLoadingIndicator: false,
+  isLoadingResponse: false,
+  isResponding: false,
+};
+
 jest.mock("../contexts/root-store-context", () => ({
   useRootStore: jest.fn(() => ({
-    assistantStore: {
-      initializeAssistant: jest.fn(),
-      transcriptStore: {
-        messages: [],
-        addMessage: jest.fn(),
-      }
-    },
+    assistantStore: mockAssistantStore,
     sonificationStore: {
       selectedGraph: { id: "graph1", name: "Graph 1" },
       setGraphs: jest.fn(),
@@ -42,9 +51,26 @@ jest.mock("../models/app-config-model", () => ({
   }
 }));
 
+const renderApp = () =>
+  render(
+    <MockAppConfigProvider>
+      <ShortcutsServiceProvider>
+        <AriaLiveProvider>
+          <SpeechServiceProvider>
+            <App />
+          </SpeechServiceProvider>
+        </AriaLiveProvider>
+      </ShortcutsServiceProvider>
+    </MockAppConfigProvider>
+  );
+
 describe("test load app", () => {
   beforeEach(() => {
     setupMockSpeechSynthesis();
+    mockAssistantStore.threadId = "thread-1";
+    mockAssistantStore.showLoadingIndicator = false;
+    mockAssistantStore.isLoadingResponse = false;
+    mockAssistantStore.isResponding = false;
   });
 
   afterEach(() => {
@@ -52,19 +78,23 @@ describe("test load app", () => {
   });
 
   it("renders without crashing", () => {
-    render(
-      <MockAppConfigProvider>
-        <ShortcutsServiceProvider>
-          <AriaLiveProvider>
-            <SpeechServiceProvider>
-              <App />
-            </SpeechServiceProvider>
-          </AriaLiveProvider>
-        </ShortcutsServiceProvider>
-      </MockAppConfigProvider>
-    );
+    renderApp();
     expect(screen.getByText("DAVAI")).toBeDefined();
     expect(screen.getByTestId("chat-transcript")).toBeDefined();
     expect(screen.getByTestId("chat-input")).toBeDefined();
+  });
+
+  it("shows the Cancel button (not Send) while a response is streaming", () => {
+    // Mirrors streaming after the first chunk: the "Processing" indicator is cleared
+    // (showLoadingIndicator false) but a response is still in flight, so the chat input
+    // must stay busy with a Cancel button rather than re-enabling Send.
+    mockAssistantStore.isLoadingResponse = true;
+    mockAssistantStore.showLoadingIndicator = false;
+    mockAssistantStore.isResponding = true;
+
+    renderApp();
+
+    expect(screen.getByTestId("chat-input-cancel")).toBeInTheDocument();
+    expect(screen.queryByTestId("chat-input-send")).not.toBeInTheDocument();
   });
 });
