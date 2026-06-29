@@ -374,4 +374,18 @@ describe("SpeechService.enqueue", () => {
     expect(mock.spoken).toEqual(["one.", "three."]);
     svc.dispose();
   });
+
+  it("stopAndSuppress stops speech and suppresses the rest of the response (Stop-button parity with Escape)", () => {
+    const mock = installSpeechMock();
+    const svc = new SpeechService(() => true, () => 1);
+    svc.enqueue("one.");
+    expect(mock.spoken).toEqual(["one."]);
+    svc.stopAndSuppress();          // what the visible Stop button calls
+    svc.enqueue("two.");            // suppressed → must not resume on the next chunk
+    expect(mock.spoken).toEqual(["one."]);
+    svc.resumeSpeech();             // a new response lifts suppression
+    svc.enqueue("three.");
+    expect(mock.spoken).toEqual(["one.", "three."]);
+    svc.dispose();
+  });
 });

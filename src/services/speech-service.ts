@@ -5,6 +5,7 @@
 export interface ISpeechService {
   speak(text: string): void;
   stopSpeech(): void;
+  stopAndSuppress(): void;
   isSpeaking(): boolean;
   dispose(): void;
   onSpeakingChange(callback: (speaking: boolean) => void): () => void;
@@ -41,8 +42,7 @@ export class SpeechService implements ISpeechService {
       // for other uses otherwise).
       if (!this.speaking && this.queue.length === 0) return;
       event.preventDefault();
-      this.suppressed = true; // stop reading the rest of this response, not just the current chunk
-      this.stopSpeech();
+      this.stopAndSuppress(); // stop reading the rest of this response, not just the current chunk
     };
 
     window.addEventListener("keydown", this.keydownHandler);
@@ -56,6 +56,14 @@ export class SpeechService implements ISpeechService {
   // Re-enable speaking after an Escape suppression (called when a new response begins).
   resumeSpeech(): void {
     this.suppressed = false;
+  }
+
+  // Stop speaking AND suppress the rest of the current streamed response, so chunks
+  // enqueued afterward don't resume playback. Used by both the Escape key and the
+  // visible Stop button. A new response (resumeSpeech) or an explicit speak() lifts it.
+  stopAndSuppress(): void {
+    this.suppressed = true;
+    this.stopSpeech();
   }
 
   private setSpeaking(value: boolean): void {

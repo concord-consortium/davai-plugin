@@ -24,7 +24,9 @@ export const SpeakingIndicator: React.FC<IProps> = ({ isProcessing }) => {
   }
 
   const handleStopClick = () => {
-    speechService.stopSpeech();
+    // Suppress (not just stop) so chunks streamed in afterward don't resume speech —
+    // parity with the Escape key. A new response lifts the suppression.
+    speechService.stopAndSuppress();
   };
 
   return (

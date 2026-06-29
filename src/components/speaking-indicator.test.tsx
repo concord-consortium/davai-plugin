@@ -10,6 +10,7 @@ import { mockAppConfig } from "../test-utils/mock-app-config";
 const createMockSpeechService = (): ISpeechService => ({
   speak: jest.fn(),
   stopSpeech: jest.fn(),
+  stopAndSuppress: jest.fn(),
   enqueue: jest.fn(),
   speakIfIdle: jest.fn(),
   resumeSpeech: jest.fn(),
@@ -82,7 +83,7 @@ describe("SpeakingIndicator", () => {
     expect(screen.getByRole("status")).toBeInTheDocument();
   });
 
-  it("stop button has accessible label and calls stopSpeech", () => {
+  it("stop button has accessible label and suppresses the rest of the response", () => {
     const { speechService } = renderSpeakingIndicator({
       readAloudEnabled: true, isSpeaking: true, currentSpeechText: "Hello"
     });
@@ -90,7 +91,9 @@ describe("SpeakingIndicator", () => {
     const stopButton = screen.getByTestId("stop-speech-button");
     expect(stopButton).toHaveAttribute("aria-label", "Stop speech");
 
+    // Must suppress (not just stopSpeech), so streamed chunks arriving afterward
+    // don't resume speech — parity with the Escape key.
     fireEvent.click(stopButton);
-    expect(speechService.stopSpeech).toHaveBeenCalled();
+    expect(speechService.stopAndSuppress).toHaveBeenCalled();
   });
 });
