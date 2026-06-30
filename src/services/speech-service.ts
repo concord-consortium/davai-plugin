@@ -74,11 +74,6 @@ export class SpeechService implements ISpeechService {
   }
 
   speak(text: string): void {
-    // An interrupt discards any pending streamed chunks and clears Escape suppression
-    // (an explicit announcement — error, replay, message — should always play).
-    this.queue = [];
-    this.utterance = null;
-    this.suppressed = false;
     if (!this.getReadAloudEnabled()) {
       return;
     }
@@ -89,6 +84,14 @@ export class SpeechService implements ISpeechService {
     if (!text || text.trim() === "") {
       return;
     }
+
+    // An interrupt discards any pending streamed chunks and clears Escape suppression
+    // (an explicit announcement — error, replay, message — should always play). Reset
+    // these only here, after the guards: doing it before the early returns could orphan
+    // an in-flight utterance when read-aloud is off, because the orphaned onend would no
+    // longer match this.utterance and `speaking` would stay stuck true.
+    this.utterance = null;
+    this.suppressed = false;
 
     // Cancel any ongoing speech, then play through the SAME queue mechanism that
     // enqueue() uses (speakNext). This is what makes streamed chunks work: chunks

@@ -388,4 +388,17 @@ describe("SpeechService.enqueue", () => {
     expect(mock.spoken).toEqual(["one.", "three."]);
     svc.dispose();
   });
+
+  it("speak() while read-aloud is off does not strand an in-flight utterance", () => {
+    const mock = installSpeechMock();
+    let enabled = true;
+    const svc = new SpeechService(() => enabled, () => 1);
+    svc.enqueue("one.");                 // begins speaking "one." (onstart → speaking true)
+    expect(svc.isSpeaking()).toBe(true);
+    enabled = false;
+    svc.speak("noop while off");         // read-aloud off: must not orphan the live utterance
+    mock.end();                          // "one." finishes → its onend must still flip speaking off
+    expect(svc.isSpeaking()).toBe(false);
+    svc.dispose();
+  });
 });
