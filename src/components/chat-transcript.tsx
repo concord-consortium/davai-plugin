@@ -14,6 +14,7 @@ import {
   downloadBlob,
   getTranscriptFilename,
 } from "../utils/transcript-utils";
+import { forSpeechMultiline } from "../utils/speech-text";
 
 import "./chat-transcript.scss";
 
@@ -90,7 +91,9 @@ export const ChatTranscriptComponent = observer(({chatTranscript, isLoading}: IP
       replayHiddenCharToggleRef.current = !replayHiddenCharToggleRef.current;
       const suffix = replayHiddenCharToggleRef.current ? "\u200B" : "\u200C";
       if (lastDavaiMessage) {
-        setAriaLiveText(`Last Message: ${lastDavaiMessage.plainTextContent}${suffix}`);
+        // Voice list/table structure the same way as live announcements (bullets ->
+        // "bullet", tables linearized), instead of the raw markdown in plainTextContent.
+        setAriaLiveText(`Last Message: ${forSpeechMultiline(lastDavaiMessage.messageContent.content)}${suffix}`);
       } else {
         setAriaLiveText(`No previous message from DAVAI to replay.${suffix}`);
       }

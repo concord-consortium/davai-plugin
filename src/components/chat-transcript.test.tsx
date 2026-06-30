@@ -1,10 +1,10 @@
 import React from "react";
-import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
+import { act, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 
 import { AppConfigProvider } from "../contexts/app-config-context";
 import { ChatTranscriptComponent } from "./chat-transcript";
 import { ShortcutsServiceProvider } from "../contexts/shortcuts-service-context";
-import { AriaLiveProvider } from "../contexts/aria-live-context";
+import { AriaLiveProvider, useAriaLive } from "../contexts/aria-live-context";
 import { SpeechServiceProvider } from "../contexts/speech-service-context";
 import { setupMockSpeechSynthesis, cleanupMockSpeechSynthesis } from "../test-utils/mock-speech-synthesis";
 
@@ -19,6 +19,12 @@ const TestProviders = ({ children }: { children: React.ReactNode }) => (
     </AriaLiveProvider>
   </AppConfigProvider>
 );
+
+// Renders the shared aria-live text so a test can assert what was announced.
+const AriaLiveDisplay = () => {
+  const { ariaLiveText } = useAriaLive();
+  return <div data-testid="aria-live-display">{ariaLiveText}</div>;
+};
 
 describe("test chat transcript component", () => {
   window.HTMLElement.prototype.scrollIntoView = jest.fn();
@@ -106,6 +112,32 @@ describe("test chat transcript component", () => {
     );
 
     expect(scrollSpy).toHaveBeenCalled();
+  });
+
+  it("replays the last DAVAI message, voicing bullets as 'bullet'", () => {
+    const transcript = {
+      messages: [
+        {
+          speaker: "DAVAI", messageContent: { content: "- Apple" }, plainTextContent: "- Apple",
+          timestamp: "2021-07-01T12:00:00Z", id: "1"
+        }
+      ],
+    };
+    render(
+      <TestProviders>
+        <ChatTranscriptComponent chatTranscript={transcript} />
+        <AriaLiveDisplay />
+      </TestProviders>
+    );
+
+    // Trigger the "replay last DAVAI message" shortcut (Control+Shift+Comma).
+    act(() => {
+      window.dispatchEvent(new KeyboardEvent("keydown", {
+        code: "Comma", key: ",", ctrlKey: true, shiftKey: true, bubbles: true
+      }));
+    });
+
+    expect(screen.getByTestId("aria-live-display").textContent).toContain("bullet Apple");
   });
 
   it("copies the transcript and downloads it when the capture button is clicked", async () => {
