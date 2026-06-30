@@ -51,10 +51,15 @@ export const SpeechServiceProvider = ({ children }: { children: React.ReactNode 
         clearTimeout(debounceTimeoutRef.current);
       }
 
-      // Debounce speech to avoid rapid cancellations
+      // Debounce, then queue onto the shared TTS queue (instead of interrupting), so
+      // sequential announcements within a turn — e.g. text the model emits before a tool
+      // call, then the final answer — are read in order rather than clobbering each other.
+      // resumeSpeech clears any prior Escape suppression for this new response. Explicit
+      // interrupts (Escape, the Stop button, replay) still call stopSpeech/stopAndSuppress.
       debounceTimeoutRef.current = setTimeout(() => {
         setCurrentSpeechText(ariaLiveText);
-        speechService.speak(ariaLiveText);
+        speechService.resumeSpeech();
+        speechService.enqueue(ariaLiveText);
         debounceTimeoutRef.current = null;
       }, 100);
     }
