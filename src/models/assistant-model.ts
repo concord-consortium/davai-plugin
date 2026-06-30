@@ -300,12 +300,15 @@ export const AssistantModel = types
             self.addDbgMsg("Server error processing tool output", output?.error || "Unknown error");
             self.addDavaiMsg("Sorry, I ran into an error processing that request.");
             return;
-          } else if (status === STREAMING_STATUS && self.streamEnabled && typeof output?.response === "string") {
+          } else if (status === STREAMING_STATUS && typeof output?.response === "string") {
+            // Count server streaming as progress regardless of the client's display
+            // preference (same as the message loop), so a long tool-phase response isn't
+            // dropped by the idle budget. Only the on-screen/spoken ingestion is gated.
             if (output.response.length > lastLen) {
               lastLen = output.response.length;
               lastProgressAt = performance.now();
             }
-            self.ingestStreamChunk(output.response);
+            if (self.streamEnabled) self.ingestStreamChunk(output.response);
             yield new Promise((res) => setTimeout(res, 500));
             continue;
           }
@@ -398,12 +401,16 @@ export const AssistantModel = types
               self.addDbgMsg("Server error processing message", output?.error || "Unknown error");
               self.addDavaiMsg("Sorry, I ran into an error processing that request.");
               return;
-            } else if (status === STREAMING_STATUS && self.streamEnabled && typeof output?.response === "string") {
+            } else if (status === STREAMING_STATUS && typeof output?.response === "string") {
+              // Count server streaming as progress regardless of the client's display
+              // preference, so a long response can't hit the idle budget while the server
+              // is steadily generating. Only the on-screen/spoken ingestion is gated on
+              // streamEnabled.
               if (output.response.length > lastLen) {
                 lastLen = output.response.length;
                 lastProgressAt = performance.now(); // progress → extend the budget
               }
-              self.ingestStreamChunk(output.response);
+              if (self.streamEnabled) self.ingestStreamChunk(output.response);
               yield new Promise((res) => setTimeout(res, 500)); // faster cadence while streaming
               continue;
             }
@@ -436,6 +443,10 @@ export const AssistantModel = types
           }
         }
       } catch (err) {
+        // Finalize any in-progress streamed message (keeping its shown text) so an
+        // exception can't leave it stuck isStreaming, which would wedge the a11y
+        // streaming logic and autoscroll on the next turn.
+        self.finishStream();
         console.error("Failed to handle message submit:", err);
         self.addDbgMsg("Failed to handle message submit", formatJsonMessage(err));
       } finally {

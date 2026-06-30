@@ -91,4 +91,46 @@ describe("AssistantModel streaming busy-state (DAVAI-118)", () => {
     expect(begin).toHaveLength(1);
     expect(completed).toHaveLength(1);
   });
+
+  it("finalizes the in-progress streaming message if the turn throws after streaming started", async () => {
+    const store = createStore();
+    store.setStreamEnabled(true);
+    mockedPostMessage
+      .mockResolvedValueOnce({ ok: true, json: async () => ({ messageId: "m1" }) } as Response) // submit
+      .mockResolvedValueOnce({ ok: true, json: async () => ({ status: "streaming", output: { response: "Partial..." } }) } as Response) // streamed chunk
+      .mockResolvedValueOnce({ ok: false, statusText: "Boom" } as Response); // next status fetch throws
+
+    await store.handleMessageSubmit("hello");
+
+    // The streaming message must be finalized (not left stuck isStreaming) and keep its text.
+    expect(store.transcriptStore.messages.some((m) => m.isStreaming)).toBe(false);
+    expect(store.transcriptStore.messages.some((m) => m.messageContent.content === "Partial...")).toBe(true);
+    expect(store.currentStreamingMessageId).toBeNull();
+  });
+
+  it("does not time out while the server reports streaming progress, even with streaming display off", async () => {
+    const store = createStore();
+    store.setStreamEnabled(false); // streaming display OFF — server still reports streaming status
+
+    // Advance the clock 30s on each status poll, so the 60s idle budget would expire after
+    // a couple of no-progress polls unless streaming statuses are counted as progress.
+    let now = 0;
+    const nowSpy = jest.spyOn(performance, "now").mockImplementation(() => now);
+    const streaming = (resp: string) =>
+      ({ ok: true, json: async () => { now += 30_000; return { status: "streaming", output: { response: resp } }; } } as unknown as Response);
+
+    mockedPostMessage
+      .mockResolvedValueOnce({ ok: true, json: async () => ({ messageId: "m1" }) } as Response) // submit
+      .mockResolvedValueOnce(streaming("a"))
+      .mockResolvedValueOnce(streaming("ab"))
+      .mockResolvedValueOnce(streaming("abc"))
+      .mockResolvedValueOnce({ ok: true, json: async () => ({ status: "completed", output: { response: "done" } }) } as Response);
+
+    await store.handleMessageSubmit("hello");
+
+    expect(store.transcriptStore.messages.some((m) => m.messageContent.content === "done")).toBe(true);
+    expect(store.transcriptStore.messages.some((m) => m.messageContent.description === "Polling expired before response received")).toBe(false);
+
+    nowSpy.mockRestore();
+  });
 });
