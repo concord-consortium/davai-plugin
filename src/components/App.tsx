@@ -7,6 +7,7 @@ import { useAppConfigContext } from "../contexts/app-config-context";
 import { useRootStore } from "../contexts/root-store-context";
 import { useAriaLive } from "../contexts/aria-live-context";
 import { useShortcutsService } from "../contexts/shortcuts-service-context";
+import { useSpeechService } from "../contexts/speech-service-context";
 import { ChatInputComponent } from "./chat-input";
 import { ChatTranscriptComponent } from "./chat-transcript";
 import { DAVAI_SPEAKER, LOADING_NOTE, USER_SPEAKER, notificationsToIgnore } from "../constants";
@@ -29,6 +30,7 @@ const kVersion = process.env.DAVAI_VERSION || "local-build";
 export const App = observer(() => {
   const appConfig = useAppConfigContext();
   const shortcutsService = useShortcutsService();
+  const speechService = useSpeechService();
   const { ariaLiveText, setAriaLiveText } = useAriaLive();
   const { assistantStore, sonificationStore, transportManager } = useRootStore();
   const { playProcessingTone } = appConfig;
@@ -179,6 +181,10 @@ export const App = observer(() => {
 
   const handleChatInputSubmit = async (messageText: string) => {
     Tone.start();
+    // A new question interrupts the previous answer's still-playing audio. (The input is
+    // disabled while a response is in flight, so this only stops a finished turn's
+    // lingering speech, never an in-progress one.)
+    speechService.stopSpeech();
     transcriptStore.addMessage(USER_SPEAKER, {content: messageText});
 
     if (appConfig.isAssistantMocked) {

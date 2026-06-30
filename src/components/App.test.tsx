@@ -1,6 +1,6 @@
 import "openai/shims/node";
 import React from "react";
-import { render, screen } from "@testing-library/react";
+import { fireEvent, render, screen } from "@testing-library/react";
 import { App } from "./App";
 import { mockAppConfig } from "../test-utils/mock-app-config";
 import { MockAppConfigProvider } from "../test-utils/app-config-provider";
@@ -118,5 +118,16 @@ describe("test load app", () => {
     renderApp();
 
     expect(await screen.findByText("bullet Apple")).toBeInTheDocument();
+  });
+
+  it("stops any in-progress speech when a new message is submitted", () => {
+    renderApp();
+
+    fireEvent.change(screen.getByTestId("chat-input-textarea"), { target: { value: "Another question" } });
+    fireEvent.click(screen.getByTestId("chat-input-send"));
+
+    // stopSpeech() cancels the browser speech synthesis, so a fresh question interrupts
+    // the previous answer's still-playing audio.
+    expect(window.speechSynthesis.cancel).toHaveBeenCalled();
   });
 });
