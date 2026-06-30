@@ -106,9 +106,13 @@ export const AssistantModel = types
         self.transcriptStore.finalizeStreamingMessage(self.currentStreamingMessageId, fullText);
         self.currentStreamingMessageId = null;
       } else {
+        // Non-streamed: the whole response arrives at once. Emit "Begin response time"
+        // here too (streaming emits it on the first chunk in ingestStreamChunk) so both
+        // modes log the begin/completed pair — here begin == completed, which is expected.
         self.transcriptStore.addMessage(DAVAI_SPEAKER, { content: fullText });
+        timingDebug(self.transcriptStore, "Begin response time", self.responseStartTime);
       }
-      // Emit the timing entry for both streamed and non-streamed responses.
+      // Emit the completed-timing entry for both streamed and non-streamed responses.
       timingDebug(self.transcriptStore, "Completed response time", self.responseStartTime);
     },
     // Finalize the in-progress streamed message in place, keeping its already-shown
