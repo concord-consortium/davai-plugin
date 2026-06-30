@@ -104,11 +104,12 @@ export const AssistantModel = types
     finalizeStream(fullText: string) {
       if (self.currentStreamingMessageId) {
         self.transcriptStore.finalizeStreamingMessage(self.currentStreamingMessageId, fullText);
-        timingDebug(self.transcriptStore, "Completed response time", self.responseStartTime);
         self.currentStreamingMessageId = null;
       } else {
         self.transcriptStore.addMessage(DAVAI_SPEAKER, { content: fullText });
       }
+      // Emit the timing entry for both streamed and non-streamed responses.
+      timingDebug(self.transcriptStore, "Completed response time", self.responseStartTime);
     },
     // Finalize the in-progress streamed message in place, keeping its already-shown
     // text (used for cancel/error/timeout and for user-facing text that precedes a
@@ -323,17 +324,6 @@ export const AssistantModel = types
     });
 
     const handleMessageSubmit = flow(function* (messageText: string) {
-      // Time from when real processing begins to when a terminal outcome is
-      // reached. logResponseTime posts exactly one debug entry (it disarms
-      // itself), and is called just before each terminal output so the entry
-      // appears directly above the response in the transcript.
-      let startTime: number | undefined;
-      const logResponseTime = () => {
-        if (startTime === undefined) return;
-        const elapsed = formatElapsedTime(performance.now() - startTime);
-        self.addDbgMsg(`Response time: ${elapsed}`, elapsed);
-        startTime = undefined;
-      };
       // A response is already in flight: queue this message to send once the current turn
       // finishes, and bail out *before* the request lifecycle below. Its finally block
       // clears the in-flight flags (isLoadingResponse/currentMessageId), so running it for
@@ -351,8 +341,7 @@ export const AssistantModel = types
           self.addDbgMsg(description, `User message added to queue: ${messageText}`);
           self.messageQueue.push(messageText);
         } else {
-          startTime = performance.now();
-          self.responseStartTime = startTime;
+          self.responseStartTime = performance.now();
           self.isLoadingResponse = true;
 
           // Generate a unique message ID for this request. This lets us cancel the message if needed.
@@ -397,12 +386,10 @@ export const AssistantModel = types
               data = output;
               break;
             } else if (status === "cancelled") {
-              logResponseTime();
               self.finishStream();
               self.addDbgMsg("Job was cancelled on the server", messageId);
               return;
             } else if (status === "error") {
-              logResponseTime();
               self.finishStream();
               self.addDbgMsg("Server error processing message", output?.error || "Unknown error");
               self.addDavaiMsg("Sorry, I ran into an error processing that request.");
@@ -421,7 +408,6 @@ export const AssistantModel = types
           }
 
           if (!data) {
-            logResponseTime();
             self.finishStream();
             self.addDbgMsg("Polling expired before response received", messageId);
             return;
@@ -442,23 +428,16 @@ export const AssistantModel = types
           }
 
           if (data?.response) {
-            logResponseTime();
             self.finalizeStream(data.response);
           }
         }
       } catch (err) {
-        // Log before the error message so the timing row sits above it, like the
-        // other terminal branches. Disarms itself, so the finally call is a no-op.
-        logResponseTime();
         console.error("Failed to handle message submit:", err);
         self.addDbgMsg("Failed to handle message submit", formatJsonMessage(err));
       } finally {
         self.isLoadingResponse = false;
         self.setShowLoadingIndicator(false);
         self.currentMessageId = null;
-        // Backstop for a success that produced no chat output (tool-only end).
-        // No-op if an inline call already logged (including the catch path).
-        logResponseTime();
       }
     });
 

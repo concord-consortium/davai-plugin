@@ -60,4 +60,20 @@ describe("AssistantModel streaming busy-state (DAVAI-118)", () => {
     store.setShowLoadingIndicator(true);
     expect(store.isResponding).toBe(true);
   });
+
+  it("logs a single 'Completed response time' and no legacy 'Response time' on completion", async () => {
+    const store = createStore();
+    mockedPostMessage
+      .mockResolvedValueOnce({ ok: true, json: async () => ({ messageId: "m1" }) } as Response) // submit
+      .mockResolvedValueOnce({ ok: true, json: async () => ({ status: "completed", output: { response: "Hi there." } }) } as Response); // status poll
+
+    await store.handleMessageSubmit("hello");
+
+    const messages = store.transcriptStore.messages;
+    expect(messages.some((m) => m.messageContent.content === "Hi there.")).toBe(true);
+    const completed = messages.filter((m) => m.messageContent.description === "Completed response time");
+    expect(completed).toHaveLength(1);
+    const legacy = messages.filter((m) => (m.messageContent.description ?? "").startsWith("Response time"));
+    expect(legacy).toHaveLength(0);
+  });
 });
