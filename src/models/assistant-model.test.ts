@@ -1,6 +1,7 @@
 import { AssistantModel } from "./assistant-model";
 import { ChatTranscriptModel } from "./chat-transcript-model";
 import { postMessage } from "../utils/llm-utils";
+import { DAVAI_SPEAKER } from "../constants";
 
 jest.mock("../utils/llm-utils", () => ({
   postMessage: jest.fn(),
@@ -90,6 +91,23 @@ describe("AssistantModel streaming busy-state (DAVAI-118)", () => {
     const completed = messages.filter((m) => m.messageContent.description === "Completed response time");
     expect(begin).toHaveLength(1);
     expect(completed).toHaveLength(1);
+  });
+
+  it("keeps the DAVAI response as the last transcript row for a non-streamed completion", async () => {
+    // App's announce/speak effect for non-streamed responses keys off "last message is a
+    // DAVAI message", so the timing debug rows must not be appended after the response.
+    const store = createStore();
+    store.setStreamEnabled(false);
+    mockedPostMessage
+      .mockResolvedValueOnce({ ok: true, json: async () => ({ messageId: "m1" }) } as Response) // submit
+      .mockResolvedValueOnce({ ok: true, json: async () => ({ status: "completed", output: { response: "Hi there." } }) } as Response); // status poll
+
+    await store.handleMessageSubmit("hello");
+
+    const messages = store.transcriptStore.messages;
+    const last = messages[messages.length - 1];
+    expect(last.speaker).toBe(DAVAI_SPEAKER);
+    expect(last.messageContent.content).toBe("Hi there.");
   });
 
   it("finalizes the in-progress streaming message if the turn throws after streaming started", async () => {

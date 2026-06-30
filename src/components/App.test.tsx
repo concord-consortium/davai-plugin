@@ -9,6 +9,7 @@ import { AriaLiveProvider } from "../contexts/aria-live-context";
 import { SpeechServiceProvider } from "../contexts/speech-service-context";
 import { mockTransportManager } from "../test-utils/mock-transport-manager";
 import { setupMockSpeechSynthesis, cleanupMockSpeechSynthesis } from "../test-utils/mock-speech-synthesis";
+import { DAVAI_SPEAKER } from "../constants";
 
 // Mutable so individual tests can vary the busy/streaming state the App reads.
 const mockAssistantStore: any = {
@@ -65,12 +66,15 @@ const renderApp = () =>
   );
 
 describe("test load app", () => {
+  window.HTMLElement.prototype.scrollIntoView = jest.fn();
+
   beforeEach(() => {
     setupMockSpeechSynthesis();
     mockAssistantStore.threadId = "thread-1";
     mockAssistantStore.showLoadingIndicator = false;
     mockAssistantStore.isLoadingResponse = false;
     mockAssistantStore.isResponding = false;
+    mockAssistantStore.transcriptStore = { messages: [], addMessage: jest.fn() };
   });
 
   afterEach(() => {
@@ -96,5 +100,23 @@ describe("test load app", () => {
 
     expect(screen.getByTestId("chat-input-cancel")).toBeInTheDocument();
     expect(screen.queryByTestId("chat-input-send")).not.toBeInTheDocument();
+  });
+
+  it("announces a finalized DAVAI response, voicing bullets as 'bullet'", async () => {
+    // A non-streamed DAVAI response that is the last transcript row should be announced
+    // via the assertive aria-live region, with the bullet marker voiced as the word.
+    mockAssistantStore.transcriptStore = {
+      messages: [
+        {
+          speaker: DAVAI_SPEAKER, isStreaming: false, id: "1", timestamp: "t",
+          messageContent: { content: "- Apple" }, plainTextContent: "- Apple"
+        }
+      ],
+      addMessage: jest.fn(),
+    };
+
+    renderApp();
+
+    expect(await screen.findByText("bullet Apple")).toBeInTheDocument();
   });
 });

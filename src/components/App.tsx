@@ -19,6 +19,7 @@ import { ICODAPGraph } from "../types";
 import { GraphSonificationScheduler } from "../models/graph-sonification-scheduler";
 import { SpeakingIndicator } from "./speaking-indicator";
 import { StreamingAnnouncer } from "./streaming-announcer";
+import { forSpeechMultiline } from "../utils/speech-text";
 
 import "./App.scss";
 
@@ -151,7 +152,9 @@ export const App = observer(() => {
     if (transcriptStore.messages.length > 0) {
       const lastMessage = messages[messages.length - 1];
       if (lastMessage.speaker === DAVAI_SPEAKER && !lastMessage.isStreaming) {
-        setAriaLiveText(lastMessage.plainTextContent);
+        // Strip markdown and voice list/table structure (bullets -> "bullet", tables
+        // linearized) for the spoken/announced text — same handling as streamed chunks.
+        setAriaLiveText(forSpeechMultiline(lastMessage.messageContent.content));
       }
     }
   }, [transcriptStore, transcriptStore.messages.length, setAriaLiveText]);

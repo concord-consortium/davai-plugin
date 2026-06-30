@@ -103,17 +103,20 @@ export const AssistantModel = types
     },
     finalizeStream(fullText: string) {
       if (self.currentStreamingMessageId) {
+        // Streamed: finalize the existing message in place, then log completion after it.
         self.transcriptStore.finalizeStreamingMessage(self.currentStreamingMessageId, fullText);
         self.currentStreamingMessageId = null;
+        timingDebug(self.transcriptStore, "Completed response time", self.responseStartTime);
       } else {
-        // Non-streamed: the whole response arrives at once. Emit "Begin response time"
-        // here too (streaming emits it on the first chunk in ingestStreamChunk) so both
-        // modes log the begin/completed pair — here begin == completed, which is expected.
-        self.transcriptStore.addMessage(DAVAI_SPEAKER, { content: fullText });
+        // Non-streamed: the whole response arrives at once. Log the begin/completed pair
+        // (streaming emits "Begin response time" on the first chunk; here begin == completed)
+        // BEFORE adding the message, so the DAVAI message stays the LAST transcript row —
+        // App's announce/speak effect for non-streamed responses keys off "last message is
+        // a DAVAI message", and trailing debug rows would suppress it.
         timingDebug(self.transcriptStore, "Begin response time", self.responseStartTime);
+        timingDebug(self.transcriptStore, "Completed response time", self.responseStartTime);
+        self.transcriptStore.addMessage(DAVAI_SPEAKER, { content: fullText });
       }
-      // Emit the completed-timing entry for both streamed and non-streamed responses.
-      timingDebug(self.transcriptStore, "Completed response time", self.responseStartTime);
     },
     // Finalize the in-progress streamed message in place, keeping its already-shown
     // text (used for cancel/error/timeout and for user-facing text that precedes a
