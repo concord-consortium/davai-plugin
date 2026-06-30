@@ -9,6 +9,7 @@ const MessageModel = types.model("MessageModel", {
   messageContent: types.frozen<MessageContent>(),
   timestamp: types.string,
   id: types.identifier,
+  isStreaming: types.optional(types.boolean, false),
 })
 .views((self) => ({
   get plainTextContent() {
@@ -38,6 +39,23 @@ export const ChatTranscriptModel = types
     },
     clearTranscript() {
       self.messages.clear();
+    },
+    addStreamingMessage(speaker: string, messageContent: MessageContent): string {
+      const id = nanoid();
+      self.messages.push({ speaker, messageContent, timestamp: timeStamp(), id, isStreaming: true });
+      return id;
+    },
+    appendToMessage(id: string, text: string) {
+      const msg = self.messages.find((m) => m.id === id);
+      if (msg) msg.messageContent = { ...msg.messageContent, content: msg.messageContent.content + text };
+    },
+    finalizeStreamingMessage(id: string, content: string) {
+      const msg = self.messages.find((m) => m.id === id);
+      if (msg) { msg.messageContent = { ...msg.messageContent, content }; msg.isStreaming = false; }
+    },
+    removeMessage(id: string) {
+      const msg = self.messages.find((m) => m.id === id);
+      if (msg) self.messages.remove(msg);
     },
   }));
 

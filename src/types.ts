@@ -29,6 +29,7 @@ export type ChatMessage = {
   timestamp: string;
   id: string;
   plainTextContent: string;
+  isStreaming?: boolean;
 };
 
 export type ChatTranscript = {

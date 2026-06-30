@@ -1,5 +1,19 @@
 const transpileModules = [
   "react-markdown",
+  // remark-gfm (GFM tables/strikethrough/etc.) and its ESM dependency tree. Most
+  // entries match by prefix (no trailing slash), so e.g. "mdast-util-gfm" also covers
+  // "mdast-util-gfm-table" and "micromark-extension-gfm" covers its sub-extensions.
+  "remark-gfm",
+  "micromark-extension-gfm",
+  "mdast-util-gfm",
+  "mdast-util-to-markdown",
+  "mdast-util-find-and-replace",
+  "mdast-util-phrasing",
+  "markdown-table",
+  "longest-streak",
+  "zwitch",
+  "ccount",
+  "escape-string-regexp",
   "tone",
   "bail",
   "comma-separated-tokens",

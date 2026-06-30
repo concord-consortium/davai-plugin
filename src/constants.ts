@@ -5,6 +5,7 @@ export const USER_SPEAKER = "User";
 // see: https://platform.openai.com/docs/api-reference/runs/object#runs/object-status
 export const WAIT_STATES = new Set(["queued", "in_progress"]);
 export const ERROR_STATES = new Set(["failed", "incomplete", "expired", "cancelled"]);
+export const STREAMING_STATUS = "streaming";
 
 export const GREETING = `Hello! I'm DAVAI, your Data Analysis through Voice and Artificial Intelligence partner.`;
 

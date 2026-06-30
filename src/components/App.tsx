@@ -7,6 +7,7 @@ import { useAppConfigContext } from "../contexts/app-config-context";
 import { useRootStore } from "../contexts/root-store-context";
 import { useAriaLive } from "../contexts/aria-live-context";
 import { useShortcutsService } from "../contexts/shortcuts-service-context";
+import { useSpeechService } from "../contexts/speech-service-context";
 import { ChatInputComponent } from "./chat-input";
 import { ChatTranscriptComponent } from "./chat-transcript";
 import { DAVAI_SPEAKER, LOADING_NOTE, USER_SPEAKER, notificationsToIgnore } from "../constants";
@@ -18,6 +19,8 @@ import { isGraphSonifiable } from "../utils/graph-sonification-utils";
 import { ICODAPGraph } from "../types";
 import { GraphSonificationScheduler } from "../models/graph-sonification-scheduler";
 import { SpeakingIndicator } from "./speaking-indicator";
+import { StreamingAnnouncer } from "./streaming-announcer";
+import { forSpeechMultiline } from "../utils/speech-text";
 
 import "./App.scss";
 
@@ -27,6 +30,7 @@ const kVersion = process.env.DAVAI_VERSION || "local-build";
 export const App = observer(() => {
   const appConfig = useAppConfigContext();
   const shortcutsService = useShortcutsService();
+  const speechService = useSpeechService();
   const { ariaLiveText, setAriaLiveText } = useAriaLive();
   const { assistantStore, sonificationStore, transportManager } = useRootStore();
   const { playProcessingTone } = appConfig;
@@ -149,8 +153,10 @@ export const App = observer(() => {
     const { messages } = transcriptStore;
     if (transcriptStore.messages.length > 0) {
       const lastMessage = messages[messages.length - 1];
-      if (lastMessage.speaker === DAVAI_SPEAKER) {
-        setAriaLiveText(lastMessage.plainTextContent);
+      if (lastMessage.speaker === DAVAI_SPEAKER && !lastMessage.isStreaming) {
+        // Strip markdown and voice list/table structure (bullets -> "bullet", tables
+        // linearized) for the spoken/announced text — same handling as streamed chunks.
+        setAriaLiveText(forSpeechMultiline(lastMessage.messageContent.content));
       }
     }
   }, [transcriptStore, transcriptStore.messages.length, setAriaLiveText]);
@@ -175,11 +181,18 @@ export const App = observer(() => {
 
   const handleChatInputSubmit = async (messageText: string) => {
     Tone.start();
+    // A new question interrupts the previous answer's still-playing audio. (The input is
+    // disabled while a response is in flight, so this only stops a finished turn's
+    // lingering speech, never an in-progress one.) resumeSpeech clears any lingering
+    // Escape/Stop suppression so this turn's "Processing" message and reply are read.
+    speechService.stopSpeech();
+    speechService.resumeSpeech();
     transcriptStore.addMessage(USER_SPEAKER, {content: messageText});
 
     if (appConfig.isAssistantMocked) {
       assistantStore.handleMessageSubmitMockAssistant();
     } else {
+      assistantStore.setStreamEnabled(appConfig.streamResponses);
       await assistantStore.handleMessageSubmit(messageText);
     }
 
@@ -196,15 +209,16 @@ export const App = observer(() => {
           <abbr title="Data Analysis through Voice and Artificial Intelligence">DAVAI</abbr>
           <span>(Data Analysis through Voice and Artificial Intelligence)</span>
         </h1>
-        <SpeakingIndicator />
+        <SpeakingIndicator isProcessing={assistantStore.showLoadingIndicator} />
       </header>
       <ChatTranscriptComponent
         chatTranscript={transcriptStore}
         isLoading={assistantStore.showLoadingIndicator}
       />
+      <StreamingAnnouncer transcript={transcriptStore} />
       <ChatInputComponent
-        disabled={(!assistantStore.threadId && !appConfig.isAssistantMocked) || assistantStore.showLoadingIndicator}
-        isLoading={assistantStore.showLoadingIndicator}
+        disabled={(!assistantStore.threadId && !appConfig.isAssistantMocked) || assistantStore.isResponding}
+        isLoading={assistantStore.isResponding}
         onCancel={handleCancel}
         onSubmit={handleChatInputSubmit}
       />

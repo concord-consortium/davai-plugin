@@ -6,6 +6,7 @@ import { LoadingMessage } from "./loading-message";
 import { useAppConfigContext } from "../contexts/app-config-context";
 import { useShortcutsService } from "../contexts/shortcuts-service-context";
 import { useAriaLive } from "../contexts/aria-live-context";
+import { useSpeechService } from "../contexts/speech-service-context";
 import {
   buildTranscriptCsv,
   buildTranscriptZip,
@@ -13,6 +14,7 @@ import {
   downloadBlob,
   getTranscriptFilename,
 } from "../utils/transcript-utils";
+import { forSpeechMultiline } from "../utils/speech-text";
 
 import "./chat-transcript.scss";
 
@@ -27,16 +29,24 @@ export const ChatTranscriptComponent = observer(({chatTranscript, isLoading}: IP
   const shortcutsService = useShortcutsService();
   const chatTranscriptRef = useRef<HTMLDivElement>(null);
   const { setAriaLiveText } = useAriaLive();
+  const speechService = useSpeechService();
   const replayHiddenCharToggleRef = useRef(true);
+
+  // Track the currently-streaming message by its flag, not by position: the first
+  // streamed chunk also appends a DEBUG "Begin response time" row right after it, so the
+  // streaming message is usually not last. Driving autoscroll off its growing length
+  // keeps the transcript scrolled to the newest text as chunks arrive.
+  const streamingMessage = chatTranscript.messages.find((m: any) => m.isStreaming);
+  const streamingLen = streamingMessage ? streamingMessage.messageContent.content.length : 0;
 
   useEffect(() => {
     // Autoscroll to the top of the latest message in the transcript.
     const chatTranscriptContainer = chatTranscriptRef.current;
     if (chatTranscriptContainer) {
-      const lastMessage = chatTranscriptContainer.querySelector(".chat-transcript__message:last-of-type");
-      lastMessage?.scrollIntoView({behavior: "smooth", block: "nearest"});
+      const lastTranscriptMessage = chatTranscriptContainer.querySelector(".chat-transcript__message:last-of-type");
+      lastTranscriptMessage?.scrollIntoView({behavior: "smooth", block: "nearest"});
     }
-  }, [chatTranscript.messages.length, isLoading]);
+  }, [chatTranscript.messages.length, isLoading, streamingLen]);
 
   const handleCaptureTranscript = useCallback(async () => {
     const { csv, images } = buildTranscriptCsv(chatTranscript.messages);
@@ -74,18 +84,21 @@ export const ChatTranscriptComponent = observer(({chatTranscript, isLoading}: IP
     // A shortcut to set the last message in the live aria region
     return shortcutsService.registerShortcutHandler("replayLastDavaiMessage", (event) => {
       event.preventDefault();
+      speechService.stopSpeech();
       const lastDavaiMessage = chatTranscript.messages.filter(msg => msg.speaker === "DAVAI").pop();
       // We toggle an invisible character to force the screen reader to read the same message again.
       // We tried to clear the live text, wait, and set it again, but that didn't work
       replayHiddenCharToggleRef.current = !replayHiddenCharToggleRef.current;
       const suffix = replayHiddenCharToggleRef.current ? "\u200B" : "\u200C";
       if (lastDavaiMessage) {
-        setAriaLiveText(`Last Message: ${lastDavaiMessage.plainTextContent}${suffix}`);
+        // Voice list/table structure the same way as live announcements (bullets ->
+        // "bullet", tables linearized), instead of the raw markdown in plainTextContent.
+        setAriaLiveText(`Last Message: ${forSpeechMultiline(lastDavaiMessage.messageContent.content)}${suffix}`);
       } else {
         setAriaLiveText(`No previous message from DAVAI to replay.${suffix}`);
       }
     }, { focus: true });
-  }, [chatTranscript.messages, setAriaLiveText, shortcutsService]);
+  }, [chatTranscript.messages, setAriaLiveText, shortcutsService, speechService]);
 
   return (
     <div
