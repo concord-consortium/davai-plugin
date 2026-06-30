@@ -151,4 +151,25 @@ describe("AssistantModel streaming busy-state (DAVAI-118)", () => {
 
     nowSpy.mockRestore();
   });
+
+  it("keeps pre-tool-call text on a mixed text+tool turn with streaming display off", async () => {
+    const store = createStore();
+    store.setStreamEnabled(false);
+    store.setLlmId(JSON.stringify({ id: "gpt-4o-mini", provider: "OpenAI" })); // non-mock, so tool output is sent
+    mockedPostMessage
+      .mockResolvedValueOnce({ ok: true, json: async () => ({ messageId: "m1" }) } as Response) // message submit
+      .mockResolvedValueOnce({ ok: true, json: async () => ({ status: "completed", output: {
+        status: "requires_action", tool_call_id: "t1", type: "x",
+        request: { status: "error", error: "nope" }, // error request → forwarded without a CODAP round-trip
+        response: "Here is the explanation." // pre-tool text the server attached
+      } }) } as Response) // status: tool call carrying pre-tool text
+      .mockResolvedValueOnce({ ok: true, json: async () => ({ messageId: "m2" }) } as Response) // tool-output submit
+      .mockResolvedValueOnce({ ok: true, json: async () => ({ status: "completed", output: { response: "Final answer." } }) } as Response); // tool status
+
+    await store.handleMessageSubmit("hello");
+
+    const contents = store.transcriptStore.messages.map((m) => m.messageContent.content);
+    expect(contents).toContain("Here is the explanation."); // pre-tool text not dropped
+    expect(contents).toContain("Final answer.");
+  });
 });

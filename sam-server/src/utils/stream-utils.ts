@@ -22,6 +22,22 @@ export function shouldFlush(fullText: string, lastWrittenLength: number): boolea
   return FLUSH_BOUNDARY.test(added);
 }
 
+// For a mixed text+tool turn, the terminal tool-call payload (requires_action) carries
+// no `response` text, but the model may have emitted user-facing text before the tool
+// call. Attach that accumulated text so the client can finalize it even if it never
+// polled a transient streaming update (streaming display off, or text + tool call landed
+// within one poll interval). A plain text completion already has `response` and is left
+// untouched.
+export function withAccumulatedResponse(
+  output: Record<string, unknown>,
+  accumulated: string
+): Record<string, unknown> {
+  if (typeof output.response !== "string" && accumulated) {
+    return { ...output, response: accumulated };
+  }
+  return output;
+}
+
 // Distinguish a user/cancel-initiated abort (don't mark the job "error") from a
 // real failure. An aborted in-node invoke throws under app.stream().
 export function isAbortError(error: unknown, signal: AbortSignal): boolean {

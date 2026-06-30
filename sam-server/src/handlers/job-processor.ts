@@ -3,7 +3,7 @@ import { Pool } from "pg";
 import { HumanMessage, ToolMessage } from "@langchain/core/messages";
 import { getLangApp } from "../utils/llm-utils";
 import { buildToolRepairMessages, extractToolCalls, toolCallResponse } from "../utils/tool-utils";
-import { messageTextToString, shouldFlush, isAbortError } from "../utils/stream-utils";
+import { messageTextToString, shouldFlush, isAbortError, withAccumulatedResponse } from "../utils/stream-utils";
 import { Job, ToolJob, MessageJob } from "../types";
 import { getLangSmithKey } from "../utils/env-utils";
 
@@ -216,9 +216,14 @@ export const handler = async (event: SQSEvent): Promise<void> => {
       } else {
         // Prefer the final graph state's message (preserves tool_calls); fall back to
         // the accumulated text if no "values" snapshot arrived.
-        const output = finalMessage
+        const built = finalMessage
           ? await buildResponse(finalMessage)
           : { response: messageTextToString(accumulated) };
+        // A mixed text+tool turn ends with a requires_action payload that carries no
+        // response text; attach the accumulated pre-tool text so the client can finalize
+        // it regardless of streaming display or poll timing (the prior streaming updates
+        // are overwritten by this terminal write).
+        const output = withAccumulatedResponse(built, messageTextToString(accumulated));
         // Guard the terminal write too, so a late completion can't clobber a cancel.
         await pool.query(
           `UPDATE jobs SET status='completed', output=$1, updated_at=NOW()

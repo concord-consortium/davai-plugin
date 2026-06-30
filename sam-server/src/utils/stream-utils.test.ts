@@ -1,4 +1,4 @@
-import { messageTextToString, shouldFlush, isAbortError } from "./stream-utils";
+import { messageTextToString, shouldFlush, isAbortError, withAccumulatedResponse } from "./stream-utils";
 
 describe("messageTextToString", () => {
   it("returns a string unchanged", () => {
@@ -45,5 +45,22 @@ describe("isAbortError", () => {
   it("is false for an ordinary error with an un-aborted signal", () => {
     const c = new AbortController();
     expect(isAbortError(new Error("400 bad request"), c.signal)).toBe(false);
+  });
+});
+
+describe("withAccumulatedResponse", () => {
+  it("attaches accumulated text to a tool-call payload that carries no response", () => {
+    const toolOutput = { request: { foo: 1 }, status: "requires_action", tool_call_id: "t1", type: "x" };
+    expect(withAccumulatedResponse(toolOutput, "Pre-tool text.")).toEqual({
+      ...toolOutput, response: "Pre-tool text."
+    });
+  });
+  it("does not overwrite an existing response (a plain text completion)", () => {
+    const out = { response: "Full answer." };
+    expect(withAccumulatedResponse(out, "ignored")).toEqual({ response: "Full answer." });
+  });
+  it("returns the payload unchanged when there is no accumulated text", () => {
+    const out = { status: "requires_action", tool_call_id: "t1" };
+    expect(withAccumulatedResponse(out, "")).toBe(out);
   });
 });

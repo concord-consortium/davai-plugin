@@ -429,10 +429,19 @@ export const AssistantModel = types
 
           self.addDbgMsg("Response from server", formatJsonMessage(data));
 
-          // Tool calls: any user-facing text streamed before this tool call is kept
-          // (finalized in place) and counted as a completed response, not discarded.
+          // Tool calls: any user-facing text the model emitted before this tool call is
+          // kept and counted as a completed response, not discarded. The server attaches
+          // that text as `response` on the tool-call payload, so finalize it here — this
+          // captures it even when streaming display is off or we never polled a transient
+          // streaming update (finalizeStream finalizes an in-progress streamed message in
+          // place, or adds + announces it when nothing was streamed). With no pre-tool
+          // text, just close out any partial stream.
           while (data?.status === "requires_action" && data?.tool_call_id) {
-            self.finishStream(true);
+            if (typeof data.response === "string" && data.response.trim()) {
+              self.finalizeStream(data.response);
+            } else {
+              self.finishStream(true);
+            }
             self.setShowLoadingIndicator(true); // re-show "Processing" for this tool phase
             const toolOutput = yield processToolCall(data as IToolCallData);
             self.addDbgMsg("Tool output generated", formatJsonMessage(toolOutput));
