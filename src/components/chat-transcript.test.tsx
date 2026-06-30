@@ -73,6 +73,41 @@ describe("test chat transcript component", () => {
     });
   });
 
+  it("keeps autoscrolling as the streaming message grows even when a debug row is last", () => {
+    const scrollSpy = window.HTMLElement.prototype.scrollIntoView as jest.Mock;
+    // A streaming DAVAI message, followed by the DEBUG "Begin response time" row that
+    // ingestStreamChunk adds right after it — so the streaming message is NOT last.
+    const make = (streamContent: string) => ({
+      messages: [
+        {
+          messageContent: { content: streamContent }, speaker: "DAVAI",
+          timestamp: "2021-07-01T12:00:00Z", id: "s1", isStreaming: true, plainTextContent: streamContent
+        },
+        {
+          messageContent: { description: "Begin response time", content: "0.10s" }, speaker: "Debug Log",
+          timestamp: "2021-07-01T12:00:01Z", id: "d1", isStreaming: false, plainTextContent: ""
+        }
+      ]
+    });
+
+    const { rerender } = render(
+      <TestProviders>
+        <ChatTranscriptComponent chatTranscript={make("Hello.")} />
+      </TestProviders>
+    );
+    scrollSpy.mockClear();
+
+    // The streamed message grows (more text appended). messages.length and isLoading
+    // are unchanged, so autoscroll must be driven by the streaming message's length.
+    rerender(
+      <TestProviders>
+        <ChatTranscriptComponent chatTranscript={make("Hello. More text streaming in now.")} />
+      </TestProviders>
+    );
+
+    expect(scrollSpy).toHaveBeenCalled();
+  });
+
   it("copies the transcript and downloads it when the capture button is clicked", async () => {
     const writeText = jest.fn().mockResolvedValue(undefined);
     Object.assign(navigator, { clipboard: { writeText } });

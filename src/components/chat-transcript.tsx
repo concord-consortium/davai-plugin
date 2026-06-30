@@ -31,8 +31,12 @@ export const ChatTranscriptComponent = observer(({chatTranscript, isLoading}: IP
   const speechService = useSpeechService();
   const replayHiddenCharToggleRef = useRef(true);
 
-  const lastMessage = chatTranscript.messages[chatTranscript.messages.length - 1];
-  const streamingLen = lastMessage?.isStreaming ? lastMessage.messageContent.content.length : 0;
+  // Track the currently-streaming message by its flag, not by position: the first
+  // streamed chunk also appends a DEBUG "Begin response time" row right after it, so the
+  // streaming message is usually not last. Driving autoscroll off its growing length
+  // keeps the transcript scrolled to the newest text as chunks arrive.
+  const streamingMessage = chatTranscript.messages.find((m: any) => m.isStreaming);
+  const streamingLen = streamingMessage ? streamingMessage.messageContent.content.length : 0;
 
   useEffect(() => {
     // Autoscroll to the top of the latest message in the transcript.
