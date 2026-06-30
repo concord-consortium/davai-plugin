@@ -67,12 +67,12 @@ it("strips markdown from the spoken/announced text", () => {
   expect(enqueue).not.toHaveBeenCalledWith(expect.stringContaining("*"));
 });
 
-it("voices a bullet marker as • instead of reading the raw symbol", () => {
+it("voices a bullet marker as the word 'bullet' instead of reading the raw symbol", () => {
   const t = ChatTranscriptModel.create({ messages: [] });
   const enqueue = jest.fn();
   t.addStreamingMessage("DAVAI", { content: "* First item\n" });
   render(provider(t, enqueue));
-  expect(enqueue).toHaveBeenCalledWith("• First item");
+  expect(enqueue).toHaveBeenCalledWith("bullet First item");
   expect(enqueue).not.toHaveBeenCalledWith(expect.stringContaining("*"));
 });
 
