@@ -6,10 +6,23 @@ import { mockAppConfig } from "../test-utils/mock-app-config";
 import { MockAppConfigProvider } from "../test-utils/app-config-provider";
 import { ShortcutsServiceProvider } from "../contexts/shortcuts-service-context";
 import { AriaLiveProvider } from "../contexts/aria-live-context";
-import { SpeechServiceProvider } from "../contexts/speech-service-context";
+import { SpeechServiceProvider, SpeechServiceContext } from "../contexts/speech-service-context";
+import { ISpeechService } from "../services/speech-service";
 import { mockTransportManager } from "../test-utils/mock-transport-manager";
 import { setupMockSpeechSynthesis, cleanupMockSpeechSynthesis } from "../test-utils/mock-speech-synthesis";
 import { DAVAI_SPEAKER } from "../constants";
+
+const createMockSpeechService = (): ISpeechService => ({
+  speak: jest.fn(),
+  stopSpeech: jest.fn(),
+  stopAndSuppress: jest.fn(),
+  enqueue: jest.fn(),
+  speakIfIdle: jest.fn(),
+  resumeSpeech: jest.fn(),
+  isSpeaking: jest.fn(() => false),
+  dispose: jest.fn(),
+  onSpeakingChange: jest.fn(() => jest.fn()),
+});
 
 // Mutable so individual tests can vary the busy/streaming state the App reads.
 const mockAssistantStore: any = {
@@ -129,5 +142,26 @@ describe("test load app", () => {
     // stopSpeech() cancels the browser speech synthesis, so a fresh question interrupts
     // the previous answer's still-playing audio.
     expect(window.speechSynthesis.cancel).toHaveBeenCalled();
+  });
+
+  it("clears Escape/Stop suppression on submit so the next Processing message is read", () => {
+    const mockService = createMockSpeechService();
+    render(
+      <MockAppConfigProvider>
+        <ShortcutsServiceProvider>
+          <AriaLiveProvider>
+            <SpeechServiceContext.Provider value={{ speechService: mockService, isSpeaking: false, currentSpeechText: null }}>
+              <App />
+            </SpeechServiceContext.Provider>
+          </AriaLiveProvider>
+        </ShortcutsServiceProvider>
+      </MockAppConfigProvider>
+    );
+
+    fireEvent.change(screen.getByTestId("chat-input-textarea"), { target: { value: "Question" } });
+    fireEvent.click(screen.getByTestId("chat-input-send"));
+
+    expect(mockService.stopSpeech).toHaveBeenCalled();
+    expect(mockService.resumeSpeech).toHaveBeenCalled(); // lifts a prior Escape/Stop suppression
   });
 });

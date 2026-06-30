@@ -183,8 +183,10 @@ export const App = observer(() => {
     Tone.start();
     // A new question interrupts the previous answer's still-playing audio. (The input is
     // disabled while a response is in flight, so this only stops a finished turn's
-    // lingering speech, never an in-progress one.)
+    // lingering speech, never an in-progress one.) resumeSpeech clears any lingering
+    // Escape/Stop suppression so this turn's "Processing" message and reply are read.
     speechService.stopSpeech();
+    speechService.resumeSpeech();
     transcriptStore.addMessage(USER_SPEAKER, {content: messageText});
 
     if (appConfig.isAssistantMocked) {
