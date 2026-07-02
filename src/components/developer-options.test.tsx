@@ -1,6 +1,6 @@
 import "openai/shims/node";
 import React from "react";
-import { render, screen, waitFor } from "@testing-library/react";
+import { render, screen, waitFor, fireEvent, within } from "@testing-library/react";
 import { types } from "mobx-state-tree";
 
 import { DeveloperOptionsComponent } from "./developer-options";
@@ -40,35 +40,56 @@ const mockAssistantStore = MockAssistantModel.create({
   transcriptStore: mockTranscriptStore,
 }) as unknown as AssistantModelType;
 
+const setEffortSpy = jest.fn();
+const setLlmIdSpy = jest.fn();
+
+// Mutable mock config so individual tests can vary the selected llmId/effort/llmList.
+let mockConfig: any;
+
 jest.mock("../models/app-config-model", () => ({
   AppConfigModel: {
-    create: jest.fn(() => ({...mockAppConfig, isDevMode: true})),
+    create: jest.fn(() => mockConfig),
     initialize: jest.fn(),
   }
 }));
 
 jest.mock("../contexts/app-config-context", () => ({
-  useAppConfigContext: jest.fn(() => ({...mockAppConfig, isDevMode: true})),
+  useAppConfigContext: jest.fn(() => mockConfig),
 }));
 
+const renderDeveloperOptions = () => {
+  const mockSonificationStore = {
+  } as unknown as GraphSonificationModelType;
+
+  const mockRootStore = {
+    sonificationStore: mockSonificationStore,
+  } as unknown as IRootStore;
+
+  return render(
+    <RootStoreProvider rootStore={mockRootStore}>
+      <DeveloperOptionsComponent
+        createToggleOption={() => <div />}
+        assistantStore={mockAssistantStore}
+        onInitializeAssistant={jest.fn()}
+      />
+    </RootStoreProvider>
+  );
+};
+
 describe("test developer options component", () => {
+  beforeEach(() => {
+    setEffortSpy.mockClear();
+    setLlmIdSpy.mockClear();
+    mockConfig = {
+      ...mockAppConfig,
+      isDevMode: true,
+      setEffort: setEffortSpy,
+      setLlmId: setLlmIdSpy,
+    };
+  });
 
   it("renders a developer options component with mock assistant checkbox and thread buttons", async () => {
-    const mockSonificationStore = {
-    } as unknown as GraphSonificationModelType;
-
-    const mockRootStore = {
-      sonificationStore: mockSonificationStore,
-    } as unknown as IRootStore;
-    render(
-      <RootStoreProvider rootStore={mockRootStore}>
-        <DeveloperOptionsComponent
-          createToggleOption={() => <div />}
-          assistantStore={mockAssistantStore}
-          onInitializeAssistant={jest.fn()}
-        />
-      </RootStoreProvider>
-    );
+    renderDeveloperOptions();
 
     const developerOptions = screen.getByTestId("developer-options");
     expect(developerOptions).toBeInTheDocument();
@@ -94,5 +115,75 @@ describe("test developer options component", () => {
     // expect(newThreadButton).toBeInTheDocument();
     // expect(newThreadButton).toHaveAttribute("aria-disabled", "true");
     // expect(newThreadButton).toHaveTextContent("New Thread");
+  });
+
+  it("renders the effort options for the selected model", () => {
+    mockConfig.llmId = JSON.stringify(
+      { id: "gemini-2.0-flash", provider: "Google", effortLevels: ["low", "medium", "high"], defaultEffort: "medium" }
+    );
+    mockConfig.effort = "medium";
+
+    renderDeveloperOptions();
+
+    const select = screen.getByTestId("effort-select");
+    expect(select).toBeEnabled();
+    const opts = within(select).getAllByRole("option").map((o) => o.getAttribute("value"));
+    expect(opts).toEqual(["low", "medium", "high"]);
+  });
+
+  it("disables the effort menu for a no-effort model", () => {
+    mockConfig.llmId = JSON.stringify({ id: "gpt-4o-mini", provider: "OpenAI", effortLevels: [] });
+    mockConfig.effort = "";
+
+    renderDeveloperOptions();
+
+    const select = screen.getByTestId("effort-select");
+    expect(select).toBeDisabled();
+    expect(within(select).queryAllByRole("option").length).toBe(0);
+  });
+
+  it("calls setEffort when a level is chosen", () => {
+    mockConfig.llmId = JSON.stringify(
+      { id: "gemini-2.0-flash", provider: "Google", effortLevels: ["low", "medium", "high"], defaultEffort: "medium" }
+    );
+    mockConfig.effort = "medium";
+
+    renderDeveloperOptions();
+
+    const select = screen.getByTestId("effort-select");
+    fireEvent.change(select, { target: { value: "low" } });
+    expect(setEffortSpy).toHaveBeenCalledWith("low");
+  });
+
+  it("resets effort to the new model's default when the model changes", () => {
+    mockConfig.llmId = JSON.stringify({ id: "gpt-4o-mini", provider: "OpenAI", effortLevels: [] });
+    mockConfig.effort = "";
+
+    renderDeveloperOptions();
+
+    const llmSelect = screen.getByTestId("llm-select");
+    const newLlmId = JSON.stringify(
+      { id: "gemini-2.0-flash", provider: "Google", effortLevels: ["low", "medium", "high"], defaultEffort: "medium" }
+    );
+    fireEvent.change(llmSelect, { target: { value: newLlmId } });
+
+    expect(setLlmIdSpy).toHaveBeenCalledWith(newLlmId);
+    expect(setEffortSpy).toHaveBeenCalledWith("medium");
+  });
+
+  it("resets effort to empty string when switching to a no-effort model", () => {
+    mockConfig.llmId = JSON.stringify(
+      { id: "gemini-2.0-flash", provider: "Google", effortLevels: ["low", "medium", "high"], defaultEffort: "medium" }
+    );
+    mockConfig.effort = "medium";
+
+    renderDeveloperOptions();
+
+    const llmSelect = screen.getByTestId("llm-select");
+    const newLlmId = JSON.stringify({ id: "gpt-4o-mini", provider: "OpenAI", effortLevels: [] });
+    fireEvent.change(llmSelect, { target: { value: newLlmId } });
+
+    expect(setLlmIdSpy).toHaveBeenCalledWith(newLlmId);
+    expect(setEffortSpy).toHaveBeenCalledWith("");
   });
 });
