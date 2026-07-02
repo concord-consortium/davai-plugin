@@ -65,14 +65,22 @@ export const createModelInstance = async (llm: string, effort?: string) => {
 
   if (provider === "OpenAI") {
     const apiKey = await getOpenAIKey();
-    // No effort/reasoning_effort here: OpenAI rejects reasoning_effort together with function
-    // tools on Chat Completions (/v1/chat/completions), which is the API DAVAI uses — that
-    // combination requires the Responses API instead. Rather than switch APIs, we leave these
-    // reasoning models to reason at their default level (their llmList entries carry no
-    // effortLevels, so no effort is sent). Effort control is Anthropic-only for now.
+    if (isOpenAIReasoningModel(id)) {
+      // Reasoning models (gpt-5 family, o-series) go through the Responses API
+      // (/v1/responses): Chat Completions rejects reasoning_effort when function tools are
+      // bound (400), while Responses supports it and preserves the model's reasoning across
+      // tool-call round trips. Temperature is omitted entirely — these models only accept
+      // the default, and Responses can reject the parameter outright.
+      return new ChatOpenAI({
+        model: id,
+        apiKey,
+        useResponsesApi: true,
+        ...(effort ? { reasoning: { effort: effort as any } } : {}),
+      });
+    }
     return new ChatOpenAI({
       model: id,
-      temperature: isOpenAIReasoningModel(id) ? 1 : 0,
+      temperature: 0,
       apiKey,
     });
   }

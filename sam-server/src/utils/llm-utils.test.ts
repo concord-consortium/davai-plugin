@@ -152,14 +152,24 @@ describe("createModelInstance", () => {
     expect(args.outputConfig).toBeUndefined();
   });
 
-  it("does not set OpenAI reasoning effort (effort disabled for OpenAI)", async () => {
-    // OpenAI rejects reasoning_effort + function tools on Chat Completions (it requires the
-    // Responses API). DAVAI stays on Chat Completions, so it never forwards effort to OpenAI;
-    // these models reason at their default level instead.
+  it("applies OpenAI effort via reasoning on the Responses API", async () => {
+    // OpenAI rejects reasoning_effort + function tools on Chat Completions, so reasoning
+    // models use the Responses API (useResponsesApi), where the constructor `reasoning`
+    // field carries the effort.
     await createModelInstance(JSON.stringify({ id: "gpt-5.5", provider: "OpenAI" }), "high");
     const args = (ChatOpenAI as unknown as jest.Mock).mock.calls[0][0];
-    expect(args.reasoning).toBeUndefined();
+    expect(args.useResponsesApi).toBe(true);
+    expect(args.reasoning).toEqual({ effort: "high" });
     expect(args.reasoningEffort).toBeUndefined();
+  });
+
+  it("uses the Responses API for OpenAI reasoning models even without an effort", async () => {
+    // The API choice must not flip based on effort — an empty effort still routes through
+    // Responses, just without a reasoning param (model reasons at its default level).
+    await createModelInstance(JSON.stringify({ id: "gpt-5.5", provider: "OpenAI" }), "");
+    const args = (ChatOpenAI as unknown as jest.Mock).mock.calls[0][0];
+    expect(args.useResponsesApi).toBe(true);
+    expect(args.reasoning).toBeUndefined();
   });
 
   it("does not set a thinking level for Google (Gemini effort disabled)", async () => {
@@ -184,25 +194,30 @@ describe("createModelInstance", () => {
 });
 
 describe("createModelInstance temperature handling", () => {
-  // Reasoning models (gpt-5 family, o-series) reject any non-default temperature,
-  // so they must be built with the only supported value (1) rather than 0.
+  // Reasoning models (gpt-5 family, o-series) only accept the default temperature, and the
+  // Responses API can reject the parameter outright — so they are built with no temperature
+  // at all (undefined is omitted from the request) and routed through the Responses API.
   it.each(["gpt-5.5", "gpt-5.4", "gpt-5.4-nano", "o3-mini", "o1"])(
-    "builds reasoning OpenAI model %s with temperature 1",
+    "builds reasoning OpenAI model %s with no temperature and the Responses API",
     async (id) => {
       await createModelInstance(JSON.stringify({ id, provider: "OpenAI" }));
       expect(ChatOpenAI).toHaveBeenCalledWith(
-        expect.objectContaining({ model: id, temperature: 1 })
+        expect.objectContaining({ model: id, useResponsesApi: true })
       );
+      const args = (ChatOpenAI as unknown as jest.Mock).mock.calls[0][0];
+      expect(args.temperature).toBeUndefined();
     }
   );
 
   it.each(["gpt-4o-mini", "gpt-4o", "gpt-4.1-mini"])(
-    "builds non-reasoning OpenAI model %s with temperature 0",
+    "builds non-reasoning OpenAI model %s with temperature 0 on Chat Completions",
     async (id) => {
       await createModelInstance(JSON.stringify({ id, provider: "OpenAI" }));
       expect(ChatOpenAI).toHaveBeenCalledWith(
         expect.objectContaining({ model: id, temperature: 0 })
       );
+      const args = (ChatOpenAI as unknown as jest.Mock).mock.calls[0][0];
+      expect(args.useResponsesApi).toBeUndefined();
     }
   );
 });
