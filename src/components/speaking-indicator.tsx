@@ -4,21 +4,29 @@ import { useAppConfigContext } from "../contexts/app-config-context";
 
 import "./speaking-indicator.scss";
 
-export const SpeakingIndicator: React.FC = () => {
+interface IProps {
+  // True while DAVAI is in a "Processing…" phase; the indicator hides then, since the
+  // spoken "Processing" announcement (via speakIfIdle) no longer sets currentSpeechText.
+  isProcessing?: boolean;
+}
+
+export const SpeakingIndicator: React.FC<IProps> = ({ isProcessing }) => {
   const appConfig = useAppConfigContext();
   const isSpeaking = useIsSpeaking();
   const speechService = useSpeechService();
   const currentSpeechText = useCurrentSpeechText();
 
-  // Don't show indicator for "Processing" messages - they're brief and transient
+  // Don't show the indicator for the transient "Processing" announcement.
   const isProcessingMessage = currentSpeechText?.trim().toLowerCase().startsWith("processing");
 
-  if (!appConfig.readAloudEnabled || !isSpeaking || isProcessingMessage) {
+  if (!appConfig.readAloudEnabled || !isSpeaking || isProcessing || isProcessingMessage) {
     return null;
   }
 
   const handleStopClick = () => {
-    speechService.stopSpeech();
+    // Suppress (not just stop) so chunks streamed in afterward don't resume speech —
+    // parity with the Escape key. A new response lifts the suppression.
+    speechService.stopAndSuppress();
   };
 
   return (

@@ -1,5 +1,6 @@
 import React, { useState } from "react";
 import Markdown from "react-markdown";
+import remarkGfm from "remark-gfm";
 import { DEBUG_SPEAKER } from "../constants";
 import { ChatMessage } from "../types";
 import { useAriaLive } from "../contexts/aria-live-context";
@@ -7,6 +8,17 @@ import { useAriaLive } from "../contexts/aria-live-context";
 interface IProps {
   message: ChatMessage;
   showDebugLog: boolean;
+}
+
+// react-markdown requires a string for `children`. Coerce defensively so a
+// non-string content (e.g. an Anthropic content-block array) can never hard-crash
+// the whole transcript; extract text blocks when given an array.
+export function toMarkdownString(content: unknown): string {
+  if (typeof content === "string") return content;
+  if (Array.isArray(content)) {
+    return content.map((block: any) => (block && typeof block.text === "string" ? block.text : "")).join("");
+  }
+  return content == null ? "" : String(content);
 }
 
 export const ChatTranscriptMessage = ({message, showDebugLog}: IProps) => {
@@ -68,7 +80,7 @@ export const ChatTranscriptMessage = ({message, showDebugLog}: IProps) => {
       >
         {speaker === DEBUG_SPEAKER ?
           renderDebugPreview() :
-          <Markdown>{messageContent.content}</Markdown>
+          <Markdown remarkPlugins={[remarkGfm]}>{toMarkdownString(messageContent.content)}</Markdown>
         }
       </div>
     </div>

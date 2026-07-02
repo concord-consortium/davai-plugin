@@ -1,12 +1,42 @@
 import React from "react";
-import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
+import { act, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 
 import { AppConfigProvider } from "../contexts/app-config-context";
 import { ChatTranscriptComponent } from "./chat-transcript";
 import { ShortcutsServiceProvider } from "../contexts/shortcuts-service-context";
+import { AriaLiveProvider, useAriaLive } from "../contexts/aria-live-context";
+import { SpeechServiceProvider } from "../contexts/speech-service-context";
+import { setupMockSpeechSynthesis, cleanupMockSpeechSynthesis } from "../test-utils/mock-speech-synthesis";
+
+const TestProviders = ({ children }: { children: React.ReactNode }) => (
+  <AppConfigProvider>
+    <AriaLiveProvider>
+      <SpeechServiceProvider>
+        <ShortcutsServiceProvider>
+          {children}
+        </ShortcutsServiceProvider>
+      </SpeechServiceProvider>
+    </AriaLiveProvider>
+  </AppConfigProvider>
+);
+
+// Renders the shared aria-live text so a test can assert what was announced.
+const AriaLiveDisplay = () => {
+  const { ariaLiveText } = useAriaLive();
+  return <div data-testid="aria-live-display">{ariaLiveText}</div>;
+};
 
 describe("test chat transcript component", () => {
   window.HTMLElement.prototype.scrollIntoView = jest.fn();
+
+  beforeEach(() => {
+    setupMockSpeechSynthesis();
+  });
+
+  afterEach(() => {
+    cleanupMockSpeechSynthesis();
+  });
+
   const chatTranscript = {
     messages: [
       {
@@ -28,11 +58,9 @@ describe("test chat transcript component", () => {
 
   it("renders a chat transcript that lists all chat messages", () => {
     render(
-      <AppConfigProvider>
-        <ShortcutsServiceProvider>
-          <ChatTranscriptComponent chatTranscript={chatTranscript}/>
-        </ShortcutsServiceProvider>
-      </AppConfigProvider>
+      <TestProviders>
+        <ChatTranscriptComponent chatTranscript={chatTranscript}/>
+      </TestProviders>
     );
 
     const transcript = screen.getByTestId("chat-transcript");
@@ -51,6 +79,67 @@ describe("test chat transcript component", () => {
     });
   });
 
+  it("keeps autoscrolling as the streaming message grows even when a debug row is last", () => {
+    const scrollSpy = window.HTMLElement.prototype.scrollIntoView as jest.Mock;
+    // A streaming DAVAI message, followed by the DEBUG "Begin response time" row that
+    // ingestStreamChunk adds right after it — so the streaming message is NOT last.
+    const make = (streamContent: string) => ({
+      messages: [
+        {
+          messageContent: { content: streamContent }, speaker: "DAVAI",
+          timestamp: "2021-07-01T12:00:00Z", id: "s1", isStreaming: true, plainTextContent: streamContent
+        },
+        {
+          messageContent: { description: "Begin response time", content: "0.10s" }, speaker: "Debug Log",
+          timestamp: "2021-07-01T12:00:01Z", id: "d1", isStreaming: false, plainTextContent: ""
+        }
+      ]
+    });
+
+    const { rerender } = render(
+      <TestProviders>
+        <ChatTranscriptComponent chatTranscript={make("Hello.")} />
+      </TestProviders>
+    );
+    scrollSpy.mockClear();
+
+    // The streamed message grows (more text appended). messages.length and isLoading
+    // are unchanged, so autoscroll must be driven by the streaming message's length.
+    rerender(
+      <TestProviders>
+        <ChatTranscriptComponent chatTranscript={make("Hello. More text streaming in now.")} />
+      </TestProviders>
+    );
+
+    expect(scrollSpy).toHaveBeenCalled();
+  });
+
+  it("replays the last DAVAI message, voicing bullets as 'bullet'", () => {
+    const transcript = {
+      messages: [
+        {
+          speaker: "DAVAI", messageContent: { content: "- Apple" }, plainTextContent: "- Apple",
+          timestamp: "2021-07-01T12:00:00Z", id: "1"
+        }
+      ],
+    };
+    render(
+      <TestProviders>
+        <ChatTranscriptComponent chatTranscript={transcript} />
+        <AriaLiveDisplay />
+      </TestProviders>
+    );
+
+    // Trigger the "replay last DAVAI message" shortcut (Control+Shift+Comma).
+    act(() => {
+      window.dispatchEvent(new KeyboardEvent("keydown", {
+        code: "Comma", key: ",", ctrlKey: true, shiftKey: true, bubbles: true
+      }));
+    });
+
+    expect(screen.getByTestId("aria-live-display").textContent).toContain("bullet Apple");
+  });
+
   it("copies the transcript and downloads it when the capture button is clicked", async () => {
     const writeText = jest.fn().mockResolvedValue(undefined);
     Object.assign(navigator, { clipboard: { writeText } });
@@ -59,11 +148,9 @@ describe("test chat transcript component", () => {
     const clickSpy = jest.spyOn(HTMLAnchorElement.prototype, "click").mockImplementation(() => undefined);
 
     render(
-      <AppConfigProvider>
-        <ShortcutsServiceProvider>
-          <ChatTranscriptComponent chatTranscript={chatTranscript}/>
-        </ShortcutsServiceProvider>
-      </AppConfigProvider>
+      <TestProviders>
+        <ChatTranscriptComponent chatTranscript={chatTranscript}/>
+      </TestProviders>
     );
 
     fireEvent.click(screen.getByTestId("capture-transcript-button"));
@@ -101,11 +188,9 @@ describe("test chat transcript component", () => {
     };
 
     render(
-      <AppConfigProvider>
-        <ShortcutsServiceProvider>
-          <ChatTranscriptComponent chatTranscript={transcriptWithImage}/>
-        </ShortcutsServiceProvider>
-      </AppConfigProvider>
+      <TestProviders>
+        <ChatTranscriptComponent chatTranscript={transcriptWithImage}/>
+      </TestProviders>
     );
 
     fireEvent.click(screen.getByTestId("capture-transcript-button"));

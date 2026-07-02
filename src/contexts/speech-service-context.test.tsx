@@ -74,6 +74,44 @@ describe("SpeechServiceContext", () => {
       const utterance = mockSynth.speak.mock.calls[0][0];
       expect(utterance.text).toBe("Test message");
     });
+
+    it("queues sequential announcements on one queue instead of interrupting", () => {
+      jest.useFakeTimers();
+      const appConfig = AppConfigModel.create({
+        ...mockAppConfig,
+        readAloudEnabled: true,
+      } as AppConfigModelSnapshot);
+      let setText: (t: string) => void = () => { /* set on render */ };
+      const TestComponent = () => {
+        const { setAriaLiveText } = useAriaLive();
+        setText = setAriaLiveText;
+        return null;
+      };
+      render(
+        <AppConfigContext.Provider value={appConfig}>
+          <AriaLiveProvider>
+            <SpeechServiceProvider>
+              <TestComponent />
+            </SpeechServiceProvider>
+          </AriaLiveProvider>
+        </AppConfigContext.Provider>
+      );
+
+      act(() => { setText("First."); });
+      act(() => { jest.advanceTimersByTime(100); });
+      act(() => { setText("Second."); });
+      act(() => { jest.advanceTimersByTime(100); });
+
+      // The second announcement must NOT cancel the first — it queues behind it.
+      expect(mockSynth.cancel).not.toHaveBeenCalled();
+      expect(mockSynth.speak).toHaveBeenCalledTimes(1);
+      expect(mockSynth.speak.mock.calls[0][0].text).toBe("First.");
+
+      // When the first finishes, the second plays.
+      act(() => { mockSynth.speak.mock.calls[0][0].onend?.({} as Event); });
+      expect(mockSynth.speak).toHaveBeenCalledTimes(2);
+      expect(mockSynth.speak.mock.calls[1][0].text).toBe("Second.");
+    });
   });
 
   describe("useSpeechService", () => {

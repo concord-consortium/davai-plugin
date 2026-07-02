@@ -1,6 +1,14 @@
 @use "./vars.scss" as *;
 
 .speaking-indicator {
+  // Float on top at the very top of the DAVAI window instead of taking layout
+  // space (which would push the rest of the content down while speaking).
+  position: absolute;
+  top: 4px;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 20;
+  white-space: nowrap;
   display: flex;
   align-items: center;
   gap: 0.5rem;
@@ -10,6 +18,7 @@
   border-radius: 4px;
   font-size: 0.875rem;
   color: $dark-teal;
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.2);
 
   .speaking-icon {
     width: 12px;

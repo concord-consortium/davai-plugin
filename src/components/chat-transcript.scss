@@ -49,6 +49,20 @@
       pre {
         font-size: .75rem;
       }
+      // GFM tables (remark-gfm): match the surrounding message font size, not the
+      // browser default which renders noticeably larger.
+      table {
+        font-size: .75rem;
+        line-height: 17px;
+        border-collapse: collapse;
+        margin: 0 0 10px;
+      }
+      th, td {
+        font-size: .75rem;
+        border: 1px solid $light-teal-1;
+        padding: 2px 6px;
+        text-align: left;
+      }
       .chat-message-content {
         &.user {
           white-space: pre-line; // maintain line breaks

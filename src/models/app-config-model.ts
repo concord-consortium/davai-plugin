@@ -145,6 +145,7 @@ export const AppConfigModel = types.model("AppConfigModel", {
   playProcessingTone: types.boolean,
   playbackSpeed: types.number,
   readAloudEnabled: types.boolean,
+  streamResponses: types.boolean,
   /**
    * The unique ID of an LLM to use, or "mock" for a mocked LLM.
    * Note: for a real LLM it is a stringified JSON object, not just the ID from the llmList object.
