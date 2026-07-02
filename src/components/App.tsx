@@ -109,6 +109,13 @@ export const App = observer(() => {
 
 
   useEffect(() => {
+    // When the plugin runs outside CODAP (top-level window — e.g. a direct localhost or
+    // deployed-URL launch), there is no parent frame to answer CODAP API messages: every
+    // request bounces off our own window and surfaces as timeouts and uncaught errors (a
+    // wall of red in the webpack dev overlay). Skip all CODAP wiring in that case — chat
+    // and the options panels still work.
+    if (window.parent === window) return;
+
     const init = async () => {
       await initializePlugin({pluginName: kPluginName, version: kVersion, dimensions});
       addDataContextsListListener(handleDocumentChangeNotice);
