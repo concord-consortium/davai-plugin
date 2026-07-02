@@ -4,6 +4,7 @@ export interface MessageJobInput {
   message: string;
   dataContexts?: any[];
   graphs?: any[];
+  effort?: string;
 }
 
 export interface ToolJobInput {
@@ -13,6 +14,7 @@ export interface ToolJobInput {
     content: string | any[];
     tool_call_id: string;
   };
+  effort?: string;
 }
 
 export interface MessageJob {
