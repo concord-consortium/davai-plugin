@@ -193,6 +193,7 @@ export const App = observer(() => {
       assistantStore.handleMessageSubmitMockAssistant();
     } else {
       assistantStore.setStreamEnabled(appConfig.streamResponses);
+      assistantStore.setEffort(appConfig.effort);
       await assistantStore.handleMessageSubmit(messageText);
     }
 

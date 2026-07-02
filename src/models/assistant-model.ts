@@ -55,6 +55,7 @@ export const AssistantModel = types
     currentStreamingMessageId: null as string | null,
     streamEnabled: true as boolean,
     responseStartTime: null as number | null,
+    effort: "" as string,
   }))
   .views((self) => ({
     get isAssistantMocked() {
@@ -87,6 +88,9 @@ export const AssistantModel = types
     },
     setStreamEnabled(enabled: boolean) {
       self.streamEnabled = enabled;
+    },
+    setEffort(effort: string) {
+      self.effort = effort;
     },
     ingestStreamChunk(cumulative: string) {
       if (!self.currentStreamingMessageId) {
@@ -258,6 +262,7 @@ export const AssistantModel = types
         const reqBody = {
           llmId: self.llmId,
           threadId: self.threadId,
+          effort: self.effort,
           message: {
             tool_call_id: toolCallId,
             content
@@ -361,6 +366,7 @@ export const AssistantModel = types
           const reqBody = {
             llmId: self.llmId,
             threadId: self.threadId,
+            effort: self.effort,
             dataContexts: self.dataContexts,
             graphs: self.graphs,
             message: messageText,

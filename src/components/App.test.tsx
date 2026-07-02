@@ -32,6 +32,7 @@ const mockAssistantStore: any = {
   handleCancel: jest.fn(),
   handleMessageSubmit: jest.fn(),
   setStreamEnabled: jest.fn(),
+  setEffort: jest.fn(),
   transcriptStore: { messages: [], addMessage: jest.fn() },
   threadId: "thread-1",
   showLoadingIndicator: false,
