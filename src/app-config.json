@@ -34,10 +34,6 @@
       "provider": "OpenAI"
     },
     {
-      "id": "gpt-5.4",
-      "provider": "OpenAI"
-    },
-    {
       "id": "gpt-5.4-mini",
       "provider": "OpenAI"
     },
@@ -46,19 +42,11 @@
       "provider": "OpenAI"
     },
     {
-      "id": "gpt-4o-mini",
-      "provider": "OpenAI"
-    },
-    {
       "id": "claude-haiku-4-5",
       "provider": "Anthropic"
     },
     {
-      "id": "claude-sonnet-4-6",
-      "provider": "Anthropic"
-    },
-    {
-      "id": "claude-opus-4-7",
+      "id": "claude-sonnet-5",
       "provider": "Anthropic"
     },
     {
