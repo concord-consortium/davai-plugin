@@ -69,15 +69,21 @@ export const DeveloperOptionsComponent = observer(({assistantStore, createToggle
             value={selectedLlm}
             onChange={handleSelectLlm}
           >
-            {appConfig.llmList.map((llm) => (
-              <option
-                aria-selected={appConfig.llmId === JSON.stringify(llm)}
-                key={llm.id}
-                value={JSON.stringify(llm)}
-              >
-                {llm.id === "mock" ? "Mock LLM" : `${llm.provider}: ${llm.id}`}
-              </option>
-            ))}
+            {appConfig.llmList.map((llm) => {
+              // Serialize only { id, provider } so the option value matches the canonical
+              // llmId. (llmList entries also carry effortLevels/defaultEffort, which must
+              // not leak into the value or the select would match no option.)
+              const value = JSON.stringify({ id: llm.id, provider: llm.provider });
+              return (
+                <option
+                  aria-selected={appConfig.llmId === value}
+                  key={llm.id}
+                  value={value}
+                >
+                  {llm.id === "mock" ? "Mock LLM" : `${llm.provider}: ${llm.id}`}
+                </option>
+              );
+            })}
           </select>
         </div>
         <div className="user-option">

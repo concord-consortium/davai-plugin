@@ -99,7 +99,7 @@ describe("test developer options component", () => {
     const selectLlmOption = screen.getByTestId("llm-select");
     expect(selectLlmOption).toBeInTheDocument();
     await waitFor(() => {
-      expect(selectLlmOption).toHaveValue('{"id":"mock","provider":"Mock","effortLevels":[]}');
+      expect(selectLlmOption).toHaveValue('{"id":"mock","provider":"Mock"}');
     });
     await waitFor(() => {
       expect(selectLlmOption).toHaveTextContent("Mock LLM");
@@ -115,6 +115,17 @@ describe("test developer options component", () => {
     // expect(newThreadButton).toBeInTheDocument();
     // expect(newThreadButton).toHaveAttribute("aria-disabled", "true");
     // expect(newThreadButton).toHaveTextContent("New Thread");
+  });
+
+  it("reflects the selected model in the LLM dropdown (option value matches canonical llmId)", () => {
+    // The canonical llmId carries only { id, provider }; llmList entries also carry
+    // effortLevels/defaultEffort, so option values must be serialized down to { id, provider }
+    // or the select would match no option and fall back to the first (Mock).
+    mockConfig.llmId = JSON.stringify({ id: "gemini-2.0-flash", provider: "Google" });
+
+    renderDeveloperOptions();
+
+    expect(screen.getByTestId("llm-select")).toHaveValue('{"id":"gemini-2.0-flash","provider":"Google"}');
   });
 
   it("renders the effort options for the selected model", () => {
@@ -162,9 +173,8 @@ describe("test developer options component", () => {
     renderDeveloperOptions();
 
     const llmSelect = screen.getByTestId("llm-select");
-    const newLlmId = JSON.stringify(
-      { id: "gemini-2.0-flash", provider: "Google", effortLevels: ["low", "medium", "high"], defaultEffort: "medium" }
-    );
+    // The dropdown emits the canonical { id, provider } value (see the LLM select).
+    const newLlmId = JSON.stringify({ id: "gemini-2.0-flash", provider: "Google" });
     fireEvent.change(llmSelect, { target: { value: newLlmId } });
 
     expect(setLlmIdSpy).toHaveBeenCalledWith(newLlmId);
@@ -180,7 +190,7 @@ describe("test developer options component", () => {
     renderDeveloperOptions();
 
     const llmSelect = screen.getByTestId("llm-select");
-    const newLlmId = JSON.stringify({ id: "gpt-4o-mini", provider: "OpenAI", effortLevels: [] });
+    const newLlmId = JSON.stringify({ id: "gpt-4o-mini", provider: "OpenAI" });
     fireEvent.change(llmSelect, { target: { value: newLlmId } });
 
     expect(setLlmIdSpy).toHaveBeenCalledWith(newLlmId);
