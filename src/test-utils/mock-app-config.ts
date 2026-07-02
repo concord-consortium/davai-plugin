@@ -14,7 +14,7 @@ export const mockAppConfig: AppConfigModelSnapshot = {
   playbackSpeed: 1.0,
   readAloudEnabled: false,
   streamResponses: true,
-  llmId: "{ id: \"mock\", name: \"Mock LLM\" }",
+  llmId: "{\"id\":\"mock\",\"provider\":\"Mock\"}",
   effort: "",
   llmList: [
     { id: "mock", provider: "Mock", effortLevels: [] },

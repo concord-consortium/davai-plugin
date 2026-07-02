@@ -29,3 +29,13 @@ it("returns empty string for a no-effort model", () => {
   expect(resolveEffort(list[2], "low", "low")).toBe("");
   expect(resolveEffort(undefined, "low", "low")).toBe("");
 });
+
+it("returns empty string when defaultEffort is invalid or unset (config safety net)", () => {
+  // "" means no effort is sent, so the provider applies its own default — safer than
+  // forwarding a value the provider would reject.
+  const badDefault: LlmEntry = { id: "x", provider: "P", effortLevels: ["low", "high"], defaultEffort: "typo" };
+  expect(resolveEffort(badDefault, null, "")).toBe("");
+
+  const noDefault: LlmEntry = { id: "y", provider: "P", effortLevels: ["low", "high"] };
+  expect(resolveEffort(noDefault, null, "")).toBe("");
+});

@@ -42,9 +42,10 @@ const promptTemplate = ChatPromptTemplate.fromMessages([
     ["placeholder", "{messages}"],
 ]);
 
-// OpenAI reasoning models (the gpt-5 family and the o-series) reject any
-// non-default temperature, returning a 400. They must be created with the only
-// supported value (1) rather than the 0 we use for standard chat models.
+// OpenAI reasoning models (the gpt-5 family and the o-series). These are routed through
+// the Responses API and built without a temperature — they only accept the default, and
+// Responses can reject the parameter outright (see createModelInstance). Standard chat
+// models stay on Chat Completions with temperature 0.
 const isOpenAIReasoningModel = (id: string) => /^(gpt-5|o\d)/i.test(id);
 
 // Adaptive-thinking-only Anthropic models removed the sampling parameters entirely —
