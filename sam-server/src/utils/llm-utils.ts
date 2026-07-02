@@ -55,7 +55,11 @@ const isOpenAIReasoningModel = (id: string) => /^(gpt-5|o\d)/i.test(id);
 const isAnthropicNoSamplingModel = (id: string) =>
   /^claude-opus-4-(?:[7-9]|\d\d)/.test(id) || /^claude-sonnet-5/.test(id);
 
-export const createModelInstance = async (llm: string) => {
+// Anthropic models that accept output_config.effort (Opus 4.5+, Sonnet 4.6+, Sonnet 5;
+// NOT Haiku 4.5, which has no effort parameter).
+const isAnthropicEffortModel = (id: string) => !/^claude-haiku/.test(id);
+
+export const createModelInstance = async (llm: string, effort?: string) => {
   const llmObj = JSON.parse(llm);
   const { id, provider } = llmObj;
 
@@ -65,6 +69,7 @@ export const createModelInstance = async (llm: string) => {
       model: id,
       temperature: isOpenAIReasoningModel(id) ? 1 : 0,
       apiKey,
+      ...(effort && isOpenAIReasoningModel(id) ? { reasoningEffort: effort as any } : {}),
     });
   }
 
@@ -74,6 +79,9 @@ export const createModelInstance = async (llm: string) => {
       model: id,
       temperature: 0,
       apiKey,
+      // Best-effort: 2.2.0 types thinkingLevel as LOW|MEDIUM|HIGH but forwards raw; pass the
+      // lowercase Gemini value. Verify on staging.
+      ...(effort ? { thinkingConfig: { thinkingLevel: effort } as any } : {}),
     });
   }
 
@@ -86,30 +94,32 @@ export const createModelInstance = async (llm: string) => {
       model: id,
       ...(isAnthropicNoSamplingModel(id) ? {} : { temperature: 0 }),
       apiKey,
+      ...(effort && isAnthropicEffortModel(id) ? { outputConfig: { effort: effort as any } } : {}),
     });
   }
 
   throw new Error(`Unsupported LLM provider: ${provider}`);
 };
 
-export const getOrCreateModelInstance = async (llmId: string): Promise<any> => {
-  if (!llmInstances[llmId]) {
-    const model = await createModelInstance(llmId);
+export const getOrCreateModelInstance = async (llmId: string, effort?: string): Promise<any> => {
+  const cacheKey = `${llmId}::${effort ?? ""}`;
+  if (!llmInstances[cacheKey]) {
+    const model = await createModelInstance(llmId, effort);
     const { provider } = JSON.parse(llmId);
     const callOptions: Record<string, any> =
       provider === "Anthropic"
         // Anthropic uses disable_parallel_tool_use in tool_choice instead of parallel_tool_calls
         ? { tool_choice: { type: "auto", disable_parallel_tool_use: true } }
         : { parallel_tool_calls: false };
-    llmInstances[llmId] = (model as any).bindTools(tools, callOptions);
+    llmInstances[cacheKey] = (model as any).bindTools(tools, callOptions);
   }
 
-  return llmInstances[llmId];
+  return llmInstances[cacheKey];
 };
 
 const callModel = async (state: any, modelConfig: any) => {
-  const { llmId } = modelConfig.configurable;
-  const llm = await getOrCreateModelInstance(llmId);
+  const { llmId, effort } = modelConfig.configurable;
+  const llm = await getOrCreateModelInstance(llmId, effort);
 
   // Use the trimmer to ensure we don't send too much to the model
   // The trimmer is used to limit the number of tokens in the conversation history.

@@ -140,6 +140,36 @@ describe("createModelInstance", () => {
     expect(callArgs.invocationKwargs).toBeUndefined();
   });
 
+  it("applies Anthropic effort via outputConfig", async () => {
+    await createModelInstance(JSON.stringify({ id: "claude-sonnet-5", provider: "Anthropic" }), "low");
+    const args = (ChatAnthropic as unknown as jest.Mock).mock.calls[0][0];
+    expect(args.outputConfig).toEqual({ effort: "low" });
+  });
+
+  it("does not set Anthropic effort for haiku (no support)", async () => {
+    await createModelInstance(JSON.stringify({ id: "claude-haiku-4-5", provider: "Anthropic" }), "low");
+    const args = (ChatAnthropic as unknown as jest.Mock).mock.calls[0][0];
+    expect(args.outputConfig).toBeUndefined();
+  });
+
+  it("applies OpenAI reasoningEffort for reasoning models", async () => {
+    await createModelInstance(JSON.stringify({ id: "gpt-5.5", provider: "OpenAI" }), "high");
+    const args = (ChatOpenAI as unknown as jest.Mock).mock.calls[0][0];
+    expect(args.reasoningEffort).toBe("high");
+  });
+
+  it("applies Gemini thinkingLevel (best-effort, lowercase passthrough)", async () => {
+    await createModelInstance(JSON.stringify({ id: "gemini-3.5-flash", provider: "Google" }), "minimal");
+    const args = (ChatGoogleGenerativeAI as unknown as jest.Mock).mock.calls[0][0];
+    expect(args.thinkingConfig).toEqual({ thinkingLevel: "minimal" });
+  });
+
+  it("omits effort params when effort is empty/undefined", async () => {
+    await createModelInstance(JSON.stringify({ id: "claude-sonnet-5", provider: "Anthropic" }), "");
+    const args = (ChatAnthropic as unknown as jest.Mock).mock.calls[0][0];
+    expect(args.outputConfig).toBeUndefined();
+  });
+
   it("should throw an error for unsupported providers", async () => {
     const llmId = JSON.stringify({ id: "unknown", provider: "Unsupported" });
 
