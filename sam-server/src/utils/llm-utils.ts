@@ -47,10 +47,13 @@ const promptTemplate = ChatPromptTemplate.fromMessages([
 // supported value (1) rather than the 0 we use for standard chat models.
 const isOpenAIReasoningModel = (id: string) => /^(gpt-5|o\d)/i.test(id);
 
-// Opus 4.7+ removed the sampling parameters entirely — sending temperature, top_p, or
-// top_k returns a 400. (Opus 4.6 and earlier still accept temperature.) The 0.3.x library
-// always sends all three, so for these models we override them to undefined to omit them.
-const isAnthropicNoSamplingModel = (id: string) => /^claude-opus-4-(?:[7-9]|\d\d)/.test(id);
+// Adaptive-thinking-only Anthropic models removed the sampling parameters entirely —
+// sending temperature, top_p, or top_k returns a 400. This is the Opus 4.7+ line and the
+// "5"-generation Sonnet (Sonnet 5); models that still support extended thinking (Opus 4.6,
+// Sonnet 4.6, Haiku 4.5) still accept temperature. The library always sends all three, so
+// for these models we omit them.
+const isAnthropicNoSamplingModel = (id: string) =>
+  /^claude-opus-4-(?:[7-9]|\d\d)/.test(id) || /^claude-sonnet-5/.test(id);
 
 export const createModelInstance = async (llm: string) => {
   const llmObj = JSON.parse(llm);

@@ -131,6 +131,15 @@ describe("createModelInstance", () => {
     expect(callArgs.invocationKwargs).toBeUndefined();
   });
 
+  it("should not set sampling params for Sonnet 5 (adaptive-only, like Opus 4.7+)", async () => {
+    await createModelInstance(JSON.stringify({ id: "claude-sonnet-5", provider: "Anthropic" }));
+
+    const callArgs = (ChatAnthropic as unknown as jest.Mock).mock.calls[0][0];
+    expect(callArgs.temperature).toBeUndefined();
+    expect(callArgs.topP).toBeUndefined();
+    expect(callArgs.invocationKwargs).toBeUndefined();
+  });
+
   it("should throw an error for unsupported providers", async () => {
     const llmId = JSON.stringify({ id: "unknown", provider: "Unsupported" });
 
