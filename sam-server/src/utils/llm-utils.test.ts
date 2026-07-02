@@ -152,16 +152,20 @@ describe("createModelInstance", () => {
     expect(args.outputConfig).toBeUndefined();
   });
 
-  it("applies OpenAI reasoningEffort for reasoning models", async () => {
+  it("applies OpenAI effort via the reasoning constructor field", async () => {
+    // @langchain/openai 1.5 ignores a constructor reasoningEffort; it only reads `reasoning`.
     await createModelInstance(JSON.stringify({ id: "gpt-5.5", provider: "OpenAI" }), "high");
     const args = (ChatOpenAI as unknown as jest.Mock).mock.calls[0][0];
-    expect(args.reasoningEffort).toBe("high");
+    expect(args.reasoning).toEqual({ effort: "high" });
+    expect(args.reasoningEffort).toBeUndefined();
   });
 
-  it("applies Gemini thinkingLevel (best-effort, lowercase passthrough)", async () => {
+  it("does not set a thinking level for Google (Gemini effort disabled)", async () => {
+    // The installed google-genai lacks Gemini 3.x levels (no "minimal"); forwarding them
+    // would send invalid requests, so Google models get no thinkingConfig even with effort.
     await createModelInstance(JSON.stringify({ id: "gemini-3.5-flash", provider: "Google" }), "minimal");
     const args = (ChatGoogleGenerativeAI as unknown as jest.Mock).mock.calls[0][0];
-    expect(args.thinkingConfig).toEqual({ thinkingLevel: "minimal" });
+    expect(args.thinkingConfig).toBeUndefined();
   });
 
   it("omits effort params when effort is empty/undefined", async () => {

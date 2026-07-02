@@ -69,19 +69,23 @@ export const createModelInstance = async (llm: string, effort?: string) => {
       model: id,
       temperature: isOpenAIReasoningModel(id) ? 1 : 0,
       apiKey,
-      ...(effort && isOpenAIReasoningModel(id) ? { reasoningEffort: effort as any } : {}),
+      // @langchain/openai 1.5 only reads a constructor `reasoning` field into the request
+      // (a constructor `reasoningEffort` is ignored — it's a call-option only). Use
+      // reasoning:{ effort } so the level actually reaches the API.
+      ...(effort && isOpenAIReasoningModel(id) ? { reasoning: { effort: effort as any } } : {}),
     });
   }
 
   if (provider === "Google") {
     const apiKey = await getGoogleKey();
+    // No effort/thinking-level here: the installed @langchain/google-genai 2.2.0 only
+    // supports LOW/MEDIUM/HIGH (no "minimal") for thinkingLevel, so forwarding the config's
+    // Gemini levels would send invalid requests. Gemini effort is disabled for now (its
+    // llmList entries carry no effortLevels); leave these models exactly as they were.
     return new ChatGoogleGenerativeAI({
       model: id,
       temperature: 0,
       apiKey,
-      // Best-effort: 2.2.0 types thinkingLevel as LOW|MEDIUM|HIGH but forwards raw; pass the
-      // lowercase Gemini value. Verify on staging.
-      ...(effort ? { thinkingConfig: { thinkingLevel: effort } as any } : {}),
     });
   }
 
