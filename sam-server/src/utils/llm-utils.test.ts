@@ -152,11 +152,13 @@ describe("createModelInstance", () => {
     expect(args.outputConfig).toBeUndefined();
   });
 
-  it("applies OpenAI effort via the reasoning constructor field", async () => {
-    // @langchain/openai 1.5 ignores a constructor reasoningEffort; it only reads `reasoning`.
+  it("does not set OpenAI reasoning effort (effort disabled for OpenAI)", async () => {
+    // OpenAI rejects reasoning_effort + function tools on Chat Completions (it requires the
+    // Responses API). DAVAI stays on Chat Completions, so it never forwards effort to OpenAI;
+    // these models reason at their default level instead.
     await createModelInstance(JSON.stringify({ id: "gpt-5.5", provider: "OpenAI" }), "high");
     const args = (ChatOpenAI as unknown as jest.Mock).mock.calls[0][0];
-    expect(args.reasoning).toEqual({ effort: "high" });
+    expect(args.reasoning).toBeUndefined();
     expect(args.reasoningEffort).toBeUndefined();
   });
 

@@ -37,20 +37,17 @@
     {
       "id": "gpt-5.5",
       "provider": "OpenAI",
-      "effortLevels": ["none", "low", "medium", "high", "xhigh"],
-      "defaultEffort": "medium"
+      "effortLevels": []
     },
     {
       "id": "gpt-5.4-mini",
       "provider": "OpenAI",
-      "effortLevels": ["none", "low", "medium", "high", "xhigh"],
-      "defaultEffort": "none"
+      "effortLevels": []
     },
     {
       "id": "gpt-5.4-nano",
       "provider": "OpenAI",
-      "effortLevels": ["none", "low", "medium", "high", "xhigh"],
-      "defaultEffort": "none"
+      "effortLevels": []
     },
     {
       "id": "claude-haiku-4-5",
