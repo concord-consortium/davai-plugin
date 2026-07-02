@@ -152,6 +152,10 @@ export const AppConfigModel = types.model("AppConfigModel", {
    */
   llmId: types.string,
   llmList: types.array(types.frozen()),
+  /**
+   * The thinking effort level to use for the selected LLM, or "" if not set.
+   */
+  effort: types.optional(types.string, ""),
   dimensions: types.model({
     /**
      * Width of the plugin in CODAP (in pixels).
@@ -193,6 +197,9 @@ export const AppConfigModel = types.model("AppConfigModel", {
 .actions((self) => ({
   setLlmId(llmId: string) {
     self.llmId = llmId;
+  },
+  setEffort(effort: string) {
+    self.effort = effort;
   },
   toggleOption(option: BooleanKeys<SnapshotOut<TypeOfValue<typeof self>>>) {
     self[option] = !self[option];

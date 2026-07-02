@@ -78,7 +78,7 @@ describe("test developer options component", () => {
     const selectLlmOption = screen.getByTestId("llm-select");
     expect(selectLlmOption).toBeInTheDocument();
     await waitFor(() => {
-      expect(selectLlmOption).toHaveValue('{"id":"mock","provider":"Mock"}');
+      expect(selectLlmOption).toHaveValue('{"id":"mock","provider":"Mock","effortLevels":[]}');
     });
     await waitFor(() => {
       expect(selectLlmOption).toHaveTextContent("Mock LLM");

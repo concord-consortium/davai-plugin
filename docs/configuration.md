@@ -5,6 +5,7 @@ Generated from source comments and MST runtime introspection. Do not edit manual
 | --------------------------------------- | -------- | ------------------------------------------- |
 | dimensions.height                       | number   | 680                                         |
 | dimensions.width                        | number   | 380                                         |
+| effort                                  | string   | ""                                          |
 | keyboardShortcuts.captureTranscript     | string   | "Control+Shift+Semicolon"                   |
 | keyboardShortcuts.focusChatInput        | string   | "Control+Shift+Slash"                       |
 | keyboardShortcuts.replayLastDavaiMessage | string   | "Control+Shift+Comma"                       |
@@ -36,6 +37,10 @@ Height of the plugin in CODAP (in pixels).
 ## `dimensions.width`
 
 Width of the plugin in CODAP (in pixels).
+
+## `effort`
+
+The thinking effort level to use for the selected LLM, or "" if not set.
 
 ## `keyboardShortcuts.captureTranscript`
 
