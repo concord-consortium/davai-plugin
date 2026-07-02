@@ -75,6 +75,11 @@ export const createModelInstance = async (llm: string, effort?: string) => {
         model: id,
         apiKey,
         useResponsesApi: true,
+        // The Responses API stores responses on OpenAI's side for 30 days by default (Chat
+        // Completions did not). zdrEnabled sends store:false on every call so nothing is
+        // retained; reasoning then round-trips via encrypted content instead of by id (see
+        // the `include` call option in getOrCreateModelInstance).
+        zdrEnabled: true,
         ...(effort ? { reasoning: { effort: effort as any } } : {}),
       });
     }
@@ -118,12 +123,20 @@ export const getOrCreateModelInstance = async (llmId: string, effort?: string): 
   const cacheKey = `${llmId}::${effort ?? ""}`;
   if (!llmInstances[cacheKey]) {
     const model = await createModelInstance(llmId, effort);
-    const { provider } = JSON.parse(llmId);
+    const { id, provider } = JSON.parse(llmId);
     const callOptions: Record<string, any> =
       provider === "Anthropic"
         // Anthropic uses disable_parallel_tool_use in tool_choice instead of parallel_tool_calls
         ? { tool_choice: { type: "auto", disable_parallel_tool_use: true } }
         : { parallel_tool_calls: false };
+    if (provider === "OpenAI" && isOpenAIReasoningModel(id)) {
+      // With zdrEnabled (store: false), OpenAI does not retain reasoning items, so they can
+      // only round-trip across tool calls as encrypted content — which must be requested
+      // explicitly. (@langchain/openai 1.5's streaming path does not yet capture the
+      // encrypted content, so streamed runs simply re-reason after tool results; requesting
+      // it is still correct and covers non-streamed runs and future library upgrades.)
+      callOptions.include = ["reasoning.encrypted_content"];
+    }
     llmInstances[cacheKey] = (model as any).bindTools(tools, callOptions);
   }
 

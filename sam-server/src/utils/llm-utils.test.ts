@@ -163,6 +163,14 @@ describe("createModelInstance", () => {
     expect(args.reasoningEffort).toBeUndefined();
   });
 
+  it("enables zero-data-retention (store:false) for OpenAI reasoning models", async () => {
+    // The Responses API stores responses for 30 days by default; zdrEnabled makes the
+    // library send store:false on every call.
+    await createModelInstance(JSON.stringify({ id: "gpt-5.5", provider: "OpenAI" }), "high");
+    const args = (ChatOpenAI as unknown as jest.Mock).mock.calls[0][0];
+    expect(args.zdrEnabled).toBe(true);
+  });
+
   it("uses the Responses API for OpenAI reasoning models even without an effort", async () => {
     // The API choice must not flip based on effort — an empty effort still routes through
     // Responses, just without a reasoning param (model reasons at its default level).
@@ -218,6 +226,7 @@ describe("createModelInstance temperature handling", () => {
       );
       const args = (ChatOpenAI as unknown as jest.Mock).mock.calls[0][0];
       expect(args.useResponsesApi).toBeUndefined();
+      expect(args.zdrEnabled).toBeUndefined();
     }
   );
 });
@@ -231,6 +240,27 @@ describe("getOrCreateModelInstance", () => {
     expect(mockInstance.bindTools).toHaveBeenCalledWith(
       expect.any(Array),
       expect.objectContaining({ parallel_tool_calls: false })
+    );
+    // Non-reasoning models stay on Chat Completions — no encrypted-reasoning include.
+    expect(mockInstance.bindTools).toHaveBeenCalledWith(
+      expect.any(Array),
+      expect.not.objectContaining({ include: expect.anything() })
+    );
+  });
+
+  it("binds OpenAI reasoning models with encrypted reasoning content included (ZDR)", async () => {
+    // With zdrEnabled (store:false), reasoning can only round-trip across tool calls as
+    // encrypted content, which must be requested via the include call option.
+    const llmId = JSON.stringify({ id: "gpt-5.5", provider: "OpenAI" });
+    await getOrCreateModelInstance(llmId);
+
+    const mockInstance = (ChatOpenAI as unknown as jest.Mock).mock.results[0].value;
+    expect(mockInstance.bindTools).toHaveBeenCalledWith(
+      expect.any(Array),
+      expect.objectContaining({
+        parallel_tool_calls: false,
+        include: ["reasoning.encrypted_content"]
+      })
     );
   });
 
