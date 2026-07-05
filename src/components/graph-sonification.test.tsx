@@ -18,6 +18,14 @@ jest.mock("../utils/graph-sonification-utils", () => ({
   updateRoiAdornment: jest.fn(),
 }));
 
+// RootStoreProvider composes the real AssistantModel, which now statically imports
+// local-llm-service.ts, which imports this factory. It uses import.meta.url, which ts-jest's
+// CJS transform cannot parse — mock it out the same way local-llm-service.test.ts does (this
+// file never exercises local-LLM behavior).
+jest.mock("../utils/local-llm/local-llm-worker-factory", () => ({
+  createLocalLlmWorker: jest.fn(() => ({} as Worker)),
+}));
+
 jest.mock("../utils/cue-audio-player", () => ({
   loadCueBuffers: jest.fn().mockResolvedValue(undefined),
   playCue: jest.fn(),

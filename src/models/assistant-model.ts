@@ -9,6 +9,9 @@ import { isGraphSonifiable } from "../utils/graph-sonification-utils";
 import { ChatTranscriptModel } from "./chat-transcript-model";
 import { IToolCallData, IToolRequestError, IMessageResponse, ToolOutput } from "../types";
 import { postMessage } from "../utils/llm-utils";
+import { localLlmService } from "../utils/local-llm/local-llm-service";
+import { runLocalTurn } from "../utils/local-llm/local-llm-loop";
+import { buildLocalSystemPrompt, buildTranscriptTurns } from "../utils/local-llm/local-llm-prompt";
 
 // A tool call the server could not prepare comes back as an error payload rather
 // than a normal CODAP request. This guard narrows the union so the normal path can
@@ -481,8 +484,89 @@ export const AssistantModel = types
       }
     });
 
+    // Local-model counterpart to handleMessageSubmit: runs the whole turn (including any
+    // tool rounds) in-browser via runLocalTurn, with no server round-trip. handleMessageSubmit
+    // delegates its own queue draining to the afterCreate/onSnapshot reactor below, but that
+    // reactor is hardcoded to call handleMessageSubmit — routing a queued local message through
+    // it would send it to the server. So this flow drains its own queue (one message at a time,
+    // recursing into itself) instead of relying on the shared reactor; the empirical MST timing
+    // (self.isLoadingResponse = false does not synchronously trigger the onSnapshot reaction
+    // before this finally block finishes) means the shared reactor never sees a non-empty queue
+    // to double-drain.
+    const handleMessageSubmitLocalLlm = flow(function* (messageText: string) {
+      // Same in-flight discipline as handleMessageSubmit: queue instead of overlapping.
+      if (self.isLoadingResponse) {
+        self.addDbgMsg("Processing", `User message added to queue: ${messageText}`);
+        self.messageQueue.push(messageText);
+        return;
+      }
+      try {
+        self.setShowLoadingIndicator(true);
+        self.isLoadingResponse = true;
+        self.responseStartTime = performance.now();
+
+        if (!localLlmService.isWebGPUAvailable()) {
+          self.addDavaiMsg(
+            "The selected local model needs WebGPU, which this browser doesn't provide. " +
+            "Please use a recent Chrome or Edge, or select a server model instead."
+          );
+          return;
+        }
+
+        const { id } = JSON.parse(self.llmId);
+        // Idempotent: resolves immediately if the engine for this model is already loaded.
+        yield localLlmService.loadEngine(id);
+
+        // Transcript turns exclude the message just submitted (App adds it before dispatch),
+        // so drop the trailing user message before mapping.
+        const priorMessages = self.transcriptStore.messages.slice(0, -1);
+        const response: string = yield runLocalTurn({
+          generate: (messages) => localLlmService.generate(messages, { jsonMode: true }),
+          executeTool: async (data: IToolCallData) => {
+            const result = await processToolCall(data);
+            // processToolCall returns an array only for image-snapshot responses, which the
+            // local (text-only) model never requests; degrade defensively if it happens. This
+            // adapter must never reject — processToolCall already catches internally and
+            // returns strings/arrays, never throws, so there is no rethrow path here either.
+            return typeof result === "string"
+              ? result
+              : JSON.stringify({ note: "Image snapshots are not available for the local model." });
+          },
+          systemPrompt: buildLocalSystemPrompt(self.dataContexts, self.graphs),
+          turns: buildTranscriptTurns(priorMessages),
+          userMessage: messageText,
+        });
+        self.addDavaiMsg(response);
+      } catch (err) {
+        console.error("Local model turn failed:", err);
+        self.addDbgMsg("Local model turn failed", formatJsonMessage(err));
+        self.addDavaiMsg("Sorry, I ran into an error running the local model on that request.");
+      } finally {
+        self.isLoadingResponse = false;
+        self.setShowLoadingIndicator(false);
+        if (self.messageQueue.length > 0) {
+          const nextMessage = self.messageQueue.shift();
+          if (nextMessage) handleMessageSubmitLocalLlm(nextMessage);
+        }
+      }
+    });
+
     const handleCancel = flow(function* () {
       try {
+        if (self.isLocalLlm) {
+          localLlmService.interrupt();
+          self.isLoadingResponse = false;
+          self.setShowLoadingIndicator(false);
+          // Drop any queued follow-ups too: handleMessageSubmitLocalLlm drains its own queue
+          // in its finally block (so it never routes a queued local message through the
+          // shared afterCreate/onSnapshot reactor below, which is hardcoded to the server's
+          // handleMessageSubmit). But cancelling here bypasses that finally entirely, so a
+          // non-empty queue would otherwise fall through to that shared reactor and leak
+          // onto the server path the moment isLoadingResponse flips to false.
+          self.clearUserMessageQueue();
+          self.addDavaiMsg("I've cancelled processing your message.");
+          return;
+        }
         if (self.currentMessageId && self.threadId) {
           self.isCancelling = true;
           self.setShowLoadingIndicator(false);
@@ -528,7 +612,10 @@ export const AssistantModel = types
       }
     });
 
-    return { createThread, initializeAssistant, handleMessageSubmit, handleCancel, updateDataContexts, updateGraphs };
+    return {
+      createThread, initializeAssistant, handleMessageSubmit, handleMessageSubmitLocalLlm,
+      handleCancel, updateDataContexts, updateGraphs
+    };
   })
   .actions((self) => ({
     afterCreate() {

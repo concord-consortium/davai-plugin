@@ -198,6 +198,8 @@ export const App = observer(() => {
 
     if (appConfig.isAssistantMocked) {
       assistantStore.handleMessageSubmitMockAssistant();
+    } else if (appConfig.isLocalLlm) {
+      await assistantStore.handleMessageSubmitLocalLlm(messageText);
     } else {
       assistantStore.setStreamEnabled(appConfig.streamResponses);
       assistantStore.setEffort(appConfig.effort);

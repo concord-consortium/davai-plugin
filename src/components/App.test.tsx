@@ -32,6 +32,7 @@ const mockAssistantStore: any = {
   updateGraphs: jest.fn(),
   handleCancel: jest.fn(),
   handleMessageSubmit: jest.fn(),
+  handleMessageSubmitLocalLlm: jest.fn(),
   setStreamEnabled: jest.fn(),
   setEffort: jest.fn(),
   transcriptStore: { messages: [], addMessage: jest.fn() },
@@ -96,10 +97,15 @@ describe("test load app", () => {
     mockAssistantStore.isLoadingResponse = false;
     mockAssistantStore.isResponding = false;
     mockAssistantStore.transcriptStore = { messages: [], addMessage: jest.fn() };
+    (mockAppConfig as any).isLocalLlm = false;
   });
 
   afterEach(() => {
     cleanupMockSpeechSynthesis();
+    // Several assistantStore/CODAP mocks are shared module-level jest.fn()s; clear their
+    // call history between tests so a submit assertion here can't see a call left over
+    // from an earlier test in this file (e.g. handleMessageSubmit from a prior submit).
+    jest.clearAllMocks();
   });
 
   it("renders without crashing", () => {
@@ -160,6 +166,18 @@ describe("test load app", () => {
     // stopSpeech() cancels the browser speech synthesis, so a fresh question interrupts
     // the previous answer's still-playing audio.
     expect(window.speechSynthesis.cancel).toHaveBeenCalled();
+  });
+
+  it("routes chat submission to the local LLM handler when isLocalLlm is true (DAVAI-126)", () => {
+    (mockAppConfig as any).isLocalLlm = true;
+
+    renderApp();
+
+    fireEvent.change(screen.getByTestId("chat-input-textarea"), { target: { value: "describe the graph" } });
+    fireEvent.click(screen.getByTestId("chat-input-send"));
+
+    expect(mockAssistantStore.handleMessageSubmitLocalLlm).toHaveBeenCalledWith("describe the graph");
+    expect(mockAssistantStore.handleMessageSubmit).not.toHaveBeenCalled();
   });
 
   it("clears Escape/Stop suppression on submit so the next Processing message is read", () => {

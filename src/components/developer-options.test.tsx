@@ -11,6 +11,14 @@ import { IRootStore } from "../models/root-store";
 import { RootStoreProvider } from "../contexts/root-store-context";
 import { GraphSonificationModelType } from "../models/graph-sonification-model";
 
+// assistant-model.ts (imported above for its type, and transitively via root-store through
+// RootStoreProvider) now statically imports local-llm-service.ts, which imports this factory.
+// It uses import.meta.url, which ts-jest's CJS transform cannot parse — mock it out the same
+// way local-llm-service.test.ts does (this file never exercises local-LLM behavior).
+jest.mock("../utils/local-llm/local-llm-worker-factory", () => ({
+  createLocalLlmWorker: jest.fn(() => ({} as Worker)),
+}));
+
 const MockAssistantModel = types
   .model("MockAssistantModel", {
     llmId: types.string,

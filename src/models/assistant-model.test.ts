@@ -6,6 +6,23 @@ import { DAVAI_SPEAKER } from "../constants";
 jest.mock("../utils/llm-utils", () => ({
   postMessage: jest.fn(),
 }));
+jest.mock("../utils/local-llm/local-llm-service", () => ({
+  localLlmService: {
+    isWebGPUAvailable: jest.fn(() => true),
+    loadEngine: jest.fn().mockResolvedValue(undefined),
+    generate: jest.fn(),
+    interrupt: jest.fn(),
+    unload: jest.fn().mockResolvedValue(undefined),
+    getLoadState: jest.fn(() => ({ status: "ready" })),
+    onLoadStateChange: jest.fn(() => () => undefined),
+  },
+}));
+jest.mock("../utils/local-llm/local-llm-loop", () => ({
+  runLocalTurn: jest.fn().mockResolvedValue("A local description."),
+}));
+
+import { localLlmService } from "../utils/local-llm/local-llm-service";
+import { runLocalTurn } from "../utils/local-llm/local-llm-loop";
 
 const mockedPostMessage = postMessage as jest.MockedFunction<typeof postMessage>;
 
@@ -197,5 +214,103 @@ describe("AssistantModel isLocalLlm (DAVAI-126)", () => {
     expect(assistantStore.isLocalLlm).toBe(true);
     assistantStore.setLlmId(JSON.stringify({ id: "mock", provider: "Mock" }));
     expect(assistantStore.isLocalLlm).toBe(false);
+  });
+});
+
+describe("handleMessageSubmitLocalLlm (DAVAI-126)", () => {
+  afterEach(() => {
+    jest.clearAllMocks();
+  });
+
+  const createLocalStore = () => {
+    const store = createStore();
+    store.setLlmId(JSON.stringify({ id: "Qwen3-1.7B-q4f16_1-MLC", provider: "Local" }));
+    return store;
+  };
+
+  it("runs a local turn and adds the reply to the transcript without any server call", async () => {
+    const store = createLocalStore();
+    await store.handleMessageSubmitLocalLlm("describe the graph");
+
+    expect(localLlmService.loadEngine).toHaveBeenCalledWith("Qwen3-1.7B-q4f16_1-MLC");
+    expect(runLocalTurn).toHaveBeenCalledWith(expect.objectContaining({
+      userMessage: "describe the graph",
+    }));
+    const last = store.transcriptStore.messages.at(-1);
+    expect(last?.speaker).toBe(DAVAI_SPEAKER);
+    expect(last?.messageContent.content).toBe("A local description.");
+    // No server round-trip on the local path.
+    expect(mockedPostMessage).not.toHaveBeenCalled();
+  });
+
+  it("replies with a WebGPU explanation when WebGPU is unavailable", async () => {
+    const store = createLocalStore();
+    (localLlmService.isWebGPUAvailable as jest.Mock).mockReturnValueOnce(false);
+
+    await store.handleMessageSubmitLocalLlm("hello");
+
+    const last = store.transcriptStore.messages.at(-1);
+    expect(last?.messageContent.content).toMatch(/WebGPU/);
+    expect(runLocalTurn).not.toHaveBeenCalled();
+    expect(store.isLoadingResponse).toBe(false);
+  });
+
+  it("replies with an error message when the local turn throws", async () => {
+    const store = createLocalStore();
+    (runLocalTurn as jest.Mock).mockRejectedValueOnce(new Error("engine crashed"));
+
+    await store.handleMessageSubmitLocalLlm("hello");
+
+    const last = store.transcriptStore.messages.at(-1);
+    expect(last?.messageContent.content).toMatch(/error/i);
+    expect(store.isLoadingResponse).toBe(false);
+  });
+
+  it("queues a message while a local response is in flight", async () => {
+    const store = createLocalStore();
+    let release: (v: string) => void = () => undefined;
+    (runLocalTurn as jest.Mock).mockImplementationOnce(
+      () => new Promise((res) => { release = res; })
+    );
+
+    const first = store.handleMessageSubmitLocalLlm("first");
+    await Promise.resolve();
+    await store.handleMessageSubmitLocalLlm("second");
+    expect(store.messageQueue.length).toBe(1);
+
+    release("done with first");
+    await first;
+
+    // Drain: the queued message is submitted after the first completes.
+    expect((runLocalTurn as jest.Mock).mock.calls.length).toBeGreaterThanOrEqual(2);
+  });
+
+  it("drops a queued message on cancel instead of leaking it to the server", async () => {
+    // handleMessageSubmitLocalLlm drains its own queue in its `finally` block (so a queued
+    // local message is never routed through the shared afterCreate/onSnapshot reactor, which
+    // is hardcoded to the server's handleMessageSubmit). Cancelling bypasses that `finally`
+    // entirely, so without an explicit clear here, a still-queued message would fall through
+    // to that shared reactor the moment isLoadingResponse flips to false and get sent to the
+    // server — defeating "no server request possible on the local path".
+    const store = createLocalStore();
+    let release: (v: string) => void = () => undefined;
+    (runLocalTurn as jest.Mock).mockImplementationOnce(
+      () => new Promise((res) => { release = res; })
+    );
+
+    const first = store.handleMessageSubmitLocalLlm("first");
+    await Promise.resolve();
+    await store.handleMessageSubmitLocalLlm("second"); // queued while "first" is in flight
+    expect(store.messageQueue.length).toBe(1);
+
+    await store.handleCancel();
+    await Promise.resolve();
+    await Promise.resolve();
+
+    expect(mockedPostMessage).not.toHaveBeenCalled();
+    expect(store.messageQueue.length).toBe(0);
+
+    release("done"); // let the abandoned first turn settle so the test can exit cleanly
+    await first.catch(() => undefined);
   });
 });
