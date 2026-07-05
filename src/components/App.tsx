@@ -21,6 +21,8 @@ import { GraphSonificationScheduler } from "../models/graph-sonification-schedul
 import { SpeakingIndicator } from "./speaking-indicator";
 import { StreamingAnnouncer } from "./streaming-announcer";
 import { forSpeechMultiline } from "../utils/speech-text";
+import { localLlmService } from "../utils/local-llm/local-llm-service";
+import { findEntryByLlmId } from "../utils/llm-effort";
 
 import "./App.scss";
 
@@ -154,7 +156,51 @@ export const App = observer(() => {
   useEffect(() => {
     // Initialize the assistant on mount and when the LLM ID changes.
     handleInitializeAssistant();
+
+    // Drive the local in-browser engine's lifecycle off the same LLM-selection change:
+    // load it when a Local model is selected, and unload it (freeing GPU/WASM memory)
+    // when switching away to a server-backed model.
+    const entry = findEntryByLlmId(appConfig.llmList as any, appConfig.llmId);
+    if (entry?.provider === "Local") {
+      if (!localLlmService.isWebGPUAvailable()) {
+        transcriptStore.addMessage(DAVAI_SPEAKER, {
+          content: "The selected local model needs WebGPU, which this browser doesn't provide. Please use a recent Chrome or Edge, or select a server model.",
+        });
+        return;
+      }
+      const sizeNote = entry.id.includes("1.7B") ? "about 1.1 GB" : "about 2.3 GB";
+      transcriptStore.addMessage(DAVAI_SPEAKER, {
+        content: `Loading the local model ${entry.id}. The first load downloads ${sizeNote} and may take several minutes; afterward it is cached in the browser.`,
+      });
+      localLlmService.loadEngine(entry.id).catch((err) => {
+        transcriptStore.addMessage(DAVAI_SPEAKER, {
+          content: `Sorry, the local model failed to load: ${err instanceof Error ? err.message : String(err)}`,
+        });
+      });
+    } else {
+      localLlmService.unload();
+    }
   }, [appConfig.llmId, handleInitializeAssistant]);
+
+  useEffect(() => {
+    // Announce coarse load milestones (25% steps) and readiness through the transcript so
+    // the aria-live path reads them; per-percent updates would spam the screen reader.
+    let lastMilestone = 0;
+    const off = localLlmService.onLoadStateChange((s) => {
+      if (s.status === "loading" && typeof s.progress === "number") {
+        const milestone = Math.floor(s.progress * 4) * 25;
+        if (milestone > lastMilestone && milestone < 100) {
+          lastMilestone = milestone;
+          transcriptStore.addMessage(DAVAI_SPEAKER, { content: `Model loading: ${milestone}% complete.` });
+        }
+      } else if (s.status === "ready") {
+        lastMilestone = 0;
+        transcriptStore.addMessage(DAVAI_SPEAKER, { content: "The local model is ready." });
+      }
+    });
+    return off;
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   useEffect(() => {
     const { messages } = transcriptStore;

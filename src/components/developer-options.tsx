@@ -6,6 +6,7 @@ import { DAVAI_SPEAKER, GREETING } from "../constants";
 import { AppConfigToggleOptions } from "../models/app-config-model";
 import { useRootStore } from "../contexts/root-store-context";
 import { findEntryByLlmId, resolveEffort } from "../utils/llm-effort";
+import { localLlmService } from "../utils/local-llm/local-llm-service";
 
 interface IProps {
   assistantStore: AssistantModelType;
@@ -74,13 +75,19 @@ export const DeveloperOptionsComponent = observer(({assistantStore, createToggle
               // llmId. (llmList entries also carry effortLevels/defaultEffort, which must
               // not leak into the value or the select would match no option.)
               const value = JSON.stringify({ id: llm.id, provider: llm.provider });
+              // Local models require WebGPU (see local-llm-service.isWebGPUAvailable);
+              // gate the option here rather than at select-time so an unsupported browser
+              // can't silently pick a model that will never load.
+              const localUnavailable = llm.provider === "Local" && !localLlmService.isWebGPUAvailable();
+              const label = llm.id === "mock" ? "Mock LLM" : `${llm.provider}: ${llm.id}`;
               return (
                 <option
                   aria-selected={appConfig.llmId === value}
                   key={llm.id}
                   value={value}
+                  disabled={localUnavailable}
                 >
-                  {llm.id === "mock" ? "Mock LLM" : `${llm.provider}: ${llm.id}`}
+                  {localUnavailable ? `${label} (requires WebGPU)` : label}
                 </option>
               );
             })}

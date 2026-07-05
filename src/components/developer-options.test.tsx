@@ -19,6 +19,11 @@ jest.mock("../utils/local-llm/local-llm-worker-factory", () => ({
   createLocalLlmWorker: jest.fn(() => ({} as Worker)),
 }));
 
+const mockIsWebGPUAvailable = jest.fn(() => false);
+jest.mock("../utils/local-llm/local-llm-service", () => ({
+  localLlmService: { isWebGPUAvailable: () => mockIsWebGPUAvailable() },
+}));
+
 const MockAssistantModel = types
   .model("MockAssistantModel", {
     llmId: types.string,
@@ -203,5 +208,27 @@ describe("test developer options component", () => {
 
     expect(setLlmIdSpy).toHaveBeenCalledWith(newLlmId);
     expect(setEffortSpy).toHaveBeenCalledWith("");
+  });
+
+  it("disables Local model options and annotates them when WebGPU is unavailable (DAVAI-126)", () => {
+    mockIsWebGPUAvailable.mockReturnValue(false);
+    mockConfig.llmList = [
+      { id: "mock", provider: "Mock", effortLevels: [] },
+      { id: "Qwen3-1.7B-q4f16_1-MLC", provider: "Local", effortLevels: [] },
+    ];
+    renderDeveloperOptions();
+    const option = screen.getByRole("option", { name: /Qwen3-1\.7B.*requires WebGPU/ }) as HTMLOptionElement;
+    expect(option.disabled).toBe(true);
+  });
+
+  it("enables Local model options when WebGPU is available (DAVAI-126)", () => {
+    mockIsWebGPUAvailable.mockReturnValue(true);
+    mockConfig.llmList = [
+      { id: "mock", provider: "Mock", effortLevels: [] },
+      { id: "Qwen3-1.7B-q4f16_1-MLC", provider: "Local", effortLevels: [] },
+    ];
+    renderDeveloperOptions();
+    const option = screen.getByRole("option", { name: "Local: Qwen3-1.7B-q4f16_1-MLC" }) as HTMLOptionElement;
+    expect(option.disabled).toBe(false);
   });
 });

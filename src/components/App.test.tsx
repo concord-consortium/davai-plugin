@@ -12,6 +12,19 @@ import { ISpeechService } from "../services/speech-service";
 import { mockTransportManager } from "../test-utils/mock-transport-manager";
 import { setupMockSpeechSynthesis, cleanupMockSpeechSynthesis } from "../test-utils/mock-speech-synthesis";
 import { DAVAI_SPEAKER } from "../constants";
+import { localLlmService } from "../utils/local-llm/local-llm-service";
+
+jest.mock("../utils/local-llm/local-llm-service", () => ({
+  localLlmService: {
+    isWebGPUAvailable: jest.fn(() => true),
+    loadEngine: jest.fn().mockResolvedValue(undefined),
+    generate: jest.fn(),
+    interrupt: jest.fn(),
+    unload: jest.fn().mockResolvedValue(undefined),
+    getLoadState: jest.fn(() => ({ status: "ready" })),
+    onLoadStateChange: jest.fn(() => () => undefined),
+  },
+}));
 
 const createMockSpeechService = (): ISpeechService => ({
   speak: jest.fn(),
@@ -98,6 +111,16 @@ describe("test load app", () => {
     mockAssistantStore.isResponding = false;
     mockAssistantStore.transcriptStore = { messages: [], addMessage: jest.fn() };
     (mockAppConfig as any).isLocalLlm = false;
+    // mockAppConfig is a shared module-level object (see the app-config-model mock above,
+    // which hands it back as-is rather than constructing a real MST instance) — reset the
+    // llmId/llmList fields the DAVAI-126 engine-lifecycle effect reads so a Local override
+    // in one test can't leak into another.
+    mockAppConfig.llmId = "{\"id\":\"mock\",\"provider\":\"Mock\"}";
+    mockAppConfig.llmList = [
+      { id: "mock", provider: "Mock", effortLevels: [] },
+      { id: "gemini-2.0-flash", provider: "Google", effortLevels: ["low", "medium", "high"], defaultEffort: "medium" },
+      { id: "gpt-4o-mini", provider: "OpenAI", effortLevels: [] }
+    ];
   });
 
   afterEach(() => {
@@ -199,5 +222,23 @@ describe("test load app", () => {
 
     expect(mockService.stopSpeech).toHaveBeenCalled();
     expect(mockService.resumeSpeech).toHaveBeenCalled(); // lifts a prior Escape/Stop suppression
+  });
+
+  it("starts loading the local engine when a Local model is selected (DAVAI-126)", () => {
+    mockAppConfig.llmId = JSON.stringify({ id: "Qwen3-1.7B-q4f16_1-MLC", provider: "Local" });
+    mockAppConfig.llmList = [
+      { id: "mock", provider: "Mock", effortLevels: [] },
+      { id: "Qwen3-1.7B-q4f16_1-MLC", provider: "Local", effortLevels: [] },
+    ];
+
+    renderApp();
+
+    expect(localLlmService.loadEngine).toHaveBeenCalledWith("Qwen3-1.7B-q4f16_1-MLC");
+  });
+
+  it("unloads the local engine when a server model is selected (DAVAI-126)", () => {
+    renderApp(); // default (non-Local) config
+
+    expect(localLlmService.unload).toHaveBeenCalled();
   });
 });
