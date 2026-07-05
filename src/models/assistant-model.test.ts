@@ -429,11 +429,12 @@ describe("handleMessageSubmitLocalLlm (DAVAI-126)", () => {
     expect(store.transcriptStore.messages.at(-1)?.messageContent.content).toBe("Created.");
   });
 
-  it("assembles a drained queue turn without dropping the prior reply or duplicating the queued text (DAVAI-126 I3)", async () => {
+  it("assembles a drained queue turn without dropping the prior reply or duplicating the queued text (DAVAI-126 I3/P2b)", async () => {
     // Reproduce the transcript state at the moment a queued turn is drained: the queued user
     // message was added by App at submit time, and the PRIOR turn's DAVAI reply is now the last
-    // row. slice(0,-1) would wrongly drop that reply and leave the queued text duplicated (in
-    // turns AND as userMessage).
+    // row (not the queued user row) — trailing-only removal leaves the queued row in place, so
+    // it stays in `turns` AND repeats as `userMessage`. The fix must instead remove the LAST
+    // occurrence of a USER_SPEAKER row matching messageText, wherever it sits.
     const store = createLocalStore();
     store.transcriptStore.addMessage(USER_SPEAKER, { content: "first question" });
     store.transcriptStore.addMessage(USER_SPEAKER, { content: "second question" }); // queued at submit
@@ -444,16 +445,17 @@ describe("handleMessageSubmitLocalLlm (DAVAI-126)", () => {
     await store.handleMessageSubmitLocalLlm("second question");
 
     const args = (runLocalTurn as jest.Mock).mock.calls.at(-1)![0];
-    const turnContents = args.turns.map((t: any) => t.content);
-    // The prior DAVAI reply is preserved in history, exactly once.
-    expect(turnContents).toContain("Answer to the first question.");
-    expect(turnContents.filter((c: string) => c === "Answer to the first question.")).toHaveLength(1);
-    // The queued text is the userMessage, and does NOT also appear duplicated in the turns.
+    // Exact shape: turns = [user1 -> assistant answer1]. The queued row is fully absent from
+    // turns (not merely "present once amid other duplicates") and appears exactly once overall,
+    // as userMessage.
+    expect(args.turns).toEqual([
+      { role: "user", content: "first question" },
+      { role: "assistant", content: "Answer to the first question." },
+    ]);
     expect(args.userMessage).toBe("second question");
-    expect(turnContents.filter((c: string) => c === "second question")).toHaveLength(1);
   });
 
-  it("still drops the trailing user row for a direct submit (DAVAI-126 I3)", async () => {
+  it("still drops the trailing user row for a direct submit (DAVAI-126 I3/P2b)", async () => {
     // Direct submit path: App adds the user row immediately before dispatch, so the last row IS
     // the just-submitted message and must be excluded from the mapped turns.
     const store = createLocalStore();
@@ -468,6 +470,27 @@ describe("handleMessageSubmitLocalLlm (DAVAI-126)", () => {
     expect(turnContents).toContain("Earlier reply.");
     // The just-submitted user row is not duplicated into the turns.
     expect(turnContents).not.toContain("describe the graph");
+    expect(args.userMessage).toBe("describe the graph");
+  });
+
+  it("keeps an earlier identical user question when removing only the last-occurring queued row (DAVAI-126 P2b)", async () => {
+    // A history where the SAME question text was asked earlier (and answered differently) must
+    // keep that earlier row intact — only the most recent (queued) occurrence is the one being
+    // drained and must be excluded from `turns`.
+    const store = createLocalStore();
+    store.transcriptStore.addMessage(USER_SPEAKER, { content: "describe the graph" }); // earlier, legitimate
+    store.addDavaiMsg("First description.");
+    store.transcriptStore.addMessage(USER_SPEAKER, { content: "describe the graph" }); // queued at submit (duplicate text)
+
+    (runLocalTurn as jest.Mock).mockResolvedValueOnce("Second description.");
+    await store.handleMessageSubmitLocalLlm("describe the graph");
+
+    const args = (runLocalTurn as jest.Mock).mock.calls.at(-1)![0];
+    // The earlier identical question survives in turns, exactly once, paired with its own reply.
+    expect(args.turns).toEqual([
+      { role: "user", content: "describe the graph" },
+      { role: "assistant", content: "First description." },
+    ]);
     expect(args.userMessage).toBe("describe the graph");
   });
 

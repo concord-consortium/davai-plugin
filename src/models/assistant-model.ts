@@ -541,17 +541,25 @@ export const AssistantModel = types
         if (!isCurrent()) return; // cancelled/superseded during the (possibly long) load
 
         // Transcript turns are the history BEFORE this message. On a direct submit, App added
-        // the user row immediately before dispatch, so the trailing row IS this message and must
-        // be excluded. On a finally-drained queue turn there is no such fresh user row (the last
-        // row is the prior turn's DAVAI reply), so dropping it blindly would delete that answer
-        // and duplicate the queued text. Only drop the trailing row when it is exactly the
-        // just-submitted user message.
+        // the user row immediately before dispatch, so that row IS this message and must be
+        // excluded. On a finally-drained queue turn, the queued user row was likewise added by
+        // App at submit time, but it sits BEFORE the prior turn's DAVAI reply (which is now the
+        // trailing row) — so a trailing-only check misses it, leaving it in `turns` AND
+        // duplicated as `userMessage` below. Remove the LAST occurrence (scanning from the end)
+        // of a USER_SPEAKER row whose content matches messageText, wherever it sits, keeping
+        // everything else — including any earlier legitimate identical question — in order.
         const msgs = self.transcriptStore.messages;
-        const last = msgs[msgs.length - 1];
+        const lastMatchIndex = (() => {
+          for (let i = msgs.length - 1; i >= 0; i--) {
+            const m = msgs[i];
+            if (m.speaker === USER_SPEAKER && m.messageContent.content === messageText) return i;
+          }
+          return -1;
+        })();
         const priorMessages =
-          last && last.speaker === USER_SPEAKER && last.messageContent.content === messageText
-            ? msgs.slice(0, -1)
-            : msgs.slice();
+          lastMatchIndex === -1
+            ? msgs.slice()
+            : [...msgs.slice(0, lastMatchIndex), ...msgs.slice(lastMatchIndex + 1)];
         const response: string = yield runLocalTurn({
           generate: (messages) => localLlmService.generate(messages, { jsonMode: true }),
           executeTool: async (data: IToolCallData) => {
