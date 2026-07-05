@@ -189,3 +189,13 @@ describe("AssistantModel effort (DAVAI-125)", () => {
     expect(body.effort).toBe("low");
   });
 });
+
+describe("AssistantModel isLocalLlm (DAVAI-126)", () => {
+  it("isLocalLlm reflects the Local provider in llmId", () => {
+    const assistantStore = createStore();
+    assistantStore.setLlmId(JSON.stringify({ id: "Qwen3-1.7B-q4f16_1-MLC", provider: "Local" }));
+    expect(assistantStore.isLocalLlm).toBe(true);
+    assistantStore.setLlmId(JSON.stringify({ id: "mock", provider: "Mock" }));
+    expect(assistantStore.isLocalLlm).toBe(false);
+  });
+});

@@ -20,6 +20,16 @@
       "effortLevels": []
     },
     {
+      "id": "Qwen3-1.7B-q4f16_1-MLC",
+      "provider": "Local",
+      "effortLevels": []
+    },
+    {
+      "id": "Qwen3-4B-q4f16_1-MLC",
+      "provider": "Local",
+      "effortLevels": []
+    },
+    {
       "id": "gemini-3.5-flash",
       "provider": "Google",
       "effortLevels": []

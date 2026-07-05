@@ -62,6 +62,13 @@ export const AssistantModel = types
       const llmData = JSON.parse(self.llmId || "");
       return llmData.id === "mock";
     },
+    get isLocalLlm() {
+      try {
+        return JSON.parse(self.llmId || "").provider === "Local";
+      } catch {
+        return false;
+      }
+    },
     // True whenever a response is being produced and the chat input should stay busy
     // (disabled, showing Cancel). isLoadingResponse spans the whole real-LLM turn
     // (including tool calls and streaming, after the "Processing" indicator is cleared);

@@ -190,6 +190,13 @@ export const AppConfigModel = types.model("AppConfigModel", {
     const llmData = JSON.parse(self.llmId || "");
     return llmData.id === "mock";
   },
+  get isLocalLlm() {
+    try {
+      return JSON.parse(self.llmId || "").provider === "Local";
+    } catch {
+      return false;
+    }
+  },
   get showDebugLog() {
     return self.isDevMode && self.showDebugLogInDevMode;
   }
