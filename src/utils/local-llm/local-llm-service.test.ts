@@ -9,8 +9,11 @@ const mockCreateWebWorkerMLCEngine = jest.fn().mockResolvedValue(mockEngine);
 jest.mock("@mlc-ai/web-llm", () => ({
   CreateWebWorkerMLCEngine: (...args: any[]) => mockCreateWebWorkerMLCEngine(...args),
 }));
+// A distinct worker object per call (each with its own `terminate` spy) so a test can assert
+// specifically which load's worker was torn down.
+const mockCreateLocalLlmWorker = jest.fn(() => ({ terminate: jest.fn() } as unknown as Worker));
 jest.mock("./local-llm-worker-factory", () => ({
-  createLocalLlmWorker: jest.fn(() => ({} as Worker)),
+  createLocalLlmWorker: () => mockCreateLocalLlmWorker(),
 }));
 
 import { localLlmService } from "./local-llm-service";
@@ -164,5 +167,59 @@ it("does not announce ready when unloaded mid-load (DAVAI-126 I1)", async () => 
   expect(engineA.unload).toHaveBeenCalled();        // the late engine is torn down
   expect(states).not.toContain("ready");            // never announced ready
   expect(localLlmService.getLoadState().status).toBe("idle");
+  off();
+});
+
+// Resolves to a rejection if `promise` doesn't settle within `ms`, instead of hanging the test
+// run forever — used below for promises that must settle via terminate()'s resolve-not-reject
+// path even though their underlying CreateWebWorkerMLCEngine call never itself resolves/rejects.
+const withTimeoutGuard = <T,>(promise: Promise<T>, ms = 1000): Promise<T> =>
+  Promise.race([
+    promise,
+    new Promise<T>((_res, rej) => setTimeout(() => rej(new Error("timed out waiting for promise to settle")), ms)),
+  ]);
+
+it("terminates a superseded in-flight load's worker and resolves (not rejects) its promise (DAVAI-126 P2a)", async () => {
+  // A's engine creation never settles — simulates a 1-2 GB download/compile still running.
+  mockCreateWebWorkerMLCEngine.mockImplementationOnce(() => new Promise(() => undefined));
+  const engineB = makeEngine();
+  mockCreateWebWorkerMLCEngine.mockImplementationOnce(() => Promise.resolve(engineB));
+
+  const loadA = localLlmService.loadEngine("Qwen3-1.7B-q4f16_1-MLC");
+  await waitForCreateCalls(1); // A is past the dynamic import, awaiting its (never-resolving) engine
+  const workerA = mockCreateLocalLlmWorker.mock.results[0].value as { terminate: jest.Mock };
+
+  // A new claim (a different model) supersedes A while it is still in flight.
+  const loadB = localLlmService.loadEngine("Qwen3-4B-q4f16_1-MLC");
+
+  // A's worker is torn down immediately (not left running to completion), and A's own promise
+  // resolves rather than rejecting — callers re-validate via isCurrent()/isStale(), so a mere
+  // supersession must not read as a load failure.
+  await expect(withTimeoutGuard(loadA)).resolves.toBeUndefined();
+  expect(workerA.terminate).toHaveBeenCalledTimes(1);
+
+  // B proceeds independently and reaches ready.
+  await loadB;
+  expect(localLlmService.getLoadState()).toEqual(
+    expect.objectContaining({ status: "ready", modelId: "Qwen3-4B-q4f16_1-MLC" })
+  );
+});
+
+it("terminates the in-flight load's worker and resolves its promise on unload() (DAVAI-126 P2a)", async () => {
+  mockCreateWebWorkerMLCEngine.mockImplementationOnce(() => new Promise(() => undefined));
+
+  const states: string[] = [];
+  const off = localLlmService.onLoadStateChange((s) => states.push(s.status));
+
+  const loadA = localLlmService.loadEngine("Qwen3-1.7B-q4f16_1-MLC");
+  await waitForCreateCalls(1);
+  const workerA = mockCreateLocalLlmWorker.mock.results[0].value as { terminate: jest.Mock };
+
+  await localLlmService.unload();
+
+  await expect(withTimeoutGuard(loadA)).resolves.toBeUndefined();
+  expect(workerA.terminate).toHaveBeenCalledTimes(1);
+  expect(localLlmService.getLoadState().status).toBe("idle");
+  expect(states).not.toContain("ready"); // no subscriber ever saw "ready" for the superseded load
   off();
 });

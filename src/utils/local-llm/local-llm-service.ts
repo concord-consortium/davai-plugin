@@ -32,6 +32,13 @@ let loadedModelId: string | null = null;
 // leaking GBs of resident model. Guards the loadEngine race where model A is still downloading
 // (engine null) when loadEngine(B) starts a second concurrent doLoad.
 let loadGeneration = 0;
+// The currently in-flight load's worker, tracked so a superseding claim (a new loadEngine, or
+// unload()) can terminate it immediately instead of letting a 1-2 GB download/compilation run to
+// completion in a live worker before being discarded by the isStale() checks below. `settle`
+// resolves (never rejects) that load's own promise the moment it is superseded: callers
+// re-validate their epoch right after the load (the turn path re-checks isCurrent(), and App's
+// loadEngine().catch(...) must not fire a spurious "failed to load" for a mere supersession).
+let inflightLoad: { generation: number; worker: Worker; settle: () => void } | null = null;
 let state: ILocalLlmLoadState = { status: "idle" };
 const listeners = new Set<(s: ILocalLlmLoadState) => void>();
 
@@ -40,15 +47,39 @@ const setState = (next: ILocalLlmLoadState) => {
   listeners.forEach((cb) => cb(state));
 };
 
-const doLoad = async (modelId: string, generation: number) => {
+// If an older-generation load is still in flight, terminate its worker right away and resolve
+// its promise (not reject — see `inflightLoad` comment above) so it stops occupying GPU/WASM
+// resources instead of running to completion unobserved. Called both when a new load claims the
+// generation and from unload(). A no-op if the in-flight load already belongs to `generation` or
+// there is none.
+const terminateInflightIfSuperseded = (generation: number) => {
+  if (inflightLoad && inflightLoad.generation !== generation) {
+    inflightLoad.worker.terminate();
+    inflightLoad.settle();
+    inflightLoad = null;
+  }
+};
+
+const doLoad = async (modelId: string, generation: number, onSettleEarly: () => void) => {
   const isStale = () => generation !== loadGeneration;
   setState({ status: "loading", modelId, progress: 0 });
   // Dynamic import keeps @mlc-ai/web-llm out of the main bundle until a Local model
   // is actually selected (it becomes an async webpack chunk).
   const { CreateWebWorkerMLCEngine } = await import("@mlc-ai/web-llm");
   if (isStale()) return; // superseded during the import
+
+  // Create the worker before the engine call and register it as this generation's in-flight
+  // load so a superseding claim can terminate it immediately (see terminateInflightIfSuperseded).
+  // Termination calls `onSettleEarly`, which resolves the OUTER loadEngine()-facing promise early
+  // (wired up by the caller in loadEngine) — it does not interrupt this function. This doLoad
+  // body keeps running underneath and still reaches the isStale() check below if/when
+  // CreateWebWorkerMLCEngine eventually settles on its own, which remains the backstop for
+  // tearing down a late-arriving engine.
+  const worker = createLocalLlmWorker();
+  inflightLoad = { generation, worker, settle: onSettleEarly };
+
   const created = await CreateWebWorkerMLCEngine(
-    createLocalLlmWorker(),
+    worker,
     modelId,
     {
       initProgressCallback: (p: { progress: number; text: string }) => {
@@ -66,10 +97,17 @@ const doLoad = async (modelId: string, generation: number) => {
     // experiment.
     { context_window_size: 16384 }
   ) as unknown as IEngineLike;
+  // Clear our own inflightLoad registration now that we have an engine (nothing left to
+  // terminate); a superseding claim that arrives after this point tears down `created` via the
+  // isStale() branch below instead of via terminateInflightIfSuperseded.
+  if (inflightLoad && inflightLoad.generation === generation) inflightLoad = null;
+
   if (isStale()) {
-    // A newer load started (or unload was called) while this engine was being built. Tear it
-    // down rather than adopting it: the winner owns `engine`/`state`, and adopting this one
-    // would leak the winner's engine and/or resurrect a stale "ready" announcement.
+    // A newer load started (or unload was called) while this engine was being built — either
+    // caught here on first arrival, or (if terminateInflightIfSuperseded already ran) this is the
+    // backstop for a terminated worker whose CreateWebWorkerMLCEngine call settled anyway. Tear it
+    // down rather than adopting it: the winner owns `engine`/`state`, and adopting this one would
+    // leak the winner's engine and/or resurrect a stale "ready" announcement.
     await created.unload().catch(() => undefined);
     return;
   }
@@ -95,7 +133,19 @@ export const localLlmService = {
     if (engine) await this.unload();
     // Claim a fresh generation for this load; any earlier in-flight doLoad is now stale.
     const generation = ++loadGeneration;
-    loadPromise = doLoad(modelId, generation).catch((err) => {
+    // If a load from an older generation is still in flight (e.g. still downloading with no
+    // resident `engine` yet, so the `if (engine)` branch above didn't run unload()), terminate
+    // its worker now instead of leaving it to run to completion before isStale() discards it.
+    terminateInflightIfSuperseded(generation);
+
+    // Resolved early (never rejected) if THIS load is itself superseded before it finishes: a
+    // mere supersession must read as success to callers (they re-validate their own epoch), not
+    // as a load failure. Racing it against the real doLoad(...) below lets the caller-facing
+    // promise settle immediately on termination without waiting on (or being coupled to) whatever
+    // doLoad's own execution — which keeps running underneath — eventually does.
+    let resolveEarly: () => void = () => undefined;
+    const settledEarly = new Promise<void>((resolve) => { resolveEarly = resolve; });
+    const settling = doLoad(modelId, generation, resolveEarly).catch((err) => {
       // Only the current load may publish an error / reset shared state; a stale load that
       // rejected after being superseded must stay silent.
       if (generation === loadGeneration) {
@@ -107,6 +157,13 @@ export const localLlmService = {
     }).finally(() => {
       if (generation === loadGeneration) loadPromise = null;
     });
+    loadPromise = Promise.race([settledEarly, settling]);
+    // If `settledEarly` wins the race (this load was superseded) and `settling` goes on to
+    // reject anyway (e.g. the terminated worker's CreateWebWorkerMLCEngine call settles with an
+    // error), that rejection is already unobservable to callers and must not become an unhandled
+    // promise rejection. The `.catch` above already handles the "publish an error" side effect
+    // for the still-current case; this just silences the promise itself.
+    settling.catch(() => undefined);
     return loadPromise;
   },
   async generate(messages: IChatMsg[], opts?: { jsonMode?: boolean }): Promise<string> {
@@ -126,6 +183,9 @@ export const localLlmService = {
     // Bump the generation so any in-flight doLoad abandons its engine instead of announcing
     // ready after this unload.
     loadGeneration++;
+    // Terminate (rather than let run to completion) any load still in flight under the old
+    // generation, and resolve its promise so it doesn't hang.
+    terminateInflightIfSuperseded(loadGeneration);
     const e = engine;
     engine = null;
     loadedModelId = null;
