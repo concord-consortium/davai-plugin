@@ -51,8 +51,11 @@ it("excludes announcement-kind messages from transcript turns (DAVAI-126 I2)", (
 });
 
 describe("trimToBudget (DAVAI-126 C2)", () => {
-  it("keeps the real assembled base prompt under budget with >=20% margin once the doc is cut", () => {
+  it("fits the real assembled base prompt (incl. full API doc) within budget with >=20% margin, doc intact (DAVAI-126 context-16K)", () => {
     // Representative live contexts + graphs (a few KB), real instructions + API doc imports.
+    // This is the point of the 16K context-window change: at the default budget, the full
+    // mirrored prompt — instructions + the whole CODAP API doc + live contexts/graphs — must
+    // fit with headroom, not just after the doc-cut safety net kicks in.
     const dataContexts = {
       Mammals: {
         collections: [{ name: "Cases", attrs: ["Mammal", "Order", "LifeSpan", "Height", "Mass", "Sleep", "Speed"] }],
@@ -65,16 +68,27 @@ describe("trimToBudget (DAVAI-126 C2)", () => {
     ];
     const out = trimToBudget(parts, turns);
     const total = out.reduce((n, m) => n + m.content.length, 0);
+    // At least 20% margin under the default budget — real headroom, not a razor's edge.
     expect(total).toBeLessThanOrEqual(DEFAULT_PROMPT_BUDGET_CHARS * 0.8);
-    // The live contexts and the user's question survived the trim.
+    // The API doc survived intact: a distinctive doc substring is present, and the doc was
+    // NOT replaced by the truncation marker. This is the behavior the 16K window buys us.
+    expect(out[0].content).toContain("### CODAP API documentation:");
+    expect(parts.apiDoc.length).toBeGreaterThan(1000); // sanity: the real doc import is non-trivial
+    expect(out[0].content).toContain(parts.apiDoc.slice(0, 200));
+    expect(out[0].content).not.toContain("[api documentation truncated]");
+    // The live contexts and the user's question also survived the trim.
     expect(out[0].content).toContain("Mammals");
     expect(out[0].content).toContain("Height vs Mass");
     expect(out[out.length - 1].content).toContain("Describe the height vs mass graph");
   });
 
   it("cuts the API doc first, keeping instructions, contexts, and /no_think (DAVAI-126 C2)", () => {
+    // An artificially small budget (independent of DEFAULT_PROMPT_BUDGET_CHARS, which now
+    // comfortably fits the full doc — that's the point of the 16K window) too small to hold
+    // the full API doc, so the doc-cut branch must fire.
+    const smallBudget = (8192 - 1024) * 3;
     const parts = buildSystemPromptParts({ ds: { note: "LIVE_CONTEXT_MARKER" } }, [{ id: 9, name: "GRAPH_MARKER" }]);
-    const out = trimToBudget(parts, [], DEFAULT_PROMPT_BUDGET_CHARS);
+    const out = trimToBudget(parts, [], smallBudget);
     const sys = out[0].content;
     // API doc cut down to a marker.
     expect(sys).toContain("[api documentation truncated]");
@@ -85,7 +99,7 @@ describe("trimToBudget (DAVAI-126 C2)", () => {
     expect(sys).toContain("GRAPH_MARKER");
     // /no_think always survives, at the very end.
     expect(sys.trimEnd().endsWith("/no_think")).toBe(true);
-    expect(sys.length).toBeLessThanOrEqual(DEFAULT_PROMPT_BUDGET_CHARS);
+    expect(sys.length).toBeLessThanOrEqual(smallBudget);
   });
 
   it("drops oldest transcript turns after cutting the doc, keeping the most recent turn", () => {

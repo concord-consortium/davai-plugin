@@ -31,13 +31,13 @@ it("reports WebGPU availability from navigator.gpu", () => {
   expect(localLlmService.isWebGPUAvailable()).toBe(false);
 });
 
-it("loads the engine with the 8K context override and reaches ready", async () => {
+it("loads the engine with the 16K context override and reaches ready", async () => {
   await localLlmService.loadEngine("Qwen3-1.7B-q4f16_1-MLC");
   expect(mockCreateWebWorkerMLCEngine).toHaveBeenCalledTimes(1);
   const [, modelId, engineConfig, chatOpts] = mockCreateWebWorkerMLCEngine.mock.calls[0];
   expect(modelId).toBe("Qwen3-1.7B-q4f16_1-MLC");
   expect(engineConfig.initProgressCallback).toEqual(expect.any(Function));
-  expect(chatOpts).toEqual({ context_window_size: 8192 });
+  expect(chatOpts).toEqual({ context_window_size: 16384 });
   expect(localLlmService.getLoadState().status).toBe("ready");
 });
 

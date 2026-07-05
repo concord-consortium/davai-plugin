@@ -57,9 +57,14 @@ const doLoad = async (modelId: string, generation: number) => {
         setState({ status: "loading", modelId, progress: p.progress, text: p.text });
       },
     },
-    // Prebuilt Qwen3 configs default to a 4096 window — too small for the mirrored
-    // DAVAI context, so override to 8K (KV-cache cost is acceptable for both models).
-    { context_window_size: 8192 }
+    // Prebuilt Qwen3 configs default to a 4096 window — too small for the mirrored DAVAI
+    // context, so override to 16K: with the full mirrored context (instructions + client API
+    // doc + data contexts) assembled, 16K is what it takes for the doc to survive intact with
+    // headroom rather than being cut by the prompt-budget safety net. Qwen3's native window is
+    // 32K, so 16K is well within range. KV-cache cost vs the previous 8K override is roughly
+    // +1 GB for the 1.7B model and +1.2 GB for the 4B model — acceptable for this dev-gated
+    // experiment.
+    { context_window_size: 16384 }
   ) as unknown as IEngineLike;
   if (isStale()) {
     // A newer load started (or unload was called) while this engine was being built. Tear it

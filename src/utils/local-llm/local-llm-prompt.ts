@@ -3,11 +3,11 @@ import { localCodapApiDoc } from "../../text/codap-api-documentation";
 import { DAVAI_SPEAKER, USER_SPEAKER } from "../../constants";
 import { IChatMsg } from "./local-llm-service";
 
-// 8192-token window minus ~1K reserved for the model's reply. Calibrated at 3 chars/token
+// 16384-token window minus ~1K reserved for the model's reply. Calibrated at 3 chars/token
 // (not the naive 4) because the mirrored DAVAI context — dense JSON with punctuation and
 // digits — tokenizes closer to 3.3–3.7 chars/token, and WebLLM throws
 // ContextWindowSizeExceededError rather than auto-truncating when the prompt overflows.
-export const DEFAULT_PROMPT_BUDGET_CHARS = (8192 - 1024) * 3;
+export const DEFAULT_PROMPT_BUDGET_CHARS = (16384 - 1024) * 3;
 const MAX_TRANSCRIPT_TURNS = 6;
 
 // Qwen3's prompt-level switch to disable thinking mode. Appended AFTER budget trimming so it
