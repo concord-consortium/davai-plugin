@@ -59,6 +59,11 @@ export const AssistantModel = types
     streamEnabled: true as boolean,
     responseStartTime: null as number | null,
     effort: "" as string,
+    // Monotonic counter guarding in-flight LOCAL turns. A local turn captures this at start;
+    // cancel, a model switch (setLlmId), and createThread all bump it. When the suspended
+    // `yield runLocalTurn(...)` resumes, a mismatch means the turn was cancelled/superseded, so
+    // its reply, error message, and flag/queue writes are all skipped (no zombie turn).
+    turnEpoch: 0 as number,
   }))
   .views((self) => ({
     get isAssistantMocked() {
@@ -91,7 +96,13 @@ export const AssistantModel = types
       self.showLoadingIndicator = show;
     },
     setLlmId(llmId: string) {
+      // A model switch invalidates any in-flight local turn: bump the epoch so a turn started
+      // under the previous model can't post its reply into the new model's conversation.
+      if (llmId !== self.llmId) self.turnEpoch++;
       self.llmId = llmId;
+    },
+    bumpTurnEpoch() {
+      self.turnEpoch++;
     },
     setThreadId(threadId: string) {
       self.threadId = threadId;
@@ -500,6 +511,12 @@ export const AssistantModel = types
         self.messageQueue.push(messageText);
         return;
       }
+      // Capture the turn epoch. Cancel / model switch / createThread bump self.turnEpoch; if it
+      // changes while this flow is suspended at a `yield`, the turn has been superseded and must
+      // become a no-op on resume (no reply, no error, no flag/queue writes). `self.turnEpoch` is
+      // always re-read live here because MST flows resume against the current model state.
+      const myEpoch = self.turnEpoch;
+      const isCurrent = () => self.turnEpoch === myEpoch;
       try {
         self.setShowLoadingIndicator(true);
         self.isLoadingResponse = true;
@@ -516,6 +533,7 @@ export const AssistantModel = types
         const { id } = JSON.parse(self.llmId);
         // Idempotent: resolves immediately if the engine for this model is already loaded.
         yield localLlmService.loadEngine(id);
+        if (!isCurrent()) return; // cancelled/superseded during the (possibly long) load
 
         // Transcript turns exclude the message just submitted (App adds it before dispatch),
         // so drop the trailing user message before mapping.
@@ -535,18 +553,32 @@ export const AssistantModel = types
           systemPromptParts: buildSystemPromptParts(self.dataContexts, self.graphs),
           turns: buildTranscriptTurns(priorMessages),
           userMessage: messageText,
+          // Stops the loop between generations once this turn is no longer current, so a
+          // cancelled turn can't keep issuing generations or tool calls.
+          isCancelled: () => !isCurrent(),
         });
+        // The turn may have been cancelled/superseded while runLocalTurn was running; if so,
+        // discard its (abandoned) result rather than posting a zombie reply.
+        if (!isCurrent()) return;
         self.addDavaiMsg(response);
       } catch (err) {
+        // A cancelled turn's rejection is expected fallout of interrupt(); don't surface an
+        // error zombie for it.
+        if (!isCurrent()) return;
         console.error("Local model turn failed:", err);
         self.addDbgMsg("Local model turn failed", formatJsonMessage(err));
         self.addDavaiMsg("Sorry, I ran into an error running the local model on that request.");
       } finally {
-        self.isLoadingResponse = false;
-        self.setShowLoadingIndicator(false);
-        if (self.messageQueue.length > 0) {
-          const nextMessage = self.messageQueue.shift();
-          if (nextMessage) handleMessageSubmitLocalLlm(nextMessage);
+        // Only tear down / drain if this is still the current turn. A stale turn resuming after
+        // cancel must NOT clear a fresh turn's isLoadingResponse or drain the queue (cancel
+        // already cleared the flags and the queue).
+        if (isCurrent()) {
+          self.isLoadingResponse = false;
+          self.setShowLoadingIndicator(false);
+          if (self.messageQueue.length > 0) {
+            const nextMessage = self.messageQueue.shift();
+            if (nextMessage) handleMessageSubmitLocalLlm(nextMessage);
+          }
         }
       }
     });
@@ -555,6 +587,9 @@ export const AssistantModel = types
       try {
         if (self.isLocalLlm) {
           localLlmService.interrupt();
+          // Invalidate the in-flight turn: its suspended flow will see the epoch change on
+          // resume and skip posting a reply / clearing the (soon-to-be-fresh) loading flag.
+          self.bumpTurnEpoch();
           self.isLoadingResponse = false;
           self.setShowLoadingIndicator(false);
           // Drop any queued follow-ups too: handleMessageSubmitLocalLlm drains its own queue
@@ -604,6 +639,9 @@ export const AssistantModel = types
           self.isCancelling = true;
           yield handleCancel();
         }
+        // Invalidate any in-flight LOCAL turn too (which has no currentMessageId to gate the
+        // branch above): a reset thread must not receive a prior turn's late reply.
+        self.bumpTurnEpoch();
         self.isLoadingResponse = false;
         self.isCancelling = false;
         self.threadId = nanoid();

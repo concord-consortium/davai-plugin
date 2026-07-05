@@ -313,4 +313,113 @@ describe("handleMessageSubmitLocalLlm (DAVAI-126)", () => {
     release("done"); // let the abandoned first turn settle so the test can exit cleanly
     await first.catch(() => undefined);
   });
+
+  it("posts no reply after cancel when the in-flight turn later settles (DAVAI-126 C1)", async () => {
+    // Cancel interrupts generation and clears the flags, but the flow suspended at
+    // `yield runLocalTurn` still resumes when the (now-abandoned) promise settles. Without an
+    // epoch guard, its addDavaiMsg would post a zombie reply AFTER "I've cancelled…", and its
+    // finally would clear isLoadingResponse mid-next-turn. The captured epoch must make the
+    // resumed flow a no-op.
+    const store = createLocalStore();
+    let release: (v: string) => void = () => undefined;
+    (runLocalTurn as jest.Mock).mockImplementationOnce(
+      () => new Promise((res) => { release = res; })
+    );
+
+    const first = store.handleMessageSubmitLocalLlm("describe the graph");
+    await Promise.resolve();
+    expect(store.isLoadingResponse).toBe(true);
+
+    await store.handleCancel();
+    expect(store.isLoadingResponse).toBe(false);
+
+    // The abandoned turn settles late (interrupt() typically yields partial/empty text).
+    release("A late zombie reply.");
+    await first;
+    await Promise.resolve();
+
+    const contents = store.transcriptStore.messages.map((m) => m.messageContent.content);
+    expect(contents).toContain("I've cancelled processing your message.");
+    // The zombie reply must NOT be posted, and no fallback/error zombie either.
+    expect(contents).not.toContain("A late zombie reply.");
+    expect(contents.filter((c) => c === "I've cancelled processing your message.")).toHaveLength(1);
+    // Flags stay cleared — the stale finally did not resurrect loading state.
+    expect(store.isLoadingResponse).toBe(false);
+    expect(store.showLoadingIndicator).toBe(false);
+  });
+
+  it("posts no error zombie when a cancelled turn later rejects (DAVAI-126 C1)", async () => {
+    const store = createLocalStore();
+    let reject: (e: Error) => void = () => undefined;
+    (runLocalTurn as jest.Mock).mockImplementationOnce(
+      () => new Promise((_res, rej) => { reject = rej; })
+    );
+
+    const first = store.handleMessageSubmitLocalLlm("describe the graph");
+    await Promise.resolve();
+    await store.handleCancel();
+
+    reject(new Error("interrupted mid-generation"));
+    await first.catch(() => undefined);
+    await Promise.resolve();
+
+    const contents = store.transcriptStore.messages.map((m) => m.messageContent.content);
+    expect(contents).not.toContain("Sorry, I ran into an error running the local model on that request.");
+    expect(store.isLoadingResponse).toBe(false);
+  });
+
+  it("does not let a cancelled turn's stale finally clobber a fresh turn's loading flag (DAVAI-126 C1)", async () => {
+    const store = createLocalStore();
+    let releaseFirst: (v: string) => void = () => undefined;
+    let releaseSecond: (v: string) => void = () => undefined;
+    (runLocalTurn as jest.Mock)
+      .mockImplementationOnce(() => new Promise((res) => { releaseFirst = res; }))
+      .mockImplementationOnce(() => new Promise((res) => { releaseSecond = res; }));
+
+    const first = store.handleMessageSubmitLocalLlm("first");
+    await Promise.resolve();
+    await store.handleCancel(); // epoch bumped; first turn abandoned
+
+    // A brand-new turn starts (input was re-enabled by cancel).
+    const second = store.handleMessageSubmitLocalLlm("second");
+    await Promise.resolve();
+    expect(store.isLoadingResponse).toBe(true); // second turn is live
+
+    // Now the abandoned FIRST turn finally settles. Its finally must NOT flip the live
+    // second turn's isLoadingResponse to false.
+    releaseFirst("late");
+    await first;
+    await Promise.resolve();
+    expect(store.isLoadingResponse).toBe(true); // still busy with the second turn
+
+    releaseSecond("second done");
+    await second;
+    await Promise.resolve();
+    expect(store.isLoadingResponse).toBe(false); // second turn cleared it normally
+    const contents = store.transcriptStore.messages.map((m) => m.messageContent.content);
+    expect(contents).toContain("second done");
+    expect(contents).not.toContain("late");
+  });
+
+  it("discards an in-flight local turn when the model is switched mid-turn (DAVAI-126 C1)", async () => {
+    // Switching models (setLlmId) bumps the same epoch as cancel, so a turn started under the
+    // old model must not post its reply into the new model's conversation.
+    const store = createLocalStore();
+    let release: (v: string) => void = () => undefined;
+    (runLocalTurn as jest.Mock).mockImplementationOnce(
+      () => new Promise((res) => { release = res; })
+    );
+
+    const first = store.handleMessageSubmitLocalLlm("describe the graph");
+    await Promise.resolve();
+
+    store.setLlmId(JSON.stringify({ id: "Qwen3-4B-q4f16_1-MLC", provider: "Local" }));
+
+    release("stale reply from the old model");
+    await first;
+    await Promise.resolve();
+
+    const contents = store.transcriptStore.messages.map((m) => m.messageContent.content);
+    expect(contents).not.toContain("stale reply from the old model");
+  });
 });
