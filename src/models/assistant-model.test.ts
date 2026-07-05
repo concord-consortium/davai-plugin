@@ -401,6 +401,45 @@ describe("handleMessageSubmitLocalLlm (DAVAI-126)", () => {
     expect(contents).not.toContain("late");
   });
 
+  it("tags status messages as kind 'announcement' so they stay out of model history (DAVAI-126 I2)", async () => {
+    const store = createLocalStore();
+
+    // WebGPU-unavailable notice.
+    (localLlmService.isWebGPUAvailable as jest.Mock).mockReturnValueOnce(false);
+    await store.handleMessageSubmitLocalLlm("hello");
+    const webgpuMsg = store.transcriptStore.messages.at(-1);
+    expect(webgpuMsg?.messageContent.kind).toBe("announcement");
+
+    // Local-turn error notice.
+    (localLlmService.isWebGPUAvailable as jest.Mock).mockReturnValue(true);
+    (runLocalTurn as jest.Mock).mockRejectedValueOnce(new Error("engine crashed"));
+    await store.handleMessageSubmitLocalLlm("again");
+    const errorMsg = store.transcriptStore.messages.at(-1);
+    expect(errorMsg?.messageContent.content).toMatch(/error/i);
+    expect(errorMsg?.messageContent.kind).toBe("announcement");
+
+    // A real reply is NOT an announcement (so it still feeds model history).
+    (runLocalTurn as jest.Mock).mockResolvedValueOnce("A real description.");
+    await store.handleMessageSubmitLocalLlm("once more");
+    const replyMsg = store.transcriptStore.messages.at(-1);
+    expect(replyMsg?.messageContent.content).toBe("A real description.");
+    expect(replyMsg?.messageContent.kind).toBeUndefined();
+  });
+
+  it("tags the local cancel confirmation as an announcement (DAVAI-126 I2)", async () => {
+    const store = createLocalStore();
+    let release: (v: string) => void = () => undefined;
+    (runLocalTurn as jest.Mock).mockImplementationOnce(() => new Promise((res) => { release = res; }));
+    const first = store.handleMessageSubmitLocalLlm("describe the graph");
+    await Promise.resolve();
+    await store.handleCancel();
+    const cancelMsg = store.transcriptStore.messages.at(-1);
+    expect(cancelMsg?.messageContent.content).toBe("I've cancelled processing your message.");
+    expect(cancelMsg?.messageContent.kind).toBe("announcement");
+    release("late");
+    await first.catch(() => undefined);
+  });
+
   it("discards an in-flight local turn when the model is switched mid-turn (DAVAI-126 C1)", async () => {
     // Switching models (setLlmId) bumps the same epoch as cancel, so a turn started under the
     // old model must not post its reply into the new model's conversation.

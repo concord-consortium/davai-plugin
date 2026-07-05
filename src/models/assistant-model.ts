@@ -1,7 +1,7 @@
 import { types, flow, Instance, getRoot, onSnapshot } from "mobx-state-tree";
 import { nanoid } from "nanoid";
 import { codapInterface } from "@concord-consortium/codap-plugin-api";
-import { DAVAI_SPEAKER, DEBUG_SPEAKER, STREAMING_STATUS } from "../constants";
+import { DAVAI_SPEAKER, DEBUG_SPEAKER, STREAMING_STATUS, WEBGPU_UNAVAILABLE_MESSAGE } from "../constants";
 import { appendedText } from "../utils/stream-utils";
 import { formatJsonMessage, formatElapsedTime } from "../utils/utils";
 import { getDataContexts, getGraphAttrData, getGraphByID, getTrimmedGraphDetails } from "../utils/codap-api-utils";
@@ -88,6 +88,12 @@ export const AssistantModel = types
   .actions((self) => ({
     addDavaiMsg(msg: string) {
       self.transcriptStore.addMessage(DAVAI_SPEAKER, { content: msg });
+    },
+    // Status chatter (WebGPU notice, cancel confirmation, local-model error) that should be
+    // shown/announced but kept out of the model conversation history (buildTranscriptTurns
+    // filters kind === "announcement").
+    addDavaiAnnouncement(msg: string) {
+      self.transcriptStore.addMessage(DAVAI_SPEAKER, { content: msg, kind: "announcement" });
     },
     addDbgMsg (description: string, content: any) {
       self.transcriptStore.addMessage(DEBUG_SPEAKER, { description, content });
@@ -523,10 +529,7 @@ export const AssistantModel = types
         self.responseStartTime = performance.now();
 
         if (!localLlmService.isWebGPUAvailable()) {
-          self.addDavaiMsg(
-            "The selected local model needs WebGPU, which this browser doesn't provide. " +
-            "Please use a recent Chrome or Edge, or select a server model instead."
-          );
+          self.addDavaiAnnouncement(WEBGPU_UNAVAILABLE_MESSAGE);
           return;
         }
 
@@ -567,7 +570,7 @@ export const AssistantModel = types
         if (!isCurrent()) return;
         console.error("Local model turn failed:", err);
         self.addDbgMsg("Local model turn failed", formatJsonMessage(err));
-        self.addDavaiMsg("Sorry, I ran into an error running the local model on that request.");
+        self.addDavaiAnnouncement("Sorry, I ran into an error running the local model on that request.");
       } finally {
         // Only tear down / drain if this is still the current turn. A stale turn resuming after
         // cancel must NOT clear a fresh turn's isLoadingResponse or drain the queue (cancel
@@ -599,7 +602,7 @@ export const AssistantModel = types
           // non-empty queue would otherwise fall through to that shared reactor and leak
           // onto the server path the moment isLoadingResponse flips to false.
           self.clearUserMessageQueue();
-          self.addDavaiMsg("I've cancelled processing your message.");
+          self.addDavaiAnnouncement("I've cancelled processing your message.");
           return;
         }
         if (self.currentMessageId && self.threadId) {

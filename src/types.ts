@@ -21,6 +21,10 @@ export type AppConfig = {
 export type MessageContent = {
   description?: string;
   content: string;
+  // "announcement" marks DAVAI-speaker status chatter (local-model load progress/ready/
+  // failure, WebGPU notices, cancel confirmations, local error messages) so it can be shown
+  // in the UI but excluded from the model conversation history (buildTranscriptTurns).
+  kind?: "announcement";
 };
 
 export type ChatMessage = {

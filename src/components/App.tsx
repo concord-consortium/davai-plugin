@@ -10,7 +10,7 @@ import { useShortcutsService } from "../contexts/shortcuts-service-context";
 import { useSpeechService } from "../contexts/speech-service-context";
 import { ChatInputComponent } from "./chat-input";
 import { ChatTranscriptComponent } from "./chat-transcript";
-import { DAVAI_SPEAKER, LOADING_NOTE, USER_SPEAKER, notificationsToIgnore } from "../constants";
+import { DAVAI_SPEAKER, LOADING_NOTE, USER_SPEAKER, WEBGPU_UNAVAILABLE_MESSAGE, notificationsToIgnore } from "../constants";
 import { UserOptions } from "./user-options";
 import { GraphSonification } from "./graph-sonification";
 import { playSound } from "../utils/utils";
@@ -164,17 +164,20 @@ export const App = observer(() => {
     if (entry?.provider === "Local") {
       if (!localLlmService.isWebGPUAvailable()) {
         transcriptStore.addMessage(DAVAI_SPEAKER, {
-          content: "The selected local model needs WebGPU, which this browser doesn't provide. Please use a recent Chrome or Edge, or select a server model.",
+          content: WEBGPU_UNAVAILABLE_MESSAGE,
+          kind: "announcement",
         });
         return;
       }
       const sizeNote = entry.id.includes("1.7B") ? "about 1.1 GB" : "about 2.3 GB";
       transcriptStore.addMessage(DAVAI_SPEAKER, {
         content: `Loading the local model ${entry.id}. The first load downloads ${sizeNote} and may take several minutes; afterward it is cached in the browser.`,
+        kind: "announcement",
       });
       localLlmService.loadEngine(entry.id).catch((err) => {
         transcriptStore.addMessage(DAVAI_SPEAKER, {
           content: `Sorry, the local model failed to load: ${err instanceof Error ? err.message : String(err)}`,
+          kind: "announcement",
         });
       });
     } else {
@@ -195,11 +198,11 @@ export const App = observer(() => {
         const milestone = Math.floor(s.progress * 4) * 25;
         if (milestone > lastMilestone && milestone < 100) {
           lastMilestone = milestone;
-          transcriptStore.addMessage(DAVAI_SPEAKER, { content: `Model loading: ${milestone}% complete.` });
+          transcriptStore.addMessage(DAVAI_SPEAKER, { content: `Model loading: ${milestone}% complete.`, kind: "announcement" });
         }
       } else if (s.status === "ready") {
         lastMilestone = 0;
-        transcriptStore.addMessage(DAVAI_SPEAKER, { content: "The local model is ready." });
+        transcriptStore.addMessage(DAVAI_SPEAKER, { content: "The local model is ready.", kind: "announcement" });
       }
     });
     return off;

@@ -9,6 +9,12 @@ export const STREAMING_STATUS = "streaming";
 
 export const GREETING = `Hello! I'm DAVAI, your Data Analysis through Voice and Artificial Intelligence partner.`;
 
+// Shown when a Local model is selected but the browser lacks WebGPU. Shared by App.tsx (engine
+// lifecycle) and assistant-model.ts (submit-time guard) so the two paths speak identically.
+export const WEBGPU_UNAVAILABLE_MESSAGE =
+  "The selected local model needs WebGPU, which this browser doesn't provide. " +
+  "Please use a recent Chrome or Edge, or select a server model instead.";
+
 // we don't send case-level information, only info about dataContexts, collections + attributes
 // documentation about CODAP Data Interactive API notifications: https://github.com/concord-consortium/codap/wiki/CODAP-Data-Interactive-Plugin-API#codap-initiated-actions
 export const notificationsToIgnore = [
