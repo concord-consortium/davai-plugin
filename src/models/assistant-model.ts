@@ -11,7 +11,7 @@ import { IToolCallData, IToolRequestError, IMessageResponse, ToolOutput } from "
 import { postMessage } from "../utils/llm-utils";
 import { localLlmService } from "../utils/local-llm/local-llm-service";
 import { runLocalTurn } from "../utils/local-llm/local-llm-loop";
-import { buildLocalSystemPrompt, buildTranscriptTurns } from "../utils/local-llm/local-llm-prompt";
+import { buildSystemPromptParts, buildTranscriptTurns } from "../utils/local-llm/local-llm-prompt";
 
 // A tool call the server could not prepare comes back as an error payload rather
 // than a normal CODAP request. This guard narrows the union so the normal path can
@@ -532,7 +532,7 @@ export const AssistantModel = types
               ? result
               : JSON.stringify({ note: "Image snapshots are not available for the local model." });
           },
-          systemPrompt: buildLocalSystemPrompt(self.dataContexts, self.graphs),
+          systemPromptParts: buildSystemPromptParts(self.dataContexts, self.graphs),
           turns: buildTranscriptTurns(priorMessages),
           userMessage: messageText,
         });

@@ -1,7 +1,16 @@
-import { runLocalTurn } from "./local-llm-loop";
+import { runLocalTurn, MAX_TOOL_RESULT_CHARS } from "./local-llm-loop";
+import { buildSystemPromptParts, trimToBudget } from "./local-llm-prompt";
 
-const sys = "SYSTEM";
-const baseArgs = { systemPrompt: sys, turns: [], userMessage: "describe the graph" };
+// A tiny parts set so assertions can compare against the exact assembled/trimmed system
+// message the loop builds. Real instructions/doc are imported by buildSystemPromptParts; the
+// loop trims them against the budget before each generation, so we compute the expectation the
+// same way the loop does.
+const systemPromptParts = buildSystemPromptParts({ ds: { collections: [] } }, [{ id: 1 }]);
+const baseArgs = { systemPromptParts, turns: [], userMessage: "describe the graph" };
+
+// The exact first-generation message array: trimToBudget(parts, [user]).
+const expectedFirstMessages = (userMessage: string) =>
+  trimToBudget(systemPromptParts, [{ role: "user" as const, content: userMessage }]);
 
 it("returns the final response directly when the first envelope is final", async () => {
   const generate = jest.fn().mockResolvedValue("{\"tool\":\"final\",\"response\":\"A dot plot.\"}");
@@ -9,11 +18,8 @@ it("returns the final response directly when the first envelope is final", async
   const out = await runLocalTurn({ ...baseArgs, generate, executeTool });
   expect(out).toBe("A dot plot.");
   expect(executeTool).not.toHaveBeenCalled();
-  // First call gets [system, user] exactly.
-  expect(generate.mock.calls[0][0]).toEqual([
-    { role: "system", content: sys },
-    { role: "user", content: "describe the graph" },
-  ]);
+  // First call gets the budgeted [system, user] exactly.
+  expect(generate.mock.calls[0][0]).toEqual(expectedFirstMessages("describe the graph"));
 });
 
 it("executes a tool call, feeds the result back, then returns the final", async () => {
@@ -74,4 +80,51 @@ it("returns a fallback message if the forced final is also unusable", async () =
   const executeTool = jest.fn().mockResolvedValue("{\"success\":true}");
   const out = await runLocalTurn({ ...baseArgs, generate, executeTool, maxRounds: 1 });
   expect(out).toMatch(/wasn't able to complete/i);
+});
+
+it("caps an oversized tool result before feeding it back (DAVAI-126 C2)", async () => {
+  const generate = jest.fn()
+    .mockResolvedValueOnce("{\"tool\":\"create_request\",\"action\":\"get\",\"resource\":\"componentList\"}")
+    .mockResolvedValueOnce("{\"tool\":\"final\",\"response\":\"done\"}");
+  // A 30 KB tool result — far over the 8 KB cap.
+  const hugeResult = "R".repeat(30_000);
+  const executeTool = jest.fn().mockResolvedValue(hugeResult);
+  await runLocalTurn({ ...baseArgs, generate, executeTool });
+
+  const secondMessages = generate.mock.calls[1][0];
+  const toolMsg = secondMessages[secondMessages.length - 1].content as string;
+  expect(toolMsg).toContain("[tool result truncated]");
+  // The raw 30 KB blob is not passed through intact.
+  expect(toolMsg).not.toContain("R".repeat(MAX_TOOL_RESULT_CHARS + 1));
+  // The capped tool-result body is at most the cap plus the short marker line.
+  const body = toolMsg.replace("Tool result: ", "");
+  expect(body.length).toBeLessThanOrEqual(MAX_TOOL_RESULT_CHARS + "\n[tool result truncated]".length);
+});
+
+it("stops between rounds when isCancelled becomes true, returning the fallback (DAVAI-126 C1)", async () => {
+  const toolEnvelope = "{\"tool\":\"create_request\",\"action\":\"get\",\"resource\":\"componentList\"}";
+  // Cancel flips true after the first generation (during tool execution). The loop must NOT
+  // run a second generation.
+  let cancelled = false;
+  const generate = jest.fn().mockResolvedValue(toolEnvelope);
+  const executeTool = jest.fn().mockImplementation(async () => {
+    cancelled = true;
+    return "{\"success\":true}";
+  });
+  const out = await runLocalTurn({
+    ...baseArgs, generate, executeTool, isCancelled: () => cancelled,
+  });
+  expect(out).toMatch(/wasn't able to complete/i);
+  // Exactly one generation ran; the cancel check before round 2 stopped the loop.
+  expect(generate).toHaveBeenCalledTimes(1);
+  expect(executeTool).toHaveBeenCalledTimes(1);
+});
+
+it("does not even run the first generation when already cancelled (DAVAI-126 C1)", async () => {
+  const generate = jest.fn().mockResolvedValue("{\"tool\":\"final\",\"response\":\"nope\"}");
+  const out = await runLocalTurn({
+    ...baseArgs, generate, executeTool: jest.fn(), isCancelled: () => true,
+  });
+  expect(out).toMatch(/wasn't able to complete/i);
+  expect(generate).not.toHaveBeenCalled();
 });
