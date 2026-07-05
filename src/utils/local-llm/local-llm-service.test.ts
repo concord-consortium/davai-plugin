@@ -87,3 +87,82 @@ it("sets error state when engine creation fails", async () => {
     expect.objectContaining({ status: "error", error: "boom" })
   );
 });
+
+// A distinct engine per CreateWebWorkerMLCEngine call, each with its own unload spy, so a
+// stale-load's engine can be told apart from the winner's.
+const makeEngine = () => ({
+  chat: { completions: { create: jest.fn() } },
+  interruptGenerate: jest.fn(),
+  unload: jest.fn().mockResolvedValue(undefined),
+});
+
+// Wait until the engine factory has been called `n` times, i.e. doLoad has cleared the dynamic
+// import() and is actually awaiting engine creation. Flushing a fixed number of microtasks is
+// brittle (the mocked import() resolves over several ticks); poll instead.
+const waitForCreateCalls = async (n: number) => {
+  for (let i = 0; i < 100 && mockCreateWebWorkerMLCEngine.mock.calls.length < n; i++) {
+    await Promise.resolve();
+  }
+};
+
+it("keeps only the second model's engine when models are switched mid-load (DAVAI-126 I1)", async () => {
+  const engineA = makeEngine();
+  const engineB = makeEngine();
+  let resolveA: (e: any) => void = () => undefined;
+  let resolveB: (e: any) => void = () => undefined;
+  mockCreateWebWorkerMLCEngine
+    .mockImplementationOnce(() => new Promise((res) => { resolveA = res; }))
+    .mockImplementationOnce(() => new Promise((res) => { resolveB = res; }));
+
+  const states: string[] = [];
+  const off = localLlmService.onLoadStateChange((s) => states.push(`${s.status}:${s.modelId ?? ""}`));
+
+  const loadA = localLlmService.loadEngine("Qwen3-1.7B-q4f16_1-MLC");
+  await waitForCreateCalls(1); // A is past the dynamic import, awaiting its engine
+  // While A is still downloading (engine null), select B. This must start a second load, not
+  // reuse A's in-flight promise (different model id).
+  const loadB = localLlmService.loadEngine("Qwen3-4B-q4f16_1-MLC");
+  await waitForCreateCalls(2); // B is now awaiting its engine too
+
+  // B finishes first and becomes the owner.
+  resolveB(engineB);
+  await loadB;
+  // A finishes late: it is stale, so its engine must be unloaded and it must NOT overwrite the
+  // ready state with the old model.
+  resolveA(engineA);
+  await loadA.catch(() => undefined);
+  await Promise.resolve();
+
+  expect(engineA.unload).toHaveBeenCalled();      // loser cleaned up (no GB leak)
+  expect(engineB.unload).not.toHaveBeenCalled();  // winner still resident
+  const finalState = localLlmService.getLoadState();
+  expect(finalState.status).toBe("ready");
+  expect(finalState.modelId).toBe("Qwen3-4B-q4f16_1-MLC");
+  // No "ready" announcement for the stale first model.
+  expect(states).toContain("ready:Qwen3-4B-q4f16_1-MLC");
+  expect(states).not.toContain("ready:Qwen3-1.7B-q4f16_1-MLC");
+  off();
+});
+
+it("does not announce ready when unloaded mid-load (DAVAI-126 I1)", async () => {
+  const engineA = makeEngine();
+  let resolveA: (e: any) => void = () => undefined;
+  mockCreateWebWorkerMLCEngine.mockImplementationOnce(() => new Promise((res) => { resolveA = res; }));
+
+  const states: string[] = [];
+  const off = localLlmService.onLoadStateChange((s) => states.push(s.status));
+
+  const loadA = localLlmService.loadEngine("Qwen3-1.7B-q4f16_1-MLC");
+  await waitForCreateCalls(1); // A is past the dynamic import, awaiting its engine
+  // User switches away to a server model → unload() while A is still downloading.
+  await localLlmService.unload();
+
+  resolveA(engineA);
+  await loadA.catch(() => undefined);
+  await Promise.resolve();
+
+  expect(engineA.unload).toHaveBeenCalled();        // the late engine is torn down
+  expect(states).not.toContain("ready");            // never announced ready
+  expect(localLlmService.getLoadState().status).toBe("idle");
+  off();
+});

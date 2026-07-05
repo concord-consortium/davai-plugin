@@ -313,6 +313,32 @@ describe("test load app", () => {
       expect.objectContaining({ content: expect.stringMatching(/local model is ready/) }));
   });
 
+  it("re-announces milestones for a second model loaded after the first (DAVAI-126 I1)", () => {
+    mockAppConfig.llmId = JSON.stringify({ id: "Qwen3-1.7B-q4f16_1-MLC", provider: "Local" });
+    mockAppConfig.llmList = [
+      { id: "mock", provider: "Mock", effortLevels: [] },
+      { id: "Qwen3-1.7B-q4f16_1-MLC", provider: "Local", effortLevels: [] },
+    ];
+
+    renderApp();
+    expect(loadStateChangeCallback).toBeDefined();
+    const addMessage = mockAssistantStore.transcriptStore.addMessage as jest.Mock;
+    const drive = (state: Parameters<NonNullable<typeof loadStateChangeCallback>>[0]) =>
+      act(() => loadStateChangeCallback!(state));
+
+    const before = addMessage.mock.calls.length;
+    // First model climbs past 75%.
+    drive({ status: "loading", modelId: "Qwen3-1.7B-q4f16_1-MLC", progress: 0.80 });
+    const afterFirst = addMessage.mock.calls.length;
+    expect(afterFirst).toBeGreaterThan(before); // at least the 25/50/75 announcements
+
+    // Switch to a second model: progress restarts at a low value. Without a per-model reset,
+    // the stale lastMilestone (75) would suppress the second model's 25% announcement.
+    drive({ status: "loading", modelId: "Qwen3-4B-q4f16_1-MLC", progress: 0.30 });
+    expect(addMessage).toHaveBeenLastCalledWith(DAVAI_SPEAKER,
+      expect.objectContaining({ content: expect.stringMatching(/25% complete/) }));
+  });
+
   it("unsubscribes from load-state changes on unmount (DAVAI-126)", () => {
     const { unmount } = renderApp();
 

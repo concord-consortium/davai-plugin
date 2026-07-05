@@ -193,8 +193,16 @@ export const App = observer(() => {
     // Announce coarse load milestones (25% steps) and readiness through the transcript so
     // the aria-live path reads them; per-percent updates would spam the screen reader.
     let lastMilestone = 0;
+    // Track which model the milestone counter belongs to. Switching models restarts progress
+    // at 0 for the new model, but a stale lastMilestone (e.g. 75 from the previous model) would
+    // otherwise suppress the new model's 25/50/75 announcements. Reset when the model changes.
+    let milestoneModelId: string | undefined;
     const off = localLlmService.onLoadStateChange((s) => {
       if (s.status === "loading" && typeof s.progress === "number") {
+        if (s.modelId !== milestoneModelId) {
+          milestoneModelId = s.modelId;
+          lastMilestone = 0;
+        }
         const milestone = Math.floor(s.progress * 4) * 25;
         if (milestone > lastMilestone && milestone < 100) {
           lastMilestone = milestone;
@@ -202,6 +210,7 @@ export const App = observer(() => {
         }
       } else if (s.status === "ready") {
         lastMilestone = 0;
+        milestoneModelId = undefined;
         transcriptStore.addMessage(DAVAI_SPEAKER, { content: "The local model is ready.", kind: "announcement" });
       }
     });
