@@ -1,7 +1,7 @@
 import { types, flow, Instance, getRoot, onSnapshot } from "mobx-state-tree";
 import { nanoid } from "nanoid";
 import { codapInterface } from "@concord-consortium/codap-plugin-api";
-import { DAVAI_SPEAKER, DEBUG_SPEAKER, STREAMING_STATUS, WEBGPU_UNAVAILABLE_MESSAGE } from "../constants";
+import { DAVAI_SPEAKER, DEBUG_SPEAKER, STREAMING_STATUS, USER_SPEAKER, WEBGPU_UNAVAILABLE_MESSAGE } from "../constants";
 import { appendedText } from "../utils/stream-utils";
 import { formatJsonMessage, formatElapsedTime } from "../utils/utils";
 import { getDataContexts, getGraphAttrData, getGraphByID, getTrimmedGraphDetails } from "../utils/codap-api-utils";
@@ -538,9 +538,18 @@ export const AssistantModel = types
         yield localLlmService.loadEngine(id);
         if (!isCurrent()) return; // cancelled/superseded during the (possibly long) load
 
-        // Transcript turns exclude the message just submitted (App adds it before dispatch),
-        // so drop the trailing user message before mapping.
-        const priorMessages = self.transcriptStore.messages.slice(0, -1);
+        // Transcript turns are the history BEFORE this message. On a direct submit, App added
+        // the user row immediately before dispatch, so the trailing row IS this message and must
+        // be excluded. On a finally-drained queue turn there is no such fresh user row (the last
+        // row is the prior turn's DAVAI reply), so dropping it blindly would delete that answer
+        // and duplicate the queued text. Only drop the trailing row when it is exactly the
+        // just-submitted user message.
+        const msgs = self.transcriptStore.messages;
+        const last = msgs[msgs.length - 1];
+        const priorMessages =
+          last && last.speaker === USER_SPEAKER && last.messageContent.content === messageText
+            ? msgs.slice(0, -1)
+            : msgs.slice();
         const response: string = yield runLocalTurn({
           generate: (messages) => localLlmService.generate(messages, { jsonMode: true }),
           executeTool: async (data: IToolCallData) => {

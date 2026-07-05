@@ -1,7 +1,7 @@
 import { AssistantModel } from "./assistant-model";
 import { ChatTranscriptModel } from "./chat-transcript-model";
 import { postMessage } from "../utils/llm-utils";
-import { DAVAI_SPEAKER } from "../constants";
+import { DAVAI_SPEAKER, USER_SPEAKER } from "../constants";
 
 jest.mock("../utils/llm-utils", () => ({
   postMessage: jest.fn(),
@@ -399,6 +399,48 @@ describe("handleMessageSubmitLocalLlm (DAVAI-126)", () => {
     const contents = store.transcriptStore.messages.map((m) => m.messageContent.content);
     expect(contents).toContain("second done");
     expect(contents).not.toContain("late");
+  });
+
+  it("assembles a drained queue turn without dropping the prior reply or duplicating the queued text (DAVAI-126 I3)", async () => {
+    // Reproduce the transcript state at the moment a queued turn is drained: the queued user
+    // message was added by App at submit time, and the PRIOR turn's DAVAI reply is now the last
+    // row. slice(0,-1) would wrongly drop that reply and leave the queued text duplicated (in
+    // turns AND as userMessage).
+    const store = createLocalStore();
+    store.transcriptStore.addMessage(USER_SPEAKER, { content: "first question" });
+    store.transcriptStore.addMessage(USER_SPEAKER, { content: "second question" }); // queued at submit
+    store.addDavaiMsg("Answer to the first question."); // prior turn's reply, now the last row
+
+    (runLocalTurn as jest.Mock).mockResolvedValueOnce("Answer to the second question.");
+    // Drain "second question" the way the finally block does (no App-side user-row insertion).
+    await store.handleMessageSubmitLocalLlm("second question");
+
+    const args = (runLocalTurn as jest.Mock).mock.calls.at(-1)![0];
+    const turnContents = args.turns.map((t: any) => t.content);
+    // The prior DAVAI reply is preserved in history, exactly once.
+    expect(turnContents).toContain("Answer to the first question.");
+    expect(turnContents.filter((c: string) => c === "Answer to the first question.")).toHaveLength(1);
+    // The queued text is the userMessage, and does NOT also appear duplicated in the turns.
+    expect(args.userMessage).toBe("second question");
+    expect(turnContents.filter((c: string) => c === "second question")).toHaveLength(1);
+  });
+
+  it("still drops the trailing user row for a direct submit (DAVAI-126 I3)", async () => {
+    // Direct submit path: App adds the user row immediately before dispatch, so the last row IS
+    // the just-submitted message and must be excluded from the mapped turns.
+    const store = createLocalStore();
+    store.transcriptStore.addMessage(DAVAI_SPEAKER, { content: "Earlier reply." });
+    store.transcriptStore.addMessage(USER_SPEAKER, { content: "describe the graph" }); // App-added
+
+    (runLocalTurn as jest.Mock).mockResolvedValueOnce("A description.");
+    await store.handleMessageSubmitLocalLlm("describe the graph");
+
+    const args = (runLocalTurn as jest.Mock).mock.calls.at(-1)![0];
+    const turnContents = args.turns.map((t: any) => t.content);
+    expect(turnContents).toContain("Earlier reply.");
+    // The just-submitted user row is not duplicated into the turns.
+    expect(turnContents).not.toContain("describe the graph");
+    expect(args.userMessage).toBe("describe the graph");
   });
 
   it("tags status messages as kind 'announcement' so they stay out of model history (DAVAI-126 I2)", async () => {
