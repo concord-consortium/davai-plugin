@@ -1,6 +1,6 @@
 import "openai/shims/node";
 import React from "react";
-import { fireEvent, render, screen } from "@testing-library/react";
+import { act, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { initializePlugin, selectSelf } from "@concord-consortium/codap-plugin-api";
 import { App } from "./App";
 import { mockAppConfig } from "../test-utils/mock-app-config";
@@ -12,7 +12,13 @@ import { ISpeechService } from "../services/speech-service";
 import { mockTransportManager } from "../test-utils/mock-transport-manager";
 import { setupMockSpeechSynthesis, cleanupMockSpeechSynthesis } from "../test-utils/mock-speech-synthesis";
 import { DAVAI_SPEAKER } from "../constants";
-import { localLlmService } from "../utils/local-llm/local-llm-service";
+import { localLlmService, ILocalLlmLoadState } from "../utils/local-llm/local-llm-service";
+
+// Captures the callback the App component registers via onLoadStateChange, so tests can
+// drive load-progress/ready notifications directly, plus a dedicated unsubscribe jest.fn()
+// (rather than an inline () => undefined) so unmount cleanup can be asserted on.
+let loadStateChangeCallback: ((s: ILocalLlmLoadState) => void) | undefined;
+const mockUnsubscribeLoadStateChange = jest.fn();
 
 jest.mock("../utils/local-llm/local-llm-service", () => ({
   localLlmService: {
@@ -22,7 +28,7 @@ jest.mock("../utils/local-llm/local-llm-service", () => ({
     interrupt: jest.fn(),
     unload: jest.fn().mockResolvedValue(undefined),
     getLoadState: jest.fn(() => ({ status: "ready" })),
-    onLoadStateChange: jest.fn(() => () => undefined),
+    onLoadStateChange: jest.fn(),
   },
 }));
 
@@ -121,6 +127,14 @@ describe("test load app", () => {
       { id: "gemini-2.0-flash", provider: "Google", effortLevels: ["low", "medium", "high"], defaultEffort: "medium" },
       { id: "gpt-4o-mini", provider: "OpenAI", effortLevels: [] }
     ];
+    // Reset the WebGPU-availability default (a test can override it to false) and capture
+    // the milestone-effect's callback whenever the App (re-)registers via onLoadStateChange.
+    (localLlmService.isWebGPUAvailable as jest.Mock).mockReturnValue(true);
+    loadStateChangeCallback = undefined;
+    (localLlmService.onLoadStateChange as jest.Mock).mockImplementation((cb: (s: ILocalLlmLoadState) => void) => {
+      loadStateChangeCallback = cb;
+      return mockUnsubscribeLoadStateChange;
+    });
   });
 
   afterEach(() => {
@@ -240,5 +254,134 @@ describe("test load app", () => {
     renderApp(); // default (non-Local) config
 
     expect(localLlmService.unload).toHaveBeenCalled();
+  });
+
+  it("announces only coarse 25% milestones and a single readiness message, never per-percent (DAVAI-126)", () => {
+    mockAppConfig.llmId = JSON.stringify({ id: "Qwen3-1.7B-q4f16_1-MLC", provider: "Local" });
+    mockAppConfig.llmList = [
+      { id: "mock", provider: "Mock", effortLevels: [] },
+      { id: "Qwen3-1.7B-q4f16_1-MLC", provider: "Local", effortLevels: [] },
+    ];
+
+    renderApp();
+
+    // The App registers its milestone-subscription callback on mount; capture it via the
+    // mocked onLoadStateChange so this test can drive load-progress notifications directly.
+    expect(loadStateChangeCallback).toBeDefined();
+    const addMessage = mockAssistantStore.transcriptStore.addMessage as jest.Mock;
+    // The "loading" start message (and possibly a WebGPU/failure message) from the llmId
+    // effect fires before any progress events; only milestone-effect calls matter below.
+    const callsBeforeProgress = addMessage.mock.calls.length;
+
+    const drive = (state: Parameters<NonNullable<typeof loadStateChangeCallback>>[0]) =>
+      act(() => loadStateChangeCallback!(state));
+
+    // Fine-grained progress within the first quartile: no milestone message yet.
+    drive({ status: "loading", progress: 0.01 });
+    drive({ status: "loading", progress: 0.10 });
+    drive({ status: "loading", progress: 0.24 });
+    expect(addMessage.mock.calls.length).toBe(callsBeforeProgress);
+
+    // Crossing 25%: exactly one "25% complete" message, even though two ticks land in
+    // the same quartile (0.26 then 0.30) — proving 25%-step coarseness, not per-tick spam.
+    drive({ status: "loading", progress: 0.26 });
+    drive({ status: "loading", progress: 0.30 });
+    expect(addMessage).toHaveBeenCalledTimes(callsBeforeProgress + 1);
+    expect(addMessage).toHaveBeenNthCalledWith(callsBeforeProgress + 1, DAVAI_SPEAKER,
+      expect.objectContaining({ content: expect.stringMatching(/25% complete/) }));
+
+    // Crossing 50%: exactly one more message.
+    drive({ status: "loading", progress: 0.55 });
+    expect(addMessage).toHaveBeenCalledTimes(callsBeforeProgress + 2);
+    expect(addMessage).toHaveBeenNthCalledWith(callsBeforeProgress + 2, DAVAI_SPEAKER,
+      expect.objectContaining({ content: expect.stringMatching(/50% complete/) }));
+
+    // Crossing 75%: exactly one more message.
+    drive({ status: "loading", progress: 0.80 });
+    expect(addMessage).toHaveBeenCalledTimes(callsBeforeProgress + 3);
+    expect(addMessage).toHaveBeenNthCalledWith(callsBeforeProgress + 3, DAVAI_SPEAKER,
+      expect.objectContaining({ content: expect.stringMatching(/75% complete/) }));
+
+    // Still within the same (last) quartile: no new message.
+    drive({ status: "loading", progress: 0.99 });
+    expect(addMessage).toHaveBeenCalledTimes(callsBeforeProgress + 3);
+
+    // Readiness: exactly one "ready" message, distinct from a 100% progress announcement.
+    drive({ status: "ready" });
+    expect(addMessage).toHaveBeenCalledTimes(callsBeforeProgress + 4);
+    expect(addMessage).toHaveBeenNthCalledWith(callsBeforeProgress + 4, DAVAI_SPEAKER,
+      expect.objectContaining({ content: expect.stringMatching(/local model is ready/) }));
+  });
+
+  it("unsubscribes from load-state changes on unmount (DAVAI-126)", () => {
+    const { unmount } = renderApp();
+
+    expect(loadStateChangeCallback).toBeDefined();
+    // Establish a clean baseline rather than asserting zero calls: RTL's own auto-cleanup
+    // afterEach (registered at import time, outside this file's describe block) runs after
+    // this describe's afterEach in Jest's hook order, so a previous test's renderApp() can
+    // still be unmounted — and its real unsubscribe invoked — after jest.clearAllMocks().
+    mockUnsubscribeLoadStateChange.mockClear();
+
+    unmount();
+
+    expect(mockUnsubscribeLoadStateChange).toHaveBeenCalledTimes(1);
+  });
+
+  it("announces the expected download size for the 1.7B local model (DAVAI-126)", () => {
+    mockAppConfig.llmId = JSON.stringify({ id: "Qwen3-1.7B-q4f16_1-MLC", provider: "Local" });
+    mockAppConfig.llmList = [
+      { id: "mock", provider: "Mock", effortLevels: [] },
+      { id: "Qwen3-1.7B-q4f16_1-MLC", provider: "Local", effortLevels: [] },
+    ];
+
+    renderApp();
+
+    expect(mockAssistantStore.transcriptStore.addMessage).toHaveBeenCalledWith(DAVAI_SPEAKER,
+      expect.objectContaining({ content: expect.stringMatching(/about 1\.1 GB/) }));
+  });
+
+  it("announces the expected download size for the 4B local model (DAVAI-126)", () => {
+    mockAppConfig.llmId = JSON.stringify({ id: "Qwen3-4B-q4f16_1-MLC", provider: "Local" });
+    mockAppConfig.llmList = [
+      { id: "mock", provider: "Mock", effortLevels: [] },
+      { id: "Qwen3-4B-q4f16_1-MLC", provider: "Local", effortLevels: [] },
+    ];
+
+    renderApp();
+
+    expect(mockAssistantStore.transcriptStore.addMessage).toHaveBeenCalledWith(DAVAI_SPEAKER,
+      expect.objectContaining({ content: expect.stringMatching(/about 2\.3 GB/) }));
+  });
+
+  it("explains the WebGPU requirement and skips loadEngine when WebGPU is unavailable (DAVAI-126)", () => {
+    (localLlmService.isWebGPUAvailable as jest.Mock).mockReturnValue(false);
+    mockAppConfig.llmId = JSON.stringify({ id: "Qwen3-1.7B-q4f16_1-MLC", provider: "Local" });
+    mockAppConfig.llmList = [
+      { id: "mock", provider: "Mock", effortLevels: [] },
+      { id: "Qwen3-1.7B-q4f16_1-MLC", provider: "Local", effortLevels: [] },
+    ];
+
+    renderApp();
+
+    expect(mockAssistantStore.transcriptStore.addMessage).toHaveBeenCalledWith(DAVAI_SPEAKER,
+      expect.objectContaining({ content: expect.stringMatching(/WebGPU/) }));
+    expect(localLlmService.loadEngine).not.toHaveBeenCalled();
+  });
+
+  it("announces a failure message when the local engine fails to load (DAVAI-126)", async () => {
+    (localLlmService.loadEngine as jest.Mock).mockRejectedValueOnce(new Error("download failed"));
+    mockAppConfig.llmId = JSON.stringify({ id: "Qwen3-1.7B-q4f16_1-MLC", provider: "Local" });
+    mockAppConfig.llmList = [
+      { id: "mock", provider: "Mock", effortLevels: [] },
+      { id: "Qwen3-1.7B-q4f16_1-MLC", provider: "Local", effortLevels: [] },
+    ];
+
+    renderApp();
+
+    await waitFor(() => {
+      expect(mockAssistantStore.transcriptStore.addMessage).toHaveBeenCalledWith(DAVAI_SPEAKER,
+        expect.objectContaining({ content: expect.stringMatching(/failed to load.*download failed/) }));
+    });
   });
 });

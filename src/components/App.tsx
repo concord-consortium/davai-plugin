@@ -180,6 +180,10 @@ export const App = observer(() => {
     } else {
       localLlmService.unload();
     }
+  // appConfig.llmList and transcriptStore are intentionally omitted: llmList only changes
+  // in lockstep with llmId in this codebase, and transcriptStore is a stable reference off
+  // the root store — re-running this effect for either would re-trigger engine load/unload.
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [appConfig.llmId, handleInitializeAssistant]);
 
   useEffect(() => {
