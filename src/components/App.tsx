@@ -181,7 +181,8 @@ export const App = observer(() => {
         });
       });
     } else {
-      localLlmService.unload();
+      // Fire-and-forget: surface an unexpected unload rejection instead of an unhandled promise.
+      localLlmService.unload().catch(console.error);
     }
   // appConfig.llmList and transcriptStore are intentionally omitted: llmList only changes
   // in lockstep with llmId in this codebase, and transcriptStore is a stable reference off

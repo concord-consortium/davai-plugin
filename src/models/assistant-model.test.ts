@@ -20,9 +20,14 @@ jest.mock("../utils/local-llm/local-llm-service", () => ({
 jest.mock("../utils/local-llm/local-llm-loop", () => ({
   runLocalTurn: jest.fn().mockResolvedValue("A local description."),
 }));
+jest.mock("@concord-consortium/codap-plugin-api", () => ({
+  ...jest.requireActual("@concord-consortium/codap-plugin-api"),
+  codapInterface: { sendRequest: jest.fn() },
+}));
 
 import { localLlmService } from "../utils/local-llm/local-llm-service";
 import { runLocalTurn } from "../utils/local-llm/local-llm-loop";
+import { codapInterface } from "@concord-consortium/codap-plugin-api";
 
 const mockedPostMessage = postMessage as jest.MockedFunction<typeof postMessage>;
 
@@ -399,6 +404,29 @@ describe("handleMessageSubmitLocalLlm (DAVAI-126)", () => {
     const contents = store.transcriptStore.messages.map((m) => m.messageContent.content);
     expect(contents).toContain("second done");
     expect(contents).not.toContain("late");
+  });
+
+  it("handles a local create_request tool call with no 'values' without throwing (DAVAI-126 minor)", async () => {
+    // The local envelope parser passes through an omitted "values", so processToolCall's
+    // graph-create check (values.type === "graph") must not dereference an undefined values.
+    const store = createLocalStore();
+    (codapInterface.sendRequest as jest.Mock).mockResolvedValueOnce({ success: true, values: {} });
+    let toolResult: string | undefined;
+    (runLocalTurn as jest.Mock).mockImplementationOnce(async (args: any) => {
+      toolResult = await args.executeTool({
+        type: "create_request",
+        tool_call_id: "local-0",
+        request: { action: "create", resource: "component" }, // no `values`
+      });
+      return "Created.";
+    });
+
+    await store.handleMessageSubmitLocalLlm("make a component");
+
+    // The tool executed and returned the CODAP response as a string (graph-create branch was
+    // skipped because values is undefined) — no TypeError bubbled up.
+    expect(toolResult).toBe(JSON.stringify({ success: true, values: {} }));
+    expect(store.transcriptStore.messages.at(-1)?.messageContent.content).toBe("Created.");
   });
 
   it("assembles a drained queue turn without dropping the prior reply or duplicating the queued text (DAVAI-126 I3)", async () => {

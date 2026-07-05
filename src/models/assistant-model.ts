@@ -240,8 +240,9 @@ export const AssistantModel = types
           }
 
           // When the request is to create a graph component, we need to update the sonification
-          // store after the run.
-          if (action === "create" && resource === "component" && values.type === "graph") {
+          // store after the run. `values` may be undefined on the local path (the envelope
+          // parser passes through an omitted "values"), so guard the property access.
+          if (action === "create" && resource === "component" && values?.type === "graph") {
             const root = getRoot(self) as any;
             root.sonificationStore.setGraphs({ selectNewest: true });
           }
@@ -526,7 +527,8 @@ export const AssistantModel = types
       try {
         self.setShowLoadingIndicator(true);
         self.isLoadingResponse = true;
-        self.responseStartTime = performance.now();
+        // No responseStartTime is set here: the local path reports its reply via addDavaiMsg and
+        // never runs the timingDebug (Begin/Completed response time) path that reads it.
 
         if (!localLlmService.isWebGPUAvailable()) {
           self.addDavaiAnnouncement(WEBGPU_UNAVAILABLE_MESSAGE);
