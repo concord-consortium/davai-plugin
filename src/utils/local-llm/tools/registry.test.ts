@@ -63,3 +63,14 @@ it("buildToolDocs includes every registered tool's name, description, and args e
     expect(docs).toContain(t.argsExample);
   }
 });
+
+import { initializeLocalTools } from "./index";
+
+it("initializeLocalTools registers all 8 tools with docs for each", () => {
+  initializeLocalTools();
+  const names = getRegisteredTools().map((t) => t.name).sort();
+  expect(names).toEqual([
+    "create_adornment", "create_attribute", "create_graph", "get_case_values",
+    "get_graph_info", "get_stats", "select_cases", "sonify_graph",
+  ]);
+});
