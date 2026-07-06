@@ -171,7 +171,7 @@ export const App = observer(() => {
       }
       const sizeNote = entry.id.includes("1.7B") ? "about 1.1 GB" : "about 2.3 GB";
       transcriptStore.addMessage(DAVAI_SPEAKER, {
-        content: `Loading the local model ${entry.id}. The first load downloads ${sizeNote} and may take several minutes; afterward it is cached in the browser.`,
+        content: `Model download started for ${entry.id}. The first download is ${sizeNote} and may take several minutes; afterward the model is cached in the browser.`,
         kind: "announcement",
       });
       localLlmService.loadEngine(entry.id).catch((err) => {
@@ -198,11 +198,24 @@ export const App = observer(() => {
     // at 0 for the new model, but a stale lastMilestone (e.g. 75 from the previous model) would
     // otherwise suppress the new model's 25/50/75 announcements. Reset when the model changes.
     let milestoneModelId: string | undefined;
+    // Whether the one-time "download started" progress announcement has fired for the current
+    // model's load. The first 25% milestone can take minutes on a slow connection, so this gives
+    // feedback within seconds of the very first progress tick instead. Reset alongside the
+    // milestone tracker (same per-modelId reset above) so a second load announces again.
+    let announcedFirstProgress = false;
     const off = localLlmService.onLoadStateChange((s) => {
       if (s.status === "loading" && typeof s.progress === "number") {
         if (s.modelId !== milestoneModelId) {
           milestoneModelId = s.modelId;
           lastMilestone = 0;
+          announcedFirstProgress = false;
+        }
+        if (!announcedFirstProgress && s.progress > 0) {
+          announcedFirstProgress = true;
+          transcriptStore.addMessage(DAVAI_SPEAKER, {
+            content: "Downloading the local model — progress will be announced at 25% steps.",
+            kind: "announcement",
+          });
         }
         const milestone = Math.floor(s.progress * 4) * 25;
         if (milestone > lastMilestone && milestone < 100) {
@@ -212,6 +225,7 @@ export const App = observer(() => {
       } else if (s.status === "ready") {
         lastMilestone = 0;
         milestoneModelId = undefined;
+        announcedFirstProgress = false;
         transcriptStore.addMessage(DAVAI_SPEAKER, { content: "The local model is ready.", kind: "announcement" });
       }
     });

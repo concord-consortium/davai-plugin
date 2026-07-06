@@ -276,40 +276,50 @@ describe("test load app", () => {
     const drive = (state: Parameters<NonNullable<typeof loadStateChangeCallback>>[0]) =>
       act(() => loadStateChangeCallback!(state));
 
-    // Fine-grained progress within the first quartile: no milestone message yet.
+    // The very first progress event of a load (however small) announces once immediately, so
+    // there is feedback within seconds rather than waiting minutes for the first 25% milestone.
     drive({ status: "loading", progress: 0.01 });
+    expect(addMessage).toHaveBeenCalledTimes(callsBeforeProgress + 1);
+    expect(addMessage).toHaveBeenNthCalledWith(callsBeforeProgress + 1, DAVAI_SPEAKER,
+      expect.objectContaining({
+        content: expect.stringMatching(/Downloading the local model/),
+        kind: "announcement",
+      }));
+
+    // Further fine-grained progress within the first quartile: no additional message yet
+    // (neither a repeat first-progress announcement nor a milestone).
     drive({ status: "loading", progress: 0.10 });
     drive({ status: "loading", progress: 0.24 });
-    expect(addMessage.mock.calls.length).toBe(callsBeforeProgress);
+    expect(addMessage).toHaveBeenCalledTimes(callsBeforeProgress + 1);
 
     // Crossing 25%: exactly one "25% complete" message, even though two ticks land in
     // the same quartile (0.26 then 0.30) — proving 25%-step coarseness, not per-tick spam.
     drive({ status: "loading", progress: 0.26 });
     drive({ status: "loading", progress: 0.30 });
-    expect(addMessage).toHaveBeenCalledTimes(callsBeforeProgress + 1);
-    expect(addMessage).toHaveBeenNthCalledWith(callsBeforeProgress + 1, DAVAI_SPEAKER,
+    expect(addMessage).toHaveBeenCalledTimes(callsBeforeProgress + 2);
+    expect(addMessage).toHaveBeenNthCalledWith(callsBeforeProgress + 2, DAVAI_SPEAKER,
       expect.objectContaining({ content: expect.stringMatching(/25% complete/) }));
 
     // Crossing 50%: exactly one more message.
     drive({ status: "loading", progress: 0.55 });
-    expect(addMessage).toHaveBeenCalledTimes(callsBeforeProgress + 2);
-    expect(addMessage).toHaveBeenNthCalledWith(callsBeforeProgress + 2, DAVAI_SPEAKER,
+    expect(addMessage).toHaveBeenCalledTimes(callsBeforeProgress + 3);
+    expect(addMessage).toHaveBeenNthCalledWith(callsBeforeProgress + 3, DAVAI_SPEAKER,
       expect.objectContaining({ content: expect.stringMatching(/50% complete/) }));
 
     // Crossing 75%: exactly one more message.
     drive({ status: "loading", progress: 0.80 });
-    expect(addMessage).toHaveBeenCalledTimes(callsBeforeProgress + 3);
-    expect(addMessage).toHaveBeenNthCalledWith(callsBeforeProgress + 3, DAVAI_SPEAKER,
+    expect(addMessage).toHaveBeenCalledTimes(callsBeforeProgress + 4);
+    expect(addMessage).toHaveBeenNthCalledWith(callsBeforeProgress + 4, DAVAI_SPEAKER,
       expect.objectContaining({ content: expect.stringMatching(/75% complete/) }));
 
     // Still within the same (last) quartile: no new message.
     drive({ status: "loading", progress: 0.99 });
-    expect(addMessage).toHaveBeenCalledTimes(callsBeforeProgress + 3);
+    expect(addMessage).toHaveBeenCalledTimes(callsBeforeProgress + 4);
 
     // Readiness: exactly one "ready" message, distinct from a 100% progress announcement.
     drive({ status: "ready" });
-    expect(addMessage).toHaveBeenCalledTimes(callsBeforeProgress + 4);
-    expect(addMessage).toHaveBeenNthCalledWith(callsBeforeProgress + 4, DAVAI_SPEAKER,
+    expect(addMessage).toHaveBeenCalledTimes(callsBeforeProgress + 5);
+    expect(addMessage).toHaveBeenNthCalledWith(callsBeforeProgress + 5, DAVAI_SPEAKER,
       expect.objectContaining({ content: expect.stringMatching(/local model is ready/) }));
   });
 
@@ -327,13 +337,23 @@ describe("test load app", () => {
       act(() => loadStateChangeCallback!(state));
 
     const before = addMessage.mock.calls.length;
+    // First model's first progress tick: the one-time "Downloading the local model" announcement.
+    drive({ status: "loading", modelId: "Qwen3-1.7B-q4f16_1-MLC", progress: 0.02 });
+    expect(addMessage).toHaveBeenLastCalledWith(DAVAI_SPEAKER,
+      expect.objectContaining({ content: expect.stringMatching(/Downloading the local model/) }));
     // First model climbs past 75%.
     drive({ status: "loading", modelId: "Qwen3-1.7B-q4f16_1-MLC", progress: 0.80 });
     const afterFirst = addMessage.mock.calls.length;
-    expect(afterFirst).toBeGreaterThan(before); // at least the 25/50/75 announcements
+    expect(afterFirst).toBeGreaterThan(before); // at least first-progress + 25/50/75 announcements
 
     // Switch to a second model: progress restarts at a low value. Without a per-model reset,
-    // the stale lastMilestone (75) would suppress the second model's 25% announcement.
+    // the stale lastMilestone (75) would suppress the second model's 25% announcement, and
+    // without a per-model first-progress reset the second model's download-start feedback
+    // would silently never fire.
+    drive({ status: "loading", modelId: "Qwen3-4B-q4f16_1-MLC", progress: 0.02 });
+    expect(addMessage).toHaveBeenLastCalledWith(DAVAI_SPEAKER,
+      expect.objectContaining({ content: expect.stringMatching(/Downloading the local model/) }));
+
     drive({ status: "loading", modelId: "Qwen3-4B-q4f16_1-MLC", progress: 0.30 });
     expect(addMessage).toHaveBeenLastCalledWith(DAVAI_SPEAKER,
       expect.objectContaining({ content: expect.stringMatching(/25% complete/) }));
@@ -354,7 +374,7 @@ describe("test load app", () => {
     expect(mockUnsubscribeLoadStateChange).toHaveBeenCalledTimes(1);
   });
 
-  it("announces the expected download size for the 1.7B local model (DAVAI-126)", () => {
+  it("leads with the download-started action and announces the expected size for the 1.7B local model (DAVAI-126)", () => {
     mockAppConfig.llmId = JSON.stringify({ id: "Qwen3-1.7B-q4f16_1-MLC", provider: "Local" });
     mockAppConfig.llmList = [
       { id: "mock", provider: "Mock", effortLevels: [] },
@@ -364,10 +384,13 @@ describe("test load app", () => {
     renderApp();
 
     expect(mockAssistantStore.transcriptStore.addMessage).toHaveBeenCalledWith(DAVAI_SPEAKER,
-      expect.objectContaining({ content: expect.stringMatching(/about 1\.1 GB/) }));
+      expect.objectContaining({
+        content: expect.stringMatching(/^Model download started for.*about 1\.1 GB/),
+        kind: "announcement",
+      }));
   });
 
-  it("announces the expected download size for the 4B local model (DAVAI-126)", () => {
+  it("leads with the download-started action and announces the expected size for the 4B local model (DAVAI-126)", () => {
     mockAppConfig.llmId = JSON.stringify({ id: "Qwen3-4B-q4f16_1-MLC", provider: "Local" });
     mockAppConfig.llmList = [
       { id: "mock", provider: "Mock", effortLevels: [] },
@@ -377,7 +400,10 @@ describe("test load app", () => {
     renderApp();
 
     expect(mockAssistantStore.transcriptStore.addMessage).toHaveBeenCalledWith(DAVAI_SPEAKER,
-      expect.objectContaining({ content: expect.stringMatching(/about 2\.3 GB/) }));
+      expect.objectContaining({
+        content: expect.stringMatching(/^Model download started for.*about 2\.3 GB/),
+        kind: "announcement",
+      }));
   });
 
   it("explains the WebGPU requirement and skips loadEngine when WebGPU is unavailable (DAVAI-126)", () => {
