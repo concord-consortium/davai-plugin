@@ -74,6 +74,53 @@ describe("domain resolvers", () => {
     if (none.ok) throw new Error("should fail");
     expect(none.error).toMatch(/no graph is selected/i);
   });
+
+  it("resolveGraph's no-selection error lists available graph titles when graphs exist", () => {
+    const graphs = [
+      { id: 1, name: "g1", title: "Height vs Age" },
+      { id: 2, name: "g2", title: "Sleep vs Weight" },
+    ];
+    const r = resolveGraph(undefined, graphs, null);
+    if (r.ok) throw new Error("should fail");
+    expect(r.error).toMatch(/no graph is selected/i);
+    expect(r.error).toContain("Height vs Age");
+    expect(r.error).toContain("Sleep vs Weight");
+  });
+
+  it("resolveGraph's no-selection error falls back to name and dedupes when there are no titles", () => {
+    const graphs = [{ id: 1, name: "g1" }];
+    const r = resolveGraph(undefined, graphs, null);
+    if (r.ok) throw new Error("should fail");
+    expect(r.error).toContain("g1");
+  });
+
+  it("resolveGraph's no-selection error is a clean no-options message when there are no graphs", () => {
+    const r = resolveGraph(undefined, [], null);
+    if (r.ok) throw new Error("should fail");
+    expect(r.error).toMatch(/no graphs in this document/i);
+    expect(r.error).toContain("create_graph");
+  });
+
+  it("resolveGraph does not treat a single graph's colliding title/name as ambiguous", () => {
+    // A graph whose title and name normalize identically ("Heights" / "heights") must resolve
+    // as one candidate, not two — otherwise resolveByName sees two "matches" for the same object
+    // and incorrectly reports ambiguity.
+    const graphs = [{ id: 1, title: "Heights", name: "heights" }];
+    const r = resolveGraph("HEIGHTS", graphs, null);
+    if (!r.ok) throw new Error(`should succeed, got error: ${r.error}`);
+    expect(r.value.id).toBe(1);
+    expect(r.repaired).toBe(true);
+  });
+
+  it("resolveGraph still reports genuine ambiguity across two different graphs with colliding titles", () => {
+    const graphs = [
+      { id: 1, title: "Heights", name: "g1" },
+      { id: 2, title: "heights", name: "g2" },
+    ];
+    const r = resolveGraph("HEIGHTS", graphs, null);
+    if (r.ok) throw new Error("should fail");
+    expect(r.error).toMatch(/matches more than one/i);
+  });
 });
 
 describe("helpers", () => {

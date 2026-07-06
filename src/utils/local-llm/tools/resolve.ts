@@ -74,6 +74,14 @@ export const resolveAttribute = (
   return resolveByName("attribute", requested, candidates);
 };
 
+// Titles for the no-selection corrective: prefer title, fall back to name, dedupe, drop empties.
+// Kept separate from the resolveByName candidate list below (which needs name/title as distinct
+// match keys, not a single display label per graph).
+const graphTitlesForDisplay = (graphs: any[]): string[] => {
+  const titles = graphs.map((g) => g?.title ?? g?.name).filter((n): n is string => typeof n === "string" && n.length > 0);
+  return Array.from(new Set(titles));
+};
+
 export const resolveGraph = (
   requested: string | undefined,
   graphs: any[],
@@ -82,11 +90,21 @@ export const resolveGraph = (
   if (requested === undefined || requested === "") {
     const selected = graphs.find((g) => String(g?.id) === String(selectedGraphId));
     if (selected) return { ok: true, value: selected, repaired: false };
-    return { ok: false, error: "No graph is selected. Name the graph (by its title) or ask the user to select one." };
+    if (graphs.length === 0) {
+      return { ok: false, error: "There are no graphs in this document yet — create one with create_graph." };
+    }
+    return {
+      ok: false,
+      error: `No graph is selected. Available graphs: ${listNames(graphTitlesForDisplay(graphs))}. Name one (by its title), or ask the user to select one.`,
+    };
   }
   const candidates = graphs.flatMap((g) => {
     const names = [g?.title, g?.name].filter((n): n is string => typeof n === "string" && n.length > 0);
-    return names.map((name) => ({ name, value: g }));
+    // Dedupe per-graph: a title/name pair that normalizes identically (e.g. "Heights"/"heights")
+    // must contribute exactly one candidate, or resolveByName sees two "matches" for one object
+    // and misreports ambiguity.
+    const deduped = names.filter((name, i) => names.findIndex((n) => normalizeName(n) === normalizeName(name)) === i);
+    return deduped.map((name) => ({ name, value: g }));
   });
   return resolveByName("graph", requested, candidates);
 };
