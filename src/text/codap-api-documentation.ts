@@ -458,11 +458,13 @@ Response:
     "type": "graph",
     "dataContext": "My Dataset",
     "title": "Height vs Age",
-    "xAttributeID": 7,
-    "yAttributeID": 9
+    "xAttributeName": "Height",
+    "yAttributeName": "Age"
   }
 }
 \`\`\`
+
+Graph axes accept the attribute's exact name (\`xAttributeName\`, \`yAttributeName\`) or its ID (\`xAttributeID\`, \`yAttributeID\`). Always prefer the name form: copy the attribute name verbatim (matching is exact, including case and spaces) from the data context. Never guess an ID.
 
 ##### Graph adornments
 

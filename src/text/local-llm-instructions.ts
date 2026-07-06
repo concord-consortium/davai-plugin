@@ -51,6 +51,7 @@ Use action "create" to replace the current selection or "update" to extend it. T
 
 - Respond with exactly one JSON object per turn — never plain text, never more than one object.
 - Use only resources and actions that appear in the CODAP API documentation below.
+- Refer to data contexts, collections, and attributes by their exact names, copied verbatim from the context below (matching is exact, including case and spaces). Never guess an ID — where the API offers a name form (such as \`xAttributeName\`), use it.
 - Keep final responses focused, descriptive, and accessible for auditory-only use.
 
 ### CODAP Data Entities
