@@ -171,7 +171,7 @@ export const App = observer(() => {
       }
       const sizeNote = entry.id.includes("1.7B") ? "about 1.1 GB" : "about 2.3 GB";
       transcriptStore.addMessage(DAVAI_SPEAKER, {
-        content: `Model download started for ${entry.id}. The first download is ${sizeNote} and may take several minutes; afterward the model is cached in the browser.`,
+        content: `Loading the local model ${entry.id}. First-time use downloads ${sizeNote}; afterwards it loads from the browser cache in a few seconds.`,
         kind: "announcement",
       });
       localLlmService.loadEngine(entry.id).catch((err) => {
@@ -210,17 +210,26 @@ export const App = observer(() => {
           lastMilestone = 0;
           announcedFirstProgress = false;
         }
-        if (!announcedFirstProgress && s.progress > 0) {
-          announcedFirstProgress = true;
-          transcriptStore.addMessage(DAVAI_SPEAKER, {
-            content: "Downloading the local model — progress will be announced at 25% steps.",
-            kind: "announcement",
-          });
-        }
-        const milestone = Math.floor(s.progress * 4) * 25;
-        if (milestone > lastMilestone && milestone < 100) {
-          lastMilestone = milestone;
-          transcriptStore.addMessage(DAVAI_SPEAKER, { content: `Model loading: ${milestone}% complete.`, kind: "announcement" });
+        // WebLLM's initProgressCallback fires for cache reads (an already-downloaded model)
+        // too, with progress climbing 0 -> 1 in seconds. Its `text` distinguishes the phases:
+        // network downloads say "Fetching param cache[...]"; cache reads say "Loading model
+        // from cache[...]". Gate both the first-progress feedback and the 25/50/75% milestones
+        // on the CURRENT event's text containing "Fetching" so a cache load — the common case
+        // once a model is already downloaded — announces nothing but the final "ready" message.
+        const isDownloadProgress = typeof s.text === "string" && s.text.includes("Fetching");
+        if (isDownloadProgress) {
+          if (!announcedFirstProgress && s.progress > 0) {
+            announcedFirstProgress = true;
+            transcriptStore.addMessage(DAVAI_SPEAKER, {
+              content: "Downloading the local model — progress will be announced at 25% steps.",
+              kind: "announcement",
+            });
+          }
+          const milestone = Math.floor(s.progress * 4) * 25;
+          if (milestone > lastMilestone && milestone < 100) {
+            lastMilestone = milestone;
+            transcriptStore.addMessage(DAVAI_SPEAKER, { content: `Model download: ${milestone}% complete.`, kind: "announcement" });
+          }
         }
       } else if (s.status === "ready") {
         lastMilestone = 0;

@@ -278,7 +278,9 @@ describe("test load app", () => {
 
     // The very first progress event of a load (however small) announces once immediately, so
     // there is feedback within seconds rather than waiting minutes for the first 25% milestone.
-    drive({ status: "loading", progress: 0.01 });
+    // `text` must contain "Fetching" (WebLLM's network-download phase marker) for download/
+    // milestone announcements to fire at all — see the cache-load test below for the contrast.
+    drive({ status: "loading", progress: 0.01, text: "Fetching param cache[1/24]: 12MB fetched. 3% completed." });
     expect(addMessage).toHaveBeenCalledTimes(callsBeforeProgress + 1);
     expect(addMessage).toHaveBeenNthCalledWith(callsBeforeProgress + 1, DAVAI_SPEAKER,
       expect.objectContaining({
@@ -288,32 +290,32 @@ describe("test load app", () => {
 
     // Further fine-grained progress within the first quartile: no additional message yet
     // (neither a repeat first-progress announcement nor a milestone).
-    drive({ status: "loading", progress: 0.10 });
-    drive({ status: "loading", progress: 0.24 });
+    drive({ status: "loading", progress: 0.10, text: "Fetching param cache[2/24]: 40MB fetched. 10% completed." });
+    drive({ status: "loading", progress: 0.24, text: "Fetching param cache[5/24]: 96MB fetched. 24% completed." });
     expect(addMessage).toHaveBeenCalledTimes(callsBeforeProgress + 1);
 
     // Crossing 25%: exactly one "25% complete" message, even though two ticks land in
     // the same quartile (0.26 then 0.30) — proving 25%-step coarseness, not per-tick spam.
-    drive({ status: "loading", progress: 0.26 });
-    drive({ status: "loading", progress: 0.30 });
+    drive({ status: "loading", progress: 0.26, text: "Fetching param cache[6/24]: 104MB fetched. 26% completed." });
+    drive({ status: "loading", progress: 0.30, text: "Fetching param cache[7/24]: 120MB fetched. 30% completed." });
     expect(addMessage).toHaveBeenCalledTimes(callsBeforeProgress + 2);
     expect(addMessage).toHaveBeenNthCalledWith(callsBeforeProgress + 2, DAVAI_SPEAKER,
       expect.objectContaining({ content: expect.stringMatching(/25% complete/) }));
 
     // Crossing 50%: exactly one more message.
-    drive({ status: "loading", progress: 0.55 });
+    drive({ status: "loading", progress: 0.55, text: "Fetching param cache[13/24]: 220MB fetched. 55% completed." });
     expect(addMessage).toHaveBeenCalledTimes(callsBeforeProgress + 3);
     expect(addMessage).toHaveBeenNthCalledWith(callsBeforeProgress + 3, DAVAI_SPEAKER,
       expect.objectContaining({ content: expect.stringMatching(/50% complete/) }));
 
     // Crossing 75%: exactly one more message.
-    drive({ status: "loading", progress: 0.80 });
+    drive({ status: "loading", progress: 0.80, text: "Fetching param cache[19/24]: 320MB fetched. 80% completed." });
     expect(addMessage).toHaveBeenCalledTimes(callsBeforeProgress + 4);
     expect(addMessage).toHaveBeenNthCalledWith(callsBeforeProgress + 4, DAVAI_SPEAKER,
       expect.objectContaining({ content: expect.stringMatching(/75% complete/) }));
 
     // Still within the same (last) quartile: no new message.
-    drive({ status: "loading", progress: 0.99 });
+    drive({ status: "loading", progress: 0.99, text: "Fetching param cache[24/24]: 396MB fetched. 99% completed." });
     expect(addMessage).toHaveBeenCalledTimes(callsBeforeProgress + 4);
 
     // Readiness: exactly one "ready" message, distinct from a 100% progress announcement.
@@ -338,11 +340,12 @@ describe("test load app", () => {
 
     const before = addMessage.mock.calls.length;
     // First model's first progress tick: the one-time "Downloading the local model" announcement.
-    drive({ status: "loading", modelId: "Qwen3-1.7B-q4f16_1-MLC", progress: 0.02 });
+    // `text` must contain "Fetching" for download/milestone announcements to fire at all.
+    drive({ status: "loading", modelId: "Qwen3-1.7B-q4f16_1-MLC", progress: 0.02, text: "Fetching param cache[1/24]: 8MB fetched. 2% completed." });
     expect(addMessage).toHaveBeenLastCalledWith(DAVAI_SPEAKER,
       expect.objectContaining({ content: expect.stringMatching(/Downloading the local model/) }));
     // First model climbs past 75%.
-    drive({ status: "loading", modelId: "Qwen3-1.7B-q4f16_1-MLC", progress: 0.80 });
+    drive({ status: "loading", modelId: "Qwen3-1.7B-q4f16_1-MLC", progress: 0.80, text: "Fetching param cache[19/24]: 320MB fetched. 80% completed." });
     const afterFirst = addMessage.mock.calls.length;
     expect(afterFirst).toBeGreaterThan(before); // at least first-progress + 25/50/75 announcements
 
@@ -350,13 +353,54 @@ describe("test load app", () => {
     // the stale lastMilestone (75) would suppress the second model's 25% announcement, and
     // without a per-model first-progress reset the second model's download-start feedback
     // would silently never fire.
-    drive({ status: "loading", modelId: "Qwen3-4B-q4f16_1-MLC", progress: 0.02 });
+    drive({ status: "loading", modelId: "Qwen3-4B-q4f16_1-MLC", progress: 0.02, text: "Fetching param cache[1/40]: 8MB fetched. 2% completed." });
     expect(addMessage).toHaveBeenLastCalledWith(DAVAI_SPEAKER,
       expect.objectContaining({ content: expect.stringMatching(/Downloading the local model/) }));
 
-    drive({ status: "loading", modelId: "Qwen3-4B-q4f16_1-MLC", progress: 0.30 });
+    drive({ status: "loading", modelId: "Qwen3-4B-q4f16_1-MLC", progress: 0.30, text: "Fetching param cache[12/40]: 120MB fetched. 30% completed." });
     expect(addMessage).toHaveBeenLastCalledWith(DAVAI_SPEAKER,
       expect.objectContaining({ content: expect.stringMatching(/25% complete/) }));
+  });
+
+  it("suppresses download/milestone announcements for a cache-read load, announcing only readiness (DAVAI-126)", () => {
+    // WebLLM fires initProgressCallback for cache reads too, with progress climbing 0 -> 1 in
+    // seconds. Its `text` distinguishes the phases: cache reads say "Loading model from
+    // cache[...]" rather than "Fetching ...". An already-downloaded model must not spam
+    // "Downloading"/"N% complete" announcements on every launch, so the milestone effect gates
+    // those on `text` containing "Fetching" — cache-phase events must emit nothing at all,
+    // only the final "ready" message when the load completes.
+    mockAppConfig.llmId = JSON.stringify({ id: "Qwen3-1.7B-q4f16_1-MLC", provider: "Local" });
+    mockAppConfig.llmList = [
+      { id: "mock", provider: "Mock", effortLevels: [] },
+      { id: "Qwen3-1.7B-q4f16_1-MLC", provider: "Local", effortLevels: [] },
+    ];
+
+    renderApp();
+
+    expect(loadStateChangeCallback).toBeDefined();
+    const addMessage = mockAssistantStore.transcriptStore.addMessage as jest.Mock;
+    // The llmId-effect's immediate selection-time message (and possibly a WebGPU/failure
+    // message) fires before any progress events; only milestone-effect calls matter below.
+    const callsBeforeProgress = addMessage.mock.calls.length;
+
+    const drive = (state: Parameters<NonNullable<typeof loadStateChangeCallback>>[0]) =>
+      act(() => loadStateChangeCallback!(state));
+
+    drive({ status: "loading", progress: 0.1, text: "Loading model from cache[3/24]" });
+    drive({ status: "loading", progress: 0.3, text: "Loading model from cache[8/24]" });
+    drive({ status: "loading", progress: 0.55, text: "Loading model from cache[14/24]" });
+    drive({ status: "loading", progress: 0.8, text: "Loading model from cache[20/24]" });
+    drive({ status: "loading", progress: 0.99, text: "Loading model from cache[24/24]" });
+    // No "Downloading the local model" first-progress announcement and no 25/50/75% milestones.
+    expect(addMessage).toHaveBeenCalledTimes(callsBeforeProgress);
+
+    drive({ status: "ready" });
+    expect(addMessage).toHaveBeenCalledTimes(callsBeforeProgress + 1);
+    expect(addMessage).toHaveBeenNthCalledWith(callsBeforeProgress + 1, DAVAI_SPEAKER,
+      expect.objectContaining({
+        content: expect.stringMatching(/local model is ready/),
+        kind: "announcement",
+      }));
   });
 
   it("unsubscribes from load-state changes on unmount (DAVAI-126)", () => {
@@ -374,7 +418,9 @@ describe("test load app", () => {
     expect(mockUnsubscribeLoadStateChange).toHaveBeenCalledTimes(1);
   });
 
-  it("leads with the download-started action and announces the expected size for the 1.7B local model (DAVAI-126)", () => {
+  it("leads with a phase-neutral loading message and announces the expected size for the 1.7B local model (DAVAI-126)", () => {
+    // Phrasing must not claim a download is happening — WebLLM's own progress callback fires
+    // for cache reads too, so an already-downloaded model loads from cache, not the network.
     mockAppConfig.llmId = JSON.stringify({ id: "Qwen3-1.7B-q4f16_1-MLC", provider: "Local" });
     mockAppConfig.llmList = [
       { id: "mock", provider: "Mock", effortLevels: [] },
@@ -385,12 +431,12 @@ describe("test load app", () => {
 
     expect(mockAssistantStore.transcriptStore.addMessage).toHaveBeenCalledWith(DAVAI_SPEAKER,
       expect.objectContaining({
-        content: expect.stringMatching(/^Model download started for.*about 1\.1 GB/),
+        content: expect.stringMatching(/^Loading the local model.*First-time use downloads about 1\.1 GB.*browser cache/),
         kind: "announcement",
       }));
   });
 
-  it("leads with the download-started action and announces the expected size for the 4B local model (DAVAI-126)", () => {
+  it("leads with a phase-neutral loading message and announces the expected size for the 4B local model (DAVAI-126)", () => {
     mockAppConfig.llmId = JSON.stringify({ id: "Qwen3-4B-q4f16_1-MLC", provider: "Local" });
     mockAppConfig.llmList = [
       { id: "mock", provider: "Mock", effortLevels: [] },
@@ -401,7 +447,7 @@ describe("test load app", () => {
 
     expect(mockAssistantStore.transcriptStore.addMessage).toHaveBeenCalledWith(DAVAI_SPEAKER,
       expect.objectContaining({
-        content: expect.stringMatching(/^Model download started for.*about 2\.3 GB/),
+        content: expect.stringMatching(/^Loading the local model.*First-time use downloads about 2\.3 GB.*browser cache/),
         kind: "announcement",
       }));
   });
