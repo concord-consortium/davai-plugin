@@ -18,6 +18,11 @@ interface IEngineLike {
   unload: () => Promise<void>;
 }
 
+// Watchdog timeout for a single generate() call. Generous on purpose: a 16K-token prefill on a
+// weak GPU can legitimately take minutes. This exists to rescue a hung engine call (see the
+// response_format removal below), not to police normal latency.
+const GENERATE_TIMEOUT_MS = 300_000;
+
 let engine: IEngineLike | null = null;
 let loadPromise: Promise<void> | null = null;
 // Two model-id trackers with different lifetimes: `loadedModelId` names the model whose engine
@@ -166,15 +171,40 @@ export const localLlmService = {
     settling.catch(() => undefined);
     return loadPromise;
   },
-  async generate(messages: IChatMsg[], opts?: { jsonMode?: boolean }): Promise<string> {
+  async generate(messages: IChatMsg[]): Promise<string> {
     if (!engine) throw new Error("Local model is not loaded.");
-    const reply = await engine.chat.completions.create({
+    // No response_format here: @mlc-ai/web-llm 0.2.84 routes a schema-less
+    // response_format: {type:"json_object"} straight into compileJSONSchema(undefined), which
+    // raises a wasm BindingError ("Cannot pass non-string to std::string") as an uncaught
+    // rejection inside the worker — it never reaches this promise, so the turn just hangs
+    // forever. The envelope parser + one-retry loop in local-llm-loop.ts were designed to
+    // survive unconstrained model output, so run unconstrained here. A VERIFIED schema/EBNF
+    // grammar constraint (once 0.2.84's bug is worked around or a fixed version is available)
+    // is a named follow-up, not done here.
+    const create = engine.chat.completions.create({
       messages,
       temperature: 0,
       max_tokens: 1024,
-      ...(opts?.jsonMode ? { response_format: { type: "json_object" } } : {}),
     });
-    return reply?.choices?.[0]?.message?.content ?? "";
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    const timeout = new Promise<never>((_resolve, reject) => {
+      timer = setTimeout(() => {
+        // Defensive: ask the engine to stop generating even though nothing reads the result of
+        // this call — if the hang is caused by the 0.2.84 worker-side rejection, the worker may
+        // already be wedged and interruptGenerate() may itself be a no-op, but it's free to try.
+        engine?.interruptGenerate();
+        reject(new Error("local model generation timed out"));
+      }, GENERATE_TIMEOUT_MS);
+    });
+    try {
+      const reply = await Promise.race([create, timeout]);
+      return reply?.choices?.[0]?.message?.content ?? "";
+    } finally {
+      // Clear the timer regardless of which side of the race settled, so a resolved/rejected
+      // generate() never leaves a dangling timer behind (matters for tests using fake timers,
+      // and avoids an unnecessary interruptGenerate() firing after the call already finished).
+      clearTimeout(timer);
+    }
   },
   interrupt(): void {
     engine?.interruptGenerate();

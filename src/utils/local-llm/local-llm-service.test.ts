@@ -64,18 +64,59 @@ it("emits load-state changes to subscribers and supports unsubscribe", async () 
   expect(seen[seen.length - 1]).toBe("ready"); // no events after unsubscribe
 });
 
-it("generates with temperature 0 and json_object mode when asked", async () => {
+it("generates unconstrained (no response_format) with temperature 0 / max_tokens 1024", async () => {
   mockCreate.mockResolvedValue({ choices: [{ message: { content: "{\"tool\":\"final\",\"response\":\"hi\"}" } }] });
   await localLlmService.loadEngine("Qwen3-1.7B-q4f16_1-MLC");
-  const out = await localLlmService.generate(
-    [{ role: "user", content: "hello" }], { jsonMode: true }
-  );
+  const out = await localLlmService.generate([{ role: "user", content: "hello" }]);
   expect(out).toBe("{\"tool\":\"final\",\"response\":\"hi\"}");
-  expect(mockCreate).toHaveBeenCalledWith(expect.objectContaining({
+  const call = mockCreate.mock.calls[0][0];
+  expect(call).toEqual(expect.objectContaining({
     temperature: 0,
     max_tokens: 1024,
-    response_format: { type: "json_object" },
   }));
+  // 0.2.84's schema-less json_object mode is broken (compileJSONSchema(undefined) throws a
+  // wasm BindingError as an uncaught worker-side rejection) — response_format must never be sent.
+  expect(call).not.toHaveProperty("response_format");
+});
+
+describe("generate watchdog (DAVAI-126)", () => {
+  beforeEach(() => {
+    jest.useFakeTimers();
+  });
+
+  afterEach(() => {
+    jest.useRealTimers();
+  });
+
+  it("rejects with a clear timeout error and interrupts the engine when the engine call never settles", async () => {
+    // Simulates the 0.2.84 worker-side BindingError being thrown as an uncaught rejection that
+    // never reaches this promise — create() just hangs forever from generate()'s point of view.
+    mockCreate.mockImplementation(() => new Promise(() => undefined));
+    await localLlmService.loadEngine("Qwen3-1.7B-q4f16_1-MLC");
+
+    const pending = localLlmService.generate([{ role: "user", content: "hello" }]);
+    // advanceTimersByTimeAsync flushes the fake-timer callback (which rejects the race) and lets
+    // its microtasks settle before resolving, so `pending` is already rejected by the time this
+    // resolves — no separate "swallow the eventual rejection" step needed.
+    const advance = jest.advanceTimersByTimeAsync(300_000);
+    await Promise.all([expect(pending).rejects.toThrow(/timed out/i), advance]);
+
+    expect(mockEngine.interruptGenerate).toHaveBeenCalledTimes(1);
+  });
+
+  it("does not time out and clears its timer when the engine call resolves normally", async () => {
+    mockCreate.mockResolvedValue({ choices: [{ message: { content: "hi" } }] });
+    await localLlmService.loadEngine("Qwen3-1.7B-q4f16_1-MLC");
+
+    const out = await localLlmService.generate([{ role: "user", content: "hello" }]);
+    expect(out).toBe("hi");
+
+    // If the watchdog timer weren't cleared, advancing past it would either throw (no dangling
+    // timer should still be able to reject an already-settled promise) or leave a stray timer
+    // warning; asserting no further interrupt call is the direct behavioral check.
+    await jest.advanceTimersByTimeAsync(300_000);
+    expect(mockEngine.interruptGenerate).not.toHaveBeenCalled();
+  });
 });
 
 it("throws a clear error when generate is called before load", async () => {

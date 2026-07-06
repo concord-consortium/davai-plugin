@@ -561,7 +561,7 @@ export const AssistantModel = types
             ? msgs.slice()
             : [...msgs.slice(0, lastMatchIndex), ...msgs.slice(lastMatchIndex + 1)];
         const response: string = yield runLocalTurn({
-          generate: (messages) => localLlmService.generate(messages, { jsonMode: true }),
+          generate: (messages) => localLlmService.generate(messages),
           executeTool: async (data: IToolCallData) => {
             const result = await processToolCall(data);
             // processToolCall returns an array only for image-snapshot responses, which the
