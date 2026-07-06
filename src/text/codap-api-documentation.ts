@@ -271,7 +271,7 @@ Use expressions for analytical selections (thresholds, ranges, conditions). Use 
 **Expression syntax:**
 Comparison: \`==\`, \`!=\`, \`<\`, \`<=\`, \`>\`, \`>=\`
 Logical: \`and\`, \`or\`, \`not\`
-Aggregate: \`mean(attr)\`, \`median(attr)\`, \`min(attr)\`, \`max(attr)\`, \`stdDev(attr)\`, \`percentile(attr, p)\`
+Aggregate: \`mean(attr)\`, \`median(attr)\`, \`min(attr)\`, \`max(attr)\`, \`stdDev(attr)\`, \`percentile(attr, p)\` — p is a fraction from 0 to 1 (0.75 = the 75th percentile), not 0–100
 Arithmetic: \`abs()\`, \`round()\`, \`sqrt()\`
 
 **Attribute names in expressions:**
@@ -282,12 +282,12 @@ Always wrap attribute names in backticks in expression strings, otherwise names 
 | Use case | Expression |
 |---|---|
 | Above the mean | \`Weight\` > mean(\`Weight\`) |
-| Top quarter | \`Weight\` >= percentile(\`Weight\`, 75) |
-| Bottom quarter | \`Weight\` <= percentile(\`Weight\`, 25) |
-| Middle 50% | \`Weight\` >= percentile(\`Weight\`, 25) and \`Weight\` <= percentile(\`Weight\`, 75) |
+| Top quarter | \`Weight\` >= percentile(\`Weight\`, 0.75) |
+| Bottom quarter | \`Weight\` <= percentile(\`Weight\`, 0.25) |
+| Middle 50% | \`Weight\` >= percentile(\`Weight\`, 0.25) and \`Weight\` <= percentile(\`Weight\`, 0.75) |
 | A range | \`Weight\` > 50 and \`Weight\` <= 100 |
 | String match | \`Name\` == "Alice" |
-| Outliers (IQR) | \`Weight\` < percentile(\`Weight\`, 25) - 1.5 * (percentile(\`Weight\`, 75) - percentile(\`Weight\`, 25)) or \`Weight\` > percentile(\`Weight\`, 75) + 1.5 * (percentile(\`Weight\`, 75) - percentile(\`Weight\`, 25)) |
+| Outliers (IQR) | \`Weight\` < percentile(\`Weight\`, 0.25) - 1.5 * (percentile(\`Weight\`, 0.75) - percentile(\`Weight\`, 0.25)) or \`Weight\` > percentile(\`Weight\`, 0.75) + 1.5 * (percentile(\`Weight\`, 0.75) - percentile(\`Weight\`, 0.25)) |
 | Above 2 std devs | abs(\`Weight\` - mean(\`Weight\`)) > 2 * stdDev(\`Weight\`) |
 
 **Hierarchical data:** Omitting \`collection\` defaults to childmost collection. Selecting a parent case selects all its children.
@@ -413,7 +413,7 @@ Always wrap attribute names in backticks in expression strings, otherwise names 
   "action": "update",
   "resource": "dataContext[MyData].selectionList",
   "values": {
-    "expression": "\`Height\` > percentile(\`Height\`, 90)"
+    "expression": "\`Height\` > percentile(\`Height\`, 0.9)"
   }
 }
 \`\`\`
