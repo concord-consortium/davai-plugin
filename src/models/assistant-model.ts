@@ -563,7 +563,15 @@ export const AssistantModel = types
         const response: string = yield runLocalTurn({
           generate: (messages) => localLlmService.generate(messages),
           executeTool: async (data: IToolCallData) => {
-            const result = await processToolCall(data);
+            // Called via self (not the bare `processToolCall` closure reference used elsewhere
+            // in this file) because this callback runs from runLocalTurn's async continuation,
+            // outside any MST action context. A bare flow() call has no action context to
+            // inherit there and throws "a mst flow must always have a parent context"; routing
+            // through self invokes the registered action, which self-roots a new context. `self`
+            // is cast to `any` because TS's structural typing for this `.actions()` block doesn't
+            // see `processToolCall` on `self` until this same block's `return` below adds it to
+            // the live instance — a same-block sibling-action reference has no narrower type.
+            const result = await (self as any).processToolCall(data);
             // processToolCall returns an array only for image-snapshot responses, which the
             // local (text-only) model never requests; degrade defensively if it happens. This
             // adapter must never reject — processToolCall already catches internally and
@@ -674,7 +682,7 @@ export const AssistantModel = types
 
     return {
       createThread, initializeAssistant, handleMessageSubmit, handleMessageSubmitLocalLlm,
-      handleCancel, updateDataContexts, updateGraphs
+      handleCancel, updateDataContexts, updateGraphs, processToolCall
     };
   })
   .actions((self) => ({

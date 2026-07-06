@@ -429,6 +429,40 @@ describe("handleMessageSubmitLocalLlm (DAVAI-126)", () => {
     expect(store.transcriptStore.messages.at(-1)?.messageContent.content).toBe("Created.");
   });
 
+  it("lets the local executor invoke processToolCall across a macrotask boundary without an MST parent-context error", async () => {
+    // Regression test for "a mst flow must always have a parent context": in the real browser,
+    // runLocalTurn's executeTool callback is invoked from an async continuation that has crossed
+    // a real task boundary (e.g. after awaiting model generation), so it does NOT inherit an MST
+    // action context from the outer `yield runLocalTurn(...)` call. The `await new Promise(...,
+    // setTimeout)` below reproduces that macrotask hop — calling executeTool synchronously inside
+    // the mock (as other tests in this file do) does not exercise the bug, because it stays
+    // within the same microtask chain and happens to still inherit the parent context.
+    const store = createLocalStore();
+    (codapInterface.sendRequest as jest.Mock).mockResolvedValueOnce({ success: true, values: [] });
+
+    (runLocalTurn as jest.Mock).mockImplementationOnce(async (args: any) => {
+      await new Promise((res) => setTimeout(res, 0));
+      const result = await args.executeTool({
+        type: "create_request",
+        tool_call_id: "local-0",
+        request: { action: "get", resource: "componentList" },
+      });
+      return `Result: ${result}`;
+    });
+
+    await store.handleMessageSubmitLocalLlm("list the components");
+
+    const contents = store.transcriptStore.messages.map((m) => m.messageContent.content);
+    expect(contents).not.toEqual(
+      expect.arrayContaining([expect.stringMatching(/error running the local model/i)])
+    );
+    expect(contents.some((c) => typeof c === "string" && /mst flow must always have a parent context/i.test(c)))
+      .toBe(false);
+    expect(store.transcriptStore.messages.at(-1)?.messageContent.content).toBe(
+      `Result: ${JSON.stringify({ success: true, values: [] })}`
+    );
+  });
+
   it("assembles a drained queue turn without dropping the prior reply or duplicating the queued text (DAVAI-126 I3/P2b)", async () => {
     // Reproduce the transcript state at the moment a queued turn is drained: the queued user
     // message was added by App at submit time, and the PRIOR turn's DAVAI reply is now the last
