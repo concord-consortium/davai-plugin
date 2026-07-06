@@ -637,53 +637,81 @@ export const AssistantModel = types
     // conversation, and no per-case transcript chatter. Only a start announcement and the final
     // pass/fail summary are added to the transcript; the full per-case detail goes to the
     // console (see summarizeEval's "details in the browser console"). Reuses the same turnEpoch
-    // guard as a normal local turn, so Cancel aborts an in-progress eval run the same way.
+    // guard as a normal local turn, so Cancel aborts an in-progress eval run the same way. Also
+    // mirrors handleMessageSubmitLocalLlm's overlap/busy-flag/try-catch discipline (review round
+    // 1, task 11): isLoadingResponse/showLoadingIndicator gate the run against a concurrent chat
+    // turn or a second eval, and the whole body is wrapped so a failure announces and resolves
+    // instead of leaving an unhandled rejection or a stuck busy chat input.
     const runLocalEvalTurns = flow(function* (cases: IEvalCase[]) {
+      if (self.isLoadingResponse) {
+        self.addDavaiAnnouncement(
+          "A response or eval run is already in progress — wait for it to finish (or press Cancel) before starting the eval."
+        );
+        return;
+      }
       const myEpoch = self.turnEpoch;
       const isCurrent = () => self.turnEpoch === myEpoch;
+      try {
+        self.isLoadingResponse = true;
+        self.setShowLoadingIndicator(true);
 
-      yield localLlmService.loadEngine(JSON.parse(self.llmId).id);
-      if (!isCurrent()) return;
+        yield localLlmService.loadEngine(JSON.parse(self.llmId).id);
+        if (!isCurrent()) return;
 
-      self.addDavaiAnnouncement(`Running ${cases.length} local eval case${cases.length === 1 ? "" : "s"}…`);
+        self.addDavaiAnnouncement(`Running ${cases.length} local eval case${cases.length === 1 ? "" : "s"}…`);
 
-      const root = getRoot(self) as any;
-      const toolCtx: ILocalToolContext = {
-        sendCODAPRequest,
-        dataContexts: () => self.dataContexts ?? {},
-        graphs: () => self.graphs ?? [],
-        selectedGraphId: () => root.sonificationStore?.selectedGraphID ?? null,
-        setSelectedGraphID: (graphId) => root.sonificationStore.setSelectedGraphID(graphId),
-        refreshDataContexts: async () => { await (self as any).updateDataContexts(); },
-        refreshGraphs: async () => { await (self as any).updateGraphs(); },
-      };
-      const selectedId = toolCtx.selectedGraphId();
-      const graphSeed: string = selectedId ? yield buildGraphSeed(String(selectedId), self.dataContexts ?? {}) : "";
-      const systemPrompt = buildLocalSystemPrompt({
-        toolDocs: buildToolDocs(),
-        schemaDigest: buildSchemaDigest(self.dataContexts ?? {}),
-        graphSeed,
-      });
-
-      const runTurn = async (prompt: string): Promise<IEvalTurnResult> => {
-        const toolCalls: string[] = [];
-        const final = await runLocalTurn({
-          generate: (messages) => localLlmService.generate(messages),
-          executeTool: (name, args) => dispatchTool(name, args, toolCtx),
-          systemPrompt,
-          turns: [], // eval cases are independent single-shot prompts, not a growing conversation
-          userMessage: prompt,
-          onToolCall: (name) => toolCalls.push(name),
-          isCancelled: () => !isCurrent(),
+        const root = getRoot(self) as any;
+        const toolCtx: ILocalToolContext = {
+          sendCODAPRequest,
+          dataContexts: () => self.dataContexts ?? {},
+          graphs: () => self.graphs ?? [],
+          selectedGraphId: () => root.sonificationStore?.selectedGraphID ?? null,
+          setSelectedGraphID: (graphId) => root.sonificationStore.setSelectedGraphID(graphId),
+          refreshDataContexts: async () => { await (self as any).updateDataContexts(); },
+          refreshGraphs: async () => { await (self as any).updateGraphs(); },
+        };
+        const selectedId = toolCtx.selectedGraphId();
+        const graphSeed: string = selectedId ? yield buildGraphSeed(String(selectedId), self.dataContexts ?? {}) : "";
+        const systemPrompt = buildLocalSystemPrompt({
+          toolDocs: buildToolDocs(),
+          schemaDigest: buildSchemaDigest(self.dataContexts ?? {}),
+          graphSeed,
         });
-        return { toolCalls, final };
-      };
 
-      const results = yield runLocalEval(cases, runTurn);
-      if (!isCurrent()) return; // cancelled/superseded partway through the battery
+        const runTurn = async (prompt: string): Promise<IEvalTurnResult> => {
+          const toolCalls: string[] = [];
+          const final = await runLocalTurn({
+            generate: (messages) => localLlmService.generate(messages),
+            executeTool: (name, args) => dispatchTool(name, args, toolCtx),
+            systemPrompt,
+            turns: [], // eval cases are independent single-shot prompts, not a growing conversation
+            userMessage: prompt,
+            onToolCall: (name) => toolCalls.push(name),
+            isCancelled: () => !isCurrent(),
+          });
+          return { toolCalls, final };
+        };
 
-      console.log("DAVAI local eval results", JSON.stringify(results, null, 2));
-      self.addDavaiAnnouncement(summarizeEval(results));
+        const results = yield runLocalEval(cases, runTurn);
+        if (!isCurrent()) return; // cancelled/superseded partway through the battery
+
+        // eslint-disable-next-line no-console
+        console.log("DAVAI local eval results", JSON.stringify(results, null, 2));
+        self.addDavaiAnnouncement(summarizeEval(results));
+      } catch (err) {
+        if (!isCurrent()) return;
+        console.error("Local eval failed:", err);
+        self.addDavaiAnnouncement(`Local eval failed: ${err instanceof Error ? err.message : String(err)}`);
+      } finally {
+        if (isCurrent()) {
+          self.isLoadingResponse = false;
+          self.setShowLoadingIndicator(false);
+          if (self.messageQueue.length > 0) {
+            const nextMessage = self.messageQueue.shift();
+            if (nextMessage) handleMessageSubmitLocalLlm(nextMessage);
+          }
+        }
+      }
     });
 
     const handleCancel = flow(function* () {

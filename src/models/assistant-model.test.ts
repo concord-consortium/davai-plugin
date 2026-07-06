@@ -641,6 +641,7 @@ describe("runLocalEvalTurns (DAVAI-126 Task 11)", () => {
     expect(davaiContents).toHaveLength(2);
     expect(davaiContents.every((c) => typeof c === "string" && !/^A local description\.$/.test(c))).toBe(true);
 
+    // eslint-disable-next-line no-console
     (console.log as jest.Mock).mockRestore();
   });
 
@@ -684,6 +685,7 @@ describe("runLocalEvalTurns (DAVAI-126 Task 11)", () => {
     await store.runLocalEvalTurns([twoCases[0]] as any);
     expect(dispatchTool).toHaveBeenCalledWith("get_graph_info", {}, expect.anything());
 
+    // eslint-disable-next-line no-console
     (console.log as jest.Mock).mockRestore();
   });
 
@@ -709,5 +711,116 @@ describe("runLocalEvalTurns (DAVAI-126 Task 11)", () => {
     expect(consoleLogSpy).not.toHaveBeenCalledWith("DAVAI local eval results", expect.anything());
 
     consoleLogSpy.mockRestore();
+  });
+
+  it("announces already-in-progress and does not start a second run when an eval is already running (DAVAI-126 review F1)", async () => {
+    const store = createLocalStore();
+    const consoleLogSpy = jest.spyOn(console, "log").mockImplementation(() => undefined);
+    let release: () => void = () => undefined;
+    (localLlmService.loadEngine as jest.Mock).mockImplementationOnce(
+      () => new Promise<void>((res) => { release = res; })
+    );
+
+    const first = store.runLocalEvalTurns(twoCases as any);
+    await Promise.resolve();
+    expect(store.isLoadingResponse).toBe(true);
+    expect(localLlmService.loadEngine).toHaveBeenCalledTimes(1);
+
+    // A second eval call while one is in flight must be rejected outright (not queued as a
+    // message, and not started as a concurrent run) — it must not call loadEngine again.
+    await store.runLocalEvalTurns(twoCases as any);
+    expect(localLlmService.loadEngine).toHaveBeenCalledTimes(1);
+
+    const contents = store.transcriptStore.messages.map((m) => m.messageContent.content);
+    expect(contents.some((c) => typeof c === "string" && /already in progress/i.test(c))).toBe(true);
+
+    // A live chat message submitted during the eval must queue rather than run concurrently.
+    const queued = store.handleMessageSubmitLocalLlm("hi");
+    await Promise.resolve();
+    expect(store.messageQueue.slice()).toContain("hi");
+    expect(runLocalTurn).not.toHaveBeenCalled();
+
+    release();
+    await first;
+    await queued;
+    await Promise.resolve();
+
+    // Once the eval completes, the queued chat message drains and actually runs.
+    expect(runLocalTurn).toHaveBeenCalledWith(expect.objectContaining({ userMessage: "hi" }));
+    expect(store.messageQueue.length).toBe(0);
+
+    consoleLogSpy.mockRestore();
+  });
+
+  it("sets isLoadingResponse/showLoadingIndicator during the run and clears them on completion and on rejection (DAVAI-126 review F1/F2)", async () => {
+    const store = createLocalStore();
+    const consoleLogSpy = jest.spyOn(console, "log").mockImplementation(() => undefined);
+
+    // Completion path.
+    let release: () => void = () => undefined;
+    (localLlmService.loadEngine as jest.Mock).mockImplementationOnce(
+      () => new Promise<void>((res) => { release = res; })
+    );
+    const run = store.runLocalEvalTurns(twoCases as any);
+    await Promise.resolve();
+    expect(store.isLoadingResponse).toBe(true);
+    expect(store.showLoadingIndicator).toBe(true);
+    release();
+    await run;
+    expect(store.isLoadingResponse).toBe(false);
+    expect(store.showLoadingIndicator).toBe(false);
+
+    // Rejection path.
+    (localLlmService.loadEngine as jest.Mock).mockRejectedValueOnce(new Error("boom"));
+    await store.runLocalEvalTurns(twoCases as any);
+    expect(store.isLoadingResponse).toBe(false);
+    expect(store.showLoadingIndicator).toBe(false);
+
+    consoleLogSpy.mockRestore();
+  });
+
+  it("resolves (no unhandled rejection), announces the error, and posts no summary or console dump when loadEngine rejects (DAVAI-126 review F2)", async () => {
+    const store = createLocalStore();
+    const consoleLogSpy = jest.spyOn(console, "log").mockImplementation(() => undefined);
+    const consoleErrorSpy = jest.spyOn(console, "error").mockImplementation(() => undefined);
+    (localLlmService.loadEngine as jest.Mock).mockRejectedValueOnce(new Error("engine failed to load"));
+
+    await expect(store.runLocalEvalTurns(twoCases as any)).resolves.toBeUndefined();
+
+    const contents = store.transcriptStore.messages.map((m) => m.messageContent.content);
+    expect(contents.some((c) => typeof c === "string" && /local eval failed/i.test(c) && /engine failed to load/.test(c)))
+      .toBe(true);
+    expect(contents.some((c) => typeof c === "string" && /passed/.test(c))).toBe(false);
+    expect(consoleLogSpy).not.toHaveBeenCalledWith("DAVAI local eval results", expect.anything());
+    expect(consoleErrorSpy).toHaveBeenCalledWith("Local eval failed:", expect.any(Error));
+    expect(store.isLoadingResponse).toBe(false);
+    expect(store.showLoadingIndicator).toBe(false);
+
+    consoleLogSpy.mockRestore();
+    consoleErrorSpy.mockRestore();
+  });
+
+  it("resolves, announces the error, and posts no summary or console dump when a step after loadEngine throws (DAVAI-126 review F2)", async () => {
+    // Exercises the catch block via a distinct failure point from loadEngine (buildSchemaDigest,
+    // called unconditionally in the body) so the guard isn't just special-cased around the engine
+    // load — any synchronous failure in the eval setup must resolve cleanly, not reject/hang.
+    const store = createLocalStore();
+    const consoleLogSpy = jest.spyOn(console, "log").mockImplementation(() => undefined);
+    const consoleErrorSpy = jest.spyOn(console, "error").mockImplementation(() => undefined);
+    (buildSchemaDigest as jest.Mock).mockImplementationOnce(() => { throw new Error("digest boom"); });
+
+    await expect(store.runLocalEvalTurns(twoCases as any)).resolves.toBeUndefined();
+
+    const contents = store.transcriptStore.messages.map((m) => m.messageContent.content);
+    expect(contents.some((c) => typeof c === "string" && /local eval failed/i.test(c) && /digest boom/.test(c)))
+      .toBe(true);
+    expect(contents.some((c) => typeof c === "string" && /passed/.test(c))).toBe(false);
+    expect(consoleLogSpy).not.toHaveBeenCalledWith("DAVAI local eval results", expect.anything());
+    expect(consoleErrorSpy).toHaveBeenCalledWith("Local eval failed:", expect.any(Error));
+    expect(store.isLoadingResponse).toBe(false);
+    expect(store.showLoadingIndicator).toBe(false);
+
+    consoleLogSpy.mockRestore();
+    consoleErrorSpy.mockRestore();
   });
 });
