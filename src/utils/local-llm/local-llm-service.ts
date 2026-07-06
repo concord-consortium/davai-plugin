@@ -93,14 +93,14 @@ const doLoad = async (modelId: string, generation: number, onSettleEarly: () => 
         setState({ status: "loading", modelId, progress: p.progress, text: p.text });
       },
     },
-    // Prebuilt Qwen3 configs default to a 4096 window — too small for the mirrored DAVAI
-    // context, so override to 16K: with the full mirrored context (instructions + client API
-    // doc + data contexts) assembled, 16K is what it takes for the doc to survive intact with
-    // headroom rather than being cut by the prompt-budget safety net. Qwen3's native window is
-    // 32K, so 16K is well within range. KV-cache cost vs the previous 8K override is roughly
-    // +1 GB for the 1.7B model and +1.2 GB for the 4B model — acceptable for this dev-gated
-    // experiment.
-    { context_window_size: 16384 }
+    // Prebuilt Qwen3 configs default to a 4096 window — too small even for the focused-tools
+    // prompt, so override to 8K: the generated tool docs + schema digest + graph seed assemble
+    // to roughly 3K tokens, so 8K leaves ample headroom for the transcript and a multi-round
+    // tool loop without the model ever seeing ContextWindowSizeExceededError. It also halves
+    // KV-cache VRAM versus the prior 16K window (roughly -1 GB for the 1.7B model and -1.2 GB
+    // for the 4B model), which matters on weaker GPUs. Qwen3's native window is 32K, so 8K is
+    // well within range.
+    { context_window_size: 8192 }
   ) as unknown as IEngineLike;
   // Clear our own inflightLoad registration now that we have an engine (nothing left to
   // terminate); a superseding claim that arrives after this point tears down `created` via the
