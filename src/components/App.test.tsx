@@ -1,6 +1,7 @@
 import "openai/shims/node";
 import React from "react";
 import { fireEvent, render, screen } from "@testing-library/react";
+import { initializePlugin, selectSelf } from "@concord-consortium/codap-plugin-api";
 import { App } from "./App";
 import { mockAppConfig } from "../test-utils/mock-app-config";
 import { MockAppConfigProvider } from "../test-utils/app-config-provider";
@@ -32,12 +33,19 @@ const mockAssistantStore: any = {
   handleCancel: jest.fn(),
   handleMessageSubmit: jest.fn(),
   setStreamEnabled: jest.fn(),
+  setEffort: jest.fn(),
   transcriptStore: { messages: [], addMessage: jest.fn() },
   threadId: "thread-1",
   showLoadingIndicator: false,
   isLoadingResponse: false,
   isResponding: false,
 };
+
+jest.mock("@concord-consortium/codap-plugin-api", () => ({
+  ...jest.requireActual("@concord-consortium/codap-plugin-api"),
+  initializePlugin: jest.fn(),
+  selectSelf: jest.fn(),
+}));
 
 jest.mock("../contexts/root-store-context", () => ({
   useRootStore: jest.fn(() => ({
@@ -99,6 +107,16 @@ describe("test load app", () => {
     expect(screen.getByText("DAVAI")).toBeDefined();
     expect(screen.getByTestId("chat-transcript")).toBeDefined();
     expect(screen.getByTestId("chat-input")).toBeDefined();
+  });
+
+  it("skips CODAP wiring when running outside CODAP (standalone window)", () => {
+    // jsdom is a top-level window (window.parent === window), i.e. the standalone case:
+    // no CODAP requests may be made on mount — with no parent frame to answer them they
+    // would surface as timeouts and uncaught errors in the dev overlay.
+    renderApp();
+
+    expect(initializePlugin).not.toHaveBeenCalled();
+    expect(selectSelf).not.toHaveBeenCalled();
   });
 
   it("shows the Cancel button (not Send) while a response is streaming", () => {

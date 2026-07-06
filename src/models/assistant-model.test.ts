@@ -173,3 +173,19 @@ describe("AssistantModel streaming busy-state (DAVAI-118)", () => {
     expect(contents).toContain("Final answer.");
   });
 });
+
+describe("AssistantModel effort (DAVAI-125)", () => {
+  afterEach(() => {
+    jest.clearAllMocks();
+  });
+
+  it("includes the effort in the message request body", async () => {
+    const store = createStore();
+    store.setEffort("low");
+    mockedPostMessage.mockReturnValue(new Promise<Response>(() => { /* never resolves */ })); // park after submit
+    store.handleMessageSubmit("hi");
+    await Promise.resolve();
+    const body = mockedPostMessage.mock.calls[0][0];
+    expect(body.effort).toBe("low");
+  });
+});

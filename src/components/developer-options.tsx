@@ -5,6 +5,7 @@ import { useAppConfigContext } from "../contexts/app-config-context";
 import { DAVAI_SPEAKER, GREETING } from "../constants";
 import { AppConfigToggleOptions } from "../models/app-config-model";
 import { useRootStore } from "../contexts/root-store-context";
+import { findEntryByLlmId, resolveEffort } from "../utils/llm-effort";
 
 interface IProps {
   assistantStore: AssistantModelType;
@@ -46,6 +47,8 @@ export const DeveloperOptionsComponent = observer(({assistantStore, createToggle
 
     resetTranscriptStore();
     appConfig.setLlmId(e.target.value);
+    const entry = findEntryByLlmId(appConfig.llmList as any, e.target.value);
+    appConfig.setEffort(resolveEffort(entry as any, null, ""));
     // We don't need to initialize the assistant here, because changing the LLM ID
     // will automatically re-initialize it via an effect in the App component
   };
@@ -66,16 +69,41 @@ export const DeveloperOptionsComponent = observer(({assistantStore, createToggle
             value={selectedLlm}
             onChange={handleSelectLlm}
           >
-            {appConfig.llmList.map((llm) => (
-              <option
-                aria-selected={appConfig.llmId === JSON.stringify(llm)}
-                key={llm.id}
-                value={JSON.stringify(llm)}
-              >
-                {llm.id === "mock" ? "Mock LLM" : `${llm.provider}: ${llm.id}`}
-              </option>
-            ))}
+            {appConfig.llmList.map((llm) => {
+              // Serialize only { id, provider } so the option value matches the canonical
+              // llmId. (llmList entries also carry effortLevels/defaultEffort, which must
+              // not leak into the value or the select would match no option.)
+              const value = JSON.stringify({ id: llm.id, provider: llm.provider });
+              return (
+                <option
+                  aria-selected={appConfig.llmId === value}
+                  key={llm.id}
+                  value={value}
+                >
+                  {llm.id === "mock" ? "Mock LLM" : `${llm.provider}: ${llm.id}`}
+                </option>
+              );
+            })}
           </select>
+        </div>
+        <div className="user-option">
+          <label htmlFor="effort-select" data-testid="effort-select-label">Effort:</label>
+          {(() => {
+            const entry = findEntryByLlmId(appConfig.llmList as any, appConfig.llmId);
+            const levels = entry?.effortLevels ?? [];
+            return (
+              <select
+                id="effort-select"
+                data-testid="effort-select"
+                aria-label={levels.length ? undefined : "Effort (not available for this model)"}
+                disabled={levels.length === 0}
+                value={appConfig.effort}
+                onChange={(e) => appConfig.setEffort(e.target.value)}
+              >
+                {levels.map((level) => <option key={level} value={level}>{level}</option>)}
+              </select>
+            );
+          })()}
         </div>
         <div className="user-option">
           <button

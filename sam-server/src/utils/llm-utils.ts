@@ -42,31 +42,56 @@ const promptTemplate = ChatPromptTemplate.fromMessages([
     ["placeholder", "{messages}"],
 ]);
 
-// OpenAI reasoning models (the gpt-5 family and the o-series) reject any
-// non-default temperature, returning a 400. They must be created with the only
-// supported value (1) rather than the 0 we use for standard chat models.
+// OpenAI reasoning models (the gpt-5 family and the o-series). These are routed through
+// the Responses API and built without a temperature — they only accept the default, and
+// Responses can reject the parameter outright (see createModelInstance). Standard chat
+// models stay on Chat Completions with temperature 0.
 const isOpenAIReasoningModel = (id: string) => /^(gpt-5|o\d)/i.test(id);
 
-// Opus 4.7+ removed the sampling parameters entirely — sending temperature, top_p, or
-// top_k returns a 400. (Opus 4.6 and earlier still accept temperature.) The 0.3.x library
-// always sends all three, so for these models we override them to undefined to omit them.
-const isAnthropicNoSamplingModel = (id: string) => /^claude-opus-4-(?:[7-9]|\d\d)/.test(id);
+// Adaptive-thinking-only Anthropic models removed the sampling parameters entirely —
+// sending temperature, top_p, or top_k returns a 400. This is the Opus 4.7+ line and the
+// "5"-generation Sonnet (Sonnet 5); models that still support extended thinking (Opus 4.6,
+// Sonnet 4.6, Haiku 4.5) still accept temperature. The library always sends all three, so
+// for these models we omit them.
+const isAnthropicNoSamplingModel = (id: string) =>
+  /^claude-opus-4-(?:[7-9]|\d\d)/.test(id) || /^claude-sonnet-5/.test(id);
 
-export const createModelInstance = async (llm: string) => {
+// Anthropic models that accept output_config.effort (Opus 4.5+, Sonnet 4.6+, Sonnet 5;
+// NOT Haiku 4.5, which has no effort parameter).
+const isAnthropicEffortModel = (id: string) => !/^claude-haiku/.test(id);
+
+export const createModelInstance = async (llm: string, effort?: string) => {
   const llmObj = JSON.parse(llm);
   const { id, provider } = llmObj;
 
   if (provider === "OpenAI") {
     const apiKey = await getOpenAIKey();
+    if (isOpenAIReasoningModel(id)) {
+      // Reasoning models (gpt-5 family, o-series) go through the Responses API
+      // (/v1/responses): Chat Completions rejects reasoning_effort when function tools are
+      // bound (400), while Responses supports it and preserves the model's reasoning across
+      // tool-call round trips. Temperature is omitted entirely — these models only accept
+      // the default, and Responses can reject the parameter outright.
+      return new ChatOpenAI({
+        model: id,
+        apiKey,
+        useResponsesApi: true,
+        ...(effort ? { reasoning: { effort: effort as any } } : {}),
+      });
+    }
     return new ChatOpenAI({
       model: id,
-      temperature: isOpenAIReasoningModel(id) ? 1 : 0,
+      temperature: 0,
       apiKey,
     });
   }
 
   if (provider === "Google") {
     const apiKey = await getGoogleKey();
+    // No effort/thinking-level here: the installed @langchain/google-genai 2.2.0 only
+    // supports LOW/MEDIUM/HIGH (no "minimal") for thinkingLevel, so forwarding the config's
+    // Gemini levels would send invalid requests. Gemini effort is disabled for now (its
+    // llmList entries carry no effortLevels); leave these models exactly as they were.
     return new ChatGoogleGenerativeAI({
       model: id,
       temperature: 0,
@@ -83,30 +108,32 @@ export const createModelInstance = async (llm: string) => {
       model: id,
       ...(isAnthropicNoSamplingModel(id) ? {} : { temperature: 0 }),
       apiKey,
+      ...(effort && isAnthropicEffortModel(id) ? { outputConfig: { effort: effort as any } } : {}),
     });
   }
 
   throw new Error(`Unsupported LLM provider: ${provider}`);
 };
 
-export const getOrCreateModelInstance = async (llmId: string): Promise<any> => {
-  if (!llmInstances[llmId]) {
-    const model = await createModelInstance(llmId);
+export const getOrCreateModelInstance = async (llmId: string, effort?: string): Promise<any> => {
+  const cacheKey = `${llmId}::${effort ?? ""}`;
+  if (!llmInstances[cacheKey]) {
+    const model = await createModelInstance(llmId, effort);
     const { provider } = JSON.parse(llmId);
     const callOptions: Record<string, any> =
       provider === "Anthropic"
         // Anthropic uses disable_parallel_tool_use in tool_choice instead of parallel_tool_calls
         ? { tool_choice: { type: "auto", disable_parallel_tool_use: true } }
         : { parallel_tool_calls: false };
-    llmInstances[llmId] = (model as any).bindTools(tools, callOptions);
+    llmInstances[cacheKey] = (model as any).bindTools(tools, callOptions);
   }
 
-  return llmInstances[llmId];
+  return llmInstances[cacheKey];
 };
 
 const callModel = async (state: any, modelConfig: any) => {
-  const { llmId } = modelConfig.configurable;
-  const llm = await getOrCreateModelInstance(llmId);
+  const { llmId, effort } = modelConfig.configurable;
+  const llm = await getOrCreateModelInstance(llmId, effort);
 
   // Use the trimmer to ensure we don't send too much to the model
   // The trimmer is used to limit the number of tokens in the conversation history.

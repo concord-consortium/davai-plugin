@@ -14,11 +14,12 @@ export const mockAppConfig: AppConfigModelSnapshot = {
   playbackSpeed: 1.0,
   readAloudEnabled: false,
   streamResponses: true,
-  llmId: "{ id: \"mock\", name: \"Mock LLM\" }",
+  llmId: "{\"id\":\"mock\",\"provider\":\"Mock\"}",
+  effort: "",
   llmList: [
-    { id: "mock", provider: "Mock" },
-    { id: "gemini-2.0-flash", provider: "Google" },
-    { id: "gpt-4o-mini", provider: "OpenAI" }
+    { id: "mock", provider: "Mock", effortLevels: [] },
+    { id: "gemini-2.0-flash", provider: "Google", effortLevels: ["low", "medium", "high"], defaultEffort: "medium" },
+    { id: "gpt-4o-mini", provider: "OpenAI", effortLevels: [] }
   ],
   dimensions: {
     height: 680,

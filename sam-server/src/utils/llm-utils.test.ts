@@ -131,6 +131,61 @@ describe("createModelInstance", () => {
     expect(callArgs.invocationKwargs).toBeUndefined();
   });
 
+  it("should not set sampling params for Sonnet 5 (adaptive-only, like Opus 4.7+)", async () => {
+    await createModelInstance(JSON.stringify({ id: "claude-sonnet-5", provider: "Anthropic" }));
+
+    const callArgs = (ChatAnthropic as unknown as jest.Mock).mock.calls[0][0];
+    expect(callArgs.temperature).toBeUndefined();
+    expect(callArgs.topP).toBeUndefined();
+    expect(callArgs.invocationKwargs).toBeUndefined();
+  });
+
+  it("applies Anthropic effort via outputConfig", async () => {
+    await createModelInstance(JSON.stringify({ id: "claude-sonnet-5", provider: "Anthropic" }), "low");
+    const args = (ChatAnthropic as unknown as jest.Mock).mock.calls[0][0];
+    expect(args.outputConfig).toEqual({ effort: "low" });
+  });
+
+  it("does not set Anthropic effort for haiku (no support)", async () => {
+    await createModelInstance(JSON.stringify({ id: "claude-haiku-4-5", provider: "Anthropic" }), "low");
+    const args = (ChatAnthropic as unknown as jest.Mock).mock.calls[0][0];
+    expect(args.outputConfig).toBeUndefined();
+  });
+
+  it("applies OpenAI effort via reasoning on the Responses API", async () => {
+    // OpenAI rejects reasoning_effort + function tools on Chat Completions, so reasoning
+    // models use the Responses API (useResponsesApi), where the constructor `reasoning`
+    // field carries the effort.
+    await createModelInstance(JSON.stringify({ id: "gpt-5.5", provider: "OpenAI" }), "high");
+    const args = (ChatOpenAI as unknown as jest.Mock).mock.calls[0][0];
+    expect(args.useResponsesApi).toBe(true);
+    expect(args.reasoning).toEqual({ effort: "high" });
+    expect(args.reasoningEffort).toBeUndefined();
+  });
+
+  it("uses the Responses API for OpenAI reasoning models even without an effort", async () => {
+    // The API choice must not flip based on effort — an empty effort still routes through
+    // Responses, just without a reasoning param (model reasons at its default level).
+    await createModelInstance(JSON.stringify({ id: "gpt-5.5", provider: "OpenAI" }), "");
+    const args = (ChatOpenAI as unknown as jest.Mock).mock.calls[0][0];
+    expect(args.useResponsesApi).toBe(true);
+    expect(args.reasoning).toBeUndefined();
+  });
+
+  it("does not set a thinking level for Google (Gemini effort disabled)", async () => {
+    // The installed google-genai lacks Gemini 3.x levels (no "minimal"); forwarding them
+    // would send invalid requests, so Google models get no thinkingConfig even with effort.
+    await createModelInstance(JSON.stringify({ id: "gemini-3.5-flash", provider: "Google" }), "minimal");
+    const args = (ChatGoogleGenerativeAI as unknown as jest.Mock).mock.calls[0][0];
+    expect(args.thinkingConfig).toBeUndefined();
+  });
+
+  it("omits effort params when effort is empty/undefined", async () => {
+    await createModelInstance(JSON.stringify({ id: "claude-sonnet-5", provider: "Anthropic" }), "");
+    const args = (ChatAnthropic as unknown as jest.Mock).mock.calls[0][0];
+    expect(args.outputConfig).toBeUndefined();
+  });
+
   it("should throw an error for unsupported providers", async () => {
     const llmId = JSON.stringify({ id: "unknown", provider: "Unsupported" });
 
@@ -139,25 +194,30 @@ describe("createModelInstance", () => {
 });
 
 describe("createModelInstance temperature handling", () => {
-  // Reasoning models (gpt-5 family, o-series) reject any non-default temperature,
-  // so they must be built with the only supported value (1) rather than 0.
+  // Reasoning models (gpt-5 family, o-series) only accept the default temperature, and the
+  // Responses API can reject the parameter outright — so they are built with no temperature
+  // at all (undefined is omitted from the request) and routed through the Responses API.
   it.each(["gpt-5.5", "gpt-5.4", "gpt-5.4-nano", "o3-mini", "o1"])(
-    "builds reasoning OpenAI model %s with temperature 1",
+    "builds reasoning OpenAI model %s with no temperature and the Responses API",
     async (id) => {
       await createModelInstance(JSON.stringify({ id, provider: "OpenAI" }));
       expect(ChatOpenAI).toHaveBeenCalledWith(
-        expect.objectContaining({ model: id, temperature: 1 })
+        expect.objectContaining({ model: id, useResponsesApi: true })
       );
+      const args = (ChatOpenAI as unknown as jest.Mock).mock.calls[0][0];
+      expect(args.temperature).toBeUndefined();
     }
   );
 
   it.each(["gpt-4o-mini", "gpt-4o", "gpt-4.1-mini"])(
-    "builds non-reasoning OpenAI model %s with temperature 0",
+    "builds non-reasoning OpenAI model %s with temperature 0 on Chat Completions",
     async (id) => {
       await createModelInstance(JSON.stringify({ id, provider: "OpenAI" }));
       expect(ChatOpenAI).toHaveBeenCalledWith(
         expect.objectContaining({ model: id, temperature: 0 })
       );
+      const args = (ChatOpenAI as unknown as jest.Mock).mock.calls[0][0];
+      expect(args.useResponsesApi).toBeUndefined();
     }
   );
 });

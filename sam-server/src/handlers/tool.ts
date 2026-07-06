@@ -20,7 +20,7 @@ export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayPr
   
   try {
     const body = JSON.parse(event.body || "{}");
-    const { llmId, message, threadId } = body;
+    const { llmId, message, threadId, effort } = body;
 
     if (!llmId || !message || !threadId) {
       return {
@@ -34,7 +34,7 @@ export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayPr
     }
 
     const messageId = nanoid();
-    const jobInput: ToolJobInput = { llmId, threadId, message };
+    const jobInput: ToolJobInput = { llmId, threadId, message, effort };
     
     // Store job in PostgreSQL
     await pool.query(

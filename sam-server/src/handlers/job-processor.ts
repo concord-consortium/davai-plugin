@@ -89,7 +89,7 @@ export const handler = async (event: SQSEvent): Promise<void> => {
 
       // Process the job
       const config = {
-        configurable: { llmId: job.input.llmId, thread_id: job.input.threadId },
+        configurable: { llmId: job.input.llmId, thread_id: job.input.threadId, effort: job.input.effort },
         signal: controller.signal
       };
 

@@ -12,58 +12,62 @@
   "readAloudEnabled": false,
   "streamResponses": true,
   "llmId": "{\"id\":\"claude-haiku-4-5\",\"provider\":\"Anthropic\"}",
+  "effort": "",
   "llmList": [
     {
       "id": "mock",
-      "provider": "Mock"
+      "provider": "Mock",
+      "effortLevels": []
     },
     {
       "id": "gemini-3.5-flash",
-      "provider": "Google"
+      "provider": "Google",
+      "effortLevels": []
     },
     {
       "id": "gemini-3.1-flash-lite",
-      "provider": "Google"
+      "provider": "Google",
+      "effortLevels": []
     },
     {
       "id": "gemini-3.1-pro-preview",
-      "provider": "Google"
+      "provider": "Google",
+      "effortLevels": []
     },
     {
       "id": "gpt-5.5",
-      "provider": "OpenAI"
-    },
-    {
-      "id": "gpt-5.4",
-      "provider": "OpenAI"
+      "provider": "OpenAI",
+      "effortLevels": ["none", "low", "medium", "high", "xhigh"],
+      "defaultEffort": "medium"
     },
     {
       "id": "gpt-5.4-mini",
-      "provider": "OpenAI"
+      "provider": "OpenAI",
+      "effortLevels": ["none", "low", "medium", "high", "xhigh"],
+      "defaultEffort": "none"
     },
     {
       "id": "gpt-5.4-nano",
-      "provider": "OpenAI"
-    },
-    {
-      "id": "gpt-4o-mini",
-      "provider": "OpenAI"
+      "provider": "OpenAI",
+      "effortLevels": ["none", "low", "medium", "high", "xhigh"],
+      "defaultEffort": "none"
     },
     {
       "id": "claude-haiku-4-5",
-      "provider": "Anthropic"
+      "provider": "Anthropic",
+      "effortLevels": []
     },
     {
-      "id": "claude-sonnet-4-6",
-      "provider": "Anthropic"
-    },
-    {
-      "id": "claude-opus-4-7",
-      "provider": "Anthropic"
+      "id": "claude-sonnet-5",
+      "provider": "Anthropic",
+      "effortLevels": ["low", "medium", "high", "xhigh", "max"],
+      "defaultEffort": "high"
     },
     {
       "id": "claude-opus-4-8",
-      "provider": "Anthropic"
+      "provider": "Anthropic",
+      "effortLevels": ["low", "medium", "high", "xhigh", "max"],
+      "defaultEffort": "high"
     }
   ],
   "sonify": {

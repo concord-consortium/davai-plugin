@@ -14,4 +14,11 @@ describe("AppConfigModel streamResponses", () => {
     const config = AppConfigModel.create(mockAppConfig);
     expect(config.streamResponses).toBe(true);
   });
+
+  it("has an effort setting that defaults to empty and is settable", () => {
+    const config = AppConfigModel.create(mockAppConfig as AppConfigModelSnapshot);
+    expect(config.effort).toBe("");
+    config.setEffort("low");
+    expect(config.effort).toBe("low");
+  });
 });
