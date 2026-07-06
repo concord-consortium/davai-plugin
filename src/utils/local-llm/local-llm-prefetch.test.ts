@@ -68,4 +68,11 @@ describe("buildGraphSeed", () => {
     (getGraphByID as jest.Mock).mockRejectedValue(new Error("gone"));
     expect(await buildGraphSeed("42", dcs)).toBe("");
   });
+
+  it("returns empty string when the graph's data context is not in the store", async () => {
+    (getGraphByID as jest.Mock).mockResolvedValue({
+      id: 42, title: "Orphan", dataContext: "NotARealContext", xAttributeName: "Height", yAttributeName: null,
+    });
+    expect(await buildGraphSeed("42", dcs)).toBe("");
+  });
 });
