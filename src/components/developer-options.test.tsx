@@ -24,6 +24,13 @@ jest.mock("../utils/local-llm/local-llm-service", () => ({
   localLlmService: { isWebGPUAvailable: () => mockIsWebGPUAvailable() },
 }));
 
+// Declared separately (rather than inlined as `runLocalEvalTurns: jest.fn()`) because MST wraps
+// actions: the instance's `runLocalEvalTurns` property is not the same object as the jest.fn()
+// used to define it (no `.mock` inspection API on the wrapped property), even though calls are
+// still recorded on this original reference. Assertions below must use this spy, not
+// `mockAssistantStore.runLocalEvalTurns`.
+const runLocalEvalTurnsSpy = jest.fn();
+
 const MockAssistantModel = types
   .model("MockAssistantModel", {
     llmId: types.string,
@@ -33,7 +40,8 @@ const MockAssistantModel = types
   })
   .actions((self) => ({
     createThread: jest.fn(),
-    deleteThread: jest.fn()
+    deleteThread: jest.fn(),
+    runLocalEvalTurns: runLocalEvalTurnsSpy
   }));
 
 const mockTranscriptStore = ChatTranscriptModel.create({
@@ -93,9 +101,11 @@ describe("test developer options component", () => {
   beforeEach(() => {
     setEffortSpy.mockClear();
     setLlmIdSpy.mockClear();
+    runLocalEvalTurnsSpy.mockClear();
     mockConfig = {
       ...mockAppConfig,
       isDevMode: true,
+      isLocalLlm: false,
       setEffort: setEffortSpy,
       setLlmId: setLlmIdSpy,
     };
@@ -230,5 +240,38 @@ describe("test developer options component", () => {
     renderDeveloperOptions();
     const option = screen.getByRole("option", { name: "Local: Qwen3-1.7B-q4f16_1-MLC" }) as HTMLOptionElement;
     expect(option.disabled).toBe(false);
+  });
+
+  it("renders the Run Local Eval button (DAVAI-126 Task 11)", () => {
+    renderDeveloperOptions();
+    const button = screen.getByTestId("run-local-eval-button");
+    expect(button).toBeInTheDocument();
+    expect(button).toHaveTextContent("Run Local Eval");
+  });
+
+  it("aria-disables the Run Local Eval button when the selected LLM is not Local (DAVAI-126 Task 11)", () => {
+    mockConfig.isLocalLlm = false;
+    renderDeveloperOptions();
+    expect(screen.getByTestId("run-local-eval-button")).toHaveAttribute("aria-disabled", "true");
+  });
+
+  it("enables (not aria-disabled) the Run Local Eval button when the selected LLM is Local (DAVAI-126 Task 11)", () => {
+    mockConfig.isLocalLlm = true;
+    renderDeveloperOptions();
+    expect(screen.getByTestId("run-local-eval-button")).toHaveAttribute("aria-disabled", "false");
+  });
+
+  it("calls assistantStore.runLocalEvalTurns when clicked with a Local model selected (DAVAI-126 Task 11)", () => {
+    mockConfig.isLocalLlm = true;
+    renderDeveloperOptions();
+    fireEvent.click(screen.getByTestId("run-local-eval-button"));
+    expect(runLocalEvalTurnsSpy).toHaveBeenCalledTimes(1);
+  });
+
+  it("does not call assistantStore.runLocalEvalTurns when clicked without a Local model selected (DAVAI-126 Task 11)", () => {
+    mockConfig.isLocalLlm = false;
+    renderDeveloperOptions();
+    fireEvent.click(screen.getByTestId("run-local-eval-button"));
+    expect(runLocalEvalTurnsSpy).not.toHaveBeenCalled();
   });
 });

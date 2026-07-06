@@ -14,6 +14,8 @@ import { runLocalTurn } from "../utils/local-llm/local-llm-loop";
 import { buildLocalSystemPrompt, buildTranscriptTurns } from "../utils/local-llm/local-llm-prompt";
 import { initializeLocalTools, dispatchTool, buildToolDocs, ILocalToolContext } from "../utils/local-llm/tools";
 import { buildGraphSeed, buildSchemaDigest } from "../utils/local-llm/local-llm-prefetch";
+import { runLocalEval, summarizeEval, IEvalTurnResult } from "../utils/local-llm/eval/eval-runner";
+import { IEvalCase } from "../utils/local-llm/eval/eval-cases";
 
 // Registers the curated local-tool set once per module load. Idempotent (registerTools does a
 // wholesale array reassignment), so re-import / hot-reload / multiple AssistantModel instances
@@ -629,6 +631,61 @@ export const AssistantModel = types
       }
     });
 
+    // Scripted eval harness (DAVAI-126 Task 11): runs a fixed battery of prompts against the
+    // SAME local-model building blocks as handleMessageSubmitLocalLlm (engine ensure, tool ctx,
+    // graph seed, system prompt, runLocalTurn) but as independent single-shot turns — no shared
+    // conversation, and no per-case transcript chatter. Only a start announcement and the final
+    // pass/fail summary are added to the transcript; the full per-case detail goes to the
+    // console (see summarizeEval's "details in the browser console"). Reuses the same turnEpoch
+    // guard as a normal local turn, so Cancel aborts an in-progress eval run the same way.
+    const runLocalEvalTurns = flow(function* (cases: IEvalCase[]) {
+      const myEpoch = self.turnEpoch;
+      const isCurrent = () => self.turnEpoch === myEpoch;
+
+      yield localLlmService.loadEngine(JSON.parse(self.llmId).id);
+      if (!isCurrent()) return;
+
+      self.addDavaiAnnouncement(`Running ${cases.length} local eval case${cases.length === 1 ? "" : "s"}…`);
+
+      const root = getRoot(self) as any;
+      const toolCtx: ILocalToolContext = {
+        sendCODAPRequest,
+        dataContexts: () => self.dataContexts ?? {},
+        graphs: () => self.graphs ?? [],
+        selectedGraphId: () => root.sonificationStore?.selectedGraphID ?? null,
+        setSelectedGraphID: (graphId) => root.sonificationStore.setSelectedGraphID(graphId),
+        refreshDataContexts: async () => { await (self as any).updateDataContexts(); },
+        refreshGraphs: async () => { await (self as any).updateGraphs(); },
+      };
+      const selectedId = toolCtx.selectedGraphId();
+      const graphSeed: string = selectedId ? yield buildGraphSeed(String(selectedId), self.dataContexts ?? {}) : "";
+      const systemPrompt = buildLocalSystemPrompt({
+        toolDocs: buildToolDocs(),
+        schemaDigest: buildSchemaDigest(self.dataContexts ?? {}),
+        graphSeed,
+      });
+
+      const runTurn = async (prompt: string): Promise<IEvalTurnResult> => {
+        const toolCalls: string[] = [];
+        const final = await runLocalTurn({
+          generate: (messages) => localLlmService.generate(messages),
+          executeTool: (name, args) => dispatchTool(name, args, toolCtx),
+          systemPrompt,
+          turns: [], // eval cases are independent single-shot prompts, not a growing conversation
+          userMessage: prompt,
+          onToolCall: (name) => toolCalls.push(name),
+          isCancelled: () => !isCurrent(),
+        });
+        return { toolCalls, final };
+      };
+
+      const results = yield runLocalEval(cases, runTurn);
+      if (!isCurrent()) return; // cancelled/superseded partway through the battery
+
+      console.log("DAVAI local eval results", JSON.stringify(results, null, 2));
+      self.addDavaiAnnouncement(summarizeEval(results));
+    });
+
     const handleCancel = flow(function* () {
       try {
         if (self.isLocalLlm) {
@@ -698,7 +755,7 @@ export const AssistantModel = types
 
     return {
       createThread, initializeAssistant, handleMessageSubmit, handleMessageSubmitLocalLlm,
-      handleCancel, updateDataContexts, updateGraphs, processToolCall
+      handleCancel, updateDataContexts, updateGraphs, processToolCall, runLocalEvalTurns
     };
   })
   .actions((self) => ({

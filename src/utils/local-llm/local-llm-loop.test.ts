@@ -34,6 +34,36 @@ it("executes a tool call, feeds the result back, then returns the final", async 
   expect(secondMessages[secondMessages.length - 1].content).toContain("Tool result");
 });
 
+it("invokes the optional onToolCall hook with each tool name, in round order, before executing it (DAVAI-126)", async () => {
+  const generate = jest.fn()
+    .mockResolvedValueOnce("{\"tool\":\"get_graph_info\"}")
+    .mockResolvedValueOnce("{\"tool\":\"get_stats\",\"dataContext\":\"D\",\"attribute\":\"A\"}")
+    .mockResolvedValueOnce("{\"tool\":\"final\",\"response\":\"done\"}");
+  const calledNamesAtExecuteTime: string[] = [];
+  const executeTool = jest.fn(async (name: string) => {
+    // Captured from inside executeTool so the assertion also proves onToolCall ran BEFORE
+    // executeTool for a given round, not merely "at some point during the turn."
+    calledNamesAtExecuteTime.push(...onToolCall.mock.calls.map((c) => c[0]));
+    return "{\"success\":true}";
+  });
+  const onToolCall = jest.fn();
+  const out = await runLocalTurn({ ...baseArgs, generate, executeTool, onToolCall });
+
+  expect(out).toBe("done");
+  expect(onToolCall.mock.calls.map((c) => c[0])).toEqual(["get_graph_info", "get_stats"]);
+  // At the moment the FIRST executeTool ran, onToolCall had already recorded that round's name.
+  expect(calledNamesAtExecuteTime[0]).toBe("get_graph_info");
+});
+
+it("does not throw when onToolCall is omitted (it is optional)", async () => {
+  const generate = jest.fn()
+    .mockResolvedValueOnce("{\"tool\":\"get_graph_info\"}")
+    .mockResolvedValueOnce("{\"tool\":\"final\",\"response\":\"done\"}");
+  const executeTool = jest.fn().mockResolvedValue("{\"success\":true}");
+  const out = await runLocalTurn({ ...baseArgs, generate, executeTool }); // no onToolCall
+  expect(out).toBe("done");
+});
+
 it("retries once after an invalid envelope with corrective feedback", async () => {
   const generate = jest.fn()
     .mockResolvedValueOnce("I think the answer is 5")

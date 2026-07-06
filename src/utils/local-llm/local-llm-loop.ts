@@ -13,6 +13,10 @@ export interface ILocalTurnArgs {
   // has been cancelled/superseded, so the loop stops early and returns the fallback WITHOUT
   // running another generation. The caller is responsible for discarding this stale result.
   isCancelled?: () => boolean;
+  // Optional instrumentation hook: invoked with the tool's name immediately before executeTool
+  // runs for that round. Used by the eval harness (DAVAI-126) to record the tool-call sequence
+  // for a turn without changing the loop's own control flow.
+  onToolCall?: (name: string) => void;
 }
 
 const FALLBACK_RESPONSE =
@@ -29,7 +33,7 @@ const capToolResult = (result: string): string =>
     : `${result.slice(0, MAX_TOOL_RESULT_CHARS)}\n${TOOL_RESULT_TRUNCATED_MARKER}`;
 
 export const runLocalTurn = async (args: ILocalTurnArgs): Promise<string> => {
-  const { generate, executeTool, systemPrompt, turns, userMessage, maxRounds = 5, isCancelled } = args;
+  const { generate, executeTool, systemPrompt, turns, userMessage, maxRounds = 5, isCancelled, onToolCall } = args;
 
   // The conversation after the system prompt: the prior transcript turns, the current user
   // message, and everything the loop appends (assistant envelopes, tool results, corrective
@@ -77,6 +81,7 @@ export const runLocalTurn = async (args: ILocalTurnArgs): Promise<string> => {
       if (lastEnvelope.kind === "final") return lastEnvelope.response;
       return stripThink(lastRaw) || FALLBACK_RESPONSE;
     }
+    onToolCall?.(envelope.name);
     const result = await executeTool(envelope.name, envelope.args);
     conversation.push({ role: "user", content: `Tool result: ${capToolResult(result)}` });
   }

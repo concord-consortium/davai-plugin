@@ -7,6 +7,7 @@ import { AppConfigToggleOptions } from "../models/app-config-model";
 import { useRootStore } from "../contexts/root-store-context";
 import { findEntryByLlmId, resolveEffort } from "../utils/llm-effort";
 import { localLlmService } from "../utils/local-llm/local-llm-service";
+import { evalCases } from "../utils/local-llm/eval/eval-cases";
 
 interface IProps {
   assistantStore: AssistantModelType;
@@ -52,6 +53,15 @@ export const DeveloperOptionsComponent = observer(({assistantStore, createToggle
     appConfig.setEffort(resolveEffort(entry as any, null, ""));
     // We don't need to initialize the assistant here, because changing the LLM ID
     // will automatically re-initialize it via an effect in the App component
+  };
+
+  const handleRunLocalEval = () => {
+    // Mirrors the button's own aria-disabled condition: a non-Local model has no local engine
+    // to run the eval battery against, so guard here too rather than relying solely on the
+    // disabled affordance (aria-disabled does not block clicks/keyboard activation like a real
+    // disabled attribute would).
+    if (!appConfig.isLocalLlm) return;
+    assistantStore.runLocalEvalTurns(evalCases);
   };
 
   return (
@@ -128,6 +138,15 @@ export const DeveloperOptionsComponent = observer(({assistantStore, createToggle
             onClick={() => sonificationStore.createCODAPSonificationTable()}
           >
             Create Sonification Table
+          </button>
+        </div>
+        <div className="user-option">
+          <button
+            data-testid="run-local-eval-button"
+            aria-disabled={!appConfig.isLocalLlm}
+            onClick={() => handleRunLocalEval()}
+          >
+            Run Local Eval
           </button>
         </div>
       </div>

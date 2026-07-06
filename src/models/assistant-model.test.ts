@@ -37,6 +37,7 @@ jest.mock("@concord-consortium/codap-plugin-api", () => ({
 import { localLlmService } from "../utils/local-llm/local-llm-service";
 import { runLocalTurn } from "../utils/local-llm/local-llm-loop";
 import { dispatchTool } from "../utils/local-llm/tools";
+import { buildSchemaDigest } from "../utils/local-llm/local-llm-prefetch";
 
 const mockedPostMessage = postMessage as jest.MockedFunction<typeof postMessage>;
 
@@ -569,5 +570,144 @@ describe("handleMessageSubmitLocalLlm (DAVAI-126)", () => {
 
     const contents = store.transcriptStore.messages.map((m) => m.messageContent.content);
     expect(contents).not.toContain("stale reply from the old model");
+  });
+});
+
+describe("runLocalEvalTurns (DAVAI-126 Task 11)", () => {
+  afterEach(() => {
+    jest.clearAllMocks();
+  });
+
+  const createLocalStore = () => {
+    const store = createStore();
+    store.setLlmId(JSON.stringify({ id: "Qwen3-1.7B-q4f16_1-MLC", provider: "Local" }));
+    return store;
+  };
+
+  // Two tiny cases so assertions can pin exact pass/fail counts without depending on the
+  // real 11-case eval-cases.ts fixture content.
+  const twoCases = [
+    { id: "case-a", prompt: "describe", expectTools: { none: true }, expectFinal: { matches: [/A local description/] } },
+    { id: "case-b", prompt: "mean?", expectTools: { contains: ["get_stats"] }, expectFinal: { matches: [/mean/i] } },
+  ];
+
+  it("runs each case through the local building blocks and posts a start announcement then a summary", async () => {
+    const store = createLocalStore();
+    const consoleLogSpy = jest.spyOn(console, "log").mockImplementation(() => undefined);
+
+    await store.runLocalEvalTurns(twoCases as any);
+
+    expect(localLlmService.loadEngine).toHaveBeenCalledWith("Qwen3-1.7B-q4f16_1-MLC");
+    // Once per case (no shared/growing conversation across eval cases).
+    expect(runLocalTurn).toHaveBeenCalledTimes(2);
+    expect(runLocalTurn).toHaveBeenCalledWith(expect.objectContaining({ userMessage: "describe" }));
+    expect(runLocalTurn).toHaveBeenCalledWith(expect.objectContaining({ userMessage: "mean?" }));
+
+    const contents = store.transcriptStore.messages.map((m) => m.messageContent.content);
+    // A start announcement precedes the completion summary.
+    expect(contents.some((c) => typeof c === "string" && /eval/i.test(c) && contents.indexOf(c) < contents.length - 1))
+      .toBe(true);
+    // case-a passes (no tools expected, runLocalTurn's mock reply matches); case-b fails (mocked
+    // reply never calls get_stats), so summarizeEval should read 1/2.
+    const summary = contents.at(-1);
+    expect(summary).toContain("1/2 passed");
+    expect(store.transcriptStore.messages.at(-1)?.messageContent.kind).toBe("announcement");
+
+    // The JSON results dump goes to the console, not the transcript.
+    expect(consoleLogSpy).toHaveBeenCalledWith("DAVAI local eval results", expect.stringContaining("case-a"));
+    const loggedJson = consoleLogSpy.mock.calls.find((c) => c[0] === "DAVAI local eval results")?.[1];
+    expect(() => JSON.parse(loggedJson)).not.toThrow();
+    const parsed = JSON.parse(loggedJson);
+    expect(parsed).toHaveLength(2);
+    expect(parsed[0].id).toBe("case-a");
+    expect(parsed[0].passed).toBe(true);
+    expect(parsed[1].id).toBe("case-b");
+    expect(parsed[1].passed).toBe(false);
+
+    consoleLogSpy.mockRestore();
+  });
+
+  it("bypasses the transcript for individual case turns (only the start announcement and final summary are posted)", async () => {
+    const store = createLocalStore();
+    jest.spyOn(console, "log").mockImplementation(() => undefined);
+
+    await store.runLocalEvalTurns(twoCases as any);
+
+    // Exactly two DAVAI-authored rows: the start announcement and the completion summary.
+    // No per-case chatter (e.g. "A local description.") leaks into the visible transcript.
+    const davaiContents = store.transcriptStore.messages
+      .filter((m) => m.speaker === DAVAI_SPEAKER)
+      .map((m) => m.messageContent.content);
+    expect(davaiContents).toHaveLength(2);
+    expect(davaiContents.every((c) => typeof c === "string" && !/^A local description\.$/.test(c))).toBe(true);
+
+    (console.log as jest.Mock).mockRestore();
+  });
+
+  it("records the onToolCall sequence per case into the eval results", async () => {
+    const store = createLocalStore();
+    const consoleLogSpy = jest.spyOn(console, "log").mockImplementation(() => undefined);
+    // Case-b's turn calls a tool via the onToolCall recorder before returning its final text.
+    (runLocalTurn as jest.Mock)
+      .mockImplementationOnce(async () => "A local description.") // case-a: no tool calls
+      .mockImplementationOnce(async (args: any) => {
+        args.onToolCall?.("get_stats");
+        return "The mean is 11.";
+      });
+
+    await store.runLocalEvalTurns(twoCases as any);
+
+    const loggedJson = consoleLogSpy.mock.calls.find((c) => c[0] === "DAVAI local eval results")?.[1];
+    const parsed = JSON.parse(loggedJson);
+    expect(parsed[0].toolCalls).toEqual([]);
+    expect(parsed[1].toolCalls).toEqual(["get_stats"]);
+    expect(parsed[1].passed).toBe(true); // get_stats called + "mean" in the final text
+
+    consoleLogSpy.mockRestore();
+  });
+
+  it("reuses the ctx/seed/prompt building blocks exactly like handleMessageSubmitLocalLlm", async () => {
+    const store = createLocalStore();
+    jest.spyOn(console, "log").mockImplementation(() => undefined);
+
+    await store.runLocalEvalTurns(twoCases as any);
+
+    // buildSchemaDigest runs unconditionally (same as handleMessageSubmitLocalLlm); buildGraphSeed
+    // is conditional on a selected graph ID, which this standalone (parentless) store has none of
+    // — mirroring handleMessageSubmitLocalLlm's own tests, which don't assert on it either.
+    expect(buildSchemaDigest).toHaveBeenCalled();
+    // dispatchTool is reachable via the same executeTool wiring if a case's mocked turn calls it.
+    (runLocalTurn as jest.Mock).mockImplementationOnce(async (args: any) => {
+      await args.executeTool("get_graph_info", {});
+      return "done";
+    });
+    await store.runLocalEvalTurns([twoCases[0]] as any);
+    expect(dispatchTool).toHaveBeenCalledWith("get_graph_info", {}, expect.anything());
+
+    (console.log as jest.Mock).mockRestore();
+  });
+
+  it("does not post a summary when the eval run is cancelled mid-run (epoch reuse)", async () => {
+    const store = createLocalStore();
+    const consoleLogSpy = jest.spyOn(console, "log").mockImplementation(() => undefined);
+    let release: (v: string) => void = () => undefined;
+    (runLocalTurn as jest.Mock).mockImplementationOnce(
+      () => new Promise((res) => { release = res; })
+    );
+
+    const evalRun = store.runLocalEvalTurns(twoCases as any);
+    await Promise.resolve();
+
+    await store.handleCancel(); // bumps the shared turnEpoch, same as an in-flight chat turn
+
+    release("late reply after cancel");
+    await evalRun;
+    await Promise.resolve();
+
+    const contents = store.transcriptStore.messages.map((m) => m.messageContent.content);
+    expect(contents.some((c) => typeof c === "string" && /passed/.test(c))).toBe(false);
+    expect(consoleLogSpy).not.toHaveBeenCalledWith("DAVAI local eval results", expect.anything());
+
+    consoleLogSpy.mockRestore();
   });
 });
