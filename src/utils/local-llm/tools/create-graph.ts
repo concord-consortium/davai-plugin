@@ -31,7 +31,10 @@ export const createGraphTool: ILocalTool = {
     };
     const res = await ctx.sendCODAPRequest({ action: "create", resource: "component", values });
     if (res?.success === false) {
-      return `Graph creation failed: ${res?.values?.error ?? "unknown reason"}.`;
+      // Documented shape is a top-level `error` (sam-server/src/text/codap-api-documentation.ts);
+      // fall back to values.error for tolerance against older/nested response shapes.
+      const reason = res?.error ?? res?.values?.error ?? "unknown reason";
+      return `Graph creation failed: ${reason}.`;
     }
     await ctx.refreshGraphs();
     const title = res?.values?.title ?? resolved.title ?? `${resolved.xAttributeName} graph`;

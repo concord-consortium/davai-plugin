@@ -41,3 +41,20 @@ it("unknown attribute is caught before any request", () => {
   expect(v.ok).toBe(false);
   expect(send).not.toHaveBeenCalled();
 });
+
+it("summarizes CODAP failure using the documented top-level error shape", async () => {
+  send.mockResolvedValue({ success: false, error: "bad component spec" });
+  const v = createGraphTool.validate({ dataContext: "Mammals", xAttribute: "Height" }, ctx);
+  expect(v.ok).toBe(true);
+  const out = await createGraphTool.execute((v as any).resolved, ctx);
+  expect(out).toMatch(/graph creation failed/i);
+  expect(out).toContain("bad component spec");
+});
+
+it("falls back to values.error when the top-level error is absent (tolerance)", async () => {
+  send.mockResolvedValue({ success: false, values: { error: "nested bad component spec" } });
+  const v = createGraphTool.validate({ dataContext: "Mammals", xAttribute: "Height" }, ctx);
+  const out = await createGraphTool.execute((v as any).resolved, ctx);
+  expect(out).toMatch(/graph creation failed/i);
+  expect(out).toContain("nested bad component spec");
+});

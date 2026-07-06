@@ -33,6 +33,18 @@ it("replace mode sends action create and reports the selected count", async () =
   expect(out).toContain("2 cases");
 });
 
+it("canonicalizes repaired refs in the sent expression (ladder rung 2)", async () => {
+  const v = selectCasesTool.validate(
+    { dataContext: "Mammals", expression: "`weight` > mean(`weight`)", mode: "replace" }, ctx);
+  expect(v.ok).toBe(true);
+  await selectCasesTool.execute((v as any).resolved, ctx);
+  expect(send).toHaveBeenCalledWith({
+    action: "create",
+    resource: "dataContext[Mammals].selectionList",
+    values: { expression: "`Weight` > mean(`Weight`)" },
+  });
+});
+
 it("extend mode sends action update", async () => {
   const v = selectCasesTool.validate(
     { dataContext: "Mammals", expression: "`Weight` < 5", mode: "extend" }, ctx);
@@ -40,11 +52,28 @@ it("extend mode sends action update", async () => {
   expect(send.mock.calls[0][0].action).toBe("update");
 });
 
-it("summarizes CODAP failure without a raw dump", async () => {
-  send.mockResolvedValue({ success: false, values: { error: "bad expression" } });
+it("omitted mode defaults to replace (action create)", async () => {
+  const v = selectCasesTool.validate(
+    { dataContext: "Mammals", expression: "`Weight` < 5" }, ctx);
+  expect(v.ok).toBe(true);
+  await selectCasesTool.execute((v as any).resolved, ctx);
+  expect(send.mock.calls[0][0].action).toBe("create");
+});
+
+it("summarizes CODAP failure without a raw dump (documented top-level error shape)", async () => {
+  send.mockResolvedValue({ success: false, error: "bad expression" });
   const v = selectCasesTool.validate(
     { dataContext: "Mammals", expression: "`Weight` >", mode: "replace" }, ctx);
   const out = await selectCasesTool.execute((v as any).resolved, ctx);
   expect(out).toMatch(/selection failed/i);
   expect(out).toContain("bad expression");
+});
+
+it("falls back to values.error when the top-level error is absent (tolerance)", async () => {
+  send.mockResolvedValue({ success: false, values: { error: "nested bad expression" } });
+  const v = selectCasesTool.validate(
+    { dataContext: "Mammals", expression: "`Weight` >", mode: "replace" }, ctx);
+  const out = await selectCasesTool.execute((v as any).resolved, ctx);
+  expect(out).toMatch(/selection failed/i);
+  expect(out).toContain("nested bad expression");
 });
