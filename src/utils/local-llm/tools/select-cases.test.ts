@@ -1,0 +1,50 @@
+jest.mock("../../codap-api-utils", () => ({ getSelectionList: jest.fn() }));
+import { getSelectionList } from "../../codap-api-utils";
+import { selectCasesTool } from "./select-cases";
+import { ILocalToolContext } from "./registry";
+
+const dc = { name: "Mammals", collections: [{ name: "Cases", attrs: [{ name: "Weight" }] }] };
+const send = jest.fn().mockResolvedValue({ success: true });
+const ctx = { dataContexts: () => ({ Mammals: dc }), sendCODAPRequest: send } as unknown as ILocalToolContext;
+
+beforeEach(() => {
+  jest.clearAllMocks();
+  send.mockResolvedValue({ success: true });
+  (getSelectionList as jest.Mock).mockResolvedValue([{ caseID: 1 }, { caseID: 2 }]);
+});
+
+it("validates backticked refs in the expression against the schema", () => {
+  const bad = selectCasesTool.validate(
+    { dataContext: "Mammals", expression: "`Speed` > 10", mode: "replace" }, ctx);
+  expect(bad.ok).toBe(false);
+  expect((bad as any).error).toContain("Weight");
+});
+
+it("replace mode sends action create and reports the selected count", async () => {
+  const v = selectCasesTool.validate(
+    { dataContext: "Mammals", expression: "`Weight` > mean(`Weight`)", mode: "replace" }, ctx);
+  expect(v.ok).toBe(true);
+  const out = await selectCasesTool.execute((v as any).resolved, ctx);
+  expect(send).toHaveBeenCalledWith({
+    action: "create",
+    resource: "dataContext[Mammals].selectionList",
+    values: { expression: "`Weight` > mean(`Weight`)" },
+  });
+  expect(out).toContain("2 cases");
+});
+
+it("extend mode sends action update", async () => {
+  const v = selectCasesTool.validate(
+    { dataContext: "Mammals", expression: "`Weight` < 5", mode: "extend" }, ctx);
+  await selectCasesTool.execute((v as any).resolved, ctx);
+  expect(send.mock.calls[0][0].action).toBe("update");
+});
+
+it("summarizes CODAP failure without a raw dump", async () => {
+  send.mockResolvedValue({ success: false, values: { error: "bad expression" } });
+  const v = selectCasesTool.validate(
+    { dataContext: "Mammals", expression: "`Weight` >", mode: "replace" }, ctx);
+  const out = await selectCasesTool.execute((v as any).resolved, ctx);
+  expect(out).toMatch(/selection failed/i);
+  expect(out).toContain("bad expression");
+});
