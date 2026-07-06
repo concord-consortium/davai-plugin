@@ -18,8 +18,15 @@ const throwTool: ILocalTool = {
   validate: () => ({ ok: true, resolved: {} }),
   execute: async () => { throw new Error("kaboom"); },
 };
+const validateThrowTool: ILocalTool = {
+  name: "demo_validate_throw",
+  description: "Validate always throws.",
+  argsExample: '{"tool": "demo_validate_throw"}',
+  validate: () => { throw new Error("validate blew up"); },
+  execute: async () => "unreachable",
+};
 
-beforeEach(() => registerTools([okTool, throwTool]));
+beforeEach(() => registerTools([okTool, throwTool, validateThrowTool]));
 
 it("dispatches to validate + execute", async () => {
   await expect(dispatchTool("demo_ok", { x: "7" }, ctx)).resolves.toBe("ran with 7");
@@ -40,6 +47,12 @@ it("execute exceptions become error strings — never rejects", async () => {
   const out = await dispatchTool("demo_throw", {}, ctx);
   expect(out).toMatch(/error/i);
   expect(out).toContain("kaboom");
+});
+
+it("validate exceptions also become error strings — never rejects", async () => {
+  const out = await dispatchTool("demo_validate_throw", {}, ctx);
+  expect(out).toMatch(/error/i);
+  expect(out).toContain("validate blew up");
 });
 
 it("buildToolDocs includes every registered tool's name, description, and args example", () => {
