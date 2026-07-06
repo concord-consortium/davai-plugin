@@ -1,12 +1,11 @@
 import { IChatMsg } from "./local-llm-service";
 import { parseEnvelope, stripThink } from "./local-llm-envelope";
-import { ISystemPromptParts, trimToBudget } from "./local-llm-prompt";
-import { IToolCallData } from "../../types";
+import { trimToBudget } from "./local-llm-prompt";
 
 export interface ILocalTurnArgs {
   generate: (messages: IChatMsg[]) => Promise<string>;
-  executeTool: (data: IToolCallData) => Promise<string>;
-  systemPromptParts: ISystemPromptParts;
+  executeTool: (name: string, args: Record<string, unknown>) => Promise<string>;
+  systemPrompt: string;
   turns: IChatMsg[];
   userMessage: string;
   maxRounds?: number;
@@ -30,13 +29,13 @@ const capToolResult = (result: string): string =>
     : `${result.slice(0, MAX_TOOL_RESULT_CHARS)}\n${TOOL_RESULT_TRUNCATED_MARKER}`;
 
 export const runLocalTurn = async (args: ILocalTurnArgs): Promise<string> => {
-  const { generate, executeTool, systemPromptParts, turns, userMessage, maxRounds = 5, isCancelled } = args;
+  const { generate, executeTool, systemPrompt, turns, userMessage, maxRounds = 5, isCancelled } = args;
 
   // The conversation after the system prompt: the prior transcript turns, the current user
   // message, and everything the loop appends (assistant envelopes, tool results, corrective
   // prompts). Re-trimmed against the budget before every generation.
   const conversation: IChatMsg[] = [...turns, { role: "user", content: userMessage }];
-  const budgeted = () => trimToBudget(systemPromptParts, conversation);
+  const budgeted = () => trimToBudget([{ role: "system", content: systemPrompt }, ...conversation]);
 
   let toolRounds = 0;
   let invalidRetried = false;
@@ -46,7 +45,7 @@ export const runLocalTurn = async (args: ILocalTurnArgs): Promise<string> => {
   for (let generation = 0; generation < maxRounds * 2 + 2; generation++) {
     if (isCancelled?.()) return FALLBACK_RESPONSE;
     const raw = await generate(budgeted());
-    const envelope = parseEnvelope(raw, toolRounds);
+    const envelope = parseEnvelope(raw);
 
     if (envelope.kind === "final") return envelope.response;
 
@@ -59,7 +58,7 @@ export const runLocalTurn = async (args: ILocalTurnArgs): Promise<string> => {
       conversation.push({ role: "assistant", content: raw });
       conversation.push({
         role: "user",
-        content: `Your response was not valid: ${envelope.error} Respond with a single JSON object only, using one of the three allowed forms.`,
+        content: `Your response was not valid: ${envelope.error} Respond with a single JSON object only, using one of the allowed forms.`,
       });
       continue;
     }
@@ -74,11 +73,11 @@ export const runLocalTurn = async (args: ILocalTurnArgs): Promise<string> => {
       });
       if (isCancelled?.()) return FALLBACK_RESPONSE;
       const lastRaw = await generate(budgeted());
-      const lastEnvelope = parseEnvelope(lastRaw, toolRounds);
+      const lastEnvelope = parseEnvelope(lastRaw);
       if (lastEnvelope.kind === "final") return lastEnvelope.response;
       return stripThink(lastRaw) || FALLBACK_RESPONSE;
     }
-    const result = await executeTool(envelope.data);
+    const result = await executeTool(envelope.name, envelope.args);
     conversation.push({ role: "user", content: `Tool result: ${capToolResult(result)}` });
   }
   return FALLBACK_RESPONSE;

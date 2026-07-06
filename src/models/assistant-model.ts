@@ -4,14 +4,21 @@ import { codapInterface } from "@concord-consortium/codap-plugin-api";
 import { DAVAI_SPEAKER, DEBUG_SPEAKER, STREAMING_STATUS, USER_SPEAKER, WEBGPU_UNAVAILABLE_MESSAGE } from "../constants";
 import { appendedText } from "../utils/stream-utils";
 import { formatJsonMessage, formatElapsedTime } from "../utils/utils";
-import { getDataContexts, getGraphAttrData, getGraphByID, getTrimmedGraphDetails } from "../utils/codap-api-utils";
+import { getDataContexts, getGraphAttrData, getGraphByID, getTrimmedGraphDetails, sendCODAPRequest } from "../utils/codap-api-utils";
 import { isGraphSonifiable } from "../utils/graph-sonification-utils";
 import { ChatTranscriptModel } from "./chat-transcript-model";
 import { IToolCallData, IToolRequestError, IMessageResponse, ToolOutput } from "../types";
 import { postMessage } from "../utils/llm-utils";
 import { localLlmService } from "../utils/local-llm/local-llm-service";
 import { runLocalTurn } from "../utils/local-llm/local-llm-loop";
-import { buildSystemPromptParts, buildTranscriptTurns } from "../utils/local-llm/local-llm-prompt";
+import { buildLocalSystemPrompt, buildTranscriptTurns } from "../utils/local-llm/local-llm-prompt";
+import { initializeLocalTools, dispatchTool, buildToolDocs, ILocalToolContext } from "../utils/local-llm/tools";
+import { buildGraphSeed, buildSchemaDigest } from "../utils/local-llm/local-llm-prefetch";
+
+// Registers the curated local-tool set once per module load. Idempotent (registerTools does a
+// wholesale array reassignment), so re-import / hot-reload / multiple AssistantModel instances
+// never double-register or leak stale tool objects.
+initializeLocalTools();
 
 // A tool call the server could not prepare comes back as an error payload rather
 // than a normal CODAP request. This guard narrows the union so the normal path can
@@ -560,27 +567,36 @@ export const AssistantModel = types
           lastMatchIndex === -1
             ? msgs.slice()
             : [...msgs.slice(0, lastMatchIndex), ...msgs.slice(lastMatchIndex + 1)];
+
+        // ILocalToolContext carries only plain utilities and REGISTERED actions
+        // (updateDataContexts/updateGraphs/setSelectedGraphID), never a bare flow closure: tool
+        // executors run from runLocalTurn's async continuation, outside any MST action context,
+        // and a bare flow() call there throws "a mst flow must always have a parent context".
+        // Routing through registered actions (via self / root store) self-roots a new context.
+        const root = getRoot(self) as any;
+        const toolCtx: ILocalToolContext = {
+          sendCODAPRequest,
+          dataContexts: () => self.dataContexts ?? {},
+          graphs: () => self.graphs ?? [],
+          selectedGraphId: () => root.sonificationStore?.selectedGraphID ?? null,
+          setSelectedGraphID: (graphId) => root.sonificationStore.setSelectedGraphID(graphId),
+          // Cast to `any`: same-block sibling-action reference (see the `processToolCall`
+          // executeTool comment above) — TS doesn't see updateDataContexts/updateGraphs on
+          // `self` until this same `.actions()` block's `return` adds them to the live instance.
+          refreshDataContexts: async () => { await (self as any).updateDataContexts(); },
+          refreshGraphs: async () => { await (self as any).updateGraphs(); },
+        };
+        const selectedId = toolCtx.selectedGraphId();
+        const graphSeed: string = selectedId ? yield buildGraphSeed(String(selectedId), self.dataContexts ?? {}) : "";
+        const systemPrompt = buildLocalSystemPrompt({
+          toolDocs: buildToolDocs(),
+          schemaDigest: buildSchemaDigest(self.dataContexts ?? {}),
+          graphSeed,
+        });
         const response: string = yield runLocalTurn({
           generate: (messages) => localLlmService.generate(messages),
-          executeTool: async (data: IToolCallData) => {
-            // Called via self (not the bare `processToolCall` closure reference used elsewhere
-            // in this file) because this callback runs from runLocalTurn's async continuation,
-            // outside any MST action context. A bare flow() call has no action context to
-            // inherit there and throws "a mst flow must always have a parent context"; routing
-            // through self invokes the registered action, which self-roots a new context. `self`
-            // is cast to `any` because TS's structural typing for this `.actions()` block doesn't
-            // see `processToolCall` on `self` until this same block's `return` below adds it to
-            // the live instance — a same-block sibling-action reference has no narrower type.
-            const result = await (self as any).processToolCall(data);
-            // processToolCall returns an array only for image-snapshot responses, which the
-            // local (text-only) model never requests; degrade defensively if it happens. This
-            // adapter must never reject — processToolCall already catches internally and
-            // returns strings/arrays, never throws, so there is no rethrow path here either.
-            return typeof result === "string"
-              ? result
-              : JSON.stringify({ note: "Image snapshots are not available for the local model." });
-          },
-          systemPromptParts: buildSystemPromptParts(self.dataContexts, self.graphs),
+          executeTool: (name, args) => dispatchTool(name, args, toolCtx),
+          systemPrompt,
           turns: buildTranscriptTurns(priorMessages),
           userMessage: messageText,
           // Stops the loop between generations once this turn is no longer current, so a

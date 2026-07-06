@@ -20,6 +20,15 @@ jest.mock("../utils/local-llm/local-llm-service", () => ({
 jest.mock("../utils/local-llm/local-llm-loop", () => ({
   runLocalTurn: jest.fn().mockResolvedValue("A local description."),
 }));
+jest.mock("../utils/local-llm/tools", () => ({
+  initializeLocalTools: jest.fn(),
+  dispatchTool: jest.fn().mockResolvedValue("tool ok"),
+  buildToolDocs: jest.fn(() => "- docs"),
+}));
+jest.mock("../utils/local-llm/local-llm-prefetch", () => ({
+  buildGraphSeed: jest.fn().mockResolvedValue(""),
+  buildSchemaDigest: jest.fn(() => "digest"),
+}));
 jest.mock("@concord-consortium/codap-plugin-api", () => ({
   ...jest.requireActual("@concord-consortium/codap-plugin-api"),
   codapInterface: { sendRequest: jest.fn() },
@@ -27,7 +36,7 @@ jest.mock("@concord-consortium/codap-plugin-api", () => ({
 
 import { localLlmService } from "../utils/local-llm/local-llm-service";
 import { runLocalTurn } from "../utils/local-llm/local-llm-loop";
-import { codapInterface } from "@concord-consortium/codap-plugin-api";
+import { dispatchTool } from "../utils/local-llm/tools";
 
 const mockedPostMessage = postMessage as jest.MockedFunction<typeof postMessage>;
 
@@ -406,61 +415,34 @@ describe("handleMessageSubmitLocalLlm (DAVAI-126)", () => {
     expect(contents).not.toContain("late");
   });
 
-  it("handles a local create_request tool call with no 'values' without throwing (DAVAI-126 minor)", async () => {
-    // The local envelope parser passes through an omitted "values", so processToolCall's
-    // graph-create check (values.type === "graph") must not dereference an undefined values.
-    const store = createLocalStore();
-    (codapInterface.sendRequest as jest.Mock).mockResolvedValueOnce({ success: true, values: {} });
-    let toolResult: string | undefined;
-    (runLocalTurn as jest.Mock).mockImplementationOnce(async (args: any) => {
-      toolResult = await args.executeTool({
-        type: "create_request",
-        tool_call_id: "local-0",
-        request: { action: "create", resource: "component" }, // no `values`
-      });
-      return "Created.";
-    });
-
-    await store.handleMessageSubmitLocalLlm("make a component");
-
-    // The tool executed and returned the CODAP response as a string (graph-create branch was
-    // skipped because values is undefined) — no TypeError bubbled up.
-    expect(toolResult).toBe(JSON.stringify({ success: true, values: {} }));
-    expect(store.transcriptStore.messages.at(-1)?.messageContent.content).toBe("Created.");
-  });
-
-  it("lets the local executor invoke processToolCall across a macrotask boundary without an MST parent-context error", async () => {
+  it("lets the local executor invoke the tool registry across a macrotask boundary without an MST parent-context error", async () => {
     // Regression test for "a mst flow must always have a parent context": in the real browser,
     // runLocalTurn's executeTool callback is invoked from an async continuation that has crossed
     // a real task boundary (e.g. after awaiting model generation), so it does NOT inherit an MST
     // action context from the outer `yield runLocalTurn(...)` call. The `await new Promise(...,
     // setTimeout)` below reproduces that macrotask hop — calling executeTool synchronously inside
     // the mock (as other tests in this file do) does not exercise the bug, because it stays
-    // within the same microtask chain and happens to still inherit the parent context.
+    // within the same microtask chain and happens to still inherit the parent context. The tool
+    // context passed to dispatchTool is built from plain utilities and REGISTERED actions only
+    // (never a bare flow closure), so it survives being invoked from that async continuation.
     const store = createLocalStore();
-    (codapInterface.sendRequest as jest.Mock).mockResolvedValueOnce({ success: true, values: [] });
 
     (runLocalTurn as jest.Mock).mockImplementationOnce(async (args: any) => {
       await new Promise((res) => setTimeout(res, 0));
-      const result = await args.executeTool({
-        type: "create_request",
-        tool_call_id: "local-0",
-        request: { action: "get", resource: "componentList" },
-      });
+      const result = await args.executeTool("get_graph_info", {});
       return `Result: ${result}`;
     });
 
     await store.handleMessageSubmitLocalLlm("list the components");
 
+    expect(dispatchTool).toHaveBeenCalledWith("get_graph_info", {}, expect.anything());
     const contents = store.transcriptStore.messages.map((m) => m.messageContent.content);
     expect(contents).not.toEqual(
       expect.arrayContaining([expect.stringMatching(/error running the local model/i)])
     );
     expect(contents.some((c) => typeof c === "string" && /mst flow must always have a parent context/i.test(c)))
       .toBe(false);
-    expect(store.transcriptStore.messages.at(-1)?.messageContent.content).toBe(
-      `Result: ${JSON.stringify({ success: true, values: [] })}`
-    );
+    expect(store.transcriptStore.messages.at(-1)?.messageContent.content).toBe("Result: tool ok");
   });
 
   it("assembles a drained queue turn without dropping the prior reply or duplicating the queued text (DAVAI-126 I3/P2b)", async () => {

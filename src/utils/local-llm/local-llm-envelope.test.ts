@@ -5,37 +5,25 @@ it("strips <think> blocks defensively", () => {
     .toBe("{\"tool\":\"final\",\"response\":\"hi\"}");
 });
 
-it("parses a create_request envelope into IToolCallData", () => {
-  const raw = JSON.stringify({ tool: "create_request", action: "get", resource: "dataContext[Foo].collection[Bar].allCases" });
-  const env = parseEnvelope(raw, 2);
-  expect(env).toEqual({
-    kind: "tool_call",
-    data: {
-      type: "create_request",
-      tool_call_id: "local-2",
-      request: { action: "get", resource: "dataContext[Foo].collection[Bar].allCases", values: undefined },
-    },
+it("parses any tool envelope generically", () => {
+  expect(parseEnvelope('{"tool":"get_stats","dataContext":"Mammals","attribute":"Height"}')).toEqual({
+    kind: "tool_call", name: "get_stats",
+    args: { dataContext: "Mammals", attribute: "Height" },
+    raw: '{"tool":"get_stats","dataContext":"Mammals","attribute":"Height"}',
   });
 });
 
-it("parses sonify_graph and final envelopes", () => {
-  expect(parseEnvelope("{\"tool\":\"sonify_graph\",\"graphID\":\"42\"}", 0)).toEqual({
-    kind: "tool_call",
-    data: { type: "sonify_graph", tool_call_id: "local-0", request: { graphID: "42" } },
-  });
-  expect(parseEnvelope("{\"tool\":\"final\",\"response\":\"All done.\"}", 0)).toEqual({
-    kind: "final", response: "All done.",
-  });
+it("final and invalid behave as before", () => {
+  expect(parseEnvelope('{"tool":"final","response":"Done."}')).toEqual({ kind: "final", response: "Done." });
+  expect(parseEnvelope("not json").kind).toBe("invalid");
+  expect(parseEnvelope('{"noTool":true}').kind).toBe("invalid");
+  expect(parseEnvelope('{"tool":"final"}').kind).toBe("invalid");
 });
 
-it("flags invalid envelopes with a reason", () => {
-  expect(parseEnvelope("not json at all", 0).kind).toBe("invalid");
-  expect(parseEnvelope("{\"tool\":\"create_request\"}", 0).kind).toBe("invalid"); // missing action/resource
-  expect(parseEnvelope("{\"tool\":\"final\"}", 0).kind).toBe("invalid");          // missing response
-  expect(parseEnvelope("{\"tool\":\"unknown\"}", 0).kind).toBe("invalid");
-});
-
-it("recovers a JSON object embedded in surrounding text", () => {
-  const env = parseEnvelope("Sure! {\"tool\":\"final\",\"response\":\"ok\"} hope that helps", 0);
-  expect(env).toEqual({ kind: "final", response: "ok" });
+it("still strips <think> and recovers embedded JSON", () => {
+  expect(parseEnvelope('<think>x</think>{"tool":"final","response":"ok"}')).toEqual({ kind: "final", response: "ok" });
+  expect(parseEnvelope('Sure! {"tool":"get_graph_info"} thanks')).toEqual({
+    kind: "tool_call", name: "get_graph_info", args: {},
+    raw: 'Sure! {"tool":"get_graph_info"} thanks'.replace(/<think>[\s\S]*?<\/think>/g, "").trim(),
+  });
 });

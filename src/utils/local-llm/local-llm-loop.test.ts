@@ -1,16 +1,15 @@
 import { runLocalTurn, MAX_TOOL_RESULT_CHARS } from "./local-llm-loop";
-import { buildSystemPromptParts, trimToBudget } from "./local-llm-prompt";
+import { trimToBudget } from "./local-llm-prompt";
 
-// A tiny parts set so assertions can compare against the exact assembled/trimmed system
-// message the loop builds. Real instructions/doc are imported by buildSystemPromptParts; the
-// loop trims them against the budget before each generation, so we compute the expectation the
-// same way the loop does.
-const systemPromptParts = buildSystemPromptParts({ ds: { collections: [] } }, [{ id: 1 }]);
-const baseArgs = { systemPromptParts, turns: [], userMessage: "describe the graph" };
+// A representative system prompt so assertions can compare against the exact assembled/trimmed
+// system message the loop builds. The loop trims it against the budget before each generation,
+// so we compute the expectation the same way the loop does.
+const systemPrompt = "### Role\n\nYou are DAVAI.\n\n### Tools:\n- t: d\n\n/no_think";
+const baseArgs = { systemPrompt, turns: [], userMessage: "describe the graph" };
 
-// The exact first-generation message array: trimToBudget(parts, [user]).
+// The exact first-generation message array: trimToBudget([system, user]).
 const expectedFirstMessages = (userMessage: string) =>
-  trimToBudget(systemPromptParts, [{ role: "user" as const, content: userMessage }]);
+  trimToBudget([{ role: "system" as const, content: systemPrompt }, { role: "user" as const, content: userMessage }]);
 
 it("returns the final response directly when the first envelope is final", async () => {
   const generate = jest.fn().mockResolvedValue("{\"tool\":\"final\",\"response\":\"A dot plot.\"}");
@@ -24,15 +23,12 @@ it("returns the final response directly when the first envelope is final", async
 
 it("executes a tool call, feeds the result back, then returns the final", async () => {
   const generate = jest.fn()
-    .mockResolvedValueOnce("{\"tool\":\"create_request\",\"action\":\"get\",\"resource\":\"dataContext[D].collection[C].allCases\"}")
+    .mockResolvedValueOnce("{\"tool\":\"get_case_values\",\"dataContext\":\"D\",\"attribute\":\"A\"}")
     .mockResolvedValueOnce("{\"tool\":\"final\",\"response\":\"Values range 1 to 9.\"}");
-  const executeTool = jest.fn().mockResolvedValue("{\"success\":true,\"values\":{\"cases\":[1,9]}}");
+  const executeTool = jest.fn(async (name: string, args: Record<string, unknown>) => "{\"success\":true,\"values\":{\"cases\":[1,9]}}");
   const out = await runLocalTurn({ ...baseArgs, generate, executeTool });
   expect(out).toBe("Values range 1 to 9.");
-  expect(executeTool).toHaveBeenCalledWith(expect.objectContaining({
-    type: "create_request",
-    request: expect.objectContaining({ resource: "dataContext[D].collection[C].allCases" }),
-  }));
+  expect(executeTool).toHaveBeenCalledWith("get_case_values", { dataContext: "D", attribute: "A" });
   // Second generation sees the assistant envelope + tool result appended.
   const secondMessages = generate.mock.calls[1][0];
   expect(secondMessages[secondMessages.length - 1].content).toContain("Tool result");
@@ -58,7 +54,7 @@ it("degrades to raw text as the final answer after two invalid envelopes", async
 it("forces a final answer at the round cap", async () => {
   // maxRounds 2: rounds 1 and 2 execute; the THIRD tool attempt exceeds the cap, skips
   // execution, and triggers the "answer now" nudge, whose reply is the forced final.
-  const toolEnvelope = "{\"tool\":\"create_request\",\"action\":\"get\",\"resource\":\"componentList\"}";
+  const toolEnvelope = "{\"tool\":\"get_graph_info\"}";
   const generate = jest.fn()
     .mockResolvedValueOnce(toolEnvelope)
     .mockResolvedValueOnce(toolEnvelope)
@@ -73,7 +69,7 @@ it("forces a final answer at the round cap", async () => {
 });
 
 it("returns a fallback message if the forced final is also unusable", async () => {
-  const toolEnvelope = "{\"tool\":\"create_request\",\"action\":\"get\",\"resource\":\"componentList\"}";
+  const toolEnvelope = "{\"tool\":\"get_graph_info\"}";
   const generate = jest.fn()
     .mockResolvedValueOnce(toolEnvelope)
     .mockResolvedValueOnce("");
@@ -84,7 +80,7 @@ it("returns a fallback message if the forced final is also unusable", async () =
 
 it("caps an oversized tool result before feeding it back (DAVAI-126 C2)", async () => {
   const generate = jest.fn()
-    .mockResolvedValueOnce("{\"tool\":\"create_request\",\"action\":\"get\",\"resource\":\"componentList\"}")
+    .mockResolvedValueOnce("{\"tool\":\"get_graph_info\"}")
     .mockResolvedValueOnce("{\"tool\":\"final\",\"response\":\"done\"}");
   // A 30 KB tool result — far over the 8 KB cap.
   const hugeResult = "R".repeat(30_000);
@@ -102,7 +98,7 @@ it("caps an oversized tool result before feeding it back (DAVAI-126 C2)", async 
 });
 
 it("stops between rounds when isCancelled becomes true, returning the fallback (DAVAI-126 C1)", async () => {
-  const toolEnvelope = "{\"tool\":\"create_request\",\"action\":\"get\",\"resource\":\"componentList\"}";
+  const toolEnvelope = "{\"tool\":\"get_graph_info\"}";
   // Cancel flips true after the first generation (during tool execution). The loop must NOT
   // run a second generation.
   let cancelled = false;
