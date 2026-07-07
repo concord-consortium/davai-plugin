@@ -1,0 +1,10 @@
+strands-agents==1.4.0
+strands-agents[sagemaker]
+strands-agents-tools>=0.2.3
+strands-agents-builder>=0.1.7
+sagemaker==2.249.0
+boto3==1.39.8
+bedrock-agentcore==0.1.1
+bedrock-agentcore-starter-toolkit==0.1.5
+botocore==1.39.8
+ably

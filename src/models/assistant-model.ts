@@ -1,4 +1,4 @@
-import { types, flow, Instance, getRoot, onSnapshot } from "mobx-state-tree";
+import { types, flow, Instance, getRoot, onSnapshot, addDisposer } from "mobx-state-tree";
 import { nanoid } from "nanoid";
 import { codapInterface } from "@concord-consortium/codap-plugin-api";
 import { DAVAI_SPEAKER, DEBUG_SPEAKER, STREAMING_STATUS } from "../constants";
@@ -9,6 +9,7 @@ import { isGraphSonifiable } from "../utils/graph-sonification-utils";
 import { ChatTranscriptModel } from "./chat-transcript-model";
 import { IToolCallData, IToolRequestError, IMessageResponse, ToolOutput } from "../types";
 import { postMessage } from "../utils/llm-utils";
+import { setupAblyHandler } from "./ably-handler";
 
 // A tool call the server could not prepare comes back as an error payload rather
 // than a normal CODAP request. This guard narrows the union so the normal path can
@@ -521,7 +522,7 @@ export const AssistantModel = types
       }
     });
 
-    return { createThread, initializeAssistant, handleMessageSubmit, handleCancel, updateDataContexts, updateGraphs };
+    return { createThread, initializeAssistant, handleMessageSubmit, handleCancel, updateDataContexts, updateGraphs, processToolCall };
   })
   .actions((self) => ({
     afterCreate() {
@@ -533,6 +534,11 @@ export const AssistantModel = types
           await self.handleMessageSubmit(allMsgs);
         }
       });
+
+      // Start up the AblyHandler so external AI agents can send us API requests
+      if (process.env.ABLY_API_KEY) {
+        addDisposer(self, setupAblyHandler(self));
+      }
     }
   }));
 
