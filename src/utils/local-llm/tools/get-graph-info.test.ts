@@ -165,3 +165,85 @@ describe("graph sketch appended to the tool result", () => {
     expect(out).toContain("Sketch: 2 points.");
   });
 });
+
+// DAVAI-126 Task H: the checklist trailer must match the sketch's mode — a numeric-flavored
+// checklist ("the outliers above", "relationship numbers") makes no sense appended to a
+// categorical sketch (there is no "outliers above" or "relationship numbers" in category counts).
+describe("checklist trailer adapts to the sketch mode (DAVAI-126 Task H)", () => {
+  const dcWithDietHabitat = {
+    name: "Mammals",
+    collections: [{ name: "Cases", attrs: [{ name: "Diet" }, { name: "Habitat" }] }],
+  };
+  const ctxDietHabitat = {
+    graphs: () => [{ id: 42, title: "Diet vs Habitat", xAttributeName: "Diet", yAttributeName: "Habitat" }],
+    selectedGraphId: () => "42",
+    dataContexts: () => ({ Mammals: dcWithDietHabitat }),
+  } as unknown as ILocalToolContext;
+
+  beforeEach(() => {
+    (getGraphByID as jest.Mock).mockResolvedValue({
+      id: 42, title: "Diet vs Habitat", xAttributeName: "Diet", yAttributeName: "Habitat", dataContext: "Mammals",
+    });
+  });
+
+  it("appends the CATEGORICAL checklist (categories/counts/largest-smallest/empty combos) when " +
+    "the sketch is a categorical mode, never the numeric outliers/relationship wording", async () => {
+    (getCollectionItemsForAttributePair as jest.Mock).mockResolvedValue([
+      { id: "1", values: { Diet: "meat", Habitat: "land" } },
+      { id: "2", values: { Diet: "meat", Habitat: "land" } },
+      { id: "3", values: { Diet: "plants", Habitat: "water" } },
+    ]);
+    const v = getGraphInfoTool.validate({}, ctxDietHabitat);
+    const out = await getGraphInfoTool.execute((v as any).resolved, ctxDietHabitat);
+    expect(out).toContain(
+      "Describe: the categories and their counts, the largest and smallest groups, and any empty combinations."
+    );
+    expect(out).not.toMatch(/the outliers above|relationship numbers/);
+  });
+
+  it("still leads with the action-first clause on a categorical sketch (Task G's clause applies " +
+    "to both trailer flavors)", async () => {
+    (getCollectionItemsForAttributePair as jest.Mock).mockResolvedValue([
+      { id: "1", values: { Diet: "meat", Habitat: "land" } },
+      { id: "2", values: { Diet: "meat", Habitat: "land" } },
+      { id: "3", values: { Diet: "plants", Habitat: "water" } },
+    ]);
+    const v = getGraphInfoTool.validate({}, ctxDietHabitat);
+    const out = await getGraphInfoTool.execute((v as any).resolved, ctxDietHabitat);
+    expect(out).toContain("If you just created or changed a graph, say that first.");
+  });
+
+  it("keeps the numeric checklist wording unchanged for a numeric sketch (regression: Task H " +
+    "must not alter the existing numeric-mode trailer)", async () => {
+    // Explicit numeric-graph mock (not the outer file's beforeEach) — this describe block's own
+    // beforeEach overrides getGraphByID for the Diet/Habitat fixture, so the numeric case needs
+    // its own self-contained override rather than relying on shadowed outer state.
+    (getGraphByID as jest.Mock).mockResolvedValue({
+      id: 42, title: "Height vs Age", xAttributeName: "Height", yAttributeName: "Age", dataContext: "Mammals",
+    });
+    (getCollectionItemsForAttributePair as jest.Mock).mockResolvedValue([
+      { id: "1", values: { Height: 1, Age: 2 } },
+      { id: "2", values: { Height: 2, Age: 4 } },
+      { id: "3", values: { Height: 3, Age: 6 } },
+    ]);
+    const v = getGraphInfoTool.validate({}, ctx);
+    const out = await getGraphInfoTool.execute((v as any).resolved, ctx);
+    expect(out).toContain(
+      "Describe: axes and units, where most points lie, the outliers above, and what the relationship numbers mean in plain words."
+    );
+    expect(out).not.toMatch(/largest and smallest groups|empty combinations/);
+  });
+
+  it("appends the categorical checklist for a categorical x numeric sketch too (not just cat x cat)", async () => {
+    (getCollectionItemsForAttributePair as jest.Mock).mockResolvedValue([
+      { id: "1", values: { Diet: "meat", Habitat: 1.2 } },
+      { id: "2", values: { Diet: "meat", Habitat: 1.4 } },
+      { id: "3", values: { Diet: "plants", Habitat: 2.1 } },
+    ]);
+    const v = getGraphInfoTool.validate({}, ctxDietHabitat);
+    const out = await getGraphInfoTool.execute((v as any).resolved, ctxDietHabitat);
+    expect(out).toContain(
+      "Describe: the categories and their counts, the largest and smallest groups, and any empty combinations."
+    );
+  });
+});

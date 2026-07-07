@@ -1,7 +1,7 @@
 import {
   getGraphByID, getGraphAdornments, getCollectionItemsForAttribute, getCollectionItemsForAttributePair
 } from "../../codap-api-utils";
-import { computeGraphSketch } from "../graph-sketch";
+import { computeGraphSketch, getSketchMode } from "../graph-sketch";
 import { findAttributeUnit, formatAdornment } from "../local-llm-prefetch";
 import { ILocalTool } from "./registry";
 import { graphLabel, resolveGraph } from "./resolve";
@@ -15,9 +15,17 @@ import { graphLabel, resolveGraph } from "./resolve";
 // is..."). The checklist steered a post-create/change fetch into pure description, silently
 // dropping the action the user most wants confirmed. The added clause comes FIRST so the model
 // acknowledges the action before falling into the description checklist.
+const ACTION_FIRST_CLAUSE = "If you just created or changed a graph, say that first. ";
 const DESCRIBE_CHECKLIST =
-  "If you just created or changed a graph, say that first. Describe: axes and units, where most " +
-  "points lie, the outliers above, and what the relationship numbers mean in plain words.";
+  `${ACTION_FIRST_CLAUSE}Describe: axes and units, where most points lie, the outliers above, ` +
+  "and what the relationship numbers mean in plain words.";
+// DAVAI-126 Task H: live hallucination report — a numeric-flavored checklist ("the outliers
+// above", "relationship numbers") makes no sense appended to a categorical sketch (there is no
+// outlier or Pearson-r concept in category counts). This trailer mirrors the numeric one's shape
+// (same action-first lead-in) but asks for the facts a categorical sketch actually contains.
+const CATEGORICAL_DESCRIBE_CHECKLIST =
+  `${ACTION_FIRST_CLAUSE}Describe: the categories and their counts, the largest and smallest ` +
+  "groups, and any empty combinations.";
 
 export const getGraphInfoTool: ILocalTool = {
   name: "get_graph_info",
@@ -68,19 +76,29 @@ export const getGraphInfoTool: ILocalTool = {
         const items = x && y
           ? await getCollectionItemsForAttributePair(dc, x, y)
           : await getCollectionItemsForAttribute(dc, (x ?? y) as string);
-        const sketch = x && y
-          ? computeGraphSketch({
+        // DAVAI-126 Task H: built once and reused for both computeGraphSketch and getSketchMode
+        // (the mode decides which checklist trailer applies) — a single source of raw values so
+        // the two calls can never disagree about what data they're describing.
+        const sketchInput = x && y
+          ? {
               xName: x, yName: y,
               xValues: items.map((it: any) => it.values[x]), yValues: items.map((it: any) => it.values[y]),
               xUnit: findAttributeUnit(dc, x), yUnit: findAttributeUnit(dc, y),
               adornments,
-            })
-          : computeGraphSketch({
+            }
+          : {
               xName: (x ?? y) as string,
               xValues: items.map((it: any) => it.values[(x ?? y) as string]),
               xUnit: findAttributeUnit(dc, x ?? y),
-            });
-        if (sketch) result = `${result}\n${sketch}\n${DESCRIBE_CHECKLIST}`;
+            };
+        const sketch = computeGraphSketch(sketchInput);
+        if (sketch) {
+          const mode = getSketchMode(sketchInput);
+          const checklist = mode === "categorical" || mode === "categorical-numeric"
+            ? CATEGORICAL_DESCRIBE_CHECKLIST
+            : DESCRIBE_CHECKLIST;
+          result = `${result}\n${sketch}\n${checklist}`;
+        }
       }
     }
     return result;

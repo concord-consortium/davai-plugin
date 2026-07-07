@@ -253,4 +253,32 @@ describe("buildGraphSeed", () => {
     expect(seed).toContain("Sketch: 3 points.");
     expect(seed).toContain("Relationship:");
   });
+
+  // DAVAI-126 Task H: this is the seed-path half of the live hallucination report's fix — the
+  // report's own graph description came from get_graph_info, but the SEED (buildGraphSeed) feeds
+  // the exact same computeGraphSketch and must place a categorical sketch in the same STRUCTURE
+  // section slot (between axes/adornments and Values) that survives trimToBudget's trim rung,
+  // exactly like the numeric sketch does — categorical data is not a special case for placement.
+  it("categorical x categorical: inserts the categorical sketch in the same structure-section " +
+    "slot as a numeric sketch (between axes/adornments and Values), with real category names " +
+    "and counts — never the invented categories from the live hallucination report", async () => {
+    (getGraphByID as jest.Mock).mockResolvedValue({
+      id: 42, title: "Diet vs Habitat", dataContext: "Mammals", xAttributeName: "Diet", yAttributeName: "Habitat",
+    });
+    (getCollectionItemsForAttributePair as jest.Mock).mockResolvedValue([
+      { id: "1", values: { Diet: "meat", Habitat: "land" } },
+      { id: "2", values: { Diet: "meat", Habitat: "land" } },
+      { id: "3", values: { Diet: "plants", Habitat: "water" } },
+    ]);
+    const seed = await buildGraphSeed("42", dcs);
+    const lines = seed.split("\n");
+    const adornmentsIdx = lines.findIndex((l) => l.startsWith("x-axis:"));
+    const valuesIdx = lines.findIndex((l) => l.startsWith("Values"));
+    const sketchIdx = lines.findIndex((l) => l.startsWith("Sketch:"));
+    expect(sketchIdx).toBeGreaterThan(adornmentsIdx);
+    expect(sketchIdx).toBeLessThan(valuesIdx);
+    expect(seed).toContain("Sketch: 3 points (two categorical attributes).");
+    expect(seed).toContain("Diet (x): meat (2), plants (1). Habitat (y): land (2), water (1).");
+    expect(seed).not.toMatch(/herbivore|carnivore|omnivore|forest|grassland|aquatic/i);
+  });
 });

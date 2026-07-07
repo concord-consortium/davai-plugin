@@ -3,7 +3,7 @@ jest.mock("./tools/get-stats", () => {
   return { ...actual, coerceNumericValues: jest.fn(actual.coerceNumericValues) };
 });
 import { coerceNumericValues } from "./tools/get-stats";
-import { computeGraphSketch, roundSig } from "./graph-sketch";
+import { computeGraphSketch, isNumericAxis, roundSig } from "./graph-sketch";
 
 describe("roundSig (3 significant figures, plain decimal, no exponential notation)", () => {
   it.each([
@@ -28,16 +28,49 @@ describe("fail-soft on insufficient data", () => {
     expect(computeGraphSketch({ xName: "Height", xValues: [5] })).toBe("");
   });
 
-  it("returns '' when non-numeric contamination leaves fewer than 2 numeric values, reusing " +
-    "get_stats's own coercion (not a duplicate)", () => {
-    expect(computeGraphSketch({ xName: "Height", xValues: ["5", "n/a", "", null] })).toBe("");
+  // DAVAI-126 Task H interaction (flagged in the report): before Task H, an axis with fewer than
+  // 2 numeric values ALWAYS failed soft to "" — there was no other mode to fall into. Task H adds
+  // a categorical fallback, and H1's own >80%-of-non-empty-values rule is unconditional on sample
+  // size: here there are exactly 2 non-empty values ("5", "n/a"), only 1 coerces (50% <= 80%), so
+  // the axis is now correctly classified CATEGORICAL and describes its (accurate, non-invented)
+  // 2 categories instead of going silent. This is intended per H1's literal threshold — verified
+  // independently that no N<=5 sample can ever land strictly between 80% and 100% (the smallest
+  // fraction exceeding 0.8 needs a denominator of at least 6), so for any axis this small,
+  // "categorical" here specifically means "well under 100% numeric", never a marginal call.
+  it("reclassifies as a 2-category CATEGORICAL sketch (not '') when non-numeric contamination " +
+    "leaves an axis with only 1 of 2 non-empty values numeric — 50% is well under the 80% " +
+    "threshold, so this is an unambiguous categorical call, not the old numeric fail-soft", () => {
+    const sketch = computeGraphSketch({ xName: "Height", xValues: ["5", "n/a", "", null] });
+    expect(sketch).toBe("Height: 5 (1), n/a (1).");
     expect(coerceNumericValues).toHaveBeenCalled();
   });
 
-  it("returns '' for a scatter with fewer than 2 numeric PAIRS (one axis short-circuits)", () => {
+  // DAVAI-126 Task H: yValues uses null (excluded from the axis-type ratio entirely, per H1 —
+  // "empty strings excluded... simplest: exclude and let counts reflect non-empty") rather than
+  // "n/a" (a non-empty value that WOULD count against the ratio) so Mass's one non-empty value
+  // (10) stays 100% numeric — this keeps the test on the intended numeric x numeric scatter path
+  // (both axes classify numeric) with too few valid PAIRS, rather than sliding into the new
+  // categorical x numeric path exercised separately just below.
+  it("returns '' for a numeric x numeric scatter with fewer than 2 numeric PAIRS (one axis " +
+    "short-circuits on missing values, even though both axes independently classify numeric)", () => {
     expect(computeGraphSketch({
-      xName: "Height", yName: "Mass", xValues: [1, 2, 3], yValues: [10, "n/a"],
+      xName: "Height", yName: "Mass", xValues: [1, 2, 3, 4, 5, 6], yValues: [10, null, null, null, null, null],
     })).toBe("");
+  });
+
+  // DAVAI-126 Task H interaction (flagged in the report, same class as the univariate case
+  // above): "n/a" is a non-empty, non-coercing value, so it counts against Mass's ratio — with
+  // only 2 non-empty Mass values and 1 coercing (50% <= 80%), Mass is now correctly classified
+  // CATEGORICAL, and there are 2 valid (Height, Mass)-category pairs, so this produces a real
+  // categorical x numeric summary instead of the old numeric fail-soft.
+  it("reclassifies as a categorical x numeric sketch (not '') when the second axis's non-empty " +
+    "values are mostly non-numeric junk rather than missing", () => {
+    const sketch = computeGraphSketch({
+      xName: "Height", yName: "Mass", xValues: [1, 2, 3], yValues: [10, "n/a"],
+    });
+    expect(sketch).toBe(
+      "Sketch: 2 points (categorical x numeric).\nHeight by Mass: 10 (1 case, median 1, range 1–1); n/a (1 case, median 2, range 2–2)."
+    );
   });
 });
 
@@ -288,5 +321,277 @@ describe("units (fail-soft, only when supplied)", () => {
     const sketch = computeGraphSketch({ xName: "Height", xValues: [0.7, 0.1, 1.5, 1.1, 6.5, 0.9, 2.2, 1.3] });
     expect(sketch).not.toContain("(meters)");
     expect(sketch).toMatch(/^Sketch: 8 points\. Height 0\.1–6\.5/);
+  });
+});
+
+// DAVAI-126 Task H: live hallucination report — the Mammals "Diet vs. Habitat" graph (both
+// categorical) produced an EMPTY sketch (computeGraphSketch was numeric-only), so get_graph_info
+// returned structure only and the model filled the vacuum with invented categories ("herbivore,
+// carnivore, omnivore", "forest, grassland, aquatic") that don't exist in the data. The fix is
+// structural: detect each axis's type and, when categorical, hand over the REAL category counts
+// and crosstab so describing becomes transcription, exactly like Task B did for numeric axes.
+describe("axis type detection (>80% of non-empty raw values coerce numeric => NUMERIC axis)", () => {
+  // 5 numeric-looking + 1 junk = 5/6 = 83.3% > 80% -> numeric. Uses the exact shared coercion
+  // (get_stats's coerceNumericValues) — this is a boundary-behavior test, not a duplicate of it.
+  it("treats an axis as NUMERIC when just over 80% of its non-empty values coerce", () => {
+    const sketch = computeGraphSketch({ xName: "V", xValues: [1, 2, 3, 4, 5, "junk"] });
+    // A numeric univariate sketch reports a range; a categorical one would report category counts.
+    expect(sketch).toMatch(/Sketch: \d+ points\. V /);
+    expect(sketch).not.toMatch(/V:.*\(\d+\)/);
+  });
+
+  // 4 numeric-looking + 2 junk = 4/6 = 66.7% <= 80% -> categorical (raw string values used).
+  it("treats an axis as CATEGORICAL when at or under 80% of its non-empty values coerce", () => {
+    const sketch = computeGraphSketch({ xName: "V", xValues: ["1", "2", "3", "4", "junk1", "junk2"] });
+    expect(sketch).toMatch(/^V: /);
+    expect(sketch).toContain('"junk1"'.replace(/"/g, "")); // categories render as raw strings
+  });
+
+  // Numeric-STRING axis: every value is a numeric string ("1","2",...) — 100% coerce, so it must
+  // stay numeric (categorical mode must not accidentally swallow purely-numeric-as-string axes).
+  it("keeps a numeric-strings axis (\"1\",\"2\",...) NUMERIC, not categorical", () => {
+    const sketch = computeGraphSketch({ xName: "V", xValues: ["1", "2", "3", "4", "5", "6", "7", "8"] });
+    expect(sketch).toMatch(/Sketch: 8 points\. V 1–8/);
+  });
+
+  // Mixed junk that still clears 80%: empty strings are excluded from the denominator per the
+  // brief ("exclude and let counts reflect non-empty"), so this axis is 6 non-empty values, all
+  // numeric -> 100% -> numeric, not miscounted as 6/9 = 66.7%.
+  it("excludes empty strings from the non-empty denominator when computing the numeric ratio", () => {
+    const sketch = computeGraphSketch({ xName: "V", xValues: [1, 2, 3, 4, 5, 6, "", "", ""] });
+    expect(sketch).toMatch(/Sketch: 6 points\. V 1–6/);
+  });
+
+  // Exactly-80% boundary is NOT numeric ("> 80%" per the brief, strictly greater-than).
+  it("treats exactly 80% coercing as CATEGORICAL (the threshold is a strict >80%, not >=)", () => {
+    // 4 numeric + 1 junk = 4/5 = 80% exactly.
+    const sketch = computeGraphSketch({ xName: "V", xValues: ["1", "2", "3", "4", "junk"] });
+    expect(sketch).toMatch(/^V: /);
+  });
+
+  // DAVAI-126 Task H interaction with M-k (flagged in the brief and the report): the shared
+  // coerceNumericValues treats a whitespace-only string as numeric zero (Number("   ") === 0 is
+  // finite) — a known, separately-tracked quirk (M-k) of the reused coercion, not something this
+  // task modifies. Left untrimmed, that quirk alone could tip an obviously-categorical, mostly-
+  // blank axis (a common data-entry artifact: someone left the cell as spaces instead of truly
+  // empty) over the 80% line into "numeric", producing a nonsense "range 0-0" sketch. This axis
+  // (9 whitespace-only + 2 real category words = 11 non-empty values) is 0/11 = 0% coercing if
+  // whitespace-only values are correctly excluded as empty, or 9/11 = 81.8% (> 80%, wrongly
+  // numeric) if they are not trimmed first. The threshold's own emptiness check trims strings
+  // before comparing to "", so this axis correctly reports as CATEGORICAL either way in practice.
+  it("is robust to M-k's whitespace quirk: whitespace-only strings are trimmed before the " +
+    "emptiness check, so they never masquerade as numeric zeros in the axis-type ratio", () => {
+    const nineWhitespacePlusTwoReal = [
+      "   ", "   ", "   ", "   ", "   ", "   ", "   ", "   ", "   ", "meat", "plants",
+    ];
+    expect(isNumericAxis(nineWhitespacePlusTwoReal)).toBe(false);
+    const sketch = computeGraphSketch({ xName: "Diet", xValues: nineWhitespacePlusTwoReal });
+    expect(sketch).toBe("Diet: meat (1), plants (1).");
+    expect(sketch).not.toMatch(/0–0|range 0/);
+  });
+});
+
+describe("categorical x categorical sketch (Mammals Diet x Habitat fixture, n=27)", () => {
+  // Exact fixture from the live hallucination report: Diet meat/both/plants, Habitat
+  // land/water/both. Crosstab reconciled against the stated marginals (Diet meat=11/both=9/
+  // plants=7; Habitat land=24/water=2/both=1): meat&land=8, both&land=9, plants&land=7,
+  // meat&water=2, meat&both=1 (all other cells 0) — the only cell assignment whose row AND
+  // column sums both match every stated marginal exactly (verified independently; see report).
+  const dietValues = [
+    ...Array(8).fill("meat"), ...Array(2).fill("meat"), ...Array(1).fill("meat"), // 11 meat
+    ...Array(9).fill("both"), // 9 both
+    ...Array(7).fill("plants"), // 7 plants
+  ];
+  const habitatValues = [
+    ...Array(8).fill("land"), ...Array(2).fill("water"), ...Array(1).fill("both"), // meat rows
+    ...Array(9).fill("land"), // both rows
+    ...Array(7).fill("land"), // plants rows
+  ];
+
+  it("matches the live-report fixture's exact category and crosstab counts", () => {
+    // Sanity-check the fixture itself before asserting on the sketch derived from it.
+    expect(dietValues).toHaveLength(27);
+    expect(dietValues.filter((d) => d === "meat")).toHaveLength(11);
+    expect(dietValues.filter((d) => d === "both")).toHaveLength(9);
+    expect(dietValues.filter((d) => d === "plants")).toHaveLength(7);
+    expect(habitatValues.filter((h) => h === "land")).toHaveLength(24);
+    expect(habitatValues.filter((h) => h === "water")).toHaveLength(2);
+    expect(habitatValues.filter((h) => h === "both")).toHaveLength(1);
+  });
+
+  it("produces the exact sketch text: point count, per-axis category counts (descending), and " +
+    "the largest crosstab combinations (descending) — the regression test for the hallucination " +
+    "report (real category names only, never invented ones)", () => {
+    const sketch = computeGraphSketch({
+      xName: "Diet", yName: "Habitat", xValues: dietValues, yValues: habitatValues,
+    });
+    expect(sketch).toBe(
+      "Sketch: 27 points (two categorical attributes).\n" +
+      "Diet (x): meat (11), both (9), plants (7). Habitat (y): land (24), water (2), both (1).\n" +
+      "Largest combinations: both & land (9), meat & land (8), plants & land (7), meat & water (2), meat & both (1).\n" +
+      "Empty combinations: both & water, both & both, plants & water, plants & both."
+    );
+  });
+
+  it("never invents category names absent from the data (the exact hallucination this task fixes)", () => {
+    const sketch = computeGraphSketch({
+      xName: "Diet", yName: "Habitat", xValues: dietValues, yValues: habitatValues,
+    });
+    expect(sketch).not.toMatch(/herbivore|carnivore|omnivore|forest|grassland|aquatic/i);
+  });
+
+  it("caps an axis at 8 categories with '… and N more' when there are 9 or more distinct values", () => {
+    const nineCats = Array.from({ length: 9 }, (_, i) => `cat${i}`);
+    // 3 cases per category so every axis has enough points to be unambiguously categorical (raw,
+    // non-numeric strings) and each category is non-degenerate.
+    const xValues = nineCats.flatMap((c) => [c, c, c]);
+    const yValues = xValues.map(() => "same"); // single-category y keeps focus on the x-axis cap
+    const sketch = computeGraphSketch({ xName: "Cat", yName: "Y", xValues, yValues });
+    const axisLine = sketch.split("\n")[1];
+    expect(axisLine).toContain("cat0 (3), cat1 (3), cat2 (3), cat3 (3), cat4 (3), cat5 (3), cat6 (3), cat7 (3)");
+    expect(axisLine).toContain("… and 1 more");
+    expect(axisLine).not.toContain("cat8");
+  });
+
+  it("caps 'Largest combinations' at 6 with '… and N more combinations' when more than 6 " +
+    "nonzero cells exist, and omits the Empty combinations line once more than 4 cells are empty " +
+    "(a 4x4 grid has 16 cells; filling only the diagonal-plus-one leaves >4 empty)", () => {
+    // 4x4 grid, 7 nonzero cells (diagonal x1..x4/y1..y4 plus x1&y2, x1&y3, x1&y4) with distinct
+    // descending counts so cap-6 ordering is unambiguous; the remaining 9 cells are empty (>4).
+    const xValues: string[] = [];
+    const yValues: string[] = [];
+    const push = (x: string, y: string, n: number) => {
+      for (let i = 0; i < n; i++) { xValues.push(x); yValues.push(y); }
+    };
+    push("x1", "y1", 10); push("x1", "y2", 9); push("x1", "y3", 8); push("x1", "y4", 7);
+    push("x2", "y2", 6); push("x3", "y3", 5); push("x4", "y4", 4);
+    const sketch = computeGraphSketch({ xName: "X", yName: "Y", xValues, yValues });
+    const lines = sketch.split("\n");
+    const combosLine = lines.find((l) => l.startsWith("Largest combinations:"))!;
+    expect(combosLine).toBe(
+      "Largest combinations: x1 & y1 (10), x1 & y2 (9), x1 & y3 (8), x1 & y4 (7), x2 & y2 (6), " +
+      "x3 & y3 (5) … and 1 more combinations."
+    );
+    expect(lines.find((l) => l.startsWith("Empty combinations:"))).toBeUndefined();
+  });
+
+  it("omits the Empty combinations line entirely when there are zero empty cells (every " +
+    "combination of categories is populated)", () => {
+    // 2x2 full grid: all 4 cells nonzero.
+    const xValues = ["a", "a", "b", "b"];
+    const yValues = ["p", "q", "p", "q"];
+    const sketch = computeGraphSketch({ xName: "X", yName: "Y", xValues, yValues });
+    expect(sketch).not.toMatch(/Empty combinations:/);
+  });
+
+  // Regression guard: the crosstab's internal cell-key encoding must not assume category names
+  // are single words. Category values are free-form user text (e.g. "red fox", "open field") —
+  // an implementation that joins x/y into one delimited string and splits it back apart would
+  // silently misattribute words to the wrong axis for any multi-word category name.
+  it("keeps multi-word category names intact in both the axis summaries and the combinations " +
+    "line (the crosstab's internal cell key must not assume single-word categories)", () => {
+    const xValues = ["red fox", "red fox", "gray wolf", "gray wolf"];
+    const yValues = ["forest edge", "forest edge", "open field", "open field"];
+    const sketch = computeGraphSketch({ xName: "Species", yName: "Habitat", xValues, yValues });
+    expect(sketch).toBe(
+      "Sketch: 4 points (two categorical attributes).\n" +
+      "Species (x): red fox (2), gray wolf (2). Habitat (y): forest edge (2), open field (2).\n" +
+      "Largest combinations: red fox & forest edge (2), gray wolf & open field (2).\n" +
+      "Empty combinations: red fox & open field, gray wolf & forest edge."
+    );
+  });
+});
+
+describe("categorical x numeric sketch (per-category median + range)", () => {
+  // Diet (categorical, x) vs a numeric attribute (Height, y): meat/both/plants groups from the
+  // live-report fixture, each given distinct numeric values so medians/ranges are unambiguous.
+  const dietValues = [...Array(11).fill("meat"), ...Array(9).fill("both"), ...Array(7).fill("plants")];
+  // meat: 11 values 0.1..6.5 evenly spaced-ish (median = 6th of 11 sorted); both: 9 values;
+  // plants: 7 values. Hand-picked so median/min/max are simple to verify independently.
+  const heightValues = [
+    ...[0.1, 0.5, 0.8, 1.0, 1.1, 1.2, 1.3, 1.6, 2.0, 3.0, 6.5], // meat: sorted median = 1.2
+    ...[0.4, 0.6, 0.9, 1.0, 1.1, 1.4, 1.8, 2.2, 2.5], // both: sorted median = 1.1
+    ...[0.7, 0.9, 1.0, 1.2, 1.5, 1.9, 2.1], // plants: sorted median = 1.2
+  ];
+
+  it("reports a per-category median + range line, categories by descending count, capped at 6", () => {
+    const sketch = computeGraphSketch({
+      xName: "Diet", yName: "Height", xValues: dietValues, yValues: heightValues,
+    });
+    expect(sketch).toBe(
+      "Sketch: 27 points (categorical x numeric).\n" +
+      "Height by Diet: meat (11 cases, median 1.2, range 0.1–6.5); both (9 cases, median 1.1, range 0.4–2.5); " +
+      "plants (7 cases, median 1.2, range 0.7–2.1)."
+    );
+  });
+
+  it("produces the same per-category summary regardless of which axis (x or y) is categorical " +
+    "(orientation-independent)", () => {
+    // Flip: Height is x (numeric), Diet is y (categorical) — same underlying data.
+    const sketch = computeGraphSketch({
+      xName: "Height", yName: "Diet", xValues: heightValues, yValues: dietValues,
+    });
+    expect(sketch).toContain(
+      "Height by Diet: meat (11 cases, median 1.2, range 0.1–6.5); both (9 cases, median 1.1, range 0.4–2.5); " +
+      "plants (7 cases, median 1.2, range 0.7–2.1)."
+    );
+  });
+
+  it("caps per-category summaries at 6 categories, largest count first", () => {
+    const cats = Array.from({ length: 7 }, (_, i) => `cat${i}`);
+    const xValues = cats.flatMap((c, idx) => Array(7 - idx).fill(c)); // counts 7,6,5,4,3,2,1
+    const yValues = xValues.map((_, i) => i + 1);
+    const sketch = computeGraphSketch({ xName: "Cat", yName: "Num", xValues, yValues });
+    const line = sketch.split("\n")[1];
+    expect(line).toContain("cat0 (7 cases");
+    expect(line).toContain("cat5 (2 cases");
+    expect(line).not.toContain("cat6");
+  });
+});
+
+describe("univariate categorical sketch (x only, no y)", () => {
+  it("reports category counts, descending, with the same cap-8 rule", () => {
+    const dietValues = [...Array(11).fill("meat"), ...Array(9).fill("both"), ...Array(7).fill("plants")];
+    const sketch = computeGraphSketch({ xName: "Diet", xValues: dietValues });
+    expect(sketch).toBe("Diet: meat (11), both (9), plants (7).");
+  });
+
+  it("caps at 8 categories with '… and N more'", () => {
+    const nineCats = Array.from({ length: 9 }, (_, i) => `cat${i}`);
+    const xValues = nineCats.flatMap((c) => [c, c]);
+    const sketch = computeGraphSketch({ xName: "Cat", xValues });
+    expect(sketch).toBe(
+      "Cat: cat0 (2), cat1 (2), cat2 (2), cat3 (2), cat4 (2), cat5 (2), cat6 (2), cat7 (2) … and 1 more."
+    );
+  });
+
+  // Fewer than 2 non-empty values must still fail soft to "" — categorical mode does not get a
+  // lower bar than numeric mode's existing "" contract.
+  it("still fails soft to '' when there are fewer than 2 non-empty categorical values", () => {
+    expect(computeGraphSketch({ xName: "Diet", xValues: ["meat"] })).toBe("");
+    expect(computeGraphSketch({ xName: "Diet", xValues: [] })).toBe("");
+  });
+});
+
+describe("pure-numeric regression guard (byte-identical to Task B, never touched by Task H)", () => {
+  // Re-asserts the exact strings from the pre-existing suites above so a regression in the new
+  // axis-type branch (H1) cannot silently change numeric output — this is the literal
+  // "byte-identical" contract from the brief, pinned as its own explicit guard.
+  it("univariate numeric sketch text is unchanged", () => {
+    const xValues = [0.7, 0.1, 1.5, 1.1, 6.5, 0.9, 2.2, 1.3];
+    expect(computeGraphSketch({ xName: "Height", xValues })).toBe(
+      "Sketch: 8 points. Height 0.1–6.5 (most between 0.8 and 1.85).\nOutliers: 6.5 (far above the rest)."
+    );
+  });
+
+  it("scatter (numeric x numeric) sketch text is unchanged", () => {
+    const xValues = [1, 2, 3, 4, 5, 6, 7, 8];
+    const yValues = [10, 12, 11, 13, 12, 14, 13, 400];
+    const sketch = computeGraphSketch({ xName: "X", yName: "Y", xValues, yValues });
+    expect(sketch).toBe(
+      "Sketch: 8 points. X 1–8 (most between 2.5 and 6.5); Y 10–400 (most between 11.5 and 13.5).\n" +
+      "Relationship: positive, moderate (r = 0.58).\n" +
+      "Unusually high Y: (8, 400)."
+    );
   });
 });

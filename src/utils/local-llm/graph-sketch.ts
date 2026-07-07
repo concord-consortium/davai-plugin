@@ -28,6 +28,41 @@ export interface IGraphSketchInput {
   selectedPairs?: [unknown, unknown][];
 }
 
+// DAVAI-126 Task H: live hallucination report — a Mammals "Diet vs. Habitat" graph (both
+// categorical axes) produced an EMPTY sketch under the numeric-only Task B logic (coercion left
+// fewer than 2 numeric values on either axis), so get_graph_info handed the model structure only
+// and it filled the vacuum with invented world-knowledge categories ("herbivore, carnivore,
+// omnivore", "forest, grassland, aquatic") that don't exist anywhere in the data. The fix is
+// structural, matching Task B's own philosophy: detect what KIND of data each axis holds and
+// hand over the real facts for that kind, so describing becomes transcription either way.
+export type AxisKind = "numeric" | "categorical";
+
+// An axis is NUMERIC when MORE than 80% of its non-empty values coerce via the shared
+// coerceNumericValues (get_stats's own coercion — reused, never modified here). The threshold is
+// strictly ">80%", not ">=80%", per the brief: exactly 80% is categorical. Empty values ("", null,
+// undefined) are excluded from BOTH the numerator and denominator — they carry no signal about
+// the axis's type either way, and counting them toward the categorical side would understate a
+// genuinely-numeric axis that merely has some missing values (a common, unremarkable case in real
+// CODAP documents).
+const isEmpty = (v: unknown): boolean => v === "" || v === null || v === undefined;
+
+// Whitespace-only strings ("   ") are treated as empty for the SAME reason a blank string is:
+// M-k (the tracked follow-up on coerceNumericValues's own quirks) documents that Number("   ")
+// is 0 — a finite number — so an untrimmed whitespace-only value would silently count as numeric
+// evidence. Left untrimmed, a handful of such values (a common data-entry artifact) can tip an
+// obviously-categorical, mostly-blank axis over the 80% line into "numeric", producing a nonsense
+// "range 0-0" sketch instead of the correct categorical one. Trimming before the emptiness check
+// makes THIS threshold robust to that quirk without modifying coerceNumericValues itself — the
+// same trim-then-check order nonEmptyCategoryStrings (below) already uses for category labels.
+const isEmptyForAxisType = (v: unknown): boolean => isEmpty(typeof v === "string" ? v.trim() : v);
+
+export const isNumericAxis = (values: unknown[]): boolean => {
+  const nonEmpty = values.filter((v) => !isEmptyForAxisType(v));
+  if (nonEmpty.length === 0) return false;
+  const numericCount = coerceNumericValues(nonEmpty).length;
+  return numericCount / nonEmpty.length > 0.8;
+};
+
 // Round to N significant figures, formatted as a plain (non-exponential) decimal string, with
 // trailing zeros after the decimal point trimmed. `toPrecision`/`toExponential` alone would
 // render values like 6277.8 as "6.28e+3", which reads badly in prose — this never does that.
@@ -145,26 +180,65 @@ const axisRangeClause = (name: string, unit: string | undefined, min: number, ma
 
 const formatCoord = (x: number, y: number): string => `(${roundSig(x)}, ${roundSig(y)})`;
 
+// DAVAI-126 Task H: reports which sketch MODE computeGraphSketch would produce (or will produce)
+// for this input, without duplicating the axis-type decision anywhere else — get_graph_info uses
+// this to pick the matching checklist trailer (a numeric-flavored "outliers above" checklist
+// makes no sense appended to a categorical sketch). Exported so callers never have to re-derive
+// axis kind from the sketch's own prose.
+export type SketchMode = "numeric-univariate" | "numeric-scatter" | "categorical" | "categorical-numeric" | "none";
+
+export const getSketchMode = (input: IGraphSketchInput): SketchMode => {
+  const hasY = input.yName !== undefined && input.yValues !== undefined;
+  if (!hasY) return isNumericAxis(input.xValues) ? "numeric-univariate" : "categorical";
+  const xNumeric = isNumericAxis(input.xValues);
+  const yNumeric = isNumericAxis(input.yValues as unknown[]);
+  if (xNumeric && yNumeric) return "numeric-scatter";
+  if (!xNumeric && !yNumeric) return "categorical";
+  return "categorical-numeric";
+};
+
 export const computeGraphSketch = (input: IGraphSketchInput): string => {
-  const xNumbers = coerceNumericValues(input.xValues);
   const hasY = input.yName !== undefined && input.yValues !== undefined;
 
   if (!hasY) {
-    if (xNumbers.length < 2) return "";
-    return buildUnivariateSketch(input.xName, input.xUnit, xNumbers);
+    // Axis-type detection (H1) decides which builder runs; each builder owns its own
+    // fewer-than-2-points fail-soft check so "" is returned uniformly either way.
+    if (isNumericAxis(input.xValues)) {
+      const xNumbers = coerceNumericValues(input.xValues);
+      if (xNumbers.length < 2) return "";
+      return buildUnivariateSketch(input.xName, input.xUnit, xNumbers);
+    }
+    return buildUnivariateCategoricalSketch(input.xName, input.xValues);
   }
 
-  // Scatter: only cases numeric on BOTH axes form a valid pair (index-aligned with xValues).
   const yValuesRaw = input.yValues as unknown[];
-  const pairs: { x: number; y: number }[] = [];
-  input.xValues.forEach((rawX, i) => {
-    const [x] = coerceNumericValues([rawX]);
-    const [y] = coerceNumericValues([yValuesRaw[i]]);
-    if (x !== undefined && y !== undefined) pairs.push({ x, y });
-  });
-  if (pairs.length < 2) return "";
+  const xNumeric = isNumericAxis(input.xValues);
+  const yNumeric = isNumericAxis(yValuesRaw);
 
-  return buildScatterSketch(input, pairs);
+  if (xNumeric && yNumeric) {
+    // Scatter: only cases numeric on BOTH axes form a valid pair (index-aligned with xValues).
+    // Byte-identical to pre-Task-H behavior — this branch is untouched from the original code.
+    const pairs: { x: number; y: number }[] = [];
+    input.xValues.forEach((rawX, i) => {
+      const [x] = coerceNumericValues([rawX]);
+      const [y] = coerceNumericValues([yValuesRaw[i]]);
+      if (x !== undefined && y !== undefined) pairs.push({ x, y });
+    });
+    if (pairs.length < 2) return "";
+    return buildScatterSketch(input, pairs);
+  }
+
+  if (!xNumeric && !yNumeric) {
+    return buildCategoricalCrosstabSketch(input.xName, input.xValues, input.yName as string, yValuesRaw);
+  }
+
+  // Exactly one axis is categorical, the other numeric — orientation-independent: always reports
+  // "<numeric attribute> by <categorical attribute>" regardless of which one is x or y. When x is
+  // the numeric one, pass (xName, xValues) as the numeric args and (yName, yValues) as the
+  // categorical args; when y is numeric, it's the reverse.
+  return xNumeric
+    ? buildCategoricalByNumericSketch(input.xName, input.xValues, input.yName as string, yValuesRaw)
+    : buildCategoricalByNumericSketch(input.yName as string, yValuesRaw, input.xName, input.xValues);
 };
 
 const buildUnivariateSketch = (name: string, unit: string | undefined, values: number[]): string => {
@@ -271,4 +345,163 @@ const formatResidualOutliers = (outliers: IResidualOutlier[]): string => {
   if (above.length > 0) clauses.push(`${joinCoords(above.map((o) => formatCoord(o.x, o.y)))} far above`);
   if (below.length > 0) clauses.push(`${joinCoords(below.map((o) => formatCoord(o.x, o.y)))} below`);
   return clauses.join("; ");
+};
+
+// ---------------------------------------------------------------------------------------------
+// DAVAI-126 Task H: categorical sketch modes (univariate categorical, categorical x categorical,
+// categorical x numeric). All three reuse the RAW string values directly — never coerced,
+// because coercion is precisely what erased the category names in the live hallucination report
+// (a categorical axis's values ARE its facts; there is nothing to compute from them beyond
+// counting). Empty/blank values are trimmed and excluded from categories (and from the count)
+// per the brief: "exclude and let counts reflect non-empty".
+// ---------------------------------------------------------------------------------------------
+
+const MAX_AXIS_CATEGORIES = 8;
+const MAX_CATEGORICAL_ROWS = 6; // cat x num per-category summary cap, and univariate-elsewhere n/a
+const MAX_COMBINATIONS = 6;
+const MAX_EMPTY_COMBINATIONS = 4;
+
+// Trims and drops empty strings/null/undefined, coercing every surviving raw value to its string
+// form (categorical axes are inherently string-labeled — a stray non-string like a boolean or a
+// number that happens to sit on an otherwise-categorical axis still gets a legible label here).
+const nonEmptyCategoryStrings = (values: unknown[]): string[] =>
+  values
+    .map((v) => (typeof v === "string" ? v.trim() : v))
+    .filter((v) => !isEmpty(v))
+    .map((v) => String(v));
+
+interface ICategoryCount { category: string; count: number; }
+
+// Distinct categories with their counts, sorted by descending count (ties keep first-seen order,
+// via Array.sort's stability, so output is deterministic across runs on the same data).
+const categoryCounts = (values: string[]): ICategoryCount[] => {
+  const counts = new Map<string, number>();
+  values.forEach((v) => counts.set(v, (counts.get(v) ?? 0) + 1));
+  return [...counts.entries()]
+    .map(([category, count]) => ({ category, count }))
+    .sort((a, b) => b.count - a.count);
+};
+
+// "meat (11), both (9), plants (7)" capped at `max`, with "… and N more" appended when truncated
+// — same cap-then-ellipsis convention the numeric Selected-pairs line already established.
+const formatCategoryList = (counts: ICategoryCount[], max: number): string => {
+  const shown = counts.slice(0, max);
+  const text = shown.map((c) => `${c.category} (${c.count})`).join(", ");
+  const more = counts.length - shown.length;
+  return more > 0 ? `${text} … and ${more} more` : text;
+};
+
+const buildUnivariateCategoricalSketch = (name: string, rawValues: unknown[]): string => {
+  const values = nonEmptyCategoryStrings(rawValues);
+  if (values.length < 2) return "";
+  return `${name}: ${formatCategoryList(categoryCounts(values), MAX_AXIS_CATEGORIES)}.`;
+};
+
+// Categorical x categorical: point count, per-axis category breakdowns, the largest nonzero
+// crosstab cells, and (when few enough exist) the empty cells — every number here is a real
+// count from the data, so a listener never hears an invented category name.
+const buildCategoricalCrosstabSketch = (
+  xName: string, xRawValues: unknown[], yName: string, yRawValues: unknown[]
+): string => {
+  // Only cases with a non-empty value on BOTH axes form a valid pair, index-aligned with xValues
+  // (mirrors the numeric scatter path's own pairing rule just above).
+  const pairs: { x: string; y: string }[] = [];
+  xRawValues.forEach((rawX, i) => {
+    const x = nonEmptyCategoryStrings([rawX])[0];
+    const y = nonEmptyCategoryStrings([yRawValues[i]])[0];
+    if (x !== undefined && y !== undefined) pairs.push({ x, y });
+  });
+  if (pairs.length < 2) return "";
+
+  const xCounts = categoryCounts(pairs.map((p) => p.x));
+  const yCounts = categoryCounts(pairs.map((p) => p.y));
+
+  // Cell counts keyed by JSON.stringify([x, y]) rather than a joined/delimited string --
+  // category names are free-form user text and may contain spaces or any other character, so a
+  // plain "x y"-style join-then-split key would be ambiguous (or outright wrong) for multi-word
+  // category names. JSON-encoding a 2-tuple properly escapes embedded characters and is safe to
+  // round-trip through JSON.parse without any delimiter assumption.
+  const cellCounts = new Map<string, number>();
+  pairs.forEach((p) => {
+    const key = JSON.stringify([p.x, p.y]);
+    cellCounts.set(key, (cellCounts.get(key) ?? 0) + 1);
+  });
+  const nonzeroCells = [...cellCounts.entries()]
+    .map(([key, count]) => {
+      const [x, y] = JSON.parse(key) as [string, string];
+      return { x, y, count };
+    })
+    .sort((a, b) => b.count - a.count);
+
+  const shownCombos = nonzeroCells.slice(0, MAX_COMBINATIONS);
+  const comboText = shownCombos.map((c) => `${c.x} & ${c.y} (${c.count})`).join(", ");
+  const moreCombos = nonzeroCells.length - shownCombos.length;
+  const combosLine = moreCombos > 0
+    ? `Largest combinations: ${comboText} … and ${moreCombos} more combinations.`
+    : `Largest combinations: ${comboText}.`;
+
+  const lines = [
+    `Sketch: ${pairs.length} points (two categorical attributes).`,
+    `${xName} (x): ${formatCategoryList(xCounts, MAX_AXIS_CATEGORIES)}. ` +
+      `${yName} (y): ${formatCategoryList(yCounts, MAX_AXIS_CATEGORIES)}.`,
+    combosLine,
+  ];
+
+  // Empty combinations (informative for a listener — "no meat-loving water dwellers" is itself a
+  // fact) are appended ONLY when there are few enough to be worth reading aloud: capped at 4,
+  // omitted entirely once there are more than that.
+  const emptyCells: string[] = [];
+  for (const xc of xCounts) {
+    for (const yc of yCounts) {
+      if (!cellCounts.has(JSON.stringify([xc.category, yc.category]))) {
+        emptyCells.push(`${xc.category} & ${yc.category}`);
+      }
+    }
+  }
+  if (emptyCells.length > 0 && emptyCells.length <= MAX_EMPTY_COMBINATIONS) {
+    lines.push(`Empty combinations: ${emptyCells.join(", ")}.`);
+  }
+
+  return lines.join("\n");
+};
+
+// Categorical x numeric (either orientation — the caller always passes the numeric attribute
+// first so the sentence always reads "<numeric> by <categorical>" regardless of which one was x
+// or y in the original graph): per-category median + range of the numeric attribute, categories
+// by descending count, capped at 6.
+const buildCategoricalByNumericSketch = (
+  numericName: string, numericRawValues: unknown[], categoricalName: string, categoricalRawValues: unknown[]
+): string => {
+  // Only cases with a non-empty category AND a coercible number form a valid pair, index-aligned
+  // with the categorical axis's original array (mirrors the numeric scatter path's pairing rule).
+  const pairs: { category: string; value: number }[] = [];
+  categoricalRawValues.forEach((rawCategory, i) => {
+    const category = nonEmptyCategoryStrings([rawCategory])[0];
+    const [value] = coerceNumericValues([numericRawValues[i]]);
+    if (category !== undefined && value !== undefined) pairs.push({ category, value });
+  });
+  if (pairs.length < 2) return "";
+
+  const byCategory = new Map<string, number[]>();
+  pairs.forEach((p) => {
+    const list = byCategory.get(p.category) ?? [];
+    list.push(p.value);
+    byCategory.set(p.category, list);
+  });
+
+  const rows = [...byCategory.entries()]
+    .map(([category, values]) => ({ category, values, count: values.length }))
+    .sort((a, b) => b.count - a.count);
+
+  const shown = rows.slice(0, MAX_CATEGORICAL_ROWS);
+  const summaries = shown.map(({ category, values, count }) => {
+    const sorted = [...values].sort((a, b) => a - b);
+    const med = median(sorted);
+    const noun = count === 1 ? "case" : "cases";
+    return `${category} (${count} ${noun}, median ${roundSig(med)}, range ${roundSig(sorted[0])}–${roundSig(sorted[sorted.length - 1])})`;
+  });
+  const more = rows.length - shown.length;
+  const summaryText = more > 0 ? `${summaries.join("; ")} … and ${more} more` : summaries.join("; ");
+
+  return `Sketch: ${pairs.length} points (categorical x numeric).\n${numericName} by ${categoricalName}: ${summaryText}.`;
 };
