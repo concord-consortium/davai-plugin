@@ -1,5 +1,5 @@
 import {
-  normalizeName, resolveByName, resolveDataContext, resolveCollection,
+  normalizeName, resolveByName, resolveDataContext, resolveCollection, resolveCollectionDefaultLeaf,
   resolveAttribute, resolveGraph, extractBacktickRefs, listNames, describeGraphOption
 } from "./resolve";
 
@@ -63,6 +63,32 @@ describe("domain resolvers", () => {
     const r = resolveCollection(undefined, multi);
     if (r.ok) throw new Error("should fail");
     expect(r.error).toMatch(/A, B/);
+  });
+  // DAVAI-126 Task D fix pass: leaf-collection default (opt-in variant used by find_cases).
+  // Collections are stored parent-first (see resolve.ts's helper comment for the evidence chain),
+  // so "leaf/childmost" = LAST element — the collection that still holds the lookup attributes
+  // after a group_by moves one attribute into a new parent collection.
+  it("resolveCollectionDefaultLeaf: unspecified defaults to the LAST (childmost/leaf) collection " +
+    "in multi-collection contexts; single-collection and explicit-name behavior delegate unchanged", () => {
+    const multi = { name: "M", collections: [{ name: "Diet", attrs: [] }, { name: "Cases", attrs: [] }] };
+    const leaf = resolveCollectionDefaultLeaf(undefined, multi);
+    if (!leaf.ok) throw new Error("should succeed");
+    expect(leaf.value.name).toBe("Cases");
+    const single = resolveCollectionDefaultLeaf(undefined, dc);
+    if (!single.ok) throw new Error("should succeed");
+    expect(single.value.name).toBe("Cases");
+    const explicitParent = resolveCollectionDefaultLeaf("diet", multi); // rung-2 repair, parent OK
+    if (!explicitParent.ok) throw new Error("should succeed");
+    expect(explicitParent.value.name).toBe("Diet");
+    const unknown = resolveCollectionDefaultLeaf("Bogus", multi);
+    if (unknown.ok) throw new Error("should fail");
+    expect(unknown.error).toMatch(/unknown collection/i);
+  });
+  it("resolveCollectionDefaultLeaf: zero collections is a corrective, not a crash", () => {
+    const empty = { name: "E", collections: [] };
+    const r = resolveCollectionDefaultLeaf(undefined, empty);
+    if (r.ok) throw new Error("should fail");
+    expect(r.error).toMatch(/no collections/i);
   });
   it("resolveGraph defaults to the selected graph and errors with none", () => {
     const graphs = [{ id: 42, name: "G1", title: "Height vs Age" }];

@@ -222,6 +222,89 @@ describe("execute: orderBy-form (client-side sort/slice)", () => {
   });
 });
 
+describe("hierarchy contexts after group_by (leaf-collection default; DAVAI-126 Task D fix pass)", () => {
+  // Shaped exactly like the Mammals dataContext AFTER the battery's group-by-diet case runs:
+  // group_by moved Diet into a new parent collection named "Diet" (collections are stored
+  // parent-first; leaf/childmost is LAST), everything else stays in the childmost "Cases"
+  // collection. Before this fix, find_cases hard-errored on ANY multi-collection context
+  // ('"Mammals" has more than one collection — specify "collection"'), silently breaking the
+  // existing find-heaviest eval case (last in the battery, after group-by-diet) and any real
+  // user who groups then asks a lookup question.
+  const hierDc = {
+    name: "Mammals",
+    collections: [
+      { name: "Diet", attrs: [{ name: "Diet", type: "categorical" }] },
+      {
+        name: "Cases",
+        attrs: [{ name: "Mammal", type: "categorical" }, { name: "Sleep", type: "numeric" }, { name: "Mass", type: "numeric" }],
+      },
+    ],
+  };
+  const hierCtx = { dataContexts: () => ({ Mammals: hierDc }), sendCODAPRequest: send } as unknown as ILocalToolContext;
+
+  it("where-form defaults to the LEAF (childmost) collection instead of erroring", async () => {
+    const v = findCasesTool.validate({ dataContext: "Mammals", where: "`Sleep` > 12" }, hierCtx);
+    expect(v.ok).toBe(true);
+    expect((v as any).resolved.collectionName).toBe("Cases");
+    await findCasesTool.execute((v as any).resolved, hierCtx);
+    expect(send).toHaveBeenCalledWith({
+      action: "get",
+      resource: "dataContext[Mammals].collection[Cases].caseFormulaSearch[`Sleep` > 12]",
+    });
+  });
+
+  it("orderBy-form defaults to the leaf collection too (find-heaviest's exact post-group_by shape)", async () => {
+    (getAllCollectionCases as jest.Mock).mockResolvedValue([
+      { case: { id: 1, values: { Mammal: "African Elephant", Mass: 6400 } } },
+      { case: { id: 2, values: { Mammal: "Human", Mass: 70 } } },
+    ]);
+    const v = findCasesTool.validate({ dataContext: "Mammals", orderBy: "Mass" }, hierCtx);
+    expect(v.ok).toBe(true);
+    const out = await findCasesTool.execute((v as any).resolved, hierCtx);
+    expect(getAllCollectionCases).toHaveBeenCalledWith("Mammals", "Cases");
+    expect(out).toContain("African Elephant (6400)");
+  });
+
+  it("a where ref to a PARENT attribute still canonicalizes while the search stays scoped to " +
+    "the leaf (CODAP resolves parent refs from child formula contexts)", () => {
+    const v = findCasesTool.validate({ dataContext: "Mammals", where: '`diet` == "meat"' }, hierCtx);
+    expect(v.ok).toBe(true);
+    expect((v as any).resolved.where).toBe('`Diet` == "meat"');
+    expect((v as any).resolved.collectionName).toBe("Cases");
+  });
+
+  it("an explicit collection arg can target the PARENT collection", async () => {
+    // Plain mockResolvedValue (not Once): the file's beforeEach re-establishes the base
+    // implementation for every test, and an unconsumed once-value would leak into the next
+    // test's send call (clearAllMocks clears calls, not queued once-implementations).
+    send.mockResolvedValue({
+      success: true,
+      values: [{ id: 9, parent: null, collection: { name: "Diet", id: 5 }, values: { Diet: "meat" } }],
+    });
+    const v = findCasesTool.validate(
+      { dataContext: "Mammals", collection: "Diet", where: '`Diet` == "meat"' }, hierCtx);
+    expect(v.ok).toBe(true);
+    expect((v as any).resolved.collectionName).toBe("Diet");
+    const out = await findCasesTool.execute((v as any).resolved, hierCtx);
+    expect(send).toHaveBeenCalledWith({
+      action: "get",
+      resource: 'dataContext[Mammals].collection[Diet].caseFormulaSearch[`Diet` == "meat"]',
+    });
+    expect(out).toContain("meat");
+  });
+
+  it("an explicit collection arg repairs case (ladder rung 2) and rejects unknown names with " +
+    "the existing corrective listing real collections", () => {
+    const repaired = findCasesTool.validate({ dataContext: "Mammals", collection: "cases", orderBy: "Mass" }, hierCtx);
+    expect(repaired.ok).toBe(true);
+    expect((repaired as any).resolved.collectionName).toBe("Cases");
+    const unknown = findCasesTool.validate({ dataContext: "Mammals", collection: "Bogus", orderBy: "Mass" }, hierCtx);
+    expect(unknown.ok).toBe(false);
+    expect((unknown as any).error).toMatch(/unknown collection/i);
+    expect((unknown as any).error).toContain("Cases");
+  });
+});
+
 describe("execute: both-form (where narrows, then orderBy sorts/slices the matches)", () => {
   it("applies where via caseFormulaSearch, then sorts/slices that result set by orderBy", async () => {
     send.mockResolvedValueOnce({

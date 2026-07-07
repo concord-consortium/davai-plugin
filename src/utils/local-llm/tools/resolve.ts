@@ -61,6 +61,33 @@ export const resolveCollection = (
   return resolveByName("collection", requested, collections.map((c) => ({ name: c.name, value: c })));
 };
 
+// DAVAI-126 Task D fix pass: opt-in leaf-collection default, a SEPARATE helper so
+// resolveCollection's ask-for-a-name corrective above stays intact for its other caller
+// (create_attribute, where "which collection gets the new attribute?" is a genuine question the
+// user must answer). For lookup tools (find_cases) the right unspecified-collection default is
+// the LEAF (childmost) collection instead: after group_by moves an attribute into a new parent
+// collection, the leaf still holds the case-level attributes a lookup targets, and CODAP's
+// formula engine resolves parent-attribute refs upward from child formula contexts — plus CODAP's
+// own precedent (codap-api-documentation.ts, selection lists: "Omitting `collection` defaults to
+// childmost collection"). Ordering evidence that leaf == LAST array element: `collections` is
+// stored verbatim from CODAP's get-dataContext response (trimDataset strips attr fields, never
+// reorders), getCollectionItemsForAttributePair walks "from the least nested down to the most
+// nested collection" by INCREASING index (codap-api-utils.ts:241-248), and
+// graph-sonification-model.ts:206 reads collections[0] as "the parent collection".
+export const resolveCollectionDefaultLeaf = (
+  requested: string | undefined,
+  dataContext: any
+): ResolveResult<any> => {
+  if (requested === undefined || requested === "") {
+    const collections: any[] = dataContext?.collections ?? [];
+    if (collections.length === 0) {
+      return { ok: false, error: `"${dataContext?.name}" has no collections.` };
+    }
+    return { ok: true, value: collections[collections.length - 1], repaired: false };
+  }
+  return resolveCollection(requested, dataContext);
+};
+
 export const resolveAttribute = (
   requested: string,
   dataContext: any

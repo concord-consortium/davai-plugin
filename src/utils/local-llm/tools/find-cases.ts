@@ -1,6 +1,6 @@
 import { getAllCollectionCases } from "../../codap-api-utils";
 import { ILocalTool } from "./registry";
-import { extractBacktickRefs, resolveAttribute, resolveCollection, resolveDataContext } from "./resolve";
+import { extractBacktickRefs, resolveAttribute, resolveCollectionDefaultLeaf, resolveDataContext } from "./resolve";
 
 const DEFAULT_LIMIT = 5;
 const MAX_LIMIT = 12;
@@ -68,11 +68,19 @@ export const findCasesTool: ILocalTool = {
   description: "Find cases matching a condition (\"where\", a CODAP formula with attribute names in backticks) and/or " +
     "ranked by an attribute (\"orderBy\", highest first by default). Reports matching cases by name.",
   argsExample: '{"tool": "find_cases", "dataContext": "Mammals", "where": "`Sleep` > 12"} or ' +
-    '{"tool": "find_cases", "dataContext": "Mammals", "orderBy": "Mass", "limit": 3}',
+    '{"tool": "find_cases", "dataContext": "Mammals", "orderBy": "Mass", "limit": 3} (optional: "collection")',
   validate(args, ctx) {
     const dc = resolveDataContext(String(args.dataContext ?? ""), ctx.dataContexts());
     if (!dc.ok) return { ok: false, error: dc.error };
-    const collection = resolveCollection(undefined, dc.value);
+    // Leaf default (DAVAI-126 Task D fix pass): unspecified collection resolves to the childmost
+    // collection instead of hard-erroring on multi-collection contexts — a group_by earlier in
+    // the session (or battery) permanently adds a parent collection to the shared dataContext,
+    // and a lookup must keep working against the case-level leaf afterward. Parent-attribute
+    // refs in `where` still work from the leaf: CODAP formula contexts resolve them up the
+    // hierarchy. An explicit "collection" arg targets any collection (including a parent), with
+    // the standard unknown-name corrective.
+    const collectionArg = typeof args.collection === "string" && args.collection ? args.collection : undefined;
+    const collection = resolveCollectionDefaultLeaf(collectionArg, dc.value);
     if (!collection.ok) return { ok: false, error: collection.error };
 
     const whereRaw = typeof args.where === "string" && args.where ? args.where : undefined;
