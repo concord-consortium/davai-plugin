@@ -30,11 +30,27 @@ it("a runTurn rejection fails that case without aborting the run", async () => {
   expect(results).toHaveLength(2);
 });
 
-it("ships the 11 spec cases with unique ids", () => {
-  expect(evalCases).toHaveLength(11);
-  expect(new Set(evalCases.map((c) => c.id)).size).toBe(11);
+it("ships the 12 spec cases with unique ids", () => {
+  // DAVAI-126 Task A: added "describe-by-axes" to exercise resolveGraph's rung 3.
+  expect(evalCases).toHaveLength(12);
+  expect(new Set(evalCases.map((c) => c.id)).size).toBe(12);
   const miscap = evalCases.find((c) => c.id === "miscapitalized-attribute");
   expect(miscap).toBeDefined();
+});
+
+it("describe-by-axes runs after create-graph and before create-adornment, with flipped axis " +
+  "word order so title matching alone cannot resolve it (DAVAI-126 Task A)", () => {
+  const ids = evalCases.map((e) => e.id);
+  const createGraphIdx = ids.indexOf("create-graph");
+  const describeByAxesIdx = ids.indexOf("describe-by-axes");
+  const createAdornmentIdx = ids.indexOf("create-adornment");
+  expect(createGraphIdx).toBeGreaterThanOrEqual(0);
+  expect(describeByAxesIdx).toBeGreaterThan(createGraphIdx);
+  expect(describeByAxesIdx).toBeLessThan(createAdornmentIdx);
+  const c = evalCases.find((e) => e.id === "describe-by-axes")!;
+  expect(c.prompt).toBe("Describe the Mass vs Height graph.");
+  expect(c.expectTools).toEqual({ contains: ["get_graph_info"] });
+  expect(c.expectFinal).toEqual({ matches: [/mass/i, /height/i], notMatches: [/error|sorry/i] });
 });
 
 describe("eval case corrections (DAVAI-126 eval round 2 item A)", () => {

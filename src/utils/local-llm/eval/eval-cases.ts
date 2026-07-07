@@ -30,6 +30,14 @@ export const evalCases: IEvalCase[] = [
     expectTools: { contains: ["select_cases"] }, expectFinal: { matches: [/select/i, /\d+\s*(cases?|mammals?)/i] } },
   { id: "create-graph", prompt: "Make a graph of Height versus Mass.",
     expectTools: { contains: ["create_graph"] }, expectFinal: { matches: [/graph|plot/i], notMatches: [/fail/i] } },
+  // DAVAI-126 Task A: exercises resolveGraph's rung 3 (axis + plot-type matching). create-graph
+  // (above) makes a graph titled "Height vs Mass" — this prompt flips the word order to "Mass vs
+  // Height", so title normalization alone cannot match it; only axis-substring scoring can. Case
+  // ORDER matters here: this must run after create-graph creates the graph and before any case
+  // that would create another graph sharing both axis names.
+  { id: "describe-by-axes", prompt: "Describe the Mass vs Height graph.",
+    expectTools: { contains: ["get_graph_info"] },
+    expectFinal: { matches: [/mass/i, /height/i], notMatches: [/error|sorry/i] } },
   // DAVAI-126 eval round 2 item A: the case's own arithmetic was wrong — Height is in meters,
   // and /30.48 is the cm-to-feet divisor, not a meters-to-feet conversion. Models obeyed the
   // (wrong) instruction faithfully; the fix is the prompt, not the model. Assertions unchanged.
