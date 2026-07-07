@@ -13,7 +13,7 @@ import { localLlmService } from "../utils/local-llm/local-llm-service";
 import { runLocalTurn } from "../utils/local-llm/local-llm-loop";
 import { buildLocalSystemPrompt, buildTranscriptTurns } from "../utils/local-llm/local-llm-prompt";
 import { initializeLocalTools, dispatchTool, buildToolDocs, ILocalToolContext } from "../utils/local-llm/tools";
-import { buildGraphSeed, buildSchemaDigest } from "../utils/local-llm/local-llm-prefetch";
+import { buildGraphSeed, buildSchemaDigest, deriveCurrentGraphId } from "../utils/local-llm/local-llm-prefetch";
 import { runLocalEval, summarizeEval, IEvalTurnResult } from "../utils/local-llm/eval/eval-runner";
 import { IEvalCase } from "../utils/local-llm/eval/eval-cases";
 
@@ -594,7 +594,11 @@ export const AssistantModel = types
           sendCODAPRequest,
           dataContexts: () => self.dataContexts ?? {},
           graphs: () => self.graphs ?? [],
-          selectedGraphId: () => root.sonificationStore?.selectedGraphID ?? null,
+          // The store's explicit selection wins; a single-graph document falls back to that
+          // graph, since clicking a graph in CODAP never sets the store's selection (only
+          // auto-select-on-create/titleChange and the Sonification panel's menu do) — see
+          // deriveCurrentGraphId.
+          selectedGraphId: () => deriveCurrentGraphId(root.sonificationStore?.selectedGraphID, self.graphs ?? []),
           setSelectedGraphID: (graphId) => root.sonificationStore.setSelectedGraphID(graphId),
           // Cast to `any`: same-block sibling-action reference (see the `processToolCall`
           // executeTool comment above) — TS doesn't see updateDataContexts/updateGraphs on
@@ -673,12 +677,17 @@ export const AssistantModel = types
       // Fixture guard (DAVAI-126 eval round 1 F3): the battery's fixed prompts (e.g.
       // describe-graph's zero-tool expectation) are only meaningful against the documented
       // fixture — the Mammals sample with a Height dot plot selected. Running the battery
-      // without a selected graph produces failures that are really "wrong fixture," not "the
-      // model got it wrong," so bail out before doing any work (no engine load, no flags set).
+      // without a resolvable current graph produces failures that are really "wrong fixture,"
+      // not "the model got it wrong," so bail out before doing any work (no engine load, no
+      // flags set). Uses the same deriveCurrentGraphId fallback as the rest of the local path
+      // (DAVAI-126 current-graph fix): a document with exactly one graph passes even with no
+      // explicit sonification-store selection, since clicking a graph in CODAP never sets that
+      // selection.
       const root = getRoot(self) as any;
-      if (root.sonificationStore?.selectedGraphID == null) {
+      if (deriveCurrentGraphId(root.sonificationStore?.selectedGraphID, self.graphs ?? []) == null) {
         self.addDavaiAnnouncement(
-          "Select a graph before running the eval (fixture: Mammals sample with a Height dot plot selected)."
+          "Select a graph before running the eval — pick it in the Sonification section's graph menu " +
+          "(fixture: Mammals sample with a Height dot plot selected)."
         );
         return;
       }
@@ -697,7 +706,7 @@ export const AssistantModel = types
           sendCODAPRequest,
           dataContexts: () => self.dataContexts ?? {},
           graphs: () => self.graphs ?? [],
-          selectedGraphId: () => root.sonificationStore?.selectedGraphID ?? null,
+          selectedGraphId: () => deriveCurrentGraphId(root.sonificationStore?.selectedGraphID, self.graphs ?? []),
           setSelectedGraphID: (graphId) => root.sonificationStore.setSelectedGraphID(graphId),
           refreshDataContexts: async () => { await (self as any).updateDataContexts(); },
           refreshGraphs: async () => { await (self as any).updateGraphs(); },

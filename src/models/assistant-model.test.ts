@@ -30,16 +30,24 @@ jest.mock("../utils/local-llm/tools", () => ({
 jest.mock("../utils/local-llm/local-llm-prefetch", () => ({
   buildGraphSeed: jest.fn().mockResolvedValue(""),
   buildSchemaDigest: jest.fn(() => "digest"),
+  // Real passthrough (not a stub): the current-graph derivation is exactly what these tests
+  // (and the eval fixture guard's single-graph fix) exercise assistant-model's wiring OF.
+  deriveCurrentGraphId: jest.requireActual("../utils/local-llm/local-llm-prefetch").deriveCurrentGraphId,
 }));
 jest.mock("@concord-consortium/codap-plugin-api", () => ({
   ...jest.requireActual("@concord-consortium/codap-plugin-api"),
   codapInterface: { sendRequest: jest.fn() },
 }));
+jest.mock("../utils/codap-api-utils", () => ({
+  ...jest.requireActual("../utils/codap-api-utils"),
+  getTrimmedGraphDetails: jest.fn().mockResolvedValue([]),
+}));
 
 import { localLlmService } from "../utils/local-llm/local-llm-service";
 import { runLocalTurn } from "../utils/local-llm/local-llm-loop";
 import { dispatchTool } from "../utils/local-llm/tools";
-import { buildSchemaDigest } from "../utils/local-llm/local-llm-prefetch";
+import { buildSchemaDigest, buildGraphSeed } from "../utils/local-llm/local-llm-prefetch";
+import { getTrimmedGraphDetails } from "../utils/codap-api-utils";
 
 const mockedPostMessage = postMessage as jest.MockedFunction<typeof postMessage>;
 
@@ -695,6 +703,28 @@ describe("handleMessageSubmitLocalLlm (DAVAI-126)", () => {
         );
       });
   });
+
+  describe("current-graph derivation (DAVAI-126): single-graph documents need no manual " +
+    "sonification selection", () => {
+    it("builds the graph seed for the sole graph even with no sonification-store selection " +
+      "(this bare store's getRoot(self) has no sonificationStore, i.e. no explicit selection)", async () => {
+      const store = createLocalStore();
+      (getTrimmedGraphDetails as jest.Mock).mockResolvedValueOnce([{ id: 55, name: "Heights" }]);
+      await store.updateGraphs();
+
+      await store.handleMessageSubmitLocalLlm("describe the graph");
+
+      expect(buildGraphSeed).toHaveBeenCalledWith("55", expect.anything());
+    });
+
+    it("does not build a graph seed when there are zero graphs and nothing is selected", async () => {
+      const store = createLocalStore();
+      // self.graphs defaults to null (no updateGraphs call) — zero graphs, nothing selected.
+      await store.handleMessageSubmitLocalLlm("hello");
+
+      expect(buildGraphSeed).not.toHaveBeenCalled();
+    });
+  });
 });
 
 describe("runLocalEvalTurns (DAVAI-126 Task 11)", () => {
@@ -719,7 +749,11 @@ describe("runLocalEvalTurns (DAVAI-126 Task 11)", () => {
   // default PARAMETER, so an explicit `undefined` argument would substitute the default itself
   // rather than opting out of it — `null` is translated to "omit the key" for the MST snapshot,
   // whose own selectedGraphID field is `types.maybe(types.number)`, i.e. unset is `undefined`).
-  const createLocalStore = (selectedGraphID: number | null = 1) => {
+  // `graphs` seeds self.graphs (used by the DAVAI-126 current-graph-derivation fix's
+  // single-graph fallback) via the real updateGraphs action, mirroring how the app populates it
+  // — rather than poking the volatile field directly, which MST's strict mode forbids outside
+  // an action.
+  const createLocalStore = async (selectedGraphID: number | null = 1, graphs: any[] = []) => {
     const transcriptStore = ChatTranscriptModel.create({ messages: [] });
     const root = TestRootStore.create({
       assistantStore: { transcriptStore, threadId: "thread-1" },
@@ -731,6 +765,8 @@ describe("runLocalEvalTurns (DAVAI-126 Task 11)", () => {
     });
     const store = root.assistantStore;
     store.setLlmId(JSON.stringify({ id: "Qwen3-1.7B-q4f16_1-MLC", provider: "Local" }));
+    (getTrimmedGraphDetails as jest.Mock).mockResolvedValueOnce(graphs);
+    await store.updateGraphs();
     return store;
   };
 
@@ -742,7 +778,7 @@ describe("runLocalEvalTurns (DAVAI-126 Task 11)", () => {
   ];
 
   it("runs each case through the local building blocks and posts a start announcement then a summary", async () => {
-    const store = createLocalStore();
+    const store = await createLocalStore();
     const consoleLogSpy = jest.spyOn(console, "log").mockImplementation(() => undefined);
 
     await store.runLocalEvalTurns(twoCases as any);
@@ -778,7 +814,7 @@ describe("runLocalEvalTurns (DAVAI-126 Task 11)", () => {
   });
 
   it("bypasses the transcript for individual case turns (only the start announcement and final summary are posted)", async () => {
-    const store = createLocalStore();
+    const store = await createLocalStore();
     jest.spyOn(console, "log").mockImplementation(() => undefined);
 
     await store.runLocalEvalTurns(twoCases as any);
@@ -796,7 +832,7 @@ describe("runLocalEvalTurns (DAVAI-126 Task 11)", () => {
   });
 
   it("records the onToolCall sequence per case into the eval results", async () => {
-    const store = createLocalStore();
+    const store = await createLocalStore();
     const consoleLogSpy = jest.spyOn(console, "log").mockImplementation(() => undefined);
     // Case-b's turn calls a tool via the onToolCall recorder before returning its final text.
     (runLocalTurn as jest.Mock)
@@ -818,7 +854,7 @@ describe("runLocalEvalTurns (DAVAI-126 Task 11)", () => {
   });
 
   it("reuses the ctx/seed/prompt building blocks exactly like handleMessageSubmitLocalLlm", async () => {
-    const store = createLocalStore();
+    const store = await createLocalStore();
     jest.spyOn(console, "log").mockImplementation(() => undefined);
 
     await store.runLocalEvalTurns(twoCases as any);
@@ -840,7 +876,7 @@ describe("runLocalEvalTurns (DAVAI-126 Task 11)", () => {
   });
 
   it("does not post a summary when the eval run is cancelled mid-run (epoch reuse)", async () => {
-    const store = createLocalStore();
+    const store = await createLocalStore();
     const consoleLogSpy = jest.spyOn(console, "log").mockImplementation(() => undefined);
     let release: (v: string) => void = () => undefined;
     (runLocalTurn as jest.Mock).mockImplementationOnce(
@@ -868,7 +904,7 @@ describe("runLocalEvalTurns (DAVAI-126 Task 11)", () => {
     // Same fix as the chat-turn case: a model switch during an eval run is not superseded by any
     // newer turn, so nothing else will ever clear isLoadingResponse/showLoadingIndicator unless
     // setLlmId does it itself.
-    const store = createLocalStore();
+    const store = await createLocalStore();
     const consoleLogSpy = jest.spyOn(console, "log").mockImplementation(() => undefined);
     let release: (v: string) => void = () => undefined;
     (runLocalTurn as jest.Mock).mockImplementationOnce(
@@ -903,7 +939,7 @@ describe("runLocalEvalTurns (DAVAI-126 Task 11)", () => {
   });
 
   it("announces already-in-progress and does not start a second run when an eval is already running (DAVAI-126 review F1)", async () => {
-    const store = createLocalStore();
+    const store = await createLocalStore();
     const consoleLogSpy = jest.spyOn(console, "log").mockImplementation(() => undefined);
     let release: () => void = () => undefined;
     (localLlmService.loadEngine as jest.Mock).mockImplementationOnce(
@@ -942,7 +978,7 @@ describe("runLocalEvalTurns (DAVAI-126 Task 11)", () => {
   });
 
   it("sets isLoadingResponse/showLoadingIndicator during the run and clears them on completion and on rejection (DAVAI-126 review F1/F2)", async () => {
-    const store = createLocalStore();
+    const store = await createLocalStore();
     const consoleLogSpy = jest.spyOn(console, "log").mockImplementation(() => undefined);
 
     // Completion path.
@@ -969,7 +1005,7 @@ describe("runLocalEvalTurns (DAVAI-126 Task 11)", () => {
   });
 
   it("resolves (no unhandled rejection), announces the error, and posts no summary or console dump when loadEngine rejects (DAVAI-126 review F2)", async () => {
-    const store = createLocalStore();
+    const store = await createLocalStore();
     const consoleLogSpy = jest.spyOn(console, "log").mockImplementation(() => undefined);
     const consoleErrorSpy = jest.spyOn(console, "error").mockImplementation(() => undefined);
     (localLlmService.loadEngine as jest.Mock).mockRejectedValueOnce(new Error("engine failed to load"));
@@ -993,7 +1029,7 @@ describe("runLocalEvalTurns (DAVAI-126 Task 11)", () => {
     // Exercises the catch block via a distinct failure point from loadEngine (buildSchemaDigest,
     // called unconditionally in the body) so the guard isn't just special-cased around the engine
     // load — any synchronous failure in the eval setup must resolve cleanly, not reject/hang.
-    const store = createLocalStore();
+    const store = await createLocalStore();
     const consoleLogSpy = jest.spyOn(console, "log").mockImplementation(() => undefined);
     const consoleErrorSpy = jest.spyOn(console, "error").mockImplementation(() => undefined);
     (buildSchemaDigest as jest.Mock).mockImplementationOnce(() => { throw new Error("digest boom"); });
@@ -1014,15 +1050,17 @@ describe("runLocalEvalTurns (DAVAI-126 Task 11)", () => {
   });
 
   describe("fixture guard: a graph must be selected before the eval runs (DAVAI-126 eval round 1 F3)", () => {
-    it("announces instead of running the battery when no graph is selected, and sticks no flags", async () => {
-      const store = createLocalStore(null); // no selectedGraphID
+    it("announces instead of running the battery when no graph is selected and there are zero " +
+      "graphs, and sticks no flags", async () => {
+      const store = await createLocalStore(null); // no selectedGraphID, no graphs
       const consoleLogSpy = jest.spyOn(console, "log").mockImplementation(() => undefined);
 
       await store.runLocalEvalTurns(twoCases as any);
 
       const contents = store.transcriptStore.messages.map((m) => m.messageContent.content);
       expect(contents).toContain(
-        "Select a graph before running the eval (fixture: Mammals sample with a Height dot plot selected)."
+        "Select a graph before running the eval — pick it in the Sonification section's graph menu " +
+        "(fixture: Mammals sample with a Height dot plot selected)."
       );
       // No battery ran at all: no case turns, no engine load, no completion summary/console dump.
       expect(runLocalTurn).not.toHaveBeenCalled();
@@ -1036,8 +1074,23 @@ describe("runLocalEvalTurns (DAVAI-126 Task 11)", () => {
       consoleLogSpy.mockRestore();
     });
 
+    it("still announces (mentioning the Sonification section) when two graphs exist and neither " +
+      "is selected — ambiguous, so the single-graph fallback cannot apply (DAVAI-126 current-graph fix)", async () => {
+      const store = await createLocalStore(null, [{ id: 10 }, { id: 20 }]);
+      const consoleLogSpy = jest.spyOn(console, "log").mockImplementation(() => undefined);
+
+      await store.runLocalEvalTurns(twoCases as any);
+
+      const contents = store.transcriptStore.messages.map((m) => m.messageContent.content);
+      expect(contents.some((c) => typeof c === "string" && /Sonification section/.test(c))).toBe(true);
+      expect(runLocalTurn).not.toHaveBeenCalled();
+      expect(localLlmService.loadEngine).not.toHaveBeenCalled();
+
+      consoleLogSpy.mockRestore();
+    });
+
     it("runs the battery normally when a graph IS selected (the default fixture state)", async () => {
-      const store = createLocalStore(1);
+      const store = await createLocalStore(1);
       const consoleLogSpy = jest.spyOn(console, "log").mockImplementation(() => undefined);
 
       await store.runLocalEvalTurns(twoCases as any);
@@ -1046,16 +1099,32 @@ describe("runLocalEvalTurns (DAVAI-126 Task 11)", () => {
       expect(runLocalTurn).toHaveBeenCalledTimes(2);
       const contents = store.transcriptStore.messages.map((m) => m.messageContent.content);
       expect(contents.some((c) => typeof c === "string" && /passed/.test(c))).toBe(true);
-      expect(contents).not.toContain(
-        "Select a graph before running the eval (fixture: Mammals sample with a Height dot plot selected)."
-      );
+      expect(contents.some((c) => typeof c === "string" && /Select a graph before running the eval/.test(c)))
+        .toBe(false);
+
+      consoleLogSpy.mockRestore();
+    });
+
+    it("runs the battery normally with one graph and NO sonification selection (single-graph " +
+      "documents need no manual pick, DAVAI-126 current-graph fix)", async () => {
+      const store = await createLocalStore(null, [{ id: 99 }]); // no selectedGraphID, exactly one graph
+      const consoleLogSpy = jest.spyOn(console, "log").mockImplementation(() => undefined);
+
+      await store.runLocalEvalTurns(twoCases as any);
+
+      expect(localLlmService.loadEngine).toHaveBeenCalled();
+      expect(runLocalTurn).toHaveBeenCalledTimes(2);
+      const contents = store.transcriptStore.messages.map((m) => m.messageContent.content);
+      expect(contents.some((c) => typeof c === "string" && /passed/.test(c))).toBe(true);
+      expect(contents.some((c) => typeof c === "string" && /Select a graph before running the eval/.test(c)))
+        .toBe(false);
 
       consoleLogSpy.mockRestore();
     });
 
     it("does not queue a subsequent chat message submitted right after the guard's early return " +
       "(the guard never sets isLoadingResponse, so nothing needs draining)", async () => {
-      const store = createLocalStore(null);
+      const store = await createLocalStore(null);
       jest.spyOn(console, "log").mockImplementation(() => undefined);
 
       await store.runLocalEvalTurns(twoCases as any);
@@ -1075,7 +1144,7 @@ describe("runLocalEvalTurns (DAVAI-126 Task 11)", () => {
   describe("thinking toggle (DAVAI-126)", () => {
     it("effort 'think' builds the eval prompt with thinking:true and calls generate with " +
       "maxTokens 2048", async () => {
-        const store = createLocalStore();
+        const store = await createLocalStore();
         store.setEffort("think");
         jest.spyOn(console, "log").mockImplementation(() => undefined);
 
@@ -1096,7 +1165,7 @@ describe("runLocalEvalTurns (DAVAI-126 Task 11)", () => {
 
     it("effort '' builds the eval prompt with thinking:false and calls generate with " +
       "maxTokens 1024", async () => {
-        const store = createLocalStore();
+        const store = await createLocalStore();
         store.setEffort("");
         jest.spyOn(console, "log").mockImplementation(() => undefined);
 

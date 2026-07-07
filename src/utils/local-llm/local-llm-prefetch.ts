@@ -2,6 +2,18 @@ import {
   getCollectionItemsForAttribute, getCollectionItemsForAttributePair, getGraphAdornments, getGraphByID
 } from "../codap-api-utils";
 
+// The sonification store's explicit selection wins; otherwise, when the document has exactly
+// one graph, that graph is unambiguously "the graph" — clicking a graph in CODAP does not
+// set the store's selection, so single-graph documents must not demand a manual pick.
+export const deriveCurrentGraphId = (
+  selectedGraphId: string | number | null | undefined,
+  graphs: any[]
+): string | null => {
+  if (selectedGraphId !== null && selectedGraphId !== undefined && selectedGraphId !== "") return String(selectedGraphId);
+  if (graphs.length === 1 && graphs[0]?.id !== undefined) return String(graphs[0].id);
+  return null;
+};
+
 // Compact, names-first dataset summary: "Mammals — Cases: Height (numeric), Habitat (categorical), Mass".
 // Replaces the raw trimmed-JSON context dump (smaller, and no IDs for the model to fixate on).
 export const buildSchemaDigest = (dataContexts: Record<string, any>): string =>

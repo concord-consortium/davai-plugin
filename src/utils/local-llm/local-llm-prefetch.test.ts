@@ -7,7 +7,33 @@ jest.mock("../codap-api-utils", () => ({
 import {
   getGraphByID, getGraphAdornments, getCollectionItemsForAttribute, getCollectionItemsForAttributePair
 } from "../codap-api-utils";
-import { buildSchemaDigest, buildGraphSeed } from "./local-llm-prefetch";
+import { buildSchemaDigest, buildGraphSeed, deriveCurrentGraphId } from "./local-llm-prefetch";
+
+describe("deriveCurrentGraphId (DAVAI-126 current-graph fix)", () => {
+  it("explicit selection wins over any graph list, including when it's a number", () => {
+    expect(deriveCurrentGraphId(42, [{ id: 1 }, { id: 2 }])).toBe("42");
+    expect(deriveCurrentGraphId("42", [{ id: 1 }, { id: 2 }])).toBe("42");
+  });
+
+  it("falls back to the sole graph's id when nothing is explicitly selected", () => {
+    expect(deriveCurrentGraphId(null, [{ id: 7 }])).toBe("7");
+    expect(deriveCurrentGraphId(undefined, [{ id: 7 }])).toBe("7");
+  });
+
+  it("returns null when there are zero graphs and nothing is selected", () => {
+    expect(deriveCurrentGraphId(null, [])).toBeNull();
+  });
+
+  it("returns null when there are multiple graphs and nothing is explicitly selected " +
+    "(ambiguous — cannot guess which one is current)", () => {
+    expect(deriveCurrentGraphId(null, [{ id: 1 }, { id: 2 }])).toBeNull();
+  });
+
+  it("treats an empty-string selection as unset, still falling back to a single graph", () => {
+    expect(deriveCurrentGraphId("", [{ id: 7 }])).toBe("7");
+    expect(deriveCurrentGraphId("", [{ id: 1 }, { id: 2 }])).toBeNull();
+  });
+});
 
 const dcs = {
   Mammals: {
