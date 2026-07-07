@@ -41,13 +41,18 @@ jest.mock("@concord-consortium/codap-plugin-api", () => ({
 jest.mock("../utils/codap-api-utils", () => ({
   ...jest.requireActual("../utils/codap-api-utils"),
   getTrimmedGraphDetails: jest.fn().mockResolvedValue([]),
+  // Backs the sonification store's OWN setGraphs (graph-sonification-model.ts), which the local
+  // create_graph tool's refreshGraphs wiring must trigger (DAVAI-126 sonification auto-select
+  // regression) — separate from getTrimmedGraphDetails above, which only backs the assistant's
+  // own graph list (self.graphs, for name resolution).
+  getGraphDetails: jest.fn().mockResolvedValue([]),
 }));
 
 import { localLlmService } from "../utils/local-llm/local-llm-service";
 import { runLocalTurn } from "../utils/local-llm/local-llm-loop";
 import { dispatchTool } from "../utils/local-llm/tools";
 import { buildSchemaDigest, buildGraphSeed } from "../utils/local-llm/local-llm-prefetch";
-import { getTrimmedGraphDetails } from "../utils/codap-api-utils";
+import { getTrimmedGraphDetails, getGraphDetails } from "../utils/codap-api-utils";
 
 const mockedPostMessage = postMessage as jest.MockedFunction<typeof postMessage>;
 
@@ -1338,5 +1343,92 @@ describe("runLocalEvalTurns (DAVAI-126 Task 11)", () => {
         // eslint-disable-next-line no-console
         (console.log as jest.Mock).mockRestore();
       });
+  });
+});
+
+describe("sonification auto-select on local create_graph (DAVAI-126)", () => {
+  // On the server path, the registered sendCODAPRequest flow (processToolCall,
+  // assistant-model.ts ~line 268) runs `root.sonificationStore.setGraphs({ selectNewest: true })`
+  // right after a successful `create component (graph)` request. The local path's create_graph
+  // tool (src/utils/local-llm/tools/create-graph.ts) never calls sendCODAPRequest through that
+  // guard — it calls `ctx.refreshGraphs()` instead, so refreshGraphs itself must also trigger the
+  // sonification side effect. Needs a real parent (getRoot(self)) for that write to land anywhere
+  // observable — mirrors the runLocalEvalTurns TestRootStore above.
+  const TestRootStore = types.model("TestRootStore", {
+    assistantStore: AssistantModel,
+    sonificationStore: GraphSonificationModel,
+  });
+
+  const createRootedStore = () => {
+    const transcriptStore = ChatTranscriptModel.create({ messages: [] });
+    const root = TestRootStore.create({
+      assistantStore: { transcriptStore, threadId: "thread-1" },
+      sonificationStore: { allGraphs: {}, binValues: {} },
+    });
+    const store = root.assistantStore;
+    store.setLlmId(JSON.stringify({ id: "Qwen3-1.7B-q4f16_1-MLC", provider: "Local" }));
+    return { root, store };
+  };
+
+  // A single sonifiable graph (univariate dot plot: one axis, no splits) freshly "created" —
+  // i.e. not already present in allGraphs, so setGraphs' selectNewest logic picks it up.
+  const newSonifiableGraph = {
+    id: 42, name: "Height", title: "Height", plotType: "dotPlot", dataContext: "Mammals",
+    xAttributeID: 1, xAttributeName: "Height",
+  };
+
+  afterEach(() => {
+    jest.clearAllMocks();
+  });
+
+  it("selects the newly created graph in the sonification store after a local create_graph " +
+    "tool call (chat wiring, handleMessageSubmitLocalLlm)", async () => {
+    const { root, store } = createRootedStore();
+    expect(root.sonificationStore.selectedGraphID).toBeUndefined();
+    (getGraphDetails as jest.Mock).mockResolvedValueOnce([newSonifiableGraph]);
+
+    (runLocalTurn as jest.Mock).mockImplementationOnce(async (args: any) => {
+      // Reproduces create-graph.ts's real post-success step (its own execute() is not exercised
+      // here — dispatchTool is mocked module-wide — but its ctx.refreshGraphs() call is the exact
+      // seam under test): capture the real toolCtx built by assistant-model.ts and invoke the
+      // same refreshGraphs it would.
+      await args.executeTool("create_graph", { dataContext: "Mammals", xAttribute: "Height" });
+      const toolCtx = (dispatchTool as jest.Mock).mock.calls.at(-1)![2];
+      await toolCtx.refreshGraphs();
+      return "Created graph \"Height\".";
+    });
+
+    await store.handleMessageSubmitLocalLlm("create a graph of height");
+
+    expect(root.sonificationStore.selectedGraphID).toBe(42);
+  });
+
+  it("selects the newly created graph in the sonification store after a local create_graph " +
+    "tool call (eval wiring, runLocalEvalTurns)", async () => {
+    const { root, store } = createRootedStore();
+    // The eval fixture guard requires a resolvable current graph before it will run at all
+    // (DAVAI-126 eval round 1 F3) — seed one pre-existing graph via the real updateGraphs action
+    // rather than poking store.graphs directly (MST strict mode).
+    (getTrimmedGraphDetails as jest.Mock).mockResolvedValueOnce([{ id: 1, name: "Existing" }]);
+    await store.updateGraphs();
+    root.sonificationStore.setSelectedGraphID(1);
+    (getGraphDetails as jest.Mock).mockResolvedValueOnce([newSonifiableGraph]);
+    const consoleLogSpy = jest.spyOn(console, "log").mockImplementation(() => undefined);
+
+    (runLocalTurn as jest.Mock).mockImplementationOnce(async (args: any) => {
+      await args.executeTool("create_graph", { dataContext: "Mammals", xAttribute: "Height" });
+      const toolCtx = (dispatchTool as jest.Mock).mock.calls.at(-1)![2];
+      await toolCtx.refreshGraphs();
+      return "Created graph \"Height\".";
+    });
+
+    await store.runLocalEvalTurns([
+      { id: "case-a", prompt: "create a graph of height", expectTools: { contains: ["create_graph"] },
+        expectFinal: { matches: [/Height/] } },
+    ] as any);
+
+    expect(root.sonificationStore.selectedGraphID).toBe(42);
+
+    consoleLogSpy.mockRestore();
   });
 });

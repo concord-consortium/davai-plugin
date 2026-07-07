@@ -263,8 +263,10 @@ export const AssistantModel = types
           }
 
           // When the request is to create a graph component, we need to update the sonification
-          // store after the run. `values` may be undefined on the local path (the envelope
-          // parser passes through an omitted "values"), so guard the property access.
+          // store after the run. This guard only serves the server path (processToolCall's
+          // create_request branch); the local path achieves the same auto-select via its own
+          // refreshGraphs wiring below (see the toolCtx blocks in handleMessageSubmitLocalLlm and
+          // runLocalEvalTurns) rather than routing through here.
           if (action === "create" && resource === "component" && values?.type === "graph") {
             const root = getRoot(self) as any;
             root.sonificationStore.setGraphs({ selectNewest: true });
@@ -609,7 +611,18 @@ export const AssistantModel = types
           // executeTool comment above) — TS doesn't see updateDataContexts/updateGraphs on
           // `self` until this same `.actions()` block's `return` adds them to the live instance.
           refreshDataContexts: async () => { await (self as any).updateDataContexts(); },
-          refreshGraphs: async () => { await (self as any).updateGraphs(); },
+          // Two separate stores, both needing a refresh after create_graph: updateGraphs refills
+          // the assistant's own graph list (self.graphs, used above for name resolution), while
+          // setGraphs({ selectNewest: true }) is the sonification store's registered flow that
+          // makes the newly created graph auto-selected — the same auto-select the server path
+          // gets from the processToolCall guard above. Without this second call the local path's
+          // graph creation succeeds but the Sonification menu never picks up the new graph
+          // (DAVAI-126 regression). setGraphs is a registered flow on another node, so — like
+          // setSelectedGraphID above — it's safely callable from this async continuation.
+          refreshGraphs: async () => {
+            await (self as any).updateGraphs();
+            await root.sonificationStore.setGraphs({ selectNewest: true });
+          },
         };
         // Reuses the DAVAI-125 effort machinery as the thinking toggle: effort "think" turns
         // Qwen3 thinking on (via the /think prompt switch) and doubles the completion-token
@@ -722,7 +735,13 @@ export const AssistantModel = types
           selectedGraphId: () => deriveCurrentGraphId(root.sonificationStore?.selectedGraphID, self.graphs ?? []),
           setSelectedGraphID: (graphId) => root.sonificationStore.setSelectedGraphID(graphId),
           refreshDataContexts: async () => { await (self as any).updateDataContexts(); },
-          refreshGraphs: async () => { await (self as any).updateGraphs(); },
+          // Same dual-store refresh as handleMessageSubmitLocalLlm's toolCtx (see its comment):
+          // updateGraphs refills self.graphs, and setGraphs({ selectNewest: true }) is what makes
+          // the Sonification menu auto-select a graph created via create_graph during an eval run.
+          refreshGraphs: async () => {
+            await (self as any).updateGraphs();
+            await root.sonificationStore.setGraphs({ selectNewest: true });
+          },
         };
         // Same thinking wiring as handleMessageSubmitLocalLlm (see its comment): effort "think"
         // enables the /think prompt switch and doubles the completion-token budget.
