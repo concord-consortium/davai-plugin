@@ -20,3 +20,24 @@ it("steers the model to get_stats for statistics not already shown", () => {
     "statistics directly — but use the get_stats tool for any statistic that is not shown there."
   );
 });
+
+it("instructs a corrective retry with a picked-from-options argument instead of narrating intent " +
+  "(eval round 1 F2)", () => {
+  expect(localLlmInstructions).toContain(
+    "If a tool result reports an error or lists options, immediately call the tool again with a " +
+    "corrected argument picked from those options — never answer with what you are about to do."
+  );
+});
+
+it("instructs the model never to repeat a tool call that already succeeded (eval round 1 F2)", () => {
+  expect(localLlmInstructions).toContain(
+    "Never repeat a tool call that already succeeded — use its result."
+  );
+});
+
+it("instructs the model to ground numbers in its final response in fetched data only (eval round 1 F2)", () => {
+  expect(localLlmInstructions).toContain(
+    "In your final response, state only numbers that appear in the tool results or in the data " +
+    "sections below. If you did not fetch a value, do not state it."
+  );
+});

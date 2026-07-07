@@ -663,6 +663,18 @@ export const AssistantModel = types
         );
         return;
       }
+      // Fixture guard (DAVAI-126 eval round 1 F3): the battery's fixed prompts (e.g.
+      // describe-graph's zero-tool expectation) are only meaningful against the documented
+      // fixture — the Mammals sample with a Height dot plot selected. Running the battery
+      // without a selected graph produces failures that are really "wrong fixture," not "the
+      // model got it wrong," so bail out before doing any work (no engine load, no flags set).
+      const root = getRoot(self) as any;
+      if (root.sonificationStore?.selectedGraphID == null) {
+        self.addDavaiAnnouncement(
+          "Select a graph before running the eval (fixture: Mammals sample with a Height dot plot selected)."
+        );
+        return;
+      }
       const myEpoch = self.turnEpoch;
       const isCurrent = () => self.turnEpoch === myEpoch;
       try {
@@ -674,7 +686,6 @@ export const AssistantModel = types
 
         self.addDavaiAnnouncement(`Running ${cases.length} local eval case${cases.length === 1 ? "" : "s"}…`);
 
-        const root = getRoot(self) as any;
         const toolCtx: ILocalToolContext = {
           sendCODAPRequest,
           dataContexts: () => self.dataContexts ?? {},

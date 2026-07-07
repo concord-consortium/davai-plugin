@@ -16,7 +16,7 @@ export const evalCases: IEvalCase[] = [
   { id: "raw-values", prompt: "List the values of Mass.",
     expectTools: { contains: ["get_case_values"] }, expectFinal: { matches: [/\d/] } },
   { id: "selection-percentile", prompt: "Select the mammals above the 75th percentile of Height.",
-    expectTools: { contains: ["select_cases"] }, expectFinal: { matches: [/select/i, /\d+ cases|\d+ mammal/i] } },
+    expectTools: { contains: ["select_cases"] }, expectFinal: { matches: [/select/i, /\d+\s*(cases?|mammals?)/i] } },
   { id: "create-graph", prompt: "Make a graph of Height versus Mass.",
     expectTools: { contains: ["create_graph"] }, expectFinal: { matches: [/graph|plot/i], notMatches: [/fail/i] } },
   { id: "create-attribute-formula", prompt: "Add an attribute called HeightInFeet computed as Height divided by 30.48.",

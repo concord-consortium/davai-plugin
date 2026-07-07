@@ -84,11 +84,13 @@ it("degrades to raw text as the final answer after two invalid envelopes", async
 it("forces a final answer at the round cap", async () => {
   // maxRounds 2: rounds 1 and 2 execute; the THIRD tool attempt exceeds the cap, skips
   // execution, and triggers the "answer now" nudge, whose reply is the forced final.
-  const toolEnvelope = "{\"tool\":\"get_graph_info\"}";
+  // Each call is DISTINCT (different attribute) so this test isolates the round-cap invariant
+  // from the repeat-call guard (DAVAI-126 eval round 1 F1), which has its own dedicated tests
+  // and would otherwise intercept a run of three identical calls before the cap is ever reached.
   const generate = jest.fn()
-    .mockResolvedValueOnce(toolEnvelope)
-    .mockResolvedValueOnce(toolEnvelope)
-    .mockResolvedValueOnce(toolEnvelope)
+    .mockResolvedValueOnce("{\"tool\":\"get_stats\",\"dataContext\":\"D\",\"attribute\":\"Height\"}")
+    .mockResolvedValueOnce("{\"tool\":\"get_stats\",\"dataContext\":\"D\",\"attribute\":\"Mass\"}")
+    .mockResolvedValueOnce("{\"tool\":\"get_stats\",\"dataContext\":\"D\",\"attribute\":\"Age\"}")
     .mockResolvedValueOnce("{\"tool\":\"final\",\"response\":\"Best effort.\"}");
   const executeTool = jest.fn().mockResolvedValue("{\"success\":true}");
   const out = await runLocalTurn({ ...baseArgs, generate, executeTool, maxRounds: 2 });
@@ -177,4 +179,171 @@ it("re-checks isCancelled after generate() resolves a tool envelope and skips ex
   expect(onToolCall).not.toHaveBeenCalled();
   // The loop must return immediately on the cancel recheck, not loop back for another generation.
   expect(generate).toHaveBeenCalledTimes(1);
+});
+
+describe("repeat-call guard (DAVAI-126 eval round 1 F1)", () => {
+  // A small local model sometimes repeats an already-successful tool call verbatim instead of
+  // answering. The guard tracks the previous EXECUTED call as `${name}::${JSON.stringify(args)}`
+  // + its result; an identical next call is intercepted instead of re-executed.
+  const graphEnvelope = "{\"tool\":\"create_graph\",\"dataContext\":\"D\",\"xAttr\":\"Height\"}";
+
+  it("(a) does not execute an identical repeat; the synthetic nudge carries the prior result " +
+    "and the next generation sees it", async () => {
+    const generate = jest.fn()
+      .mockResolvedValueOnce(graphEnvelope) // round 1: executes
+      .mockResolvedValueOnce(graphEnvelope) // round 2: identical repeat — intercepted
+      .mockResolvedValueOnce("{\"tool\":\"final\",\"response\":\"Made it.\"}");
+    const executeTool = jest.fn().mockResolvedValue("{\"success\":true,\"id\":42}");
+    const out = await runLocalTurn({ ...baseArgs, generate, executeTool });
+
+    expect(out).toBe("Made it.");
+    // executeTool ran exactly once total — the repeat was never dispatched.
+    expect(executeTool).toHaveBeenCalledTimes(1);
+
+    // The third generation (after the nudge) must see the synthetic user message carrying the
+    // prior result, appended after the repeated assistant envelope.
+    const thirdMessages = generate.mock.calls[2][0];
+    const last = thirdMessages[thirdMessages.length - 1];
+    expect(last.role).toBe("user");
+    expect(last.content).toContain("You already called create_graph with those arguments.");
+    expect(last.content).toContain("Its result was:");
+    expect(last.content).toContain("{\"success\":true,\"id\":42}");
+    expect(last.content).toContain("do not call it again");
+    expect(last.content).toContain("{\"tool\": \"final\"");
+    // The repeated assistant envelope itself was still pushed onto the conversation.
+    const secondToLast = thirdMessages[thirdMessages.length - 2];
+    expect(secondToLast.role).toBe("assistant");
+    expect(secondToLast.content).toBe(graphEnvelope);
+  });
+
+  it("(b) the model finalizes right after the nudge, returning that final answer", async () => {
+    const generate = jest.fn()
+      .mockResolvedValueOnce(graphEnvelope)
+      .mockResolvedValueOnce(graphEnvelope)
+      .mockResolvedValueOnce("{\"tool\":\"final\",\"response\":\"Here is the graph.\"}");
+    const executeTool = jest.fn().mockResolvedValue("{\"success\":true}");
+    const out = await runLocalTurn({ ...baseArgs, generate, executeTool });
+    expect(out).toBe("Here is the graph.");
+    expect(generate).toHaveBeenCalledTimes(3);
+  });
+
+  it("(c) a THIRD generation that repeats the same call again goes directly to the forced-final " +
+    "path without executing", async () => {
+    const generate = jest.fn()
+      .mockResolvedValueOnce(graphEnvelope) // round 1: executes
+      .mockResolvedValueOnce(graphEnvelope) // round 2: 1st repeat — intercepted, nudged
+      .mockResolvedValueOnce(graphEnvelope) // round 3: 2nd consecutive identical repeat
+      .mockResolvedValueOnce("{\"tool\":\"final\",\"response\":\"Best effort.\"}"); // forced final
+    const executeTool = jest.fn().mockResolvedValue("{\"success\":true}");
+    const out = await runLocalTurn({ ...baseArgs, generate, executeTool });
+
+    expect(out).toBe("Best effort.");
+    expect(executeTool).toHaveBeenCalledTimes(1); // only the original round-1 call ever ran
+    expect(generate).toHaveBeenCalledTimes(4);
+    // The 4th (forced-final) generation is prompted the same way the round-cap path prompts.
+    const forcedMessages = generate.mock.calls[3][0];
+    expect(forcedMessages[forcedMessages.length - 1].content).toMatch(/answer now/i);
+  });
+
+  it("(d) a call with a different name, or the same name with different args, executes both times " +
+    "and resets the repeat tracking", async () => {
+    const firstEnvelope = "{\"tool\":\"get_graph_info\"}";
+    const secondEnvelope = "{\"tool\":\"get_stats\",\"dataContext\":\"D\",\"attribute\":\"Height\"}";
+    const generate = jest.fn()
+      .mockResolvedValueOnce(firstEnvelope)
+      .mockResolvedValueOnce(secondEnvelope)
+      .mockResolvedValueOnce("{\"tool\":\"final\",\"response\":\"done\"}");
+    const executeTool = jest.fn().mockResolvedValue("{\"success\":true}");
+    const out = await runLocalTurn({ ...baseArgs, generate, executeTool });
+
+    expect(out).toBe("done");
+    expect(executeTool).toHaveBeenCalledTimes(2);
+    expect(executeTool).toHaveBeenNthCalledWith(1, "get_graph_info", {});
+    expect(executeTool).toHaveBeenNthCalledWith(
+      2, "get_stats", { dataContext: "D", attribute: "Height" }
+    );
+  });
+
+  it("(d2) same tool name, different args, back-to-back — both execute (args, not just name, " +
+    "distinguish repeats)", async () => {
+    const heightEnvelope = "{\"tool\":\"get_stats\",\"dataContext\":\"D\",\"attribute\":\"Height\"}";
+    const massEnvelope = "{\"tool\":\"get_stats\",\"dataContext\":\"D\",\"attribute\":\"Mass\"}";
+    const generate = jest.fn()
+      .mockResolvedValueOnce(heightEnvelope)
+      .mockResolvedValueOnce(massEnvelope)
+      .mockResolvedValueOnce("{\"tool\":\"final\",\"response\":\"done\"}");
+    const executeTool = jest.fn().mockResolvedValue("{\"success\":true}");
+    const out = await runLocalTurn({ ...baseArgs, generate, executeTool });
+
+    expect(out).toBe("done");
+    expect(executeTool).toHaveBeenCalledTimes(2);
+  });
+
+  it("(e) onToolCall fires only for rounds that actually executed — not for the intercepted " +
+    "repeat or the forced-final round", async () => {
+    const generate = jest.fn()
+      .mockResolvedValueOnce(graphEnvelope) // executes — onToolCall fires
+      .mockResolvedValueOnce(graphEnvelope) // repeat — intercepted, onToolCall does NOT fire
+      .mockResolvedValueOnce("{\"tool\":\"final\",\"response\":\"done\"}");
+    const executeTool = jest.fn().mockResolvedValue("{\"success\":true}");
+    const onToolCall = jest.fn();
+    const out = await runLocalTurn({ ...baseArgs, generate, executeTool, onToolCall });
+
+    expect(out).toBe("done");
+    expect(onToolCall).toHaveBeenCalledTimes(1);
+    expect(onToolCall).toHaveBeenCalledWith("create_graph");
+  });
+
+  it("round counter still advances on an intercepted repeat (cap safety): a repeat that lands " +
+    "exactly on the round cap is nudged, not silently forced-final on THIS round", async () => {
+    // maxRounds 1: round 1 executes. Round 2 would exceed the cap under normal accounting, but
+    // it is ALSO an identical repeat of round 1 — the repeat-guard's own "first repeat" path
+    // takes precedence over the round-cap forced-final for this round, per spec: "Round counter
+    // still increments (cap safety)" describes bookkeeping, not that the cap pre-empts the nudge.
+    const generate = jest.fn()
+      .mockResolvedValueOnce(graphEnvelope)
+      .mockResolvedValueOnce(graphEnvelope)
+      .mockResolvedValueOnce("{\"tool\":\"final\",\"response\":\"done\"}");
+    const executeTool = jest.fn().mockResolvedValue("{\"success\":true}");
+    const out = await runLocalTurn({ ...baseArgs, generate, executeTool, maxRounds: 1 });
+
+    expect(out).toBe("done");
+    expect(executeTool).toHaveBeenCalledTimes(1);
+    const thirdMessages = generate.mock.calls[2][0];
+    expect(thirdMessages[thirdMessages.length - 1].content).toContain("You already called");
+  });
+
+  it("an identical repeat is still subject to the isCancelled recheck before the (skipped) " +
+    "execution point — cancelling during the repeated generation returns via the cancel path",
+  async () => {
+    let cancelled = false;
+    const generate = jest.fn()
+      .mockResolvedValueOnce(graphEnvelope) // round 1: executes normally
+      .mockImplementationOnce(async () => {
+        cancelled = true; // flips while "awaiting" the repeat's generation
+        return graphEnvelope;
+      });
+    const executeTool = jest.fn().mockResolvedValue("{\"success\":true}");
+    const onToolCall = jest.fn();
+    const out = await runLocalTurn({
+      ...baseArgs, generate, executeTool, onToolCall, isCancelled: () => cancelled,
+    });
+
+    expect(out).toMatch(/wasn't able to complete/i);
+    expect(executeTool).toHaveBeenCalledTimes(1); // only round 1's original call
+    expect(onToolCall).toHaveBeenCalledTimes(1);
+    expect(generate).toHaveBeenCalledTimes(2); // no third generation after the cancel
+  });
+
+  it("the invalid-envelope retry flag is unaffected by repeat tracking: an invalid envelope " +
+    "after a successful tool call still gets its one retry", async () => {
+    const generate = jest.fn()
+      .mockResolvedValueOnce(graphEnvelope) // executes
+      .mockResolvedValueOnce("not json at all") // invalid — first retry
+      .mockResolvedValueOnce("{\"tool\":\"final\",\"response\":\"recovered\"}");
+    const executeTool = jest.fn().mockResolvedValue("{\"success\":true}");
+    const out = await runLocalTurn({ ...baseArgs, generate, executeTool });
+    expect(out).toBe("recovered");
+    expect(executeTool).toHaveBeenCalledTimes(1);
+  });
 });

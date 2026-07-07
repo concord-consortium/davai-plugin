@@ -1,5 +1,7 @@
+import { types } from "mobx-state-tree";
 import { AssistantModel } from "./assistant-model";
 import { ChatTranscriptModel } from "./chat-transcript-model";
+import { GraphSonificationModel } from "./graph-sonification-model";
 import { postMessage } from "../utils/llm-utils";
 import { DAVAI_SPEAKER, USER_SPEAKER } from "../constants";
 
@@ -663,8 +665,34 @@ describe("runLocalEvalTurns (DAVAI-126 Task 11)", () => {
     jest.clearAllMocks();
   });
 
-  const createLocalStore = () => {
-    const store = createStore();
+  // A minimal parent combining just the two stores runLocalEvalTurns reads off getRoot(self) —
+  // mirrors graph-sonification-model.test.ts's own local test-double RootStore. Deliberately NOT
+  // the real RootStore (root-store.ts): that one also carries a volatile TransportManager, whose
+  // constructor calls real Tone.js APIs the __mocks__/tone.js stub doesn't implement.
+  const TestRootStore = types.model("TestRootStore", {
+    assistantStore: AssistantModel,
+    sonificationStore: GraphSonificationModel,
+  });
+
+  // DAVAI-126 eval round 1 F3: runLocalEvalTurns' fixture-guard checks root.sonificationStore's
+  // selectedGraphID before running the battery, so the store needs a real parent for that guard
+  // to see a selection. `selectedGraphID` defaults to 1 (a graph selected) so the many existing
+  // tests below — whose whole point is exercising the battery — clear the guard by default; pass
+  // `null` for the guard's own dedicated "nothing selected" tests (NOT `undefined`: this is a
+  // default PARAMETER, so an explicit `undefined` argument would substitute the default itself
+  // rather than opting out of it — `null` is translated to "omit the key" for the MST snapshot,
+  // whose own selectedGraphID field is `types.maybe(types.number)`, i.e. unset is `undefined`).
+  const createLocalStore = (selectedGraphID: number | null = 1) => {
+    const transcriptStore = ChatTranscriptModel.create({ messages: [] });
+    const root = TestRootStore.create({
+      assistantStore: { transcriptStore, threadId: "thread-1" },
+      sonificationStore: {
+        allGraphs: {},
+        selectedGraphID: selectedGraphID ?? undefined,
+        binValues: {},
+      },
+    });
+    const store = root.assistantStore;
     store.setLlmId(JSON.stringify({ id: "Qwen3-1.7B-q4f16_1-MLC", provider: "Local" }));
     return store;
   };
@@ -811,6 +839,12 @@ describe("runLocalEvalTurns (DAVAI-126 Task 11)", () => {
     );
 
     const evalRun = store.runLocalEvalTurns(twoCases as any);
+    // Two ticks: runLocalEvalTurns is now one MST node deeper (a child of the eval's
+    // TestRootStore, for the F3 fixture-guard's getRoot(self).sonificationStore read) than a
+    // bare AssistantModel, which costs one extra microtask hop before the flow's first `yield`
+    // (loadEngine) resumes into the mocked runLocalTurn call below — a single tick would resolve
+    // before that mock's promise executor assigns `release`.
+    await Promise.resolve();
     await Promise.resolve();
     expect(store.isLoadingResponse).toBe(true);
 
@@ -940,5 +974,64 @@ describe("runLocalEvalTurns (DAVAI-126 Task 11)", () => {
 
     consoleLogSpy.mockRestore();
     consoleErrorSpy.mockRestore();
+  });
+
+  describe("fixture guard: a graph must be selected before the eval runs (DAVAI-126 eval round 1 F3)", () => {
+    it("announces instead of running the battery when no graph is selected, and sticks no flags", async () => {
+      const store = createLocalStore(null); // no selectedGraphID
+      const consoleLogSpy = jest.spyOn(console, "log").mockImplementation(() => undefined);
+
+      await store.runLocalEvalTurns(twoCases as any);
+
+      const contents = store.transcriptStore.messages.map((m) => m.messageContent.content);
+      expect(contents).toContain(
+        "Select a graph before running the eval (fixture: Mammals sample with a Height dot plot selected)."
+      );
+      // No battery ran at all: no case turns, no engine load, no completion summary/console dump.
+      expect(runLocalTurn).not.toHaveBeenCalled();
+      expect(localLlmService.loadEngine).not.toHaveBeenCalled();
+      expect(contents.some((c) => typeof c === "string" && /passed/.test(c))).toBe(false);
+      expect(consoleLogSpy).not.toHaveBeenCalledWith("DAVAI local eval results", expect.anything());
+      // No flags left stuck.
+      expect(store.isLoadingResponse).toBe(false);
+      expect(store.showLoadingIndicator).toBe(false);
+
+      consoleLogSpy.mockRestore();
+    });
+
+    it("runs the battery normally when a graph IS selected (the default fixture state)", async () => {
+      const store = createLocalStore(1);
+      const consoleLogSpy = jest.spyOn(console, "log").mockImplementation(() => undefined);
+
+      await store.runLocalEvalTurns(twoCases as any);
+
+      expect(localLlmService.loadEngine).toHaveBeenCalled();
+      expect(runLocalTurn).toHaveBeenCalledTimes(2);
+      const contents = store.transcriptStore.messages.map((m) => m.messageContent.content);
+      expect(contents.some((c) => typeof c === "string" && /passed/.test(c))).toBe(true);
+      expect(contents).not.toContain(
+        "Select a graph before running the eval (fixture: Mammals sample with a Height dot plot selected)."
+      );
+
+      consoleLogSpy.mockRestore();
+    });
+
+    it("does not queue a subsequent chat message submitted right after the guard's early return " +
+      "(the guard never sets isLoadingResponse, so nothing needs draining)", async () => {
+      const store = createLocalStore(null);
+      jest.spyOn(console, "log").mockImplementation(() => undefined);
+
+      await store.runLocalEvalTurns(twoCases as any);
+      expect(store.isLoadingResponse).toBe(false);
+
+      const submitted = store.handleMessageSubmitLocalLlm("hi");
+      await Promise.resolve();
+      // Not queued — it should run directly, since the guard's early return left nothing in flight.
+      expect(store.messageQueue.slice()).not.toContain("hi");
+      await submitted;
+
+      // eslint-disable-next-line no-console
+      (console.log as jest.Mock).mockRestore();
+    });
   });
 });
