@@ -35,9 +35,11 @@ export const evalCases: IEvalCase[] = [
   // Height", so title normalization alone cannot match it; only axis-substring scoring can. Case
   // ORDER matters here: this must run after create-graph creates the graph and before any case
   // that would create another graph sharing both axis names.
+  // DAVAI-126 Task B: /\d/ added — get_graph_info now appends a client-computed sketch (range,
+  // clustering, relationship), so a correct answer should ground in an actual number.
   { id: "describe-by-axes", prompt: "Describe the Mass vs Height graph.",
     expectTools: { contains: ["get_graph_info"] },
-    expectFinal: { matches: [/mass/i, /height/i], notMatches: [/error|sorry/i] } },
+    expectFinal: { matches: [/mass/i, /height/i, /\d/], notMatches: [/error|sorry/i] } },
   // DAVAI-126 eval round 2 item A: the case's own arithmetic was wrong — Height is in meters,
   // and /30.48 is the cm-to-feet divisor, not a meters-to-feet conversion. Models obeyed the
   // (wrong) instruction faithfully; the fix is the prompt, not the model. Assertions unchanged.

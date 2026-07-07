@@ -18,6 +18,13 @@ export const computeStats = (values: number[]) => {
 
 const round = (n: number) => (Number.isInteger(n) ? String(n) : n.toPrecision(6).replace(/\.?0+$/, ""));
 
+// Numeric detection by value-sniffing (schema `type` is unreliable in real documents). Exported
+// so other consumers (graph-sketch.ts) reuse this exact coercion instead of duplicating it.
+export const coerceNumericValues = (values: unknown[]): number[] =>
+  values
+    .map((v) => (typeof v === "number" ? v : v !== "" && v !== null && v !== undefined ? Number(v) : NaN))
+    .filter((n): n is number => Number.isFinite(n));
+
 export const getStatsTool: ILocalTool = {
   name: "get_stats",
   description: "Compute count, mean, median, standard deviation, min, and max for a numeric attribute (computed in code from the case values).",
@@ -31,11 +38,7 @@ export const getStatsTool: ILocalTool = {
   },
   async execute(resolved, _ctx) {
     const items = await getCollectionItemsForAttribute(resolved.dataContext as any, resolved.attribute as string);
-    // Numeric detection by value-sniffing (schema `type` is unreliable in real documents).
-    const numbers = items
-      .map((it: any) => it.values[resolved.attribute as string])
-      .map((v: any) => (typeof v === "number" ? v : v !== "" && v !== null ? Number(v) : NaN))
-      .filter((n: number) => Number.isFinite(n));
+    const numbers = coerceNumericValues(items.map((it: any) => it.values[resolved.attribute as string]));
     if (numbers.length < 2) {
       return `Attribute "${resolved.attribute}" is not numeric enough for statistics (fewer than 2 numeric values among ${items.length} cases). Pick a numeric attribute.`;
     }

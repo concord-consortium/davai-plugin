@@ -1,6 +1,7 @@
 import {
   getCollectionItemsForAttribute, getCollectionItemsForAttributePair, getGraphAdornments, getGraphByID
 } from "../codap-api-utils";
+import { computeGraphSketch } from "./graph-sketch";
 
 // The sonification store's explicit selection wins; otherwise, when the document has exactly
 // one graph, that graph is unambiguously "the graph" — clicking a graph in CODAP does not
@@ -14,7 +15,10 @@ export const deriveCurrentGraphId = (
   return null;
 };
 
-// Compact, names-first dataset summary: "Mammals — Cases: Height (numeric), Habitat (categorical), Mass".
+// "Mammals — Cases: Height (numeric), Habitat (categorical), Mass" normally, or
+// "Height (numeric, meters)" when the attribute object carries a `unit` field (DAVAI-126 Task B
+// — fail-soft, only shown when present; an attribute with no `unit` keeps the plain "(type)"
+// format, and one with no `type` at all stays a bare name, same as before this addition).
 // Replaces the raw trimmed-JSON context dump (smaller, and no IDs for the model to fixate on).
 export const buildSchemaDigest = (dataContexts: Record<string, any>): string =>
   Object.values(dataContexts ?? {})
@@ -22,7 +26,10 @@ export const buildSchemaDigest = (dataContexts: Record<string, any>): string =>
       const collections = (dc?.collections ?? [])
         .map((c: any) => {
           const attrs = (c?.attrs ?? [])
-            .map((a: any) => (a?.type ? `${a.name} (${a.type})` : a?.name))
+            .map((a: any) => {
+              if (!a?.type) return a?.name;
+              return a?.unit ? `${a.name} (${a.type}, ${a.unit})` : `${a.name} (${a.type})`;
+            })
             .join(", ");
           return `${c.name}: ${attrs}`;
         })
@@ -31,11 +38,34 @@ export const buildSchemaDigest = (dataContexts: Record<string, any>): string =>
     })
     .join("\n");
 
+// Reads the CODAP data-interactive `unit` field off the named attribute, if the data context
+// object (and CODAP's response) happens to carry one — the raw attribute objects here are the
+// same shape codap-plugin-api's `Attribute` type documents (name/type/precision/unit/...), and
+// trimDataset (codap-api-utils.ts) only strips `_categoryMap`, so `unit` survives into this
+// state untouched whenever CODAP populates it. Plumbed fail-soft: undefined whenever the field
+// is absent, never a new CODAP request. Exported so get-graph-info.ts (the tool's own sketch
+// wiring) reuses this exact lookup instead of duplicating it.
+export const findAttributeUnit = (dataContext: any, attributeName: string | null): string | undefined => {
+  if (!attributeName) return undefined;
+  for (const collection of dataContext?.collections ?? []) {
+    const attr = (collection?.attrs ?? []).find((a: any) => a?.name === attributeName);
+    if (attr?.unit) return String(attr.unit);
+  }
+  return undefined;
+};
+
 // Deterministic pre-seed for the selected graph: structure + visible adornments + ALL case
 // values (DAVAI-126 user directive: no sampling — every value ships). Fails soft (empty
 // string) — a missing seed degrades to tool calls, never to a broken turn. The prompt's own
 // trim rung (trimToBudget in local-llm-prompt.ts) is the intentional overflow behavior for huge
 // datasets: it drops this whole values line under budget pressure rather than sampling it.
+//
+// DAVAI-126 Task B: the sketch (computeGraphSketch — computed cluster/outlier/relationship facts
+// a small local model cannot reliably derive itself) is inserted here in the STRUCTURE section,
+// between the axes/adornments line and the Values line — NOT appended to the Values line — so it
+// survives trimToBudget's trim rung, which blanks only the line starting literally with "Values"
+// (SEED_VALUES_PREFIX in local-llm-prompt.ts). It reuses the very same `items` already fetched
+// for the Values line below (no second CODAP round trip).
 export const buildGraphSeed = async (
   graphId: string,
   dataContexts: Record<string, any>
@@ -60,11 +90,26 @@ export const buildGraphSeed = async (
       .map((it: any) => (x && y ? `${it.values[x]}, ${it.values[y]}` : String(it.values[(x ?? y) as string])))
       .join("; ");
 
-    return [
+    const sketch = x && y
+      ? computeGraphSketch({
+          xName: x, yName: y,
+          xValues: items.map((it: any) => it.values[x]), yValues: items.map((it: any) => it.values[y]),
+          xUnit: findAttributeUnit(dc, x), yUnit: findAttributeUnit(dc, y),
+          adornments,
+        })
+      : computeGraphSketch({
+          xName: (x ?? y) as string,
+          xValues: items.map((it: any) => it.values[(x ?? y) as string]),
+          xUnit: findAttributeUnit(dc, x ?? y),
+        });
+
+    const lines = [
       `Selected graph "${graph?.title ?? graph?.name ?? graphId}" (data context: ${graph?.dataContext}).`,
       `x-axis: ${x ?? "(none)"}; y-axis: ${y ?? "(none)"}. Adornments: ${adornmentText}.`,
-      `Values${x && y ? ` (${x}, ${y})` : ` (${x ?? y})`} — ${items.length} cases: ${rows}`,
-    ].join("\n");
+    ];
+    if (sketch) lines.push(sketch);
+    lines.push(`Values${x && y ? ` (${x}, ${y})` : ` (${x ?? y})`} — ${items.length} cases: ${rows}`);
+    return lines.join("\n");
   } catch {
     return "";
   }

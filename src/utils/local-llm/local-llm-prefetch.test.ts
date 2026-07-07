@@ -55,6 +55,25 @@ it("builds a compact schema digest with names and types", () => {
   expect(digest.length).toBeLessThan(400);
 });
 
+// DAVAI-126 Task B: when the resolved attribute object carries a `unit` field, the digest names
+// it too (fail-soft: an attribute with no `unit` keeps today's plain "(type)" format unchanged —
+// see the pinned "Height (numeric)" assertion above, which must still pass).
+it("adds the unit to a digest entry when the attribute object carries a `unit` field, leaving " +
+  "unit-less attributes formatted exactly as before", () => {
+  const dcsWithUnit = {
+    Mammals: {
+      name: "Mammals",
+      collections: [{ name: "Cases", attrs: [
+        { name: "Height", type: "numeric", unit: "meters" }, { name: "Habitat", type: "categorical" }, { name: "Mass" },
+      ]}],
+    },
+  };
+  const digest = buildSchemaDigest(dcsWithUnit);
+  expect(digest).toContain("Height (numeric, meters)");
+  expect(digest).toContain("Habitat (categorical)");
+  expect(digest).not.toContain("Habitat (categorical, ");
+});
+
 describe("buildGraphSeed", () => {
   beforeEach(() => {
     jest.clearAllMocks();
@@ -116,5 +135,60 @@ describe("buildGraphSeed", () => {
       id: 42, title: "Orphan", dataContext: "NotARealContext", xAttributeName: "Height", yAttributeName: null,
     });
     expect(await buildGraphSeed("42", dcs)).toBe("");
+  });
+
+  // DAVAI-126 Task B: the sketch (computed cluster/outlier/relationship facts) lives in the
+  // STRUCTURE section — inserted after the axes/adornments line — so it survives the prompt
+  // budget trim that drops only the Values line (see trimToBudget's SEED_VALUES_PREFIX in
+  // local-llm-prompt.ts, which matches a line starting literally with "Values").
+  it("inserts a non-empty sketch between the axes/adornments line and the Values line " +
+    "(univariate: reuses the same fetched items, no second fetch)", async () => {
+    const seed = await buildGraphSeed("42", dcs);
+    const lines = seed.split("\n");
+    const adornmentsIdx = lines.findIndex((l) => l.startsWith("x-axis:"));
+    const valuesIdx = lines.findIndex((l) => l.startsWith("Values"));
+    const sketchIdx = lines.findIndex((l) => l.startsWith("Sketch:"));
+    expect(adornmentsIdx).toBeGreaterThanOrEqual(0);
+    expect(valuesIdx).toBeGreaterThan(adornmentsIdx);
+    expect(sketchIdx).toBeGreaterThan(adornmentsIdx);
+    expect(sketchIdx).toBeLessThan(valuesIdx);
+    expect(seed).toContain("Sketch: 2 points. Height 10–12 (most between 10 and 12).");
+  });
+
+  it("omits the Sketch line (fails soft) when the graph has fewer than 2 numeric values, " +
+    "without breaking the rest of the seed", async () => {
+    (getCollectionItemsForAttribute as jest.Mock).mockResolvedValue([{ id: "1", values: { Height: "n/a" } }]);
+    const seed = await buildGraphSeed("42", dcs);
+    expect(seed).not.toMatch(/Sketch:/);
+    expect(seed).toContain("x-axis: Height");
+  });
+
+  it("passes the x/y unit through to the sketch when the resolved attribute object carries " +
+    "a `unit` field", async () => {
+    const dcsWithUnit = {
+      Mammals: {
+        name: "Mammals",
+        collections: [{ name: "Cases", attrs: [
+          { name: "Height", type: "numeric", unit: "meters" }, { name: "Habitat", type: "categorical" }, { name: "Mass" },
+        ]}],
+      },
+    };
+    const seed = await buildGraphSeed("42", dcsWithUnit);
+    expect(seed).toContain("Sketch: 2 points. Height (meters) 10–12 (most between 10 and 12).");
+  });
+
+  it("scatter: inserts a sketch reflecting both axes, using the same pair-fetched items " +
+    "buildGraphSeed already fetched for the Values line", async () => {
+    (getGraphByID as jest.Mock).mockResolvedValue({
+      id: 42, title: "H vs M", dataContext: "Mammals", xAttributeName: "Height", yAttributeName: "Mass",
+    });
+    (getCollectionItemsForAttributePair as jest.Mock).mockResolvedValue([
+      { id: "1", values: { Height: 1, Mass: 10 } },
+      { id: "2", values: { Height: 2, Mass: 20 } },
+      { id: "3", values: { Height: 3, Mass: 30 } },
+    ]);
+    const seed = await buildGraphSeed("42", dcs);
+    expect(seed).toContain("Sketch: 3 points.");
+    expect(seed).toContain("Relationship:");
   });
 });

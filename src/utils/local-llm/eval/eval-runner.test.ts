@@ -50,7 +50,9 @@ it("describe-by-axes runs after create-graph and before create-adornment, with f
   const c = evalCases.find((e) => e.id === "describe-by-axes")!;
   expect(c.prompt).toBe("Describe the Mass vs Height graph.");
   expect(c.expectTools).toEqual({ contains: ["get_graph_info"] });
-  expect(c.expectFinal).toEqual({ matches: [/mass/i, /height/i], notMatches: [/error|sorry/i] });
+  // DAVAI-126 Task B: strengthened with /\d/ — the graph sketch now computed and reported by
+  // get_graph_info means a correct answer must ground in an actual number, not just name both axes.
+  expect(c.expectFinal).toEqual({ matches: [/mass/i, /height/i, /\d/], notMatches: [/error|sorry/i] });
 });
 
 describe("eval case corrections (DAVAI-126 eval round 2 item A)", () => {

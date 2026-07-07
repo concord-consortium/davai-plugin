@@ -1,10 +1,17 @@
 jest.mock("../../codap-api-utils", () => ({ getCollectionItemsForAttribute: jest.fn() }));
 import { getCollectionItemsForAttribute } from "../../codap-api-utils";
-import { getStatsTool, computeStats } from "./get-stats";
+import { getStatsTool, computeStats, coerceNumericValues } from "./get-stats";
 import { ILocalToolContext } from "./registry";
 
 const dc = { name: "Mammals", collections: [{ name: "Cases", attrs: [{ name: "Height" }, { name: "Habitat" }] }] };
 const ctx = { dataContexts: () => ({ Mammals: dc }) } as unknown as ILocalToolContext;
+
+// DAVAI-126 Task B: graph-sketch.ts reuses this exact coercion (imported, not duplicated) — this
+// test locks its contract (numbers pass through, numeric strings coerce, "", null, and
+// non-numeric strings are dropped) so both call sites can rely on identical behavior.
+it("coerceNumericValues: numbers pass through, numeric strings coerce, junk is dropped", () => {
+  expect(coerceNumericValues([10, "12", "", null, "n/a", undefined, "3.5"])).toEqual([10, 12, 3.5]);
+});
 
 it("computeStats: known values (sample stdDev, n-1)", () => {
   const s = computeStats([1, 2, 3, 4]);

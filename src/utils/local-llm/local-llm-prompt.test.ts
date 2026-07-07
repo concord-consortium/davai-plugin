@@ -111,3 +111,25 @@ it("trim drops seed values first, then turns, then truncates digest — /no_thin
   expect(tighter[0].content.trimEnd().endsWith("/no_think")).toBe(true);
   expect(tighter.find((m) => m.content.startsWith("A"))).toBeUndefined();
 });
+
+// DAVAI-126 Task B: the graph sketch (computed cluster/outlier/relationship facts) lives in the
+// seed's STRUCTURE section, BEFORE the Values line — trimToBudget's first trim rung locates the
+// Values line by SEED_VALUES_PREFIX ("Values") and blanks only that one line, so anything placed
+// earlier in the same seed (the sketch) is untouched by this rung. This is the load-bearing
+// reason the sketch survives the exact budget pressure that most aggressively strips the seed.
+it("trim's first rung (drop seed values) leaves the Sketch line intact — only the Values line " +
+  "is blanked", () => {
+  const sketchLine = "Sketch: 3 points. A 1–9 (most between 2 and 8).";
+  const sys = buildLocalSystemPrompt({
+    toolDocs: "- t: d\n  {\"tool\": \"t\"}",
+    schemaDigest: "D".repeat(200),
+    graphSeed: `Selected graph "G".\nx-axis: A.\n${sketchLine}\nValues (A) — 3 cases: ${"9".repeat(800)}`,
+  });
+  const user = { role: "user" as const, content: "question" };
+  // Budget tight enough to force rung 1 (drop seed values) but loose enough that rungs 2-3
+  // (drop transcript turns / truncate digest) never engage — isolates rung 1's behavior.
+  const out = trimToBudget([{ role: "system", content: sys }, user], sys.length - 200);
+  expect(out[0].content).toContain("[graph values omitted");
+  expect(out[0].content).toContain(sketchLine);
+  expect(out[0].content).not.toMatch(/^Values \(A\)/m);
+});
