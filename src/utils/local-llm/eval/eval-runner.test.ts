@@ -30,10 +30,12 @@ it("a runTurn rejection fails that case without aborting the run", async () => {
   expect(results).toHaveLength(2);
 });
 
-it("ships the 12 spec cases with unique ids", () => {
+it("ships the 14 spec cases with unique ids", () => {
   // DAVAI-126 Task A: added "describe-by-axes" to exercise resolveGraph's rung 3.
-  expect(evalCases).toHaveLength(12);
-  expect(new Set(evalCases.map((c) => c.id)).size).toBe(12);
+  // DAVAI-126 Task C: added "set-attribute-unit" (update_attribute) and "find-heaviest"
+  // (find_cases), bringing the total from 12 to 14.
+  expect(evalCases).toHaveLength(14);
+  expect(new Set(evalCases.map((c) => c.id)).size).toBe(14);
   const miscap = evalCases.find((c) => c.id === "miscapitalized-attribute");
   expect(miscap).toBeDefined();
 });
@@ -53,6 +55,28 @@ it("describe-by-axes runs after create-graph and before create-adornment, with f
   // DAVAI-126 Task B: strengthened with /\d/ — the graph sketch now computed and reported by
   // get_graph_info means a correct answer must ground in an actual number, not just name both axes.
   expect(c.expectFinal).toEqual({ matches: [/mass/i, /height/i, /\d/], notMatches: [/error|sorry/i] });
+});
+
+it("set-attribute-unit runs immediately after create-attribute-formula (DAVAI-126 Task C)", () => {
+  const ids = evalCases.map((e) => e.id);
+  const createAttributeFormulaIdx = ids.indexOf("create-attribute-formula");
+  const setAttributeUnitIdx = ids.indexOf("set-attribute-unit");
+  expect(createAttributeFormulaIdx).toBeGreaterThanOrEqual(0);
+  expect(setAttributeUnitIdx).toBe(createAttributeFormulaIdx + 1);
+  const c = evalCases.find((e) => e.id === "set-attribute-unit")!;
+  expect(c.prompt).toBe("Set the unit of Height to meters.");
+  expect(c.expectTools).toEqual({ contains: ["update_attribute"] });
+  expect(c.expectFinal).toEqual({ matches: [/height/i, /meter/i] });
+});
+
+it("find-heaviest is the last case in the battery, after miscapitalized-attribute (DAVAI-126 Task C)", () => {
+  const ids = evalCases.map((e) => e.id);
+  expect(ids[ids.length - 1]).toBe("find-heaviest");
+  expect(ids[ids.length - 2]).toBe("miscapitalized-attribute");
+  const c = evalCases.find((e) => e.id === "find-heaviest")!;
+  expect(c.prompt).toBe("Which mammal is the heaviest?");
+  expect(c.expectTools).toEqual({ contains: ["find_cases"] });
+  expect(c.expectFinal).toEqual({ matches: [/elephant/i, /6400|6,400/] });
 });
 
 describe("eval case corrections (DAVAI-126 eval round 2 item A)", () => {

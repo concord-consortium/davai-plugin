@@ -51,10 +51,16 @@ describe("thinking toggle (DAVAI-126)", () => {
   });
 });
 
-it("REAL assembled base prompt (all 8 tools, representative digest+seed) fits with ≥25% margin", () => {
+it("REAL assembled base prompt (all 10 tools, representative digest+seed) fits with ≥25% margin", () => {
   // DAVAI-126 no-sampling: the seed's case count now matches the actual number of value pairs
   // shipped (no more sampling, so no "(evenly sampled N of M)" note) — this fixture uses a
   // 100-pair graph as a representative document, honestly labeled "100 cases".
+  // DAVAI-126 Task C: registry grew from 8 to 10 tools (find_cases, update_attribute added;
+  // create_graph's description also grew slightly for the new legendAttribute arg). Measured:
+  // buildToolDocs() grew from ~2031 to 2870 chars, and this fixture's assembled prompt from
+  // ~6068 to 6907 chars — margin against the 0.75x threshold (16128 of a 21504-char budget)
+  // narrowed from ~71.8% to 67.9%, comfortably still over the ≥25% this test requires. No
+  // threshold change needed.
   initializeLocalTools();
   const digest = buildSchemaDigest({
     Mammals: { name: "Mammals", collections: [{ name: "Cases", attrs: Array.from({ length: 12 }, (_, i) => ({ name: `Attr_${i}`, type: "numeric" })) }] },

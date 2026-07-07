@@ -45,6 +45,11 @@ export const evalCases: IEvalCase[] = [
   // (wrong) instruction faithfully; the fix is the prompt, not the model. Assertions unchanged.
   { id: "create-attribute-formula", prompt: "Add an attribute called HeightInFeet computed as Height times 3.281.",
     expectTools: { contains: ["create_attribute"] }, expectFinal: { matches: [/HeightInFeet/i] } },
+  // DAVAI-126 Task C: exercises update_attribute's unit field on an existing (non-formula)
+  // attribute — a distinct capability from create-attribute-formula immediately above (which
+  // exercises create_attribute's formula field on a NEW attribute).
+  { id: "set-attribute-unit", prompt: "Set the unit of Height to meters.",
+    expectTools: { contains: ["update_attribute"] }, expectFinal: { matches: [/height/i, /meter/i] } },
   // DAVAI-126 eval round 2 item A: "the graph" is ambiguous once create-graph (above) has run —
   // the sonification store auto-selects the newest graph, so "the graph" resolved to the
   // Height-vs-Mass scatterplot, where Mean is legitimately unavailable (a 4B refusal there was
@@ -58,4 +63,8 @@ export const evalCases: IEvalCase[] = [
     expectTools: { none: true }, expectFinal: { matches: [/can(no|')t|not able|server model/i] } },
   { id: "miscapitalized-attribute", prompt: "what is the mean of hieght?",   // misspelled + lowercase on purpose
     expectTools: { contains: ["get_stats"] }, expectFinal: { matches: [/mean/i, /\d/] } },
+  // DAVAI-126 Task C: exercises find_cases's orderBy-form grounded lookup (the a11y priority) —
+  // a natural-language superlative question, no explicit tool/attribute name in the prompt.
+  { id: "find-heaviest", prompt: "Which mammal is the heaviest?",
+    expectTools: { contains: ["find_cases"] }, expectFinal: { matches: [/elephant/i, /6400|6,400/] } },
 ];

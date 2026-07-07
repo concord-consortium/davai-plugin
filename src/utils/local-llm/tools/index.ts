@@ -3,8 +3,10 @@ import { getGraphInfoTool } from "./get-graph-info";
 import { getCaseValuesTool } from "./get-case-values";
 import { getStatsTool } from "./get-stats";
 import { selectCasesTool } from "./select-cases";
+import { findCasesTool } from "./find-cases";
 import { createGraphTool } from "./create-graph";
 import { createAttributeTool } from "./create-attribute";
+import { updateAttributeTool } from "./update-attribute";
 import { createAdornmentTool } from "./create-adornment";
 import { sonifyGraphTool } from "./sonify-graph";
 
@@ -19,8 +21,10 @@ export const initializeLocalTools = (): void => {
     getCaseValuesTool,
     getStatsTool,
     selectCasesTool,
+    findCasesTool,
     createGraphTool,
     createAttributeTool,
+    updateAttributeTool,
     createAdornmentTool,
     sonifyGraphTool,
   ]);

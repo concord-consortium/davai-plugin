@@ -3,8 +3,10 @@ import { resolveAttribute, resolveDataContext } from "./resolve";
 
 export const createGraphTool: ILocalTool = {
   name: "create_graph",
-  description: "Create a graph. x-axis attribute required; y-axis optional (omit for a univariate dot plot).",
-  argsExample: '{"tool": "create_graph", "dataContext": "Mammals", "xAttribute": "Height", "yAttribute": "Age", "title": "Height vs Age"}',
+  description: "Create a graph. x-axis attribute required; y-axis optional (omit for a univariate dot plot). " +
+    "Optional legendAttribute colors points by a categorical attribute.",
+  argsExample: '{"tool": "create_graph", "dataContext": "Mammals", "xAttribute": "Height", "yAttribute": "Age", ' +
+    '"title": "Height vs Age"} (optional: "legendAttribute")',
   validate(args, ctx) {
     const dc = resolveDataContext(String(args.dataContext ?? ""), ctx.dataContexts());
     if (!dc.ok) return { ok: false, error: dc.error };
@@ -18,6 +20,11 @@ export const createGraphTool: ILocalTool = {
       if (!y.ok) return { ok: false, error: y.error };
       resolved.yAttributeName = y.value.attr.name;
     }
+    if (args.legendAttribute !== undefined && args.legendAttribute !== "") {
+      const legend = resolveAttribute(String(args.legendAttribute), dc.value);
+      if (!legend.ok) return { ok: false, error: legend.error };
+      resolved.legendAttributeName = legend.value.attr.name;
+    }
     if (typeof args.title === "string" && args.title) resolved.title = args.title;
     return { ok: true, resolved };
   },
@@ -28,6 +35,7 @@ export const createGraphTool: ILocalTool = {
       ...(resolved.title ? { title: resolved.title } : {}),
       xAttributeName: resolved.xAttributeName,
       ...(resolved.yAttributeName ? { yAttributeName: resolved.yAttributeName } : {}),
+      ...(resolved.legendAttributeName ? { legendAttributeName: resolved.legendAttributeName } : {}),
     };
     const res = await ctx.sendCODAPRequest({ action: "create", resource: "component", values });
     if (res?.success === false) {
