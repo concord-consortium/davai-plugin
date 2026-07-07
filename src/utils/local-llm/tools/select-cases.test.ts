@@ -13,6 +13,21 @@ beforeEach(() => {
   (getSelectionList as jest.Mock).mockResolvedValue([{ caseID: 1 }, { caseID: 2 }]);
 });
 
+// DAVAI-126 matrix round 3 item E5: both think runs spiraled trying to hand-compute the 75th
+// percentile by hand instead of calling the tool ("get_stats doesn't provide that… but how?" x8),
+// and a none-think run's own expression picked the wrong threshold shape (selected 20/27). A
+// worked percentile example in argsExample (the model's most-imitated part of a tool doc) steers
+// toward calling select_cases directly with the correct CODAP percentile form.
+it("argsExample is a worked percentile example (DAVAI-126 matrix round 3 E5)", () => {
+  expect(selectCasesTool.argsExample).toBe(
+    '{"tool": "select_cases", "dataContext": "Mammals", "expression": "`Height` > percentile(`Height`, 0.75)", "mode": "replace"}'
+  );
+});
+
+it("description keeps the 0-1 percentile note (DAVAI-126 matrix round 3 E5)", () => {
+  expect(selectCasesTool.description).toMatch(/percentile takes 0.1/); // "0–1" (en dash) or "0-1"
+});
+
 it("validates backticked refs in the expression against the schema", () => {
   const bad = selectCasesTool.validate(
     { dataContext: "Mammals", expression: "`Speed` > 10", mode: "replace" }, ctx);

@@ -5,8 +5,15 @@ export type ParsedEnvelope =
 
 // Qwen3 emits <think>…</think> when thinking mode leaks through; json_object grammar
 // should prevent it, but strip defensively so a leak degrades instead of failing.
+//
+// DAVAI-126 matrix round 3 item E7: also strips a trailing UNCLOSED <think> block — evidence:
+// both think-mode matrix runs' selection-percentile finals were raw <think> dumps truncated
+// mid-sentence at maxTokens (generation truncation always cuts at the END of the raw output, so
+// an unclosed block is always the trailing one). The first pass removes every CLOSED pair; any
+// "<think>" surviving that pass is therefore unclosed, and the second pass strips it to end of
+// string — leaving whatever valid text preceded it (e.g. a JSON envelope) intact.
 export const stripThink = (raw: string): string =>
-  raw.replace(/<think>[\s\S]*?<\/think>/g, "").trim();
+  raw.replace(/<think>[\s\S]*?<\/think>/g, "").replace(/<think>[\s\S]*$/, "").trim();
 
 const extractJson = (raw: string): any => {
   try {

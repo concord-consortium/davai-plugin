@@ -65,8 +65,14 @@ const sortByOrderBy = (rows: { label: string; value: unknown }[], direction: "as
 
 export const findCasesTool: ILocalTool = {
   name: "find_cases",
-  description: "Find cases matching a condition (\"where\", a CODAP formula with attribute names in backticks) and/or " +
-    "ranked by an attribute (\"orderBy\", highest first by default). Reports matching cases by name.",
+  // DAVAI-126 matrix round 3 item E6: the canonical phrasing leads with the exact question shape
+  // models need to pattern-match to this tool — evidence: 3 of 4 live matrix runs answered
+  // "which mammal is the heaviest?" via get_case_values/get_stats instead of find_cases
+  // (misaligned/wrong-unit answers); only the run where find_cases was more salient used it, with
+  // a perfect one-call answer.
+  description: "Find the top/bottom cases by an attribute or cases matching a condition — use for questions " +
+    "like \"which mammal is the heaviest?\". \"where\" is a CODAP formula with attribute names in backticks; " +
+    "\"orderBy\" ranks by an attribute, highest first by default. Reports matching cases by name.",
   argsExample: '{"tool": "find_cases", "dataContext": "Mammals", "where": "`Sleep` > 12"} or ' +
     '{"tool": "find_cases", "dataContext": "Mammals", "orderBy": "Mass", "limit": 3} (optional: "collection")',
   validate(args, ctx) {

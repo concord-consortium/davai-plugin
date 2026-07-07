@@ -34,6 +34,18 @@ beforeEach(() => {
   (getAllCollectionCases as jest.Mock).mockResolvedValue([]);
 });
 
+// DAVAI-126 matrix round 3 item E6: 3 of 4 live matrix runs answered "which mammal is heaviest?"
+// via get_case_values/get_stats instead of find_cases (misaligned/wrong-unit answers); only the
+// run where find_cases happened to be salient used it, with a perfect one-call answer. The
+// description gains the canonical phrasing naming that exact question, so models pattern-match
+// the natural-language superlative to this tool.
+it("description gains the canonical phrasing naming the heaviest-mammal question (DAVAI-126 matrix round 3 E6)", () => {
+  expect(findCasesTool.description).toContain(
+    "Find the top/bottom cases by an attribute or cases matching a condition — use for questions " +
+    "like \"which mammal is the heaviest?\"."
+  );
+});
+
 describe("validate", () => {
   it("requires at least one of where/orderBy, with a corrective example for each form", () => {
     const v = findCasesTool.validate({ dataContext: "Mammals" }, ctx);

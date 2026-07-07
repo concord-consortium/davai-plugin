@@ -802,7 +802,18 @@ export const AssistantModel = types
           }
         };
 
-        const results = yield runLocalEval(cases, runTurn);
+        // DAVAI-126 matrix round 3 item E8: per-case incremental console output (user-requested
+        // observability) — evidence: MST axis-death spam and insertBefore errors interleave with
+        // the battery, and the user cannot attribute them to a case without a BEFORE/AFTER marker
+        // per case. The pure runner (eval-runner.ts) stays console-free; these callbacks are the
+        // ONLY place the actual console.log calls live.
+        const results = yield runLocalEval(
+          cases, runTurn, undefined,
+          // eslint-disable-next-line no-console
+          (start) => console.log(`DAVAI eval case ${start.index}/${start.total}: ${start.id} — ${start.prompt}`),
+          // eslint-disable-next-line no-console
+          (result) => console.log("DAVAI eval result", JSON.stringify(result))
+        );
         if (!isCurrent()) return; // cancelled/superseded partway through the battery
 
         // eslint-disable-next-line no-console

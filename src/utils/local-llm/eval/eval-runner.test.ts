@@ -30,6 +30,68 @@ it("a runTurn rejection fails that case without aborting the run", async () => {
   expect(results).toHaveLength(2);
 });
 
+// DAVAI-126 matrix round 3 item E8: per-case incremental observability (user-requested) —
+// evidence: MST axis-death spam and insertBefore errors interleave with the battery, and the
+// user cannot attribute them to a specific case without a BEFORE/AFTER marker per case. The pure
+// runner itself stays console-free (per the brief: "NOT the pure runner, which stays
+// console-free") — it only invokes optional onCaseStart/onCaseResult callbacks; assistant-model.ts
+// supplies the actual console.log implementations.
+describe("onCaseStart/onCaseResult callbacks (DAVAI-126 matrix round 3 E8)", () => {
+  it("onCaseStart fires before each case, in order, with the case's 1-based index/total/id/prompt", async () => {
+    const runTurn = jest.fn().mockResolvedValue({ toolCalls: [], final: "ok" });
+    const onCaseStart = jest.fn();
+    await runLocalEval(cases, runTurn, undefined, onCaseStart);
+    expect(onCaseStart).toHaveBeenCalledTimes(3);
+    expect(onCaseStart).toHaveBeenNthCalledWith(1, { index: 1, total: 3, id: "zero-tools", prompt: "describe" });
+    expect(onCaseStart).toHaveBeenNthCalledWith(2, { index: 2, total: 3, id: "stats", prompt: "mean?" });
+    expect(onCaseStart).toHaveBeenNthCalledWith(3, { index: 3, total: 3, id: "order", prompt: "make graph" });
+  });
+
+  it("onCaseResult fires after each case, in order, with that case's own IEvalResult", async () => {
+    const runTurn = jest.fn()
+      .mockResolvedValueOnce({ toolCalls: [], final: "The Height values range…" })
+      .mockResolvedValueOnce({ toolCalls: ["get_case_values"], final: "The mean is 11." })
+      .mockResolvedValueOnce({ toolCalls: ["create_graph"], final: "Created it." });
+    const onCaseResult = jest.fn();
+    const results = await runLocalEval(cases, runTurn, undefined, undefined, onCaseResult);
+    expect(onCaseResult).toHaveBeenCalledTimes(3);
+    expect(onCaseResult).toHaveBeenNthCalledWith(1, results[0]);
+    expect(onCaseResult).toHaveBeenNthCalledWith(2, results[1]);
+    expect(onCaseResult).toHaveBeenNthCalledWith(3, results[2]);
+  });
+
+  it("onCaseStart for a given case fires strictly BEFORE that case's onCaseResult (interleaving order)", async () => {
+    const calls: string[] = [];
+    const runTurn = jest.fn().mockImplementation(async (prompt: string) => {
+      calls.push(`runTurn:${prompt}`);
+      return { toolCalls: [], final: "ok" };
+    });
+    const onCaseStart = jest.fn((payload) => calls.push(`start:${payload.id}`));
+    const onCaseResult = jest.fn((result) => calls.push(`result:${result.id}`));
+    await runLocalEval(cases, runTurn, undefined, onCaseStart, onCaseResult);
+    expect(calls).toEqual([
+      "start:zero-tools", "runTurn:describe", "result:zero-tools",
+      "start:stats", "runTurn:mean?", "result:stats",
+      "start:order", "runTurn:make graph", "result:order",
+    ]);
+  });
+
+  it("onCaseResult still fires (with the failed result) when runTurn rejects", async () => {
+    const runTurn = jest.fn().mockRejectedValueOnce(new Error("engine died"));
+    const onCaseResult = jest.fn();
+    const results = await runLocalEval(cases.slice(0, 1), runTurn, undefined, undefined, onCaseResult);
+    expect(onCaseResult).toHaveBeenCalledTimes(1);
+    expect(onCaseResult).toHaveBeenCalledWith(results[0]);
+    expect(results[0].passed).toBe(false);
+  });
+
+  it("both callbacks are optional — omitting them changes nothing about the returned results", async () => {
+    const runTurn = jest.fn().mockResolvedValue({ toolCalls: [], final: "ok" });
+    const results = await runLocalEval(cases, runTurn); // no callbacks at all
+    expect(results).toHaveLength(3);
+  });
+});
+
 it("ships the 16 spec cases with unique ids", () => {
   // DAVAI-126 Task A: added "describe-by-axes" to exercise resolveGraph's rung 3.
   // DAVAI-126 Task C: added "set-attribute-unit" (update_attribute) and "find-heaviest"

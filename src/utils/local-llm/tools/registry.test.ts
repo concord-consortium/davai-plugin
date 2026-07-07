@@ -76,3 +76,21 @@ it("initializeLocalTools registers all 12 tools with docs for each", () => {
     "update_graph",
   ]);
 });
+
+// DAVAI-126 matrix round 3 item E6: find_cases's registration order is prompt order, which is
+// salience — evidence: 3 of 4 live matrix runs answered "which mammal is heaviest?" via
+// get_case_values/get_stats instead of find_cases (one run zipped two lists and misaligned the
+// answer; one flatly stated the wrong unit as an animal); only the run where find_cases happened
+// to be more prominent used it, with a perfect one-call answer. Registration order IS prompt
+// order (buildToolDocs, registry.ts, maps registered tools in array order) — moving find_cases
+// above get_case_values raises its salience without touching the (alphabetically-asserted, so
+// order-independent) full-registry test above.
+it("registers find_cases ABOVE get_case_values (prompt order = salience, DAVAI-126 matrix round 3 E6)", () => {
+  initializeLocalTools();
+  const names = getRegisteredTools().map((t) => t.name);
+  const findCasesIdx = names.indexOf("find_cases");
+  const getCaseValuesIdx = names.indexOf("get_case_values");
+  expect(findCasesIdx).toBeGreaterThanOrEqual(0);
+  expect(getCaseValuesIdx).toBeGreaterThanOrEqual(0);
+  expect(findCasesIdx).toBeLessThan(getCaseValuesIdx);
+});

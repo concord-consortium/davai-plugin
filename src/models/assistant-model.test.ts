@@ -950,6 +950,43 @@ describe("runLocalEvalTurns (DAVAI-126 Task 11)", () => {
     consoleLogSpy.mockRestore();
   });
 
+  // DAVAI-126 matrix round 3 item E8: per-case incremental console output (user-requested
+  // observability) — evidence: MST axis-death spam and insertBefore errors interleave with the
+  // battery, and the user cannot attribute them to a specific case without a BEFORE/AFTER marker.
+  it("logs a BEFORE marker before each case and an AFTER marker with its result, interleaved in " +
+    "case order, alongside the existing unchanged final full-array log", async () => {
+    const store = await createLocalStore();
+    const consoleLogSpy = jest.spyOn(console, "log").mockImplementation(() => undefined);
+
+    await store.runLocalEvalTurns(twoCases as any);
+
+    const caseLogCalls = consoleLogSpy.mock.calls.filter((c) => typeof c[0] === "string" && c[0].startsWith("DAVAI eval case"));
+    expect(caseLogCalls).toHaveLength(2);
+    expect(caseLogCalls[0][0]).toBe("DAVAI eval case 1/2: case-a — describe");
+    expect(caseLogCalls[1][0]).toBe("DAVAI eval case 2/2: case-b — mean?");
+
+    const resultLogCalls = consoleLogSpy.mock.calls.filter((c) => c[0] === "DAVAI eval result");
+    expect(resultLogCalls).toHaveLength(2);
+    const firstResult = JSON.parse(resultLogCalls[0][1]);
+    expect(firstResult.id).toBe("case-a");
+    const secondResult = JSON.parse(resultLogCalls[1][1]);
+    expect(secondResult.id).toBe("case-b");
+
+    // Interleaving: case-a's BEFORE/AFTER pair fully precedes case-b's own pair.
+    const allCalls = consoleLogSpy.mock.calls.map((c) => c[0]);
+    const beforeAIdx = allCalls.indexOf("DAVAI eval case 1/2: case-a — describe");
+    const afterAIdx = allCalls.findIndex((label, i) => label === "DAVAI eval result" && i > beforeAIdx);
+    const beforeBIdx = allCalls.indexOf("DAVAI eval case 2/2: case-b — mean?");
+    expect(beforeAIdx).toBeGreaterThanOrEqual(0);
+    expect(afterAIdx).toBeGreaterThan(beforeAIdx);
+    expect(beforeBIdx).toBeGreaterThan(afterAIdx);
+
+    // The existing final full-array log is unchanged (still fires once, after the per-case logs).
+    expect(consoleLogSpy).toHaveBeenCalledWith("DAVAI local eval results", expect.stringContaining("case-a"));
+
+    consoleLogSpy.mockRestore();
+  });
+
   it("bypasses the transcript for individual case turns (only the start announcement and final summary are posted)", async () => {
     const store = await createLocalStore();
     jest.spyOn(console, "log").mockImplementation(() => undefined);

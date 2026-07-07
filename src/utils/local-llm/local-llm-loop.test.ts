@@ -81,6 +81,62 @@ it("degrades to raw text as the final answer after two invalid envelopes", async
   expect(generate).toHaveBeenCalledTimes(2);
 });
 
+// DAVAI-126 matrix round 3 item E7: both think runs' selection-percentile finals were RAW
+// <think> dumps truncated mid-sentence at maxTokens, returned AS the final answer — because the
+// invalid-envelope branch's own `!text` early-exit bypassed the one-retry mechanism entirely
+// whenever the stripped remainder was empty. This is now impossible to distinguish from a genuine
+// "nothing to retry with" case only by being empty — the fix routes an empty-after-strip result
+// into the SAME one-retry path any other invalid envelope gets, so the model gets one chance to
+// produce a real answer before ever falling back.
+describe("unclosed <think> dump routes into the retry-once path instead of leaking as a final " +
+  "(DAVAI-126 matrix round 3 E7)", () => {
+  const unclosedThinkDump = "<think>let me think about the 75th percentile but how do I compute";
+
+  it("an unclosed <think> dump on the FIRST invalid envelope gets the retry, not an immediate " +
+    "raw-reasoning final", async () => {
+    const generate = jest.fn()
+      .mockResolvedValueOnce(unclosedThinkDump)
+      .mockResolvedValueOnce("{\"tool\":\"final\",\"response\":\"Selected 5 cases.\"}");
+    const out = await runLocalTurn({ ...baseArgs, generate, executeTool: jest.fn() });
+    expect(out).toBe("Selected 5 cases.");
+    expect(generate).toHaveBeenCalledTimes(2);
+    const retryMessages = generate.mock.calls[1][0];
+    expect(retryMessages[retryMessages.length - 1].content).toMatch(/single JSON object/i);
+    // The raw reasoning dump must never appear anywhere in the retry's corrective prompt content.
+    expect(retryMessages[retryMessages.length - 1].content).not.toContain("75th percentile");
+  });
+
+  it("if the retry ALSO produces an unclosed <think> dump, the existing fallback response is " +
+    "used — never raw reasoning as the final", async () => {
+    const generate = jest.fn()
+      .mockResolvedValueOnce(unclosedThinkDump)
+      .mockResolvedValueOnce("<think>still stuck computing the percentile, running out of tok");
+    const out = await runLocalTurn({ ...baseArgs, generate, executeTool: jest.fn() });
+    expect(out).toMatch(/wasn't able to complete/i);
+    expect(out).not.toContain("percentile");
+    expect(generate).toHaveBeenCalledTimes(2);
+  });
+
+  it("an unclosed <think> dump followed on retry by ordinary invalid (non-empty) text still " +
+    "degrades to that text, unaffected by the empty-string special case", async () => {
+    const generate = jest.fn()
+      .mockResolvedValueOnce(unclosedThinkDump)
+      .mockResolvedValueOnce("just plain text on retry");
+    const out = await runLocalTurn({ ...baseArgs, generate, executeTool: jest.fn() });
+    expect(out).toBe("just plain text on retry");
+  });
+
+  it("a genuinely blank generation (whitespace only, no think tags at all) still gets one retry " +
+    "before falling back — the empty-after-strip routing is not think-tag-specific", async () => {
+    const generate = jest.fn()
+      .mockResolvedValueOnce("   ")
+      .mockResolvedValueOnce("{\"tool\":\"final\",\"response\":\"ok\"}");
+    const out = await runLocalTurn({ ...baseArgs, generate, executeTool: jest.fn() });
+    expect(out).toBe("ok");
+    expect(generate).toHaveBeenCalledTimes(2);
+  });
+});
+
 it("forces a final answer at the round cap", async () => {
   // maxRounds 2: rounds 1 and 2 execute; the THIRD tool attempt exceeds the cap, skips
   // execution, and triggers the "answer now" nudge, whose reply is the forced final.
@@ -102,8 +158,14 @@ it("forces a final answer at the round cap", async () => {
 
 it("returns a fallback message if the forced final is also unusable", async () => {
   const toolEnvelope = "{\"tool\":\"get_graph_info\"}";
+  // DAVAI-126 matrix round 3 item E7: an empty generation is now an ordinary invalid envelope
+  // that gets the SAME one-retry-then-fallback treatment any other invalid envelope gets (see the
+  // dedicated E7 describe block below) — this test's own single "" mock previously relied on the
+  // old (buggy) immediate-bail-on-empty-text shortcut. A second "" mock completes the (now
+  // correctly longer) retry-once sequence so it still ends at the fallback, per this test's name.
   const generate = jest.fn()
     .mockResolvedValueOnce(toolEnvelope)
+    .mockResolvedValueOnce("")
     .mockResolvedValueOnce("");
   const executeTool = jest.fn().mockResolvedValue("{\"success\":true}");
   const out = await runLocalTurn({ ...baseArgs, generate, executeTool, maxRounds: 1 });

@@ -68,8 +68,19 @@ export const runLocalTurn = async (args: ILocalTurnArgs): Promise<string> => {
     if (envelope.kind === "final") return envelope.response;
 
     if (envelope.kind === "invalid") {
+      // DAVAI-126 matrix round 3 item E7: `text` is empty whenever the raw generation was PURELY
+      // an unclosed <think> dump (stripThink now strips a trailing unclosed block too — see its
+      // own comment) — evidence: both think runs' selection-percentile finals were raw <think>
+      // dumps truncated mid-sentence at maxTokens. Previously `!text` short-circuited straight
+      // past the one-retry mechanism on the VERY FIRST invalid envelope, returning
+      // FALLBACK_RESPONSE without ever giving the model a chance to answer properly — worse than
+      // a normal invalid envelope's handling, not better. The only thing that should skip the
+      // retry is having ALREADY retried once (`invalidRetried`); an empty `text` now goes through
+      // the exact same retry-once path any other invalid envelope gets. If the retry ALSO ends up
+      // empty/invalid, `text || FALLBACK_RESPONSE` below still degrades to the safe fallback —
+      // never raw reasoning as the final.
       const text = stripThink(raw);
-      if (invalidRetried || !text) {
+      if (invalidRetried) {
         return text || FALLBACK_RESPONSE;
       }
       invalidRetried = true;

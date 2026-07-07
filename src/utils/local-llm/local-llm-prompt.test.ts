@@ -67,6 +67,11 @@ it("REAL assembled base prompt (all 12 tools, representative digest+seed) fits w
   // still comfortably over the ≥25% this test requires. No threshold change needed.
   // DAVAI-126 Task D fix pass: find_cases's argsExample gained '(optional: "collection")'.
   // Re-measured: 3479 → 3504 docs chars, 7516 → 7541 prompt chars, margin ~53.2%.
+  // DAVAI-126 matrix round 3 items E5/E6: select_cases's argsExample became a worked percentile
+  // example, and find_cases's description gained the canonical "which mammal is the heaviest?"
+  // phrasing (registration order also changed, which doesn't affect total doc length). Re-
+  // measured: 3504 → 3605 docs chars, 7541 → 7642 prompt chars, margin ~53.2% → ~52.6%, still
+  // comfortably over the ≥25% this test requires. No threshold change needed.
   initializeLocalTools();
   const digest = buildSchemaDigest({
     Mammals: { name: "Mammals", collections: [{ name: "Cases", attrs: Array.from({ length: 12 }, (_, i) => ({ name: `Attr_${i}`, type: "numeric" })) }] },

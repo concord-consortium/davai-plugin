@@ -15,15 +15,28 @@ export interface IEvalResult {
 const MAX_TOOL_RESULT_TRACE_CHARS = 300;
 const truncateToolResult = (result: string): string => result.slice(0, MAX_TOOL_RESULT_TRACE_CHARS);
 
+// DAVAI-126 matrix round 3 item E8: per-case incremental observability (user-requested) —
+// evidence: MST axis-death spam and insertBefore errors interleave with the battery, and the
+// user cannot attribute them to a specific case without a BEFORE/AFTER marker per case. This
+// payload is deliberately console.log-agnostic (no message string baked in) so the pure runner
+// stays console-free, per the brief's explicit instruction — assistant-model.ts's caller supplies
+// the actual console.log wording from these fields.
+export interface IEvalCaseStart { index: number; total: number; id: string; prompt: string; }
+export type OnCaseStart = (payload: IEvalCaseStart) => void;
+export type OnCaseResult = (result: IEvalResult) => void;
+
 // DAVAI-126 Task 12: `now` is injectable (defaults to performance.now()) so tests can drive it
 // with a fake sequence instead of depending on wall-clock timing.
 export const runLocalEval = async (
   cases: IEvalCase[],
   runTurn: (prompt: string) => Promise<IEvalTurnResult>,
-  now: () => number = () => performance.now()
+  now: () => number = () => performance.now(),
+  onCaseStart?: OnCaseStart,
+  onCaseResult?: OnCaseResult
 ): Promise<IEvalResult[]> => {
   const results: IEvalResult[] = [];
-  for (const c of cases) {
+  for (const [i, c] of cases.entries()) {
+    onCaseStart?.({ index: i + 1, total: cases.length, id: c.id, prompt: c.prompt });
     const failures: string[] = [];
     let toolCalls: string[] = [];
     let toolResults: string[] = [];
@@ -67,7 +80,9 @@ export const runLocalEval = async (
     // Duration is recorded around the runTurn await regardless of outcome — a rejecting case
     // still records how long it took to fail.
     const durationMs = now() - startedAt;
-    results.push({ id: c.id, passed: failures.length === 0, failures, toolCalls, toolResults, final, durationMs });
+    const result: IEvalResult = { id: c.id, passed: failures.length === 0, failures, toolCalls, toolResults, final, durationMs };
+    results.push(result);
+    onCaseResult?.(result);
   }
   return results;
 };
