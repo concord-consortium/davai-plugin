@@ -8,6 +8,10 @@ export interface ILocalToolContext {
   setSelectedGraphID: (id: number | string) => void;
   refreshDataContexts: () => Promise<void>;
   refreshGraphs: () => Promise<void>;
+  // Refills the graph list WITHOUT refreshGraphs's selectNewest side effect (see assistant-model.ts's
+  // toolCtx wiring) — for tools that mutate an EXISTING graph (e.g. update_graph) rather than
+  // creating one, so the current sonification selection is never disturbed by the refresh itself.
+  refreshGraphList: () => Promise<void>;
 }
 
 export type ToolValidation =

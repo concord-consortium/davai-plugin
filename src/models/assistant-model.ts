@@ -622,6 +622,13 @@ export const AssistantModel = types
             await (self as any).updateGraphs();
             await root.sonificationStore.setGraphs({ selectNewest: true });
           },
+          // DAVAI-126 Task D: update_graph mutates an EXISTING graph, so there is no "newest"
+          // graph to select — refreshGraphs's setGraphs({ selectNewest: true }) call above would
+          // be a no-op in that case (setGraphs only reassigns selection when it finds a graph id
+          // NOT already in its snapshot), but relying on that being a no-op is fragile. This bare
+          // refill (no selectNewest follow-up at all) is the honest "just refresh the list"
+          // primitive for tools that must never disturb the current sonification selection.
+          refreshGraphList: async () => { await (self as any).updateGraphs(); },
         };
         // Reuses the DAVAI-125 effort machinery as the thinking toggle: effort "think" turns
         // Qwen3 thinking on (via the /think prompt switch) and doubles the completion-token
@@ -745,6 +752,10 @@ export const AssistantModel = types
             await (self as any).updateGraphs();
             await root.sonificationStore.setGraphs({ selectNewest: true });
           },
+          // Same no-selectNewest refill as handleMessageSubmitLocalLlm's toolCtx (see its comment)
+          // — used by update_graph so an eval run mutating an existing graph never disturbs
+          // selection the way create_graph's auto-select intentionally does.
+          refreshGraphList: async () => { await (self as any).updateGraphs(); },
         };
         // Same thinking wiring as handleMessageSubmitLocalLlm (see its comment): effort "think"
         // enables the /think prompt switch and doubles the completion-token budget.

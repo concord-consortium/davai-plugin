@@ -30,12 +30,14 @@ it("a runTurn rejection fails that case without aborting the run", async () => {
   expect(results).toHaveLength(2);
 });
 
-it("ships the 14 spec cases with unique ids", () => {
+it("ships the 16 spec cases with unique ids", () => {
   // DAVAI-126 Task A: added "describe-by-axes" to exercise resolveGraph's rung 3.
   // DAVAI-126 Task C: added "set-attribute-unit" (update_attribute) and "find-heaviest"
   // (find_cases), bringing the total from 12 to 14.
-  expect(evalCases).toHaveLength(14);
-  expect(new Set(evalCases.map((c) => c.id)).size).toBe(14);
+  // DAVAI-126 Task D: added "update-graph-yaxis" (update_graph) and "group-by-diet" (group_by),
+  // bringing the total from 14 to 16.
+  expect(evalCases).toHaveLength(16);
+  expect(new Set(evalCases.map((c) => c.id)).size).toBe(16);
   const miscap = evalCases.find((c) => c.id === "miscapitalized-attribute");
   expect(miscap).toBeDefined();
 });
@@ -67,6 +69,30 @@ it("set-attribute-unit runs immediately after create-attribute-formula (DAVAI-12
   expect(c.prompt).toBe("Set the unit of Height to meters.");
   expect(c.expectTools).toEqual({ contains: ["update_attribute"] });
   expect(c.expectFinal).toEqual({ matches: [/height/i, /meter/i] });
+});
+
+it("update-graph-yaxis runs directly after create-adornment (DAVAI-126 Task D)", () => {
+  const ids = evalCases.map((e) => e.id);
+  const createAdornmentIdx = ids.indexOf("create-adornment");
+  const updateGraphYaxisIdx = ids.indexOf("update-graph-yaxis");
+  expect(createAdornmentIdx).toBeGreaterThanOrEqual(0);
+  expect(updateGraphYaxisIdx).toBe(createAdornmentIdx + 1);
+  const c = evalCases.find((e) => e.id === "update-graph-yaxis")!;
+  expect(c.prompt).toBe("Change the y-axis of the Height vs Mass graph to Sleep.");
+  expect(c.expectTools).toEqual({ contains: ["update_graph"] });
+  expect(c.expectFinal).toEqual({ matches: [/sleep/i], notMatches: [/error|fail/i] });
+});
+
+it("group-by-diet runs directly after update-graph-yaxis (DAVAI-126 Task D)", () => {
+  const ids = evalCases.map((e) => e.id);
+  const updateGraphYaxisIdx = ids.indexOf("update-graph-yaxis");
+  const groupByDietIdx = ids.indexOf("group-by-diet");
+  expect(updateGraphYaxisIdx).toBeGreaterThanOrEqual(0);
+  expect(groupByDietIdx).toBe(updateGraphYaxisIdx + 1);
+  const c = evalCases.find((e) => e.id === "group-by-diet")!;
+  expect(c.prompt).toBe("Group the mammals by Diet.");
+  expect(c.expectTools).toEqual({ contains: ["group_by"] });
+  expect(c.expectFinal).toEqual({ matches: [/diet/i, /group/i, /\d/] });
 });
 
 it("find-heaviest is the last case in the battery, after miscapitalized-attribute (DAVAI-126 Task C)", () => {

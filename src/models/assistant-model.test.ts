@@ -1470,3 +1470,109 @@ describe("sonification auto-select on local create_graph (DAVAI-126)", () => {
     consoleLogSpy.mockRestore();
   });
 });
+
+describe("refreshGraphList: refills graphs WITHOUT the selectNewest side effect (DAVAI-126 Task D)", () => {
+  // update_graph (src/utils/local-llm/tools/update-graph.ts) mutates an EXISTING graph, so it
+  // must refresh the graph list through ctx.refreshGraphList(), never ctx.refreshGraphs() — the
+  // latter's setGraphs({ selectNewest: true }) call would risk stealing the current sonification
+  // selection. This proves the real toolCtx wired by assistant-model.ts keeps that promise: the
+  // graph list is refilled, but selectedGraphID is untouched.
+  const TestRootStore = types.model("TestRootStore", {
+    assistantStore: AssistantModel,
+    sonificationStore: GraphSonificationModel,
+  });
+
+  const createRootedStore = () => {
+    const transcriptStore = ChatTranscriptModel.create({ messages: [] });
+    const root = TestRootStore.create({
+      assistantStore: { transcriptStore, threadId: "thread-1" },
+      sonificationStore: { allGraphs: {}, binValues: {} },
+    });
+    const store = root.assistantStore;
+    store.setLlmId(JSON.stringify({ id: "Qwen3-1.7B-q4f16_1-MLC", provider: "Local" }));
+    return { root, store };
+  };
+
+  const updatedGraph = {
+    id: 42, name: "Height vs Mass", title: "Height vs Mass", plotType: "scatterPlot", dataContext: "Mammals",
+    xAttributeName: "Height", yAttributeName: "Sleep",
+  };
+
+  afterEach(() => {
+    jest.clearAllMocks();
+  });
+
+  it("chat wiring (handleMessageSubmitLocalLlm): refills store.graphs but leaves " +
+    "selectedGraphID unset", async () => {
+    const { root, store } = createRootedStore();
+    expect(root.sonificationStore.selectedGraphID).toBeUndefined();
+    (getTrimmedGraphDetails as jest.Mock).mockResolvedValueOnce([updatedGraph]);
+
+    (runLocalTurn as jest.Mock).mockImplementationOnce(async (args: any) => {
+      await args.executeTool("update_graph", { graph: "Height vs Mass", yAttribute: "Sleep" });
+      const toolCtx = (dispatchTool as jest.Mock).mock.calls.at(-1)![2];
+      await toolCtx.refreshGraphList();
+      return "Updated graph \"Height vs Mass\": y-axis is now Sleep.";
+    });
+
+    await store.handleMessageSubmitLocalLlm("change the y-axis to sleep");
+
+    expect(store.graphs).toEqual([updatedGraph]);
+    expect(root.sonificationStore.selectedGraphID).toBeUndefined();
+  });
+
+  it("chat wiring: does not disturb an EXISTING selection either", async () => {
+    const { root, store } = createRootedStore();
+    // Seed a real, sonifiable graph into the sonification store's OWN allGraphs (via setGraphs,
+    // no selectNewest) and select it directly — the sonification store's own reaction clears
+    // selectedGraphID whenever it doesn't reference a graph actually present in allGraphs (see
+    // graph-sonification-model.ts's afterCreate), so an arbitrary id would be auto-cleared
+    // regardless of anything under test here.
+    (getGraphDetails as jest.Mock).mockResolvedValueOnce([updatedGraph]);
+    await root.sonificationStore.setGraphs();
+    root.sonificationStore.setSelectedGraphID(42);
+    expect(root.sonificationStore.selectedGraphID).toBe(42);
+    (getTrimmedGraphDetails as jest.Mock).mockResolvedValueOnce([updatedGraph]);
+
+    (runLocalTurn as jest.Mock).mockImplementationOnce(async (args: any) => {
+      await args.executeTool("update_graph", { graph: "Height vs Mass", yAttribute: "Sleep" });
+      const toolCtx = (dispatchTool as jest.Mock).mock.calls.at(-1)![2];
+      await toolCtx.refreshGraphList();
+      return "Updated graph \"Height vs Mass\": y-axis is now Sleep.";
+    });
+
+    await store.handleMessageSubmitLocalLlm("change the y-axis to sleep");
+
+    expect(store.graphs).toEqual([updatedGraph]);
+    expect(root.sonificationStore.selectedGraphID).toBe(42);
+  });
+
+  it("eval wiring (runLocalEvalTurns): refills store.graphs but leaves selectedGraphID " +
+    "untouched from whatever the fixture guard set it to", async () => {
+    const { root, store } = createRootedStore();
+    // Same real-graph seeding as the chat-wiring test above (see its comment) — the eval fixture
+    // guard also needs a resolvable current graph before it will run at all.
+    (getGraphDetails as jest.Mock).mockResolvedValueOnce([updatedGraph]);
+    await root.sonificationStore.setGraphs();
+    root.sonificationStore.setSelectedGraphID(42);
+    (getTrimmedGraphDetails as jest.Mock).mockResolvedValueOnce([updatedGraph]);
+    const consoleLogSpy = jest.spyOn(console, "log").mockImplementation(() => undefined);
+
+    (runLocalTurn as jest.Mock).mockImplementationOnce(async (args: any) => {
+      await args.executeTool("update_graph", { graph: "Height vs Mass", yAttribute: "Sleep" });
+      const toolCtx = (dispatchTool as jest.Mock).mock.calls.at(-1)![2];
+      await toolCtx.refreshGraphList();
+      return "Updated graph \"Height vs Mass\": y-axis is now Sleep.";
+    });
+
+    await store.runLocalEvalTurns([
+      { id: "case-a", prompt: "change the y-axis to sleep", expectTools: { contains: ["update_graph"] },
+        expectFinal: { matches: [/Sleep/] } },
+    ] as any);
+
+    expect(store.graphs).toEqual([updatedGraph]);
+    expect(root.sonificationStore.selectedGraphID).toBe(42);
+
+    consoleLogSpy.mockRestore();
+  });
+});

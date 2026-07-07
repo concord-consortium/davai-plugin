@@ -57,6 +57,15 @@ export const evalCases: IEvalCase[] = [
   // unchanged.
   { id: "create-adornment", prompt: "Add a mean line to the Height graph.",
     expectTools: { contains: ["create_adornment"] }, expectFinal: { matches: [/mean/i, /\d/] } },
+  // DAVAI-126 Task D: exercises update_graph's rung-1 exact-title graph resolution and its
+  // y-axis change path. Runs after create-adornment (which needs the pre-change Height graph
+  // still intact) and before group-by-diet.
+  { id: "update-graph-yaxis", prompt: "Change the y-axis of the Height vs Mass graph to Sleep.",
+    expectTools: { contains: ["update_graph"] }, expectFinal: { matches: [/sleep/i], notMatches: [/error|fail/i] } },
+  // DAVAI-126 Task D: exercises group_by's happy path (new parent collection + attribute move)
+  // and grounded group-count reporting.
+  { id: "group-by-diet", prompt: "Group the mammals by Diet.",
+    expectTools: { contains: ["group_by"] }, expectFinal: { matches: [/diet/i, /group/i, /\d/] } },
   { id: "sonify", prompt: "Play this graph as sound.",
     expectTools: { contains: ["sonify_graph"] }, expectFinal: { matches: [/sonif/i] } },
   { id: "unsupported-intent", prompt: "Export this dataset to Excel.",

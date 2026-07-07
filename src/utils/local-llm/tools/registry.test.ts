@@ -66,11 +66,13 @@ it("buildToolDocs includes every registered tool's name, description, and args e
 
 import { initializeLocalTools } from "./index";
 
-it("initializeLocalTools registers all 10 tools with docs for each", () => {
+it("initializeLocalTools registers all 12 tools with docs for each", () => {
+  // DAVAI-126 Task D: added update_graph and group_by, bringing the total from 10 to 12.
   initializeLocalTools();
   const names = getRegisteredTools().map((t) => t.name).sort();
   expect(names).toEqual([
     "create_adornment", "create_attribute", "create_graph", "find_cases", "get_case_values",
-    "get_graph_info", "get_stats", "select_cases", "sonify_graph", "update_attribute",
+    "get_graph_info", "get_stats", "group_by", "select_cases", "sonify_graph", "update_attribute",
+    "update_graph",
   ]);
 });

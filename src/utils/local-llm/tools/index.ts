@@ -7,8 +7,10 @@ import { findCasesTool } from "./find-cases";
 import { createGraphTool } from "./create-graph";
 import { createAttributeTool } from "./create-attribute";
 import { updateAttributeTool } from "./update-attribute";
+import { updateGraphTool } from "./update-graph";
 import { createAdornmentTool } from "./create-adornment";
 import { sonifyGraphTool } from "./sonify-graph";
+import { groupByTool } from "./group-by";
 
 export { dispatchTool, buildToolDocs } from "./registry";
 export type { ILocalToolContext } from "./registry";
@@ -25,7 +27,9 @@ export const initializeLocalTools = (): void => {
     createGraphTool,
     createAttributeTool,
     updateAttributeTool,
+    updateGraphTool,
     createAdornmentTool,
     sonifyGraphTool,
+    groupByTool,
   ]);
 };
