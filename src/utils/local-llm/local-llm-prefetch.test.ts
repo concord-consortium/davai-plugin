@@ -107,6 +107,24 @@ describe("buildGraphSeed", () => {
     expect(seed).toContain("10, 3");
   });
 
+  // An LSRL adornment carries slope/intercept/rSquared — not value or mean/min/max — so the
+  // adornments line needs its own branch (without one it renders "LSRL: mean undefined, min
+  // undefined, max undefined"). Format matches create-adornment.ts's formatData.
+  it("renders an LSRL adornment as slope/intercept/R² on the adornments line", async () => {
+    (getGraphByID as jest.Mock).mockResolvedValue({
+      id: 42, title: "H vs M", dataContext: "Mammals", xAttributeName: "Height", yAttributeName: "Mass",
+    });
+    (getGraphAdornments as jest.Mock).mockResolvedValue([
+      { type: "LSRL", isVisible: true, slope: 2.5, intercept: 1.2, rSquared: 0.87 },
+    ]);
+    (getCollectionItemsForAttributePair as jest.Mock).mockResolvedValue([
+      { id: "1", values: { Height: 10, Mass: 3 } },
+    ]);
+    const seed = await buildGraphSeed("42", dcs);
+    expect(seed).toContain("Adornments: LSRL: slope 2.5, intercept 1.2, R² 0.87.");
+    expect(seed).not.toContain("undefined");
+  });
+
   it("includes ALL values with no sampling note when the graph has over 100 cases " +
     "(DAVAI-126 user directive)", async () => {
     const items = Array.from({ length: 150 }, (_, i) => ({ id: String(i), values: { Height: i } }));
@@ -200,6 +218,25 @@ describe("buildGraphSeed", () => {
     };
     const seed = await buildGraphSeed("42", dcsWithUnit);
     expect(seed).toContain("Sketch: 2 points. Height (meters) 10–12 (most between 10 and 12).");
+  });
+
+  // End-to-end: an LSRL adornment returned by getGraphAdornments flows into computeGraphSketch,
+  // so the seed's Sketch section carries the regression line (transcribed from the adornment's
+  // own slope/intercept/R², never re-derived by the model).
+  it("scatter: the sketch's LSRL line uses the adornment's slope/intercept/R²", async () => {
+    (getGraphByID as jest.Mock).mockResolvedValue({
+      id: 42, title: "H vs M", dataContext: "Mammals", xAttributeName: "Height", yAttributeName: "Mass",
+    });
+    (getGraphAdornments as jest.Mock).mockResolvedValue([
+      { type: "LSRL", isVisible: true, slope: 2.5, intercept: 1.2, rSquared: 0.87 },
+    ]);
+    (getCollectionItemsForAttributePair as jest.Mock).mockResolvedValue([
+      { id: "1", values: { Height: 1, Mass: 4 } },
+      { id: "2", values: { Height: 2, Mass: 6 } },
+      { id: "3", values: { Height: 3, Mass: 9 } },
+    ]);
+    const seed = await buildGraphSeed("42", dcs);
+    expect(seed).toContain("LSRL: Mass = 2.5 × Height + 1.2; R² = 0.87");
   });
 
   it("scatter: inserts a sketch reflecting both axes, using the same pair-fetched items " +

@@ -1,8 +1,19 @@
 import {
-  getCollectionItemsForAttribute, getCollectionItemsForAttributePair, getGraphAdornments, getGraphByID
+  getCollectionItemsForAttribute, getCollectionItemsForAttributePair, getGraphAdornments, getGraphByID,
+  IAdornmentData
 } from "../codap-api-utils";
 import { computeGraphSketch } from "./graph-sketch";
 import { graphLabel } from "./tools/resolve";
+
+// One adornment as prompt text. LSRL carries slope/intercept/rSquared rather than value or
+// mean/min/max, so it needs its own branch (the fallback would render "mean undefined, min
+// undefined, max undefined"); the format matches create-adornment.ts's formatData so the model
+// sees one consistent LSRL phrasing. Exported so get-graph-info.ts (the tool's own adornments
+// line) reuses this exact formatting instead of duplicating it.
+export const formatAdornment = (a: IAdornmentData): string =>
+  a.type === "LSRL"
+    ? `${a.type}: slope ${a.slope}, intercept ${a.intercept}, R² ${a.rSquared}`
+    : `${a.type}: ${a.value ?? `mean ${a.mean}, min ${a.min}, max ${a.max}`}`;
 
 // The sonification store's explicit selection wins; otherwise, when the document has exactly
 // one graph, that graph is unambiguously "the graph" — clicking a graph in CODAP does not
@@ -81,7 +92,7 @@ export const buildGraphSeed = async (
 
     const adornments = await getGraphAdornments(Number(graphId));
     const adornmentText = adornments.length
-      ? adornments.map((a) => `${a.type}: ${a.value ?? `mean ${a.mean}, min ${a.min}, max ${a.max}`}`).join("; ")
+      ? adornments.map(formatAdornment).join("; ")
       : "none";
 
     const items = x && y

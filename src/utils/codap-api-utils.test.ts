@@ -252,6 +252,17 @@ describe("getGraphAdornments", () => {
     ]);
   });
 
+  it("should parse an LSRL adornment into slope, intercept, and rSquared", async () => {
+    mockAdornmentRequests([
+      { type: "LSRL", isVisible: true, data: { slope: 2.5, intercept: 1.2, rSquared: 0.87 } }
+    ]);
+
+    const result = await getGraphAdornments(1);
+    expect(result).toEqual([
+      { type: "LSRL", isVisible: true, slope: 2.5, intercept: 1.2, rSquared: 0.87 }
+    ]);
+  });
+
   it("should filter out non-visible adornments", async () => {
     mockAdornmentRequests([
       { type: "Mean", isVisible: false, data: { mean: 24.85 } },

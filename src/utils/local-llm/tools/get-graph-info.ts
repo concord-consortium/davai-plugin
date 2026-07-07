@@ -2,7 +2,7 @@ import {
   getGraphByID, getGraphAdornments, getCollectionItemsForAttribute, getCollectionItemsForAttributePair
 } from "../../codap-api-utils";
 import { computeGraphSketch } from "../graph-sketch";
-import { findAttributeUnit } from "../local-llm-prefetch";
+import { findAttributeUnit, formatAdornment } from "../local-llm-prefetch";
 import { ILocalTool } from "./registry";
 import { graphLabel, resolveGraph } from "./resolve";
 
@@ -39,7 +39,7 @@ export const getGraphInfoTool: ILocalTool = {
       y ? `y-axis: ${y}` : "y-axis: (none)",
     ].join("; ");
     const adornmentText = adornments.length
-      ? adornments.map((a) => `${a.type}: ${a.value ?? `mean ${a.mean}, min ${a.min}, max ${a.max}`}`).join("; ")
+      ? adornments.map(formatAdornment).join("; ")
       : "none visible";
     // DAVAI-126 matrix round 3 item E1: was `graph?.title ?? graph?.name ?? resolved.graphId` —
     // graphLabel is empty-string-safe and prefers a descriptive, resolvable phrase over a bare id.
