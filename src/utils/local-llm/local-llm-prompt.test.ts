@@ -52,12 +52,15 @@ describe("thinking toggle (DAVAI-126)", () => {
 });
 
 it("REAL assembled base prompt (all 8 tools, representative digest+seed) fits with ≥25% margin", () => {
+  // DAVAI-126 no-sampling: the seed's case count now matches the actual number of value pairs
+  // shipped (no more sampling, so no "(evenly sampled N of M)" note) — this fixture uses a
+  // 100-pair graph as a representative document, honestly labeled "100 cases".
   initializeLocalTools();
   const digest = buildSchemaDigest({
     Mammals: { name: "Mammals", collections: [{ name: "Cases", attrs: Array.from({ length: 12 }, (_, i) => ({ name: `Attr_${i}`, type: "numeric" })) }] },
   });
   const seedValues = Array.from({ length: 100 }, (_, i) => `${i}.5, ${i * 2}.25`).join("; ");
-  const seed = `Selected graph "Big" (data context: Mammals).\nx-axis: A; y-axis: B. Adornments: Mean: 10.\nValues (A, B) — 250 cases (evenly sampled 100 of 250): ${seedValues}`;
+  const seed = `Selected graph "Big" (data context: Mammals).\nx-axis: A; y-axis: B. Adornments: Mean: 10.\nValues (A, B) — 100 cases: ${seedValues}`;
   const sys = buildLocalSystemPrompt({ toolDocs: buildToolDocs(), schemaDigest: digest, graphSeed: seed });
   expect(sys.length).toBeLessThan(DEFAULT_PROMPT_BUDGET_CHARS * 0.75);
 });

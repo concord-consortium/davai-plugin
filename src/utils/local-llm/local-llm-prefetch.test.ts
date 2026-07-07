@@ -41,7 +41,7 @@ describe("buildGraphSeed", () => {
     ]);
   });
 
-  it("includes structure, adornments, and capped values for a univariate graph", async () => {
+  it("includes structure, adornments, and all values for a univariate graph", async () => {
     const seed = await buildGraphSeed("42", dcs);
     expect(seed).toContain("Heights");
     expect(seed).toContain("x-axis: Height");
@@ -60,6 +60,22 @@ describe("buildGraphSeed", () => {
     const seed = await buildGraphSeed("42", dcs);
     expect(getCollectionItemsForAttributePair).toHaveBeenCalled();
     expect(seed).toContain("10, 3");
+  });
+
+  it("includes ALL values with no sampling note when the graph has over 100 cases " +
+    "(DAVAI-126 user directive)", async () => {
+    const items = Array.from({ length: 150 }, (_, i) => ({ id: String(i), values: { Height: i } }));
+    (getCollectionItemsForAttribute as jest.Mock).mockResolvedValue(items);
+
+    const seed = await buildGraphSeed("42", dcs);
+
+    expect(seed).toContain("150 cases");
+    expect(seed).not.toMatch(/sampled/i);
+    const valuesLine = seed.split("\n").find((l) => l.startsWith("Values"))!;
+    const rows = valuesLine.split(": ").slice(1).join(": ").split("; ");
+    expect(rows).toHaveLength(150);
+    expect(rows[0]).toBe("0");
+    expect(rows[149]).toBe("149");
   });
 
   it("returns empty string when the graph has no plotted attributes or fetch fails", async () => {

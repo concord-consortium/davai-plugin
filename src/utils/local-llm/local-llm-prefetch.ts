@@ -1,7 +1,6 @@
 import {
   getCollectionItemsForAttribute, getCollectionItemsForAttributePair, getGraphAdornments, getGraphByID
 } from "../codap-api-utils";
-import { capValues } from "./tools/get-case-values";
 
 // Compact, names-first dataset summary: "Mammals — Cases: Height (numeric), Habitat (categorical), Mass".
 // Replaces the raw trimmed-JSON context dump (smaller, and no IDs for the model to fixate on).
@@ -20,9 +19,11 @@ export const buildSchemaDigest = (dataContexts: Record<string, any>): string =>
     })
     .join("\n");
 
-// Deterministic pre-seed for the selected graph: structure + visible adornments + capped
-// case values. Fails soft (empty string) — a missing seed degrades to tool calls, never
-// to a broken turn.
+// Deterministic pre-seed for the selected graph: structure + visible adornments + ALL case
+// values (DAVAI-126 user directive: no sampling — every value ships). Fails soft (empty
+// string) — a missing seed degrades to tool calls, never to a broken turn. The prompt's own
+// trim rung (trimToBudget in local-llm-prompt.ts) is the intentional overflow behavior for huge
+// datasets: it drops this whole values line under budget pressure rather than sampling it.
 export const buildGraphSeed = async (
   graphId: string,
   dataContexts: Record<string, any>
@@ -43,16 +44,14 @@ export const buildGraphSeed = async (
     const items = x && y
       ? await getCollectionItemsForAttributePair(dc, x, y)
       : await getCollectionItemsForAttribute(dc, (x ?? y) as string);
-    const { kept, sampled, total } = capValues(items);
-    const rows = kept
+    const rows = items
       .map((it: any) => (x && y ? `${it.values[x]}, ${it.values[y]}` : String(it.values[(x ?? y) as string])))
       .join("; ");
-    const sampleNote = sampled ? ` (evenly sampled ${kept.length} of ${total})` : "";
 
     return [
       `Selected graph "${graph?.title ?? graph?.name ?? graphId}" (data context: ${graph?.dataContext}).`,
       `x-axis: ${x ?? "(none)"}; y-axis: ${y ?? "(none)"}. Adornments: ${adornmentText}.`,
-      `Values${x && y ? ` (${x}, ${y})` : ` (${x ?? y})`} — ${total} cases${sampleNote}: ${rows}`,
+      `Values${x && y ? ` (${x}, ${y})` : ` (${x ?? y})`} — ${items.length} cases: ${rows}`,
     ].join("\n");
   } catch {
     return "";
