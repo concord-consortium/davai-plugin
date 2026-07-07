@@ -80,24 +80,61 @@ export const resolveAttribute = (
 // alone cannot disambiguate. Rung 3 (axis + plot-type matching) and rung 4 (descriptive
 // corrective) below are additive: they only engage when rungs 1-2 produce no unique hit.
 
-// Shape word from presence of axis attributes: both x and y -> scatterplot; exactly one ->
-// dot plot; neither -> a bare "graph". Legend/facet attributes don't affect the shape word —
-// only x/y presence does, matching how create-adornment.ts's own hasAxis/hasBothAxes read shape.
+// Shape source: `plotType` is live, branched-on, verified production data elsewhere in this repo
+// (graph-sonification-utils.ts's isUnivariateDotPlot/isUnsplitScatterPlot, graph-sonification-
+// model.ts) — real runtime values confirmed there and in graph-sonification-model.test.ts include
+// "dotPlot", "binnedDotPlot", "scatterPlot", and "barChart". A CODAP barChart commonly has only an
+// x-attribute set, which axis-presence alone would misread as a dot plot — so plotType, when
+// present, is authoritative over axis-presence for both the shape word AND the rung-3 filter
+// bucket. `plotType` is `types.maybe(types.string)` on the model (codap-graph-model.ts) and is
+// legitimately absent sometimes; axis-presence is used ONLY as the fallback for that case, exactly
+// as before this fix, matching how create-adornment.ts's own hasAxis/hasBothAxes read shape when
+// no more authoritative signal exists.
 const hasX = (g: any): boolean => typeof g?.xAttributeName === "string" && g.xAttributeName.length > 0;
 const hasY = (g: any): boolean => typeof g?.yAttributeName === "string" && g.yAttributeName.length > 0;
+
+// Bucket used by the rung-3 plot-type filter: "bivariate" (scatterplot filter keeps these),
+// "univariate" (dot-plot filter keeps these), or "other" (a shape neither filter should claim —
+// e.g. a bar chart with one axis must NOT be swept into the dot-plot bucket just because it has
+// exactly one axis populated).
+type GraphBucket = "bivariate" | "univariate" | "other";
+const graphBucket = (g: any): GraphBucket => {
+  const plotType = g?.plotType;
+  if (plotType === "scatterPlot") return "bivariate";
+  if (plotType === "dotPlot") return "univariate";
+  if (typeof plotType === "string") return "other"; // e.g. "barChart", "binnedDotPlot", etc.
+  // plotType undefined: legitimate absence (types.maybe) — fall back to the pre-existing
+  // axis-presence heuristic, unchanged from before this fix.
+  if (hasX(g) && hasY(g)) return "bivariate";
+  if (hasX(g) || hasY(g)) return "univariate";
+  return "other";
+};
 
 const graphLabel = (g: any): string => g?.title ?? g?.name ?? "";
 
 // e.g. "Height" (dot plot of Height) / "Height vs Mass" (scatterplot of Height vs Mass) /
-// "Untitled" (graph).
+// "Species" (bar chart of Species) / "Untitled" (graph). Shape word comes from `graphBucket`
+// (plotType-first, axis-presence fallback); the "of <axis>" clause still reads the actual axis
+// attribute names so the descriptive text stays accurate regardless of which signal chose the
+// shape word.
+const shapeWordFor = (g: any, bucket: GraphBucket): string => {
+  const plotType = g?.plotType;
+  if (plotType === "barChart") return "bar chart";
+  if (bucket === "bivariate") return "scatterplot";
+  if (bucket === "univariate") return "dot plot";
+  return "graph";
+};
+
 export const describeGraphOption = (g: any): string => {
   const label = graphLabel(g);
+  const bucket = graphBucket(g);
   const x = hasX(g) ? g.xAttributeName : undefined;
   const y = hasY(g) ? g.yAttributeName : undefined;
+  const word = shapeWordFor(g, bucket);
   let shape: string;
-  if (x && y) shape = `scatterplot of ${x} vs ${y}`;
-  else if (x || y) shape = `dot plot of ${x ?? y}`;
-  else shape = "graph";
+  if (x && y) shape = `${word} of ${x} vs ${y}`;
+  else if (x || y) shape = `${word} of ${x ?? y}`;
+  else shape = word;
   return `"${label}" (${shape})`;
 };
 
@@ -109,13 +146,17 @@ const listGraphOptions = (graphs: any[]): string => {
 
 // A short phrase that itself resolves back to `g` via rung 3 — used as the "e.g." example in
 // rung-4 messages. CLOSURE PROPERTY: whatever we tell the user to say must actually work, so this
-// combines the shape word rung 3 filters on with the graph's own label/axis text, both of which
-// rung 3 scores by substring containment.
+// must use a phrasing that rung 3's OWN filter (see resolveByAxes below, which keys off the same
+// graphBucket) will route back to this graph's bucket, combined with axis text rung 3 scores by
+// substring containment. A bar chart's word ("bar chart") deliberately does NOT contain "scatter"
+// or "dot plot", so it triggers neither filter — it round-trips via axis-name scoring alone, which
+// is correct: rung 3 has no bar-chart-specific filter bucket to route it through.
 const exampleGraphPhrase = (g: any): string => {
+  const bucket = graphBucket(g);
   const x = hasX(g) ? g.xAttributeName : undefined;
   const y = hasY(g) ? g.yAttributeName : undefined;
-  if (x && y) return `the ${x} vs ${y} scatterplot`;
-  const shapeWord = x || y ? "dot plot" : "graph";
+  if (bucket === "bivariate" && x && y) return `the ${x} vs ${y} scatterplot`;
+  const shapeWord = shapeWordFor(g, bucket);
   const axisWord = x ?? y ?? graphLabel(g);
   return `the ${axisWord} ${shapeWord}`;
 };
@@ -168,14 +209,17 @@ type Rung3Result =
 const resolveByAxes = (requested: string, graphs: any[]): Rung3Result => {
   const wanted = normalizeName(requested);
 
-  // Plot-type filter: narrows the candidate pool by shape word before scoring. If the filter
-  // leaves zero graphs, rung 3 fails outright (the caller falls to rung 4) — it must never
-  // silently unfilter and score against the full, shape-mismatched pool.
+  // Plot-type filter: narrows the candidate pool by shape bucket before scoring. Bucketed by
+  // graphBucket (plotType-first, axis-presence fallback only when plotType is undefined) — NOT
+  // raw axis-presence — so a barChart with one axis is correctly excluded from the dot-plot
+  // bucket instead of being misread as a dot plot. If the filter leaves zero graphs, rung 3 fails
+  // outright (the caller falls to rung 4) — it must never silently unfilter and score against the
+  // full, shape-mismatched pool.
   const wantsScatter = wanted.includes("scatter") || wanted.includes(" vs ") || wanted.includes("versus");
   const wantsDotPlot = wanted.includes("dot plot") || wanted.includes("dotplot") || wanted.includes("univariate");
   let pool = graphs;
-  if (wantsScatter) pool = pool.filter((g) => hasX(g) && hasY(g));
-  else if (wantsDotPlot) pool = pool.filter((g) => (hasX(g) ? 1 : 0) + (hasY(g) ? 1 : 0) === 1);
+  if (wantsScatter) pool = pool.filter((g) => graphBucket(g) === "bivariate");
+  else if (wantsDotPlot) pool = pool.filter((g) => graphBucket(g) === "univariate");
   if (pool.length === 0) return { kind: "miss" };
 
   // Score: +1 per axis attribute name (x, y, legend) whose normalized form is a substring of the

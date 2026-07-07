@@ -1,6 +1,6 @@
 import {
   normalizeName, resolveByName, resolveDataContext, resolveCollection,
-  resolveAttribute, resolveGraph, extractBacktickRefs, listNames
+  resolveAttribute, resolveGraph, extractBacktickRefs, listNames, describeGraphOption
 } from "./resolve";
 
 const dc = {
@@ -352,6 +352,93 @@ describe("resolveGraph rung 4: descriptive corrective (DAVAI-126)", () => {
     const retried = resolveGraph(suggestion, graphs, null);
     if (!retried.ok) throw new Error(`suggested phrase "${suggestion}" did not resolve: ${retried.error}`);
     expect(retried.value.id).toBe(10);
+  });
+});
+
+describe("resolveGraph rung 3/4: plotType-driven shape words (DAVAI-126 review fix)", () => {
+  // Real runtime plotType values, confirmed against graph-sonification-utils.ts (isDotPlot check,
+  // isUnsplitScatterPlot) and graph-sonification-model.test.ts's barChart fixture — NOT guessed.
+  it("describeGraphOption labels a barChart as \"bar chart\", not \"dot plot\", even with only one axis set", () => {
+    const barChart = { id: 1, title: "Species", name: "g1", plotType: "barChart", xAttributeName: "Species" };
+    expect(describeGraphOption(barChart)).toBe('"Species" (bar chart of Species)');
+  });
+
+  it("describeGraphOption labels dotPlot as \"dot plot\" and scatterPlot as \"scatterplot\" when plotType is present", () => {
+    const dotPlot = { id: 1, title: "Height", name: "g1", plotType: "dotPlot", xAttributeName: "Height" };
+    const scatter = {
+      id: 2, title: "Height vs Mass", name: "g2", plotType: "scatterPlot",
+      xAttributeName: "Height", yAttributeName: "Mass",
+    };
+    expect(describeGraphOption(dotPlot)).toBe('"Height" (dot plot of Height)');
+    expect(describeGraphOption(scatter)).toBe('"Height vs Mass" (scatterplot of Height vs Mass)');
+  });
+
+  it("describeGraphOption falls back to a generic \"graph\" shape for an unrecognized plotType", () => {
+    const pieChart = { id: 1, title: "Habitat", name: "g1", plotType: "pieChart", xAttributeName: "Habitat" };
+    expect(describeGraphOption(pieChart)).toBe('"Habitat" (graph of Habitat)');
+  });
+
+  it("a barChart is excluded from the \"dot plot\"-filtered rung 3 bucket even though it has exactly " +
+    "one axis populated — a real dotPlot with the same axis wins instead", () => {
+    const barChart = { id: 1, title: "Species", name: "g1", plotType: "barChart", xAttributeName: "Species" };
+    const dotPlot = { id: 2, title: "Species", name: "g2", plotType: "dotPlot", xAttributeName: "Species" };
+    const r = resolveGraph("species dot plot", [barChart, dotPlot], null);
+    if (!r.ok) throw new Error(`should succeed, got error: ${r.error}`);
+    expect(r.value.id).toBe(2);
+  });
+
+  it("a barChart alone does not satisfy a \"dot plot\" request — filter eliminates it, falls to rung 4", () => {
+    const barChart = { id: 1, title: "Species", name: "g1", plotType: "barChart", xAttributeName: "Species" };
+    const r = resolveGraph("species dot plot", [barChart], null);
+    if (r.ok) throw new Error("a barChart must NOT match a \"dot plot\" request — should fail");
+    expect(r.error).toMatch(/no graph matches/i);
+  });
+
+  it("a barChart with both x and y populated is not swept into the scatterplot filter either", () => {
+    const barChart = {
+      id: 1, title: "Species Counts", name: "g1", plotType: "barChart",
+      xAttributeName: "Species", yAttributeName: "Count",
+    };
+    const scatter = {
+      id: 2, title: "Species vs Count", name: "g2", plotType: "scatterPlot",
+      xAttributeName: "Species", yAttributeName: "Count",
+    };
+    const r = resolveGraph("species count scatterplot", [barChart, scatter], null);
+    if (!r.ok) throw new Error(`should succeed, got error: ${r.error}`);
+    expect(r.value.id).toBe(2);
+  });
+
+  it("plotType undefined falls back to the axis-presence heuristic exactly as before (legitimate " +
+    "absence — plotType is types.maybe on the model)", () => {
+    const noPlotType = { id: 1, title: "Height", name: "g1", xAttributeName: "Height" };
+    expect(describeGraphOption(noPlotType)).toBe('"Height" (dot plot of Height)');
+    const withPlotType = { id: 2, title: "Height vs Mass", name: "g2", xAttributeName: "Height", yAttributeName: "Mass" };
+    expect(describeGraphOption(withPlotType)).toBe('"Height vs Mass" (scatterplot of Height vs Mass)');
+  });
+
+  it("plotType undefined still lets a \"dot plot\" request match a single-axis graph via the axis-" +
+    "presence filter fallback", () => {
+    const singleAxis = { id: 1, title: "Height", name: "g1", xAttributeName: "Height" };
+    const bothAxes = { id: 2, title: "Height vs Mass", name: "g2", xAttributeName: "Height", yAttributeName: "Mass" };
+    const r = resolveGraph("height dot plot", [singleAxis, bothAxes], null);
+    if (!r.ok) throw new Error(`should succeed, got error: ${r.error}`);
+    expect(r.value.id).toBe(1);
+  });
+
+  it("CLOSURE PROPERTY still holds for a barChart candidate: its rung-4 example phrase says " +
+    "\"bar chart\" (not \"dot plot\") and round-trips through rung 3 to itself", () => {
+    const barChart = { id: 1, title: "Species", name: "g1", plotType: "barChart", xAttributeName: "Species" };
+    const failed = resolveGraph("nonexistent", [barChart], null);
+    if (failed.ok) throw new Error("setup should fail to produce a rung-4 message");
+    expect(failed.error).toContain('"Species" (bar chart of Species)');
+    const match = failed.error.match(/e\.g\. "([^"]+)"/);
+    if (!match) throw new Error(`expected a quoted example phrase in: ${failed.error}`);
+    const suggestion = match[1];
+    expect(suggestion).toContain("bar chart");
+    expect(suggestion).not.toContain("dot plot");
+    const retried = resolveGraph(suggestion, [barChart], null);
+    if (!retried.ok) throw new Error(`suggested phrase "${suggestion}" did not resolve: ${retried.error}`);
+    expect(retried.value.id).toBe(1);
   });
 });
 
