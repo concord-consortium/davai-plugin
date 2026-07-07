@@ -1,7 +1,7 @@
 import { getGraphByID } from "../../codap-api-utils";
 import { isGraphSonifiable } from "../../graph-sonification-utils";
 import { ILocalTool } from "./registry";
-import { resolveGraph } from "./resolve";
+import { graphLabel, resolveGraph } from "./resolve";
 
 export const sonifyGraphTool: ILocalTool = {
   name: "sonify_graph",
@@ -14,10 +14,13 @@ export const sonifyGraphTool: ILocalTool = {
   },
   async execute(resolved, ctx) {
     const graph = await getGraphByID(String(resolved.graphId));
+    // DAVAI-126 matrix round 3 item E1: both messages fell back to a raw id (`graph?.name ??
+    // resolved.graphId` / `graph?.name ?? graph.id`) — graphLabel is empty-string-safe and
+    // prefers a descriptive, resolvable phrase over a bare id.
     if (!isGraphSonifiable(graph)) {
-      return `The graph "${graph?.name ?? resolved.graphId}" is not a numeric scatter plot or univariate dot plot, so it cannot be sonified. Tell the user which plot types work.`;
+      return `The graph "${graphLabel(graph)}" is not a numeric scatter plot or univariate dot plot, so it cannot be sonified. Tell the user which plot types work.`;
     }
     ctx.setSelectedGraphID(graph.id);
-    return `The graph "${graph?.name ?? graph.id}" is ready to sonify. Tell the user they can use the sonification controls to hear it.`;
+    return `The graph "${graphLabel(graph)}" is ready to sonify. Tell the user they can use the sonification controls to hear it.`;
   },
 };

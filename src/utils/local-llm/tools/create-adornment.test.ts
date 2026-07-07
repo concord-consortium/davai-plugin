@@ -106,4 +106,60 @@ describe("corrective retry options on failure (DAVAI-126 eval round 2 item F)", 
     const out = await createAdornmentTool.execute((v as any).resolved, untitledCtx);
     expect(out).toContain("Univariate graphs: graph50.");
   });
+
+  // DAVAI-126 matrix round 3 item E1: the corrective's own local graphLabel was `g?.title ??
+  // g?.name` with NO empty-string guard and no descriptive fallback — evidence: the live trace
+  // `Univariate graphs: .` (a single empty entry) when the only candidate had title: "". Now uses
+  // the shared, RESOLVABLE graphLabel from resolve.ts, which never produces an empty string.
+  it("treats an empty-string title as absent (not a blank list entry) and falls through to the " +
+    "descriptive fallback when name is also absent", async () => {
+    send.mockResolvedValue({ success: false, error: "not applicable" });
+    const emptyTitleCtx = {
+      ...ctx, graphs: () => [{ id: 51, title: "", xAttributeName: "Height" }], selectedGraphId: () => "51",
+    } as unknown as ILocalToolContext;
+    const v = createAdornmentTool.validate({ type: "mean" }, emptyTitleCtx);
+    const out = await createAdornmentTool.execute((v as any).resolved, emptyTitleCtx);
+    expect(out).toContain("Univariate graphs: the Height dot plot.");
+    expect(out).not.toBe("Univariate graphs: .");
+  });
+
+  it("falls back to a descriptive phrase (not a raw id) when both title and name are absent", async () => {
+    send.mockResolvedValue({ success: false, error: "not applicable" });
+    const idOnlyCtx = {
+      ...ctx, graphs: () => [{ id: 52, xAttributeName: "Height", yAttributeName: "Mass" }], selectedGraphId: () => "52",
+    } as unknown as ILocalToolContext;
+    const v = createAdornmentTool.validate({ type: "lsrl" }, idOnlyCtx);
+    const out = await createAdornmentTool.execute((v as any).resolved, idOnlyCtx);
+    expect(out).toContain("Scatterplots: the Height vs Mass scatterplot.");
+  });
+});
+
+// DAVAI-126 matrix round 3 item E1: resolved.graphTitle itself (used in BOTH the success and
+// failure result sentences) fell back to `graph.value.title ?? graph.value.name` with no
+// empty-string guard — evidence: `Added Mean adornment to "undefined"` in the live trace (an
+// empty-string title coerced through a template literal). Now uses the shared graphLabel.
+describe("resolved graphTitle uses the shared graphLabel (DAVAI-126 matrix round 3 E1)", () => {
+  it("an empty-string title does not surface as \"undefined\" or a blank quoted label in the " +
+    "success message", async () => {
+    send.mockResolvedValue({ success: true, values: { type: "Mean", data: [{ mean: 10.79 }] } });
+    const emptyTitleCtx = {
+      ...ctx, graphs: () => [{ id: 60, title: "", xAttributeName: "Height" }], selectedGraphId: () => "60",
+    } as unknown as ILocalToolContext;
+    const v = createAdornmentTool.validate({ type: "mean" }, emptyTitleCtx);
+    const out = await createAdornmentTool.execute((v as any).resolved, emptyTitleCtx);
+    expect(out).toContain('Added Mean adornment to "the Height dot plot"');
+    expect(out).not.toContain("undefined");
+    expect(out).not.toContain('to ""');
+  });
+
+  it("a title-less, name-less graph gets a descriptive label (not \"undefined\") in the failure message", async () => {
+    send.mockResolvedValue({ success: false, error: "not applicable" });
+    const idOnlyCtx = {
+      ...ctx, graphs: () => [{ id: 61, xAttributeName: "Height" }], selectedGraphId: () => "61",
+    } as unknown as ILocalToolContext;
+    const v = createAdornmentTool.validate({ type: "mean" }, idOnlyCtx);
+    const out = await createAdornmentTool.execute((v as any).resolved, idOnlyCtx);
+    expect(out).toContain('could not be added to "the Height dot plot"');
+    expect(out).not.toContain("undefined");
+  });
 });

@@ -46,6 +46,29 @@ it("errors correctively when no graph is selected and none named", () => {
   expect(!v.ok && v.error).toMatch(/no graph is selected/i);
 });
 
+// DAVAI-126 matrix round 3 item E1: result string used `graph?.title ?? graph?.name ??
+// resolved.graphId` — evidence: `Added Mean adornment to "undefined"` style bugs elsewhere from
+// the same raw-fallback pattern. Now uses the shared graphLabel (empty-string-safe, descriptive
+// fallback over a raw id).
+it("uses the shared graphLabel (descriptive fallback) when the graph has neither title nor name", async () => {
+  (getGraphByID as jest.Mock).mockResolvedValue({
+    id: 42, xAttributeName: "Height", yAttributeName: "Age", dataContext: "Mammals",
+  });
+  const v = getGraphInfoTool.validate({}, ctx);
+  const out = await getGraphInfoTool.execute((v as any).resolved, ctx);
+  expect(out).toContain('Graph "the Height vs Age scatterplot"');
+});
+
+it("treats an empty-string title as absent, not as a printed blank label", async () => {
+  (getGraphByID as jest.Mock).mockResolvedValue({
+    id: 42, title: "", xAttributeName: "Height", yAttributeName: "Age", dataContext: "Mammals",
+  });
+  const v = getGraphInfoTool.validate({}, ctx);
+  const out = await getGraphInfoTool.execute((v as any).resolved, ctx);
+  expect(out).not.toContain('Graph ""');
+  expect(out).toContain('Graph "the Height vs Age scatterplot"');
+});
+
 it("steers the model away from a redundant call when the data is already in the seed " +
   "(DAVAI-126 eval round 2 item D)", () => {
   expect(getGraphInfoTool.description).toContain("Selected graph data");

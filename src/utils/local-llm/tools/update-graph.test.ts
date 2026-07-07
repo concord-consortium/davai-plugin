@@ -96,6 +96,18 @@ describe("validate", () => {
     expect((v as any).error).toMatch(/title/i);
   });
 
+  // DAVAI-126 matrix round 3 item E1: graphTitle fell back to `graph.value.title ?? graph.value.name
+  // ?? String(graph.value.id)` — a raw id in the corrective/result text. Now uses graphLabel.
+  it("uses graphLabel's descriptive fallback (not the raw id) in the no-dataContext corrective " +
+    "when the graph has neither title nor name", () => {
+    const noDcGraphs = [{ id: 99, xAttributeName: "Height" }];
+    const noDcCtx = { ...ctx, graphs: () => noDcGraphs, selectedGraphId: () => "99" } as unknown as ILocalToolContext;
+    const v = updateGraphTool.validate({ yAttribute: "Sleep" }, noDcCtx);
+    expect(v.ok).toBe(false);
+    expect((v as any).error).toContain('"the Height dot plot"');
+    expect((v as any).error).not.toContain('"99"');
+  });
+
   it("corrective when the resolved graph has no dataContext", () => {
     const noDcGraphs = [{ id: 99, title: "Orphan Graph" }];
     const noDcCtx = { ...ctx, graphs: () => noDcGraphs, selectedGraphId: () => "99" } as unknown as ILocalToolContext;
@@ -166,6 +178,20 @@ describe("execute: single-change updates", () => {
     });
     // Uses the NEW title in the result sentence once the rename succeeds.
     expect(out).toBe('Updated graph "Body Stats": title is now "Body Stats".');
+  });
+});
+
+describe("execute: graphLabel wiring (DAVAI-126 matrix round 3 E1)", () => {
+  it("uses graphLabel's descriptive fallback in the result sentence when the graph has neither " +
+    "title nor name, and no rename is requested", async () => {
+    const untitledGraphs = [{ id: 77, dataContext: "Mammals", xAttributeName: "Height" }];
+    const untitledCtx = {
+      ...ctx, graphs: () => untitledGraphs, selectedGraphId: () => "77",
+    } as unknown as ILocalToolContext;
+    const v = updateGraphTool.validate({ yAttribute: "Sleep" }, untitledCtx);
+    expect(v.ok).toBe(true);
+    const out = await updateGraphTool.execute((v as any).resolved, untitledCtx);
+    expect(out).toBe('Updated graph "the Height dot plot": y-axis is now Sleep.');
   });
 });
 

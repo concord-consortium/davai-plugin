@@ -2,6 +2,7 @@ import {
   getCollectionItemsForAttribute, getCollectionItemsForAttributePair, getGraphAdornments, getGraphByID
 } from "../codap-api-utils";
 import { computeGraphSketch } from "./graph-sketch";
+import { graphLabel } from "./tools/resolve";
 
 // The sonification store's explicit selection wins; otherwise, when the document has exactly
 // one graph, that graph is unambiguously "the graph" — clicking a graph in CODAP does not
@@ -103,8 +104,12 @@ export const buildGraphSeed = async (
           xUnit: findAttributeUnit(dc, x ?? y),
         });
 
+    // DAVAI-126 matrix round 3 item E1: was `graph?.title ?? graph?.name ?? graphId` — a raw id
+    // fallback the model would then have to echo back verbatim (evidence: seed handing out
+    // `885090985993956`). graphLabel is empty-string-safe and prefers a descriptive, resolvable
+    // phrase over a bare id.
     const lines = [
-      `Selected graph "${graph?.title ?? graph?.name ?? graphId}" (data context: ${graph?.dataContext}).`,
+      `Selected graph "${graphLabel(graph)}" (data context: ${graph?.dataContext}).`,
       `x-axis: ${x ?? "(none)"}; y-axis: ${y ?? "(none)"}. Adornments: ${adornmentText}.`,
     ];
     if (sketch) lines.push(sketch);

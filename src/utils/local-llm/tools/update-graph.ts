@@ -1,5 +1,5 @@
 import { ILocalTool } from "./registry";
-import { resolveAttribute, resolveGraph } from "./resolve";
+import { graphLabel, resolveAttribute, resolveGraph } from "./resolve";
 
 // The four changeable fields, in the order every enumerated result sentence uses.
 type ChangeField = "xAttributeName" | "yAttributeName" | "legendAttributeName" | "title";
@@ -19,7 +19,10 @@ export const updateGraphTool: ILocalTool = {
   validate(args, ctx) {
     const graph = resolveGraph(args.graph as string | undefined, ctx.graphs(), ctx.selectedGraphId());
     if (!graph.ok) return { ok: false, error: graph.error };
-    const graphTitle = graph.value.title ?? graph.value.name ?? String(graph.value.id);
+    // DAVAI-126 matrix round 3 item E1: was `graph.value.title ?? graph.value.name ??
+    // String(graph.value.id)` — graphLabel is empty-string-safe and prefers a descriptive,
+    // resolvable phrase over a bare id.
+    const graphTitle = graphLabel(graph.value);
 
     const xAttributeRaw = typeof args.xAttribute === "string" && args.xAttribute ? args.xAttribute : undefined;
     const yAttributeRaw = typeof args.yAttribute === "string" && args.yAttribute ? args.yAttribute : undefined;

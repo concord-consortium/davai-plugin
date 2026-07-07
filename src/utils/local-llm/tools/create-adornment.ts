@@ -1,5 +1,5 @@
 import { ILocalTool } from "./registry";
-import { resolveGraph } from "./resolve";
+import { graphLabel, resolveGraph } from "./resolve";
 
 // Canonical adornment type strings verified against the CODAP API documentation.
 const ADORNMENT_TYPES: { canonical: string; aliases: string[] }[] = [
@@ -31,8 +31,11 @@ const formatData = (type: string, d: Record<string, number> | undefined): string
 const hasAxis = (g: any): boolean => typeof g?.xAttributeName === "string" || typeof g?.yAttributeName === "string";
 const hasBothAxes = (g: any): boolean => typeof g?.xAttributeName === "string" && typeof g?.yAttributeName === "string";
 const isUnivariate = (g: any): boolean => hasAxis(g) && !hasBothAxes(g);
-const graphLabel = (g: any): string => g?.title ?? g?.name;
 
+// DAVAI-126 matrix round 3 item E1: this file's own local `graphLabel` was `g?.title ?? g?.name`
+// with NO empty-string guard and no descriptive fallback — evidence: the live trace
+// `Univariate graphs: .` (a single blank entry) when the only candidate had title: "". Now uses
+// the shared, RESOLVABLE graphLabel from resolve.ts, which never produces an empty string.
 const compatibleGraphsMessage = (type: string, graphs: any[]): string => {
   const wantScatterplot = type === "LSRL";
   const candidates = graphs.filter(wantScatterplot ? hasBothAxes : isUnivariate);
@@ -52,7 +55,10 @@ export const createAdornmentTool: ILocalTool = {
     if (!type) {
       return { ok: false, error: `Unknown adornment type "${args.type}". Available: mean, median, standard deviation, lsrl.` };
     }
-    return { ok: true, resolved: { graphId: graph.value.id, graphTitle: graph.value.title ?? graph.value.name, type } };
+    // DAVAI-126 matrix round 3 item E1: was `graph.value.title ?? graph.value.name` — evidence:
+    // `Added Mean adornment to "undefined"` (an unset field coerced through a template literal).
+    // graphLabel is empty-string-safe and prefers a descriptive, resolvable phrase over a raw id.
+    return { ok: true, resolved: { graphId: graph.value.id, graphTitle: graphLabel(graph.value), type } };
   },
   async execute(resolved, ctx) {
     const res = await ctx.sendCODAPRequest({

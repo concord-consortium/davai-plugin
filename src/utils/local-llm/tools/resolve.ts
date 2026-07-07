@@ -140,7 +140,15 @@ const graphBucket = (g: any): GraphBucket => {
   return "other";
 };
 
-const graphLabel = (g: any): string => g?.title ?? g?.name ?? "";
+// Bare title/name label — empty string ("" is a real value CODAP sends for an untitled graph, see
+// module doc below) is normalized away to undefined so every caller treats "no title" and "" the
+// same way, rather than one caller's `??` chain accidentally accepting an empty string as if it
+// were meaningful text (evidence: `Graphs: "" (dot plot of Height)` in the live traces). Used only
+// where a SHORT bare label is wanted inside a larger construction (quoted in describeGraphOption,
+// hashed for the true-duplicate tiebreak's identity key) — NOT the public, always-non-empty,
+// always-resolvable `graphLabel` below, which these two are intentionally kept distinct from.
+const nonEmpty = (s: unknown): string | undefined => (typeof s === "string" && s.length > 0 ? s : undefined);
+const rawGraphLabel = (g: any): string => nonEmpty(g?.title) ?? nonEmpty(g?.name) ?? "";
 
 // e.g. "Height" (dot plot of Height) / "Height vs Mass" (scatterplot of Height vs Mass) /
 // "Species" (bar chart of Species) / "Untitled" (graph). Shape word comes from `graphBucket`
@@ -155,6 +163,15 @@ const shapeWordFor = (g: any, bucket: GraphBucket): string => {
   return "graph";
 };
 
+// DAVAI-126 matrix round 3 item E1: uses the shared, public graphLabel (defined further below in
+// this file — a function BODY reference, evaluated only when describeGraphOption is actually
+// called, by which point module init has long finished, so this is not a temporal-dead-zone
+// issue) rather than the bare rawGraphLabel — evidence: the live trace `Graphs: "" (dot plot of
+// Height)`, i.e. THIS function quoting an empty string for an untitled/unnamed graph. graphLabel's
+// descriptive fallback tier means the quoted label itself is never blank, even though the
+// parenthetical shape clause already restates similar information (a little redundant for an
+// already-titled graph, e.g. `"Height" (dot plot of Height)`, but that redundancy already existed
+// before this fix for any titled graph and is not new).
 export const describeGraphOption = (g: any): string => {
   const label = graphLabel(g);
   const bucket = graphBucket(g);
@@ -187,8 +204,32 @@ const exampleGraphPhrase = (g: any): string => {
   const y = hasY(g) ? g.yAttributeName : undefined;
   if (bucket === "bivariate" && x && y) return `the ${x} vs ${y} scatterplot`;
   const shapeWord = shapeWordFor(g, bucket);
-  const axisWord = x ?? y ?? graphLabel(g);
+  const axisWord = x ?? y ?? rawGraphLabel(g);
   return `the ${axisWord} ${shapeWord}`;
+};
+
+// DAVAI-126 matrix round 3 item E1: the SHARED, PUBLIC graph label — every surface that prints a
+// graph reference (buildGraphSeed's header, describeGraphOption's corrective, create_adornment's
+// compatible-graphs lists, and every mutating tool's result string) must use this, so a model
+// echoing the label back always resolves via resolveGraph (rung 3 for a descriptive fallback,
+// rung 1 for a title/name). Fallback chain, each tier gated on non-emptiness (an empty string is
+// treated as ABSENT everywhere, never as a real "blank" label — the bug this fixes):
+//   1. non-empty title
+//   2. non-empty name
+//   3. a descriptive phrase reusing exampleGraphPhrase's rung-3-round-tripping shape logic — but
+//      ONLY when there is at least one axis to describe (exampleGraphPhrase's own last-ditch
+//      fallback is rawGraphLabel, which would otherwise contribute an already-ruled-out empty
+//      string here and produce a broken "the  graph" phrase)
+//   4. a bare id reference ("graph 885090985993956") for a graph with no title, no name, and no
+//      axes at all — still ACCEPTED back via rung 0 (E2), even though it is never the preferred
+//      display form.
+export const graphLabel = (g: any): string => {
+  const title = nonEmpty(g?.title);
+  if (title) return title;
+  const name = nonEmpty(g?.name);
+  if (name) return name;
+  if (hasX(g) || hasY(g)) return exampleGraphPhrase(g);
+  return `graph ${g?.id}`;
 };
 
 // Rung 4: replaces both prior failure messages (no-match "Unknown graph" and ambiguous "matches
@@ -207,14 +248,14 @@ const describeCorrective = (requested: string | undefined, candidates: any[]): s
 // True-duplicate tiebreak (user decision: pick most recent) — applies at rung 2 (resolveByName's
 // own "matches more than one") and rung 3 (a scoring tie), before either declares ambiguity. Only
 // fires when EVERY tied candidate is content-identical: same normalized display label
-// (title/name treated as one identity, same as graphLabel/graphTitlesForDisplay elsewhere in this
-// file — CODAP auto-generates a distinct internal `name` like "graph10" per graph even when the
-// user-visible title collides, so name is a fallback label, not an independent identity field),
-// same plotType, same x/y attribute names, same dataContext. CODAP component ids increase
+// (title/name treated as one identity, same as rawGraphLabel/graphTitlesForDisplay elsewhere in
+// this file — CODAP auto-generates a distinct internal `name` like "graph10" per graph even when
+// the user-visible title collides, so name is a fallback label, not an independent identity
+// field), same plotType, same x/y attribute names, same dataContext. CODAP component ids increase
 // monotonically with creation order (never reused, never reassigned), so the highest numeric id
 // among content-identical candidates is, by construction, the most recently created one.
 const contentKey = (g: any): string => JSON.stringify([
-  normalizeName(String(graphLabel(g))),
+  normalizeName(String(rawGraphLabel(g))),
   g?.plotType ?? null,
   g?.xAttributeName ?? null,
   g?.yAttributeName ?? null,
@@ -270,6 +311,30 @@ const resolveByAxes = (requested: string, graphs: any[]): Rung3Result => {
 
   const deduped = pickTrueDuplicate(winners);
   if (deduped) return { kind: "hit", value: deduped };
+
+  // DAVAI-126 matrix round 3 item E3: word-order tiebreak. Fires only when the true-duplicate
+  // tiebreak above did NOT resolve it (these are genuinely different graphs, e.g. axis-swapped
+  // mirror images) — evidence (4B/think): "Height vs Mass" tied between the x=Height,y=Mass graph
+  // and the x=Mass,y=Height graph, forcing an unnecessary rung-4 ask even though the request's OWN
+  // word order already disambiguates which one the user meant. A "<A> vs/versus <B>" phrase names
+  // A before the vs-word and B after it — check each tied graph's OWN x/y pair appears in that
+  // left-to-right order (A found before the vs-word position, B found after it), not a fixed
+  // parse of "the text before/after vs is exactly the x/y name" — so wrapping words ("the mass vs
+  // height graph") don't break the match. Fires only when EXACTLY ONE tied graph satisfies this;
+  // ties with no vs/versus phrasing, or where zero or more-than-one candidate matches the stated
+  // order, fall through to rung 4 exactly as before this fix.
+  const vsMatch = wanted.match(/\bvs\b|\bversus\b/);
+  if (vsMatch && typeof vsMatch.index === "number") {
+    const before = wanted.slice(0, vsMatch.index);
+    const after = wanted.slice(vsMatch.index + vsMatch[0].length);
+    const orderMatches = winners.filter((g) => {
+      const x = typeof g?.xAttributeName === "string" ? normalizeName(g.xAttributeName) : "";
+      const y = typeof g?.yAttributeName === "string" ? normalizeName(g.yAttributeName) : "";
+      return x.length > 0 && y.length > 0 && before.includes(x) && after.includes(y);
+    });
+    if (orderMatches.length === 1) return { kind: "hit", value: orderMatches[0] };
+  }
+
   return { kind: "tie", tied: winners };
 };
 
@@ -289,6 +354,22 @@ export const resolveGraph = (
     // dedupe is exactly the bug this design fixes.
     return { ok: false, error: describeCorrective(undefined, graphs) };
   }
+
+  // DAVAI-126 matrix round 3 item E2: rung 0, before rung 1 (title/name). A model can only echo
+  // back a numeric id if WE printed one to it in the first place (a seed header before E1, or any
+  // surface that still falls back to graphLabel's own last-ditch "graph <id>" tier) — evidence:
+  // the model faithfully copied the seed's `885090985993956` into get_graph_info/sonify calls and
+  // the pre-E2 resolver rejected it outright (5-call flail). An exact id match is unambiguous BY
+  // CONSTRUCTION (CODAP ids are unique), so it is never "repaired" — it IS the exact reference,
+  // the same way rung 1's exact-title match isn't repaired either. This only ever ACCEPTS ids;
+  // E1 makes sure printing one is now a last resort, not the norm. Accepts both the bare id
+  // ("885090985993956") and graphLabel's own "graph 885090985993956" phrasing — the CLOSURE
+  // requirement (E1) is that whatever graphLabel prints must resolve, and that fallback tier's
+  // literal text carries a "graph " prefix.
+  const trimmedRequest = requested.trim();
+  const idPart = trimmedRequest.replace(/^graph\s+/i, "");
+  const exactId = graphs.find((g) => String(g?.id) === trimmedRequest || String(g?.id) === idPart);
+  if (exactId) return { ok: true, value: exactId, repaired: false };
 
   const candidates = graphs.flatMap((g) => {
     const names = [g?.title, g?.name].filter((n): n is string => typeof n === "string" && n.length > 0);

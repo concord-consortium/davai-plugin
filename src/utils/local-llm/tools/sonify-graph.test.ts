@@ -34,3 +34,26 @@ it("explains when the graph is not sonifiable", async () => {
   expect(setSelectedGraphID).not.toHaveBeenCalled();
   expect(out).toMatch(/scatter plot or .*dot plot/i);
 });
+
+// DAVAI-126 matrix round 3 item E1: both messages fell back to `graph?.name ?? resolved.graphId`
+// (execute) or `graph?.name ?? graph.id` (ready-to-sonify) — a raw numeric id the model then
+// could not get accepted back (pre-E2). Now both use the shared graphLabel.
+describe("graphLabel wiring (DAVAI-126 matrix round 3 E1)", () => {
+  it("uses graphLabel's descriptive fallback (not the raw id) in the not-sonifiable message " +
+    "when the graph has no name", async () => {
+    (isGraphSonifiable as jest.Mock).mockReturnValue(false);
+    (getGraphByID as jest.Mock).mockResolvedValue({ id: 42, xAttributeName: "Height", yAttributeName: "Age" });
+    const v = sonifyGraphTool.validate({}, ctx);
+    const out = await sonifyGraphTool.execute((v as any).resolved, ctx);
+    expect(out).toContain('"the Height vs Age scatterplot"');
+    expect(out).not.toContain('"42"');
+  });
+
+  it("uses graphLabel's descriptive fallback in the ready-to-sonify message when the graph has no name", async () => {
+    (isGraphSonifiable as jest.Mock).mockReturnValue(true);
+    (getGraphByID as jest.Mock).mockResolvedValue({ id: 42, xAttributeName: "Height" });
+    const v = sonifyGraphTool.validate({}, ctx);
+    const out = await sonifyGraphTool.execute((v as any).resolved, ctx);
+    expect(out).toContain('"the Height dot plot"');
+  });
+});

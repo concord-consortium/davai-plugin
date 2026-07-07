@@ -4,7 +4,7 @@ import {
 import { computeGraphSketch } from "../graph-sketch";
 import { findAttributeUnit } from "../local-llm-prefetch";
 import { ILocalTool } from "./registry";
-import { resolveGraph } from "./resolve";
+import { graphLabel, resolveGraph } from "./resolve";
 
 // DAVAI-126 Task B: shown only when a sketch was actually produced (non-empty) — steers the
 // model toward using the client-computed facts in its answer instead of re-deriving (and
@@ -41,7 +41,9 @@ export const getGraphInfoTool: ILocalTool = {
     const adornmentText = adornments.length
       ? adornments.map((a) => `${a.type}: ${a.value ?? `mean ${a.mean}, min ${a.min}, max ${a.max}`}`).join("; ")
       : "none visible";
-    let result = `Graph "${graph?.title ?? graph?.name ?? resolved.graphId}" (data context: ${graph?.dataContext ?? "unknown"}). ${axes}. Adornments: ${adornmentText}.`;
+    // DAVAI-126 matrix round 3 item E1: was `graph?.title ?? graph?.name ?? resolved.graphId` —
+    // graphLabel is empty-string-safe and prefers a descriptive, resolvable phrase over a bare id.
+    let result = `Graph "${graphLabel(graph)}" (data context: ${graph?.dataContext ?? "unknown"}). ${axes}. Adornments: ${adornmentText}.`;
 
     // DAVAI-126 Task B: fetch axis values with the SAME fetchers buildGraphSeed uses (pair
     // fetcher for two axes, single-attribute fetcher for one) and reuse computeGraphSketch, so a

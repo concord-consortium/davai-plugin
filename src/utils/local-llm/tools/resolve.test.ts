@@ -1,6 +1,6 @@
 import {
   normalizeName, resolveByName, resolveDataContext, resolveCollection, resolveCollectionDefaultLeaf,
-  resolveAttribute, resolveGraph, extractBacktickRefs, listNames, describeGraphOption
+  resolveAttribute, resolveGraph, extractBacktickRefs, listNames, describeGraphOption, graphLabel
 } from "./resolve";
 
 const dc = {
@@ -167,6 +167,54 @@ describe("domain resolvers", () => {
   });
 });
 
+// DAVAI-126 matrix round 3 item E2: rung 0 — an exact numeric-id reference (e.g. echoed back from
+// a seed header that historically printed a bare id) must resolve, even though we never PRINT
+// bare ids as the primary label anymore (E1). Evidence: the model faithfully copied
+// `885090985993956` from the seed into get_graph_info/sonify calls and the resolver rejected it,
+// causing a 5-call flail. Rung 0 runs BEFORE rung 1 (title/name matching).
+describe("resolveGraph rung 0: exact numeric id (DAVAI-126 matrix round 3 E2)", () => {
+  it("an exact string-equal-to-id request resolves, not repaired (it IS an exact reference)", () => {
+    const graphs = [{ id: 885090985993956, title: "Heights" }];
+    const r = resolveGraph("885090985993956", graphs, null);
+    if (!r.ok) throw new Error(`should succeed, got error: ${r.error}`);
+    expect(r.value.id).toBe(885090985993956);
+    expect(r.repaired).toBe(false);
+  });
+
+  it("leading/trailing whitespace around the id is trimmed before comparison", () => {
+    const graphs = [{ id: 42, title: "Heights" }];
+    const r = resolveGraph("  42  ", graphs, null);
+    if (!r.ok) throw new Error(`should succeed, got error: ${r.error}`);
+    expect(r.value.id).toBe(42);
+    expect(r.repaired).toBe(false);
+  });
+
+  it("id matching takes priority over a coincidental title/name match (rung 0 before rung 1)", () => {
+    // Contrived: a graph's title happens to be the string form of a DIFFERENT graph's id.
+    const target = { id: 42, title: "Heights" };
+    const decoy = { id: 99, title: "42" };
+    const r = resolveGraph("42", [decoy, target], null);
+    if (!r.ok) throw new Error(`should succeed, got error: ${r.error}`);
+    expect(r.value.id).toBe(42);
+  });
+
+  it("a non-numeric string that happens to equal no id falls through to the rest of the ladder " +
+    "unaffected (no false positive)", () => {
+    const graphs = [{ id: 42, title: "Heights" }];
+    const r = resolveGraph("Heights", graphs, null);
+    if (!r.ok) throw new Error(`should succeed, got error: ${r.error}`);
+    expect(r.value.id).toBe(42);
+    expect(r.repaired).toBe(false); // still an exact title match via rung 1, untouched by rung 0
+  });
+
+  it("a request matching no graph's id and no other rung still produces the normal rung-4 corrective", () => {
+    const graphs = [{ id: 42, title: "Heights" }];
+    const r = resolveGraph("999999", graphs, null);
+    if (r.ok) throw new Error("should fail");
+    expect(r.error).toMatch(/no graph matches/i);
+  });
+});
+
 describe("resolveGraph rung 3: axis + plot-type matching (DAVAI-126)", () => {
   // Fixture used across this describe block: a Height dot plot and a Height-vs-Mass scatterplot,
   // both sharing "Height" so substring scoring must disambiguate via the OTHER axis / plot type.
@@ -252,6 +300,82 @@ describe("resolveGraph rung 3: axis + plot-type matching (DAVAI-126)", () => {
     const r = resolveGraph("the foo bar habitat graph", graphs, null);
     if (!r.ok) throw new Error(`should succeed, got error: ${r.error}`);
     expect(r.value.id).toBe(30);
+  });
+});
+
+// DAVAI-126 matrix round 3 item E3: a genuine rung-3 scoring tie between two graphs that are
+// axis-swapped mirror images of each other (x=Height,y=Mass vs x=Mass,y=Height) — both score
+// identically against "height vs mass" since scoring is substring containment, order-agnostic.
+// Evidence (4B/think): request "Height vs Mass" tied and forced an unnecessary rung-4 ask, even
+// though the request's OWN word order ("A vs B") unambiguously picks the x=A,y=B graph over the
+// x=B,y=A one. This tiebreak runs AFTER the true-duplicate tiebreak (which only fires for
+// content-identical graphs — these two are NOT identical, their axes are swapped) and BEFORE
+// falling to rung 4.
+describe("resolveGraph rung 3 word-order tiebreak (DAVAI-126 matrix round 3 E3)", () => {
+  const heightVsMass = { id: 1, title: "", xAttributeName: "Height", yAttributeName: "Mass" };
+  const massVsHeight = { id: 2, title: "", xAttributeName: "Mass", yAttributeName: "Height" };
+
+  it("the exact 4B/think scenario: \"Height vs Mass\" picks the x=Height,y=Mass graph, repaired", () => {
+    const r = resolveGraph("Height vs Mass", [heightVsMass, massVsHeight], null);
+    if (!r.ok) throw new Error(`should succeed, got error: ${r.error}`);
+    expect(r.value.id).toBe(1);
+    expect(r.repaired).toBe(true);
+  });
+
+  it("reversed request (\"Mass vs Height\") picks the OTHER graph", () => {
+    const r = resolveGraph("Mass vs Height", [heightVsMass, massVsHeight], null);
+    if (!r.ok) throw new Error(`should succeed, got error: ${r.error}`);
+    expect(r.value.id).toBe(2);
+    expect(r.repaired).toBe(true);
+  });
+
+  it("\"versus\" (spelled out) works the same as \"vs\"", () => {
+    const r = resolveGraph("Height versus Mass", [heightVsMass, massVsHeight], null);
+    if (!r.ok) throw new Error(`should succeed, got error: ${r.error}`);
+    expect(r.value.id).toBe(1);
+    expect(r.repaired).toBe(true);
+  });
+
+  it("word-order matching is case/normalization-insensitive (miscapitalized attribute names)", () => {
+    const r = resolveGraph("height VS mass", [heightVsMass, massVsHeight], null);
+    if (!r.ok) throw new Error(`should succeed, got error: ${r.error}`);
+    expect(r.value.id).toBe(1);
+  });
+
+  it("a tie with NO \"vs\"/\"versus\" phrasing in the request is unaffected — still falls to rung 4", () => {
+    // Neither "vs" nor "versus" appears, so the word-order tiebreak must not engage at all —
+    // existing tie behavior (rung 4 descriptive) applies exactly as before this fix.
+    const r = resolveGraph("height mass", [heightVsMass, massVsHeight], null);
+    if (r.ok) throw new Error("should fail — no vs/versus phrasing, so no tiebreak should apply");
+    expect(r.error).toMatch(/no graph matches/i);
+  });
+
+  it("a \"vs\" tie where NEITHER tied graph's axes match the request's word order falls to rung 4 " +
+    "(the tiebreak only fires when EXACTLY ONE candidate matches that specific order)", () => {
+    // Both graphs share the same x/y pair (not swapped), so a "vs" phrase naming a THIRD pair of
+    // attributes cannot match either graph's axes in the stated order — the tiebreak condition
+    // ("exactly one tied graph has normalized xAttributeName matching A and yAttributeName
+    // matching B") is never satisfied, so this must remain a genuine tie.
+    const dup1 = { id: 3, title: "", xAttributeName: "Height", yAttributeName: "Mass" };
+    const dup2 = { id: 4, title: "", xAttributeName: "Height", yAttributeName: "Mass", dataContext: "Other" };
+    const r = resolveGraph("Sleep vs Age", [dup1, dup2], null);
+    if (r.ok) throw new Error("should fail — the vs-phrase names attributes neither graph uses as its own x/y pair");
+    // (This particular request wouldn't even score >0 against these graphs' axis names, so it's
+    // actually a rung-3 MISS, not a tie — included to document the tiebreak is scoped to real ties.)
+    expect(r.error).toMatch(/no graph matches/i);
+  });
+
+  it("does not apply the word-order tiebreak to a true-duplicate tie (identical axes both ways) " +
+    "— the true-duplicate (newest-wins) tiebreak still takes precedence", () => {
+    // Two graphs with the SAME x/y pair (not swapped) tie on "height vs mass" — this is a
+    // true-duplicate case (content-identical), which the EXISTING tiebreak (newest wins) already
+    // resolves before the word-order tiebreak would even be considered.
+    const older = { id: 5, title: "Height vs Mass", plotType: "scatterPlot", xAttributeName: "Height", yAttributeName: "Mass", dataContext: "M" };
+    const newer = { id: 6, title: "Height vs Mass", plotType: "scatterPlot", xAttributeName: "Height", yAttributeName: "Mass", dataContext: "M" };
+    // Use a phrase that doesn't title-match so rung 3 (not rung 2) does the resolving.
+    const r = resolveGraph("the mass height scatterplot", [older, newer], null);
+    if (!r.ok) throw new Error(`should succeed, got error: ${r.error}`);
+    expect(r.value.id).toBe(6); // newest wins, same as before this fix
   });
 });
 
@@ -496,5 +620,57 @@ describe("helpers", () => {
     expect(s).toContain("A11");
     expect(s).not.toContain("A12");
     expect(s).toContain("…");
+  });
+});
+
+// DAVAI-126 matrix round 3 item E1: a shared, RESOLVABLE graph label — every surface that prints
+// a graph reference (seed header, tool results, correctives) uses this so a model echoing the
+// label back always resolves. Fallback chain: non-empty title -> non-empty name -> descriptive
+// phrase (reusing the rung-3 shape logic, e.g. "the Height dot plot") -> "graph <id>" when there
+// are no axes to describe at all. Empty string is treated as absent at every tier (evidence:
+// `Graphs: "" (dot plot of Height)` and `Added Mean adornment to "undefined"` in the live traces).
+describe("graphLabel (DAVAI-126 matrix round 3 E1)", () => {
+  it("non-empty title wins", () => {
+    expect(graphLabel({ id: 1, title: "Heights", name: "graph1" })).toBe("Heights");
+  });
+
+  it("empty-string title is treated as ABSENT, not as a real (blank) label — falls through to name", () => {
+    expect(graphLabel({ id: 1, title: "", name: "graph1" })).toBe("graph1");
+  });
+
+  it("empty-string title AND name falls all the way to the descriptive fallback", () => {
+    expect(graphLabel({ id: 1, title: "", name: "", xAttributeName: "Height" })).toBe("the Height dot plot");
+  });
+
+  it("no title, non-empty name uses the name", () => {
+    expect(graphLabel({ id: 1, name: "graph1", xAttributeName: "Height" })).toBe("graph1");
+  });
+
+  it("no title/name, univariate axes: descriptive fallback names the dot plot", () => {
+    expect(graphLabel({ id: 1, xAttributeName: "Height" })).toBe("the Height dot plot");
+  });
+
+  it("no title/name, bivariate axes: descriptive fallback names the scatterplot with vs word order", () => {
+    expect(graphLabel({ id: 1, xAttributeName: "Height", yAttributeName: "Mass" })).toBe("the Height vs Mass scatterplot");
+  });
+
+  it("no title/name/axes at all: falls back to a bare id reference", () => {
+    expect(graphLabel({ id: 885090985993956 })).toBe("graph 885090985993956");
+  });
+
+  it("CLOSURE: every fallback tier's label round-trips through resolveGraph", () => {
+    const titled = { id: 1, title: "Heights", name: "graph1", xAttributeName: "Height" };
+    const namedOnly = { id: 2, name: "graph2", xAttributeName: "Mass" };
+    const descriptiveDotPlot = { id: 3, xAttributeName: "Sleep" };
+    const descriptiveScatter = { id: 4, xAttributeName: "Weight", yAttributeName: "Age" };
+    const idOnly = { id: 5 };
+    const graphs = [titled, namedOnly, descriptiveDotPlot, descriptiveScatter, idOnly];
+
+    for (const g of graphs) {
+      const label = graphLabel(g);
+      const r = resolveGraph(label, graphs, null);
+      if (!r.ok) throw new Error(`label "${label}" for graph id ${g.id} did not resolve: ${r.error}`);
+      expect(r.value.id).toBe(g.id);
+    }
   });
 });

@@ -137,6 +137,31 @@ describe("buildGraphSeed", () => {
     expect(await buildGraphSeed("42", dcs)).toBe("");
   });
 
+  // DAVAI-126 matrix round 3 item E1: the header used to fall back to the raw numeric id
+  // (`g?.title ?? g?.name ?? graphId`) — evidence: seed handing out `885090985993956` to the
+  // model, which then couldn't get it accepted back by the pre-E2 resolver. Now it uses the
+  // shared, RESOLVABLE graphLabel, which prefers a descriptive phrase over a bare id.
+  it("uses the shared graphLabel (descriptive fallback, not the raw id) in the header when the " +
+    "graph has neither a title nor a name", async () => {
+    (getGraphByID as jest.Mock).mockResolvedValue({
+      id: 885090985993956, dataContext: "Mammals", xAttributeName: "Height", yAttributeName: null,
+    });
+    const seed = await buildGraphSeed("885090985993956", dcs);
+    expect(seed).toContain('Selected graph "the Height dot plot"');
+    expect(seed).not.toContain("885090985993956");
+  });
+
+  // Evidence: `Graphs: "" (dot plot of Height)` — an empty-string title must be treated as
+  // absent, not printed verbatim as a blank label.
+  it("treats an empty-string title as absent in the header, falling through graphLabel's chain", async () => {
+    (getGraphByID as jest.Mock).mockResolvedValue({
+      id: 42, title: "", dataContext: "Mammals", xAttributeName: "Height", yAttributeName: null,
+    });
+    const seed = await buildGraphSeed("42", dcs);
+    expect(seed).toContain('Selected graph "the Height dot plot"');
+    expect(seed).not.toContain('Selected graph ""');
+  });
+
   // DAVAI-126 Task B: the sketch (computed cluster/outlier/relationship facts) lives in the
   // STRUCTURE section — inserted after the axes/adornments line — so it survives the prompt
   // budget trim that drops only the Values line (see trimToBudget's SEED_VALUES_PREFIX in
