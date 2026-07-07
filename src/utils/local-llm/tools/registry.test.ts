@@ -36,6 +36,20 @@ it("returns the corrective validation error as the tool result", async () => {
   await expect(dispatchTool("demo_ok", { x: "bad" }, ctx)).resolves.toContain("Bad x");
 });
 
+// DAVAI-126 matrix round 4 Task F1: live traces showed the model treating a corrective
+// validation-failure string as if IT were the final answer (describe-graph) or repeating the
+// identical failing call verbatim (create-adornment) instead of retrying with a fix. A uniform,
+// explicit "call again / don't repeat / don't answer with this" instruction appended to every
+// validation failure (regardless of which tool) removes the ambiguity at the dispatch layer, so
+// no per-tool error string has to remember to say it.
+it("appends a uniform retry instruction naming the tool to every validation failure", async () => {
+  const out = await dispatchTool("demo_ok", { x: "bad" }, ctx);
+  expect(out).toBe(
+    "Bad x. Available: 1, 2. Call demo_ok again now with a corrected argument — do not repeat " +
+    "the same arguments, and do not answer with this message's text."
+  );
+});
+
 it("unknown tool yields a corrective result listing tool names — never rejects", async () => {
   const out = await dispatchTool("nope", {}, ctx);
   expect(out).toContain('Unknown tool "nope"');

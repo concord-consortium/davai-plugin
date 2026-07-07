@@ -48,7 +48,17 @@ export const dispatchTool = async (
   }
   try {
     const validation = tool.validate(args, ctx);
-    if (!validation.ok) return validation.error;
+    // DAVAI-126 matrix round 4 Task F1: live traces showed the model treating a validation-
+    // failure string as if it WERE the final answer, or repeating the identical failing call
+    // verbatim, instead of retrying with a fix. A uniform instruction appended here — at the one
+    // place every validate() failure funnels through — removes that ambiguity for every tool at
+    // once, so no per-tool error string has to remember to say it. execute() failures are NOT
+    // touched: they already carry their own tool-specific corrective guidance (e.g.
+    // create-adornment.ts's compatible-graphs listing).
+    if (!validation.ok) {
+      return `${validation.error} Call ${name} again now with a corrected argument — do not ` +
+        "repeat the same arguments, and do not answer with this message's text.";
+    }
     return await tool.execute(validation.resolved, ctx);
   } catch (err) {
     return `Tool "${name}" failed with an internal error: ${err instanceof Error ? err.message : String(err)}. You may retry once or answer with what you have.`;

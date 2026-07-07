@@ -87,6 +87,21 @@ it("steers the model away from a redundant call when the data is already in the 
   expect(getGraphInfoTool.description).toMatch(/call this only for a different graph or after making a change/i);
 });
 
+// DAVAI-126 matrix round 4 Task F2: live trace evidence — a small (1.7B/none) model copied the
+// argsExample's concrete fake graph name "Height vs Age" verbatim into a real call on a document
+// that had no such graph. The no-arg form must be the ONLY form in argsExample (nothing left to
+// copy); the optional "graph" usage still needs to be documented, but in description prose with
+// no concrete fake name to imitate.
+it("argsExample shows ONLY the no-arg form — no fake graph name for a small model to copy verbatim", () => {
+  expect(getGraphInfoTool.argsExample).toBe('{"tool": "get_graph_info"}');
+  expect(getGraphInfoTool.argsExample).not.toMatch(/height/i);
+});
+
+it("documents the optional graph argument in description prose without a concrete fake graph name", () => {
+  expect(getGraphInfoTool.description).toMatch(/pass "graph"/i);
+  expect(getGraphInfoTool.description).not.toMatch(/height/i);
+});
+
 // DAVAI-126 Task B: get_graph_info fetches axis values (via the same fetchers buildGraphSeed
 // uses) and appends the same computed sketch a describe request gets from the seed — so a
 // redundant-but-harmless call (e.g. after describing a DIFFERENT graph than the seeded one)

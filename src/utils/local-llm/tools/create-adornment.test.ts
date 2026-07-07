@@ -132,6 +132,43 @@ describe("corrective retry options on failure (DAVAI-126 eval round 2 item F)", 
     const out = await createAdornmentTool.execute((v as any).resolved, idOnlyCtx);
     expect(out).toContain("Scatterplots: the Height vs Mass scatterplot.");
   });
+
+  // DAVAI-126 matrix round 4 Task F1: live trace evidence — prompt said "the Height graph" but
+  // the model called with no graph arg, defaulted to the selected scatterplot, got back
+  // `Univariate graphs: Height.`, and then REPEATED the identical failing call instead of retrying
+  // with "graph": "Height". When exactly one compatible graph exists, name it directly as the
+  // retry argument (not just listed) so the model has a copy-pasteable fix, not just information.
+  it("names the single compatible graph as the retry argument when exactly one exists", async () => {
+    send.mockResolvedValue({ success: false, error: "not applicable" });
+    const v = createAdornmentTool.validate({ type: "mean", graph: "Heights" }, mixedCtx);
+    const out = await createAdornmentTool.execute((v as any).resolved, mixedCtx);
+    expect(out).toContain('Call create_adornment again now with "graph": "Heights".');
+  });
+
+  it("does not append a named-graph retry instruction when zero graphs are compatible", async () => {
+    send.mockResolvedValue({ success: false, error: "not applicable" });
+    const noneCompatibleCtx = {
+      ...ctx, graphs: () => [{ id: 44, title: "Empty" }], selectedGraphId: () => "44",
+    } as unknown as ILocalToolContext;
+    const v = createAdornmentTool.validate({ type: "mean" }, noneCompatibleCtx);
+    const out = await createAdornmentTool.execute((v as any).resolved, noneCompatibleCtx);
+    expect(out).not.toContain("Call create_adornment again now with");
+  });
+
+  it("does not append a named-graph retry instruction when multiple graphs are compatible", async () => {
+    send.mockResolvedValue({ success: false, error: "not applicable" });
+    const twoUnivariateCtx = {
+      ...ctx,
+      graphs: () => [
+        { id: 70, title: "Heights", xAttributeName: "Height" },
+        { id: 71, title: "Weights", xAttributeName: "Weight" },
+      ],
+      selectedGraphId: () => "70",
+    } as unknown as ILocalToolContext;
+    const v = createAdornmentTool.validate({ type: "mean" }, twoUnivariateCtx);
+    const out = await createAdornmentTool.execute((v as any).resolved, twoUnivariateCtx);
+    expect(out).not.toContain("Call create_adornment again now with");
+  });
 });
 
 // DAVAI-126 matrix round 3 item E1: resolved.graphTitle itself (used in BOTH the success and

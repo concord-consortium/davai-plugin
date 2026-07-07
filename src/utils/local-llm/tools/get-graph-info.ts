@@ -20,10 +20,16 @@ export const getGraphInfoTool: ILocalTool = {
   // "Selected graph data" section — the steering line below saves that redundant ~3-5s round
   // trip. Editing this string changes the generated tool-list section of the prompt (registry.ts
   // builds it from these descriptions), so the prompt-budget test re-measures with it included.
+  // DAVAI-126 matrix round 4 Task F2: live trace evidence — a small (1.7B/none) model copied the
+  // old argsExample's concrete fake graph name "Height vs Age" verbatim into a real call on a
+  // document with no such graph. The optional "graph" usage is now documented here in prose, with
+  // no concrete fake name for a small model to imitate; argsExample below shows the no-arg form
+  // ONLY, so there is nothing left to copy.
   description: "Get a graph's axes, attributes, and visible statistic adornments. Defaults to the selected graph. " +
     "The selected graph's structure and values are already in the \"Selected graph data\" section — call this " +
-    "only for a different graph or after making a change.",
-  argsExample: '{"tool": "get_graph_info"} or {"tool": "get_graph_info", "graph": "Height vs Age"}',
+    "only for a different graph or after making a change. Pass \"graph\" with a graph's title to inspect a " +
+    "different graph.",
+  argsExample: '{"tool": "get_graph_info"}',
   validate(args, ctx) {
     const graph = resolveGraph(args.graph as string | undefined, ctx.graphs(), ctx.selectedGraphId());
     if (!graph.ok) return { ok: false, error: graph.error };

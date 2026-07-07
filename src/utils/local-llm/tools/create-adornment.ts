@@ -41,7 +41,17 @@ const compatibleGraphsMessage = (type: string, graphs: any[]): string => {
   const candidates = graphs.filter(wantScatterplot ? hasBothAxes : isUnivariate);
   if (candidates.length === 0) return "No compatible graph exists — create one with create_graph.";
   const titles = candidates.map(graphLabel).join(", ");
-  return wantScatterplot ? `Scatterplots: ${titles}.` : `Univariate graphs: ${titles}.`;
+  const listing = wantScatterplot ? `Scatterplots: ${titles}.` : `Univariate graphs: ${titles}.`;
+  // DAVAI-126 matrix round 4 Task F1: live trace evidence — prompt said "the Height graph" but
+  // the model called with no graph arg, defaulted to the selected scatterplot, got back
+  // `Univariate graphs: Height.`, and REPEATED the identical failing call instead of retrying
+  // with "graph": "Height". When exactly one graph qualifies, name it directly as a
+  // copy-pasteable retry argument — not just listed information. Omitted when zero (nothing to
+  // name) or multiple (naming one would be a guess) compatible graphs exist.
+  if (candidates.length === 1) {
+    return `${listing} Call create_adornment again now with "graph": "${graphLabel(candidates[0])}".`;
+  }
+  return listing;
 };
 
 export const createAdornmentTool: ILocalTool = {
