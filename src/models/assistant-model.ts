@@ -550,8 +550,13 @@ export const AssistantModel = types
       try {
         self.setShowLoadingIndicator(true);
         self.isLoadingResponse = true;
-        // No responseStartTime is set here: the local path reports its reply via addDavaiMsg and
-        // never runs the timingDebug (Begin/Completed response time) path that reads it.
+        // Parity with the server path's responseStartTime/timingDebug pair (see
+        // handleMessageSubmit and finishStream/finalizeStream): the local path has no streaming
+        // "first chunk" moment, so "Begin response time" is posted immediately here rather than
+        // lazily on first content, and "Completed response time" is posted once the turn's reply
+        // (or its error) is known — see below.
+        self.responseStartTime = performance.now();
+        timingDebug(self.transcriptStore, "Begin response time", self.responseStartTime);
 
         if (!localLlmService.isWebGPUAvailable()) {
           self.addDavaiAnnouncement(WEBGPU_UNAVAILABLE_MESSAGE);
@@ -633,11 +638,19 @@ export const AssistantModel = types
         // The turn may have been cancelled/superseded while runLocalTurn was running; if so,
         // discard its (abandoned) result rather than posting a zombie reply.
         if (!isCurrent()) return;
+        // Posted BEFORE the reply, mirroring finalizeStream's non-streamed ordering on the server
+        // path: the local turn is single-shot (no streaming "first chunk" moment), so — like that
+        // non-streamed case — the debug row must not trail the DAVAI message, or it would break
+        // App's announce/speak effect, which keys off "last message is a DAVAI message".
+        timingDebug(self.transcriptStore, "Completed response time", self.responseStartTime);
         self.addDavaiMsg(response);
       } catch (err) {
         // A cancelled turn's rejection is expected fallout of interrupt(); don't surface an
-        // error zombie for it.
+        // error zombie for it (and don't log a stale turn's elapsed time either).
         if (!isCurrent()) return;
+        // The elapsed-to-failure is still the answer to "how long did it take". Posted before the
+        // announcement for the same last-message-stays-DAVAI reason as the success path above.
+        timingDebug(self.transcriptStore, "Completed response time", self.responseStartTime);
         console.error("Local model turn failed:", err);
         self.addDbgMsg("Local model turn failed", formatJsonMessage(err));
         self.addDavaiAnnouncement("Sorry, I ran into an error running the local model on that request.");

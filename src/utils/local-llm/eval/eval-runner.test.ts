@@ -37,6 +37,49 @@ it("ships the 11 spec cases with unique ids", () => {
   expect(miscap).toBeDefined();
 });
 
+describe("per-case timing (DAVAI-126 Task 12)", () => {
+  it("records durationMs per case using an injected clock, including a rejecting case", async () => {
+    // Sequence of performance.now()-like readings: one pair (start, end) per case, in call order.
+    const readings = [0, 1500, 1500, 1500, 1500, 4200]; // case0: 1500ms, case1: 0ms, case2: 2700ms
+    let i = 0;
+    const now = () => readings[i++];
+
+    const runTurn = jest.fn()
+      .mockResolvedValueOnce({ toolCalls: [], final: "The Height values range…" })
+      .mockRejectedValueOnce(new Error("engine died"))
+      .mockResolvedValueOnce({ toolCalls: ["create_graph"], final: "Created it." });
+
+    const results = await runLocalEval(cases, runTurn, now);
+
+    expect(results[0].durationMs).toBe(1500);
+    expect(results[1].durationMs).toBe(0);
+    expect(results[1].passed).toBe(false); // the rejection still fails the case
+    expect(results[2].durationMs).toBe(2700);
+  });
+
+  it("defaults the clock to performance.now() when none is injected", async () => {
+    const nowSpy = jest.spyOn(performance, "now");
+    nowSpy.mockReturnValueOnce(100).mockReturnValueOnce(350);
+    const runTurn = jest.fn().mockResolvedValueOnce({ toolCalls: [], final: "The Height values…" });
+
+    const results = await runLocalEval(cases.slice(0, 1), runTurn);
+
+    expect(results[0].durationMs).toBe(250);
+    nowSpy.mockRestore();
+  });
+
+  it("summarizeEval appends a one-decimal total duration in seconds", () => {
+    const withDurations = [
+      { id: "a", passed: true, failures: [], toolCalls: [], final: "x", durationMs: 42_300 },
+      { id: "b", passed: false, failures: ["nope"], toolCalls: [], final: "y", durationMs: 41_900 },
+    ];
+    const summary = summarizeEval(withDurations);
+    expect(summary).toContain("1/2 passed");
+    // Total = 42300 + 41900 = 84200ms = 84.2s, one decimal place.
+    expect(summary).toContain("84.2s");
+  });
+});
+
 it("selection-percentile's final-answer check uses a single widened count regex " +
   "(DAVAI-126 eval round 1 F3)", () => {
   const selectionCase = evalCases.find((c) => c.id === "selection-percentile");

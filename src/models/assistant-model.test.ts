@@ -725,6 +725,100 @@ describe("handleMessageSubmitLocalLlm (DAVAI-126)", () => {
       expect(buildGraphSeed).not.toHaveBeenCalled();
     });
   });
+
+  describe("response-time debug entries (DAVAI-126 Task 12: local-turn parity with the server path)", () => {
+    it("emits paired 'Begin response time' and 'Completed response time' entries on a successful turn", async () => {
+      const store = createLocalStore();
+      await store.handleMessageSubmitLocalLlm("describe the graph");
+
+      const messages = store.transcriptStore.messages;
+      const begin = messages.filter((m) => m.messageContent.description === "Begin response time");
+      const completed = messages.filter((m) => m.messageContent.description === "Completed response time");
+      expect(begin).toHaveLength(1);
+      expect(completed).toHaveLength(1);
+    });
+
+    it("posts 'Completed response time' BEFORE the DAVAI reply, keeping the reply as the last " +
+      "transcript row (mirrors finalizeStream's non-streamed ordering on the server path — " +
+      "App's announce/speak effect keys off 'last message is a DAVAI message')", async () => {
+      const store = createLocalStore();
+      await store.handleMessageSubmitLocalLlm("describe the graph");
+
+      const messages = store.transcriptStore.messages;
+      const replyIndex = messages.findIndex(
+        (m) => m.speaker === DAVAI_SPEAKER && m.messageContent.content === "A local description."
+      );
+      const completedIndex = messages.findIndex((m) => m.messageContent.description === "Completed response time");
+      expect(replyIndex).toBeGreaterThanOrEqual(0);
+      expect(completedIndex).toBeGreaterThanOrEqual(0);
+      expect(completedIndex).toBeLessThan(replyIndex);
+      expect(messages.at(-1)?.speaker).toBe(DAVAI_SPEAKER);
+    });
+
+    it("still emits 'Completed response time' on the error path (elapsed-to-failure answers " +
+      "'how long did it take')", async () => {
+      const store = createLocalStore();
+      (runLocalTurn as jest.Mock).mockRejectedValueOnce(new Error("engine crashed"));
+
+      await store.handleMessageSubmitLocalLlm("hello");
+
+      const messages = store.transcriptStore.messages;
+      const begin = messages.filter((m) => m.messageContent.description === "Begin response time");
+      const completed = messages.filter((m) => m.messageContent.description === "Completed response time");
+      expect(begin).toHaveLength(1);
+      expect(completed).toHaveLength(1);
+    });
+
+    it("reports an elapsed duration consistent with performance.now() deltas", async () => {
+      const store = createLocalStore();
+      let now = 1_000;
+      const nowSpy = jest.spyOn(performance, "now").mockImplementation(() => now);
+      (runLocalTurn as jest.Mock).mockImplementationOnce(async () => {
+        now += 4_230; // simulate 4.23s of local-model work
+        return "A local description.";
+      });
+
+      await store.handleMessageSubmitLocalLlm("describe the graph");
+
+      const completed = store.transcriptStore.messages.find(
+        (m) => m.messageContent.description === "Completed response time"
+      );
+      expect(completed?.messageContent.content).toBe("4.23 s");
+
+      nowSpy.mockRestore();
+    });
+
+    it("emits neither entry for a stale/cancelled turn (Begin fires before cancel is possible; " +
+      "only Completed's absence is meaningfully assertable for the stale resumption)", async () => {
+      // Begin response time is posted synchronously (before any `yield`), so it always fires for
+      // the turn that started. What the epoch guard must prevent is the STALE resumption (after
+      // cancel bumps the epoch) from posting its own late "Completed response time" once the
+      // abandoned runLocalTurn promise finally settles.
+      const store = createLocalStore();
+      let release: (v: string) => void = () => undefined;
+      (runLocalTurn as jest.Mock).mockImplementationOnce(
+        () => new Promise((res) => { release = res; })
+      );
+
+      const first = store.handleMessageSubmitLocalLlm("describe the graph");
+      await Promise.resolve();
+      await store.handleCancel();
+
+      const beforeSettle = store.transcriptStore.messages.filter(
+        (m) => m.messageContent.description === "Completed response time"
+      );
+      expect(beforeSettle).toHaveLength(0);
+
+      release("A late zombie reply.");
+      await first;
+      await Promise.resolve();
+
+      const afterSettle = store.transcriptStore.messages.filter(
+        (m) => m.messageContent.description === "Completed response time"
+      );
+      expect(afterSettle).toHaveLength(0);
+    });
+  });
 });
 
 describe("runLocalEvalTurns (DAVAI-126 Task 11)", () => {
