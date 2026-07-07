@@ -25,14 +25,22 @@ export const createGraphTool: ILocalTool = {
       if (!legend.ok) return { ok: false, error: legend.error };
       resolved.legendAttributeName = legend.value.attr.name;
     }
-    if (typeof args.title === "string" && args.title) resolved.title = args.title;
+    // DAVAI-126 matrix round 3 item E4: an absent/empty title used to leave the document graph
+    // itself UNTITLED (no title sent to CODAP at all) — evidence: `Created graph "" (Height vs
+    // Mass)`, which then poisoned a LATER case's resolveGraph corrective (the untitled graph
+    // showing up as a blank entry). Default here, at validate time (x/y are already resolved),
+    // so the default is always sent to CODAP, not just used for display. Empty-string title
+    // counts as absent, same as everywhere else this fix touches.
+    const explicitTitle = typeof args.title === "string" && args.title ? args.title : undefined;
+    resolved.title = explicitTitle ??
+      (resolved.yAttributeName ? `${resolved.xAttributeName} vs ${resolved.yAttributeName}` : String(resolved.xAttributeName));
     return { ok: true, resolved };
   },
   async execute(resolved, ctx) {
     const values: Record<string, unknown> = {
       type: "graph",
       dataContext: resolved.dataContextName,
-      ...(resolved.title ? { title: resolved.title } : {}),
+      title: resolved.title,
       xAttributeName: resolved.xAttributeName,
       ...(resolved.yAttributeName ? { yAttributeName: resolved.yAttributeName } : {}),
       ...(resolved.legendAttributeName ? { legendAttributeName: resolved.legendAttributeName } : {}),
@@ -45,7 +53,11 @@ export const createGraphTool: ILocalTool = {
       return `Graph creation failed: ${reason}.`;
     }
     await ctx.refreshGraphs();
-    const title = res?.values?.title ?? resolved.title ?? `${resolved.xAttributeName} graph`;
+    // DAVAI-126 matrix round 3 item E4: an empty-string echo from CODAP counts as absent (guard
+    // against `res?.values?.title` being a real API value of "") — falls back to our own
+    // (already-sent) default rather than printing a blank.
+    const echoedTitle = typeof res?.values?.title === "string" && res.values.title ? res.values.title : undefined;
+    const title = echoedTitle ?? resolved.title;
     return `Created graph "${title}" (${resolved.xAttributeName}${resolved.yAttributeName ? ` vs ${resolved.yAttributeName}` : ""}). It is now available for describing or sonifying.`;
   },
 };
