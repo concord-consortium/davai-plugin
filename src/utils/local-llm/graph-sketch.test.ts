@@ -212,12 +212,36 @@ describe("relationship strength-word boundaries (r computed from the fixture, no
     expect(sketch).toContain("Relationship: positive, moderate (r = 0.69).");
   });
 
-  it("r rounding to 0.7 -> strong (moderate/strong boundary is inclusive at 0.7; the strength " +
-    "decision uses the true r, not the 2dp-rounded display value — this fixture's true r is " +
-    "0.700758..., just above the boundary, and still displays as 0.7)", () => {
-    const ys = [4.48, 0.7, 5.61, 0.96, 5.87, 2.09, 8.74, 7.57, 11.17, 7.83];
+  it("r rounding to 0.7 -> strong (moderate/strong boundary is inclusive at 0.7)", () => {
+    const ys = [4.48, 0.7, 5.61, 0.96, 5.87, 2.09, 8.74, 7.57, 11.17, 7.83]; // true r = 0.700758...
     const sketch = computeGraphSketch({ xName: "X", yName: "Y", xValues: xs, yValues: ys });
     expect(sketch).toContain("Relationship: positive, strong (r = 0.7).");
+  });
+
+  // DAVAI-126 Task B review fix (coherence-for-audio): the strength word is derived from the
+  // DISPLAYED r (rounded to 2 sig figs), not the true r — a blind listener hears the word and the
+  // number together, and "moderate (r = 0.7)" or "weak (r = 0.3)" is a contradiction to them.
+  // These fixtures sit in the gap where true r and displayed r fall on opposite sides of a
+  // boundary, so they fail under any true-r-based strength decision.
+  it("true r just UNDER 0.7 that displays as 0.7 -> strong (word tracks the displayed value, " +
+    "never contradicting the number the listener hears)", () => {
+    const ys = [4.48, 0.69, 5.61, 0.95, 5.87, 2.08, 8.74, 7.56, 11.18, 7.82]; // true r = 0.699960...
+    const sketch = computeGraphSketch({ xName: "X", yName: "Y", xValues: xs, yValues: ys });
+    expect(sketch).toContain("Relationship: positive, strong (r = 0.7).");
+  });
+
+  it("true r just UNDER 0.3 that displays as 0.3 -> moderate (same coherence rule at the " +
+    "weak/moderate boundary)", () => {
+    const ys = [8.72, -0.9, 8.79, -2.76, 6.93, -2.69, 10.86, 7.03, 13.83, 5.17]; // true r = 0.297445...
+    const sketch = computeGraphSketch({ xName: "X", yName: "Y", xValues: xs, yValues: ys });
+    expect(sketch).toContain("Relationship: positive, moderate (r = 0.3).");
+  });
+
+  it("negative true r just under -0.7 magnitude that displays as -0.7 -> negative, strong " +
+    "(strength uses the absolute displayed value; direction word unchanged)", () => {
+    const ys = [-4.48, -0.69, -5.61, -0.95, -5.87, -2.08, -8.74, -7.56, -11.18, -7.82]; // true r = -0.699960...
+    const sketch = computeGraphSketch({ xName: "X", yName: "Y", xValues: xs, yValues: ys });
+    expect(sketch).toContain("Relationship: negative, strong (r = -0.7).");
   });
 });
 

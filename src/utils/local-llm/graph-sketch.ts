@@ -102,9 +102,13 @@ const pearsonR = (xs: number[], ys: number[]): number => {
 };
 
 // |r| < 0.3 weak, < 0.7 moderate, else strong — spec-defined boundaries (inclusive on the
-// moderate side at both 0.3 and 0.7).
-const strengthWord = (r: number): string => {
-  const abs = Math.abs(r);
+// moderate side at both 0.3 and 0.7). Task B review fix (coherence-for-audio): the caller passes
+// the DISPLAYED r (already rounded to 2 sig figs), not the true r — a blind listener hears the
+// word and the number as one unit, and deciding the word from the true r produces contradictions
+// like "moderate (r = 0.7)" (true r 0.6999...) or "weak (r = 0.3)" (true r 0.299...) exactly at
+// the boundaries. The word must always agree with the number actually spoken.
+const strengthWord = (displayedR: number): string => {
+  const abs = Math.abs(displayedR);
   if (abs < 0.3) return "weak";
   if (abs < 0.7) return "moderate";
   return "strong";
@@ -190,7 +194,11 @@ const buildScatterSketch = (input: IGraphSketchInput, pairs: { x: number; y: num
   ];
 
   const r = pearsonR(xs, ys);
-  lines.push(`Relationship: ${directionWord(r)}, ${strengthWord(r)} (r = ${roundSig(r, 2)}).`);
+  // Round for display FIRST, then derive the strength word FROM the displayed value (see
+  // strengthWord's comment) — the word must never contradict the number the listener hears.
+  // Direction still keys off the true r's sign (roundSig preserves sign, so they can't differ).
+  const rDisplay = roundSig(r, 2);
+  lines.push(`Relationship: ${directionWord(r)}, ${strengthWord(Number(rDisplay))} (r = ${rDisplay}).`);
 
   const lsrl = findLSRL(input.adornments);
   if (lsrl) {
