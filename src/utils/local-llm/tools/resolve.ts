@@ -101,8 +101,11 @@ type GraphBucket = "bivariate" | "univariate" | "other";
 const graphBucket = (g: any): GraphBucket => {
   const plotType = g?.plotType;
   if (plotType === "scatterPlot") return "bivariate";
-  if (plotType === "dotPlot") return "univariate";
-  if (typeof plotType === "string") return "other"; // e.g. "barChart", "binnedDotPlot", etc.
+  // Exactly the dot-plot value set graph-sonification-utils.ts's isUnivariateDotPlot recognizes
+  // (plotType === "dotPlot" || plotType === "binnedDotPlot") — a binned dot plot is still a dot
+  // plot to the user, so it must be matched by the "dot plot" rung-3 filter and labeled as one.
+  if (plotType === "dotPlot" || plotType === "binnedDotPlot") return "univariate";
+  if (typeof plotType === "string") return "other"; // e.g. "barChart"
   // plotType undefined: legitimate absence (types.maybe) — fall back to the pre-existing
   // axis-presence heuristic, unchanged from before this fix.
   if (hasX(g) && hasY(g)) return "bivariate";

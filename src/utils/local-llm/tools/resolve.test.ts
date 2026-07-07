@@ -425,6 +425,23 @@ describe("resolveGraph rung 3/4: plotType-driven shape words (DAVAI-126 review f
     expect(r.value.id).toBe(1);
   });
 
+  it("describeGraphOption labels a binnedDotPlot as \"dot plot\" — same dot-plot family as " +
+    "graph-sonification-utils' isUnivariateDotPlot (dotPlot || binnedDotPlot)", () => {
+    const binned = { id: 1, title: "Height", name: "g1", plotType: "binnedDotPlot", xAttributeName: "Height" };
+    expect(describeGraphOption(binned)).toBe('"Height" (dot plot of Height)');
+  });
+
+  it("a binnedDotPlot wins a \"height dot plot\" rung-3 request over a scatterplot", () => {
+    const binned = { id: 1, title: "Height", name: "g1", plotType: "binnedDotPlot", xAttributeName: "Height" };
+    const scatter = {
+      id: 2, title: "Height vs Mass", name: "g2", plotType: "scatterPlot",
+      xAttributeName: "Height", yAttributeName: "Mass",
+    };
+    const r = resolveGraph("height dot plot", [binned, scatter], null);
+    if (!r.ok) throw new Error(`should succeed, got error: ${r.error}`);
+    expect(r.value.id).toBe(1);
+  });
+
   it("CLOSURE PROPERTY still holds for a barChart candidate: its rung-4 example phrase says " +
     "\"bar chart\" (not \"dot plot\") and round-trips through rung 3 to itself", () => {
     const barChart = { id: 1, title: "Species", name: "g1", plotType: "barChart", xAttributeName: "Species" };
