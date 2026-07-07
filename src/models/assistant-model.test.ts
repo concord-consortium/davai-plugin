@@ -732,18 +732,44 @@ describe("handleMessageSubmitLocalLlm (DAVAI-126)", () => {
   });
 
   describe("response-time debug entries (DAVAI-126 Task 12: local-turn parity with the server path)", () => {
-    it("emits paired 'Begin response time' and 'Completed response time' entries on a successful turn", async () => {
+    // timingDebug posts an ELAPSED duration from responseStartTime, so a Begin posted at submit
+    // would always read 0 (the reported DAVAI-126 bug). The local turn is non-streamed (no
+    // "first chunk" moment), so — like finalizeStream's non-streamed branch on the server path —
+    // the Begin/Completed pair posts together at completion, begin == completed.
+    const timingRows = (store: { transcriptStore: { messages: { messageContent: { description?: string } }[] } }) =>
+      store.transcriptStore.messages.filter(
+        (m) => m.messageContent.description === "Begin response time" ||
+               m.messageContent.description === "Completed response time"
+      );
+
+    it("posts no timing entry at submit; emits Begin AND Completed together at completion, in " +
+      "that order, on a successful turn", async () => {
       const store = createLocalStore();
-      await store.handleMessageSubmitLocalLlm("describe the graph");
+      let release: (v: string) => void = () => undefined;
+      (runLocalTurn as jest.Mock).mockImplementationOnce(
+        () => new Promise((res) => { release = res; })
+      );
+
+      const turn = store.handleMessageSubmitLocalLlm("describe the graph");
+      await Promise.resolve();
+
+      // Nothing while the turn is in flight — a submit-time Begin would always read 0 elapsed.
+      expect(timingRows(store)).toHaveLength(0);
+
+      release("A local description.");
+      await turn;
 
       const messages = store.transcriptStore.messages;
-      const begin = messages.filter((m) => m.messageContent.description === "Begin response time");
-      const completed = messages.filter((m) => m.messageContent.description === "Completed response time");
-      expect(begin).toHaveLength(1);
-      expect(completed).toHaveLength(1);
+      const beginIndex = messages.findIndex((m) => m.messageContent.description === "Begin response time");
+      const completedIndex = messages.findIndex((m) => m.messageContent.description === "Completed response time");
+      expect(beginIndex).toBeGreaterThanOrEqual(0);
+      expect(completedIndex).toBeGreaterThanOrEqual(0);
+      expect(beginIndex).toBeLessThan(completedIndex);
+      // Exactly one of each: the pair posts once, at completion.
+      expect(timingRows(store)).toHaveLength(2);
     });
 
-    it("posts 'Completed response time' BEFORE the DAVAI reply, keeping the reply as the last " +
+    it("posts the Begin/Completed pair BEFORE the DAVAI reply, keeping the reply as the last " +
       "transcript row (mirrors finalizeStream's non-streamed ordering on the server path — " +
       "App's announce/speak effect keys off 'last message is a DAVAI message')", async () => {
       const store = createLocalStore();
@@ -753,28 +779,43 @@ describe("handleMessageSubmitLocalLlm (DAVAI-126)", () => {
       const replyIndex = messages.findIndex(
         (m) => m.speaker === DAVAI_SPEAKER && m.messageContent.content === "A local description."
       );
+      const beginIndex = messages.findIndex((m) => m.messageContent.description === "Begin response time");
       const completedIndex = messages.findIndex((m) => m.messageContent.description === "Completed response time");
       expect(replyIndex).toBeGreaterThanOrEqual(0);
+      expect(beginIndex).toBeGreaterThanOrEqual(0);
       expect(completedIndex).toBeGreaterThanOrEqual(0);
+      expect(beginIndex).toBeLessThan(completedIndex);
       expect(completedIndex).toBeLessThan(replyIndex);
       expect(messages.at(-1)?.speaker).toBe(DAVAI_SPEAKER);
     });
 
-    it("still emits 'Completed response time' on the error path (elapsed-to-failure answers " +
-      "'how long did it take')", async () => {
+    it("posts no timing entry at submit and emits the Begin/Completed pair, in order, at " +
+      "completion on the error path too (elapsed-to-failure answers 'how long did it take')", async () => {
       const store = createLocalStore();
-      (runLocalTurn as jest.Mock).mockRejectedValueOnce(new Error("engine crashed"));
+      let reject: (e: Error) => void = () => undefined;
+      (runLocalTurn as jest.Mock).mockImplementationOnce(
+        () => new Promise((_res, rej) => { reject = rej; })
+      );
 
-      await store.handleMessageSubmitLocalLlm("hello");
+      const turn = store.handleMessageSubmitLocalLlm("hello");
+      await Promise.resolve();
+
+      expect(timingRows(store)).toHaveLength(0);
+
+      reject(new Error("engine crashed"));
+      await turn;
 
       const messages = store.transcriptStore.messages;
-      const begin = messages.filter((m) => m.messageContent.description === "Begin response time");
-      const completed = messages.filter((m) => m.messageContent.description === "Completed response time");
-      expect(begin).toHaveLength(1);
-      expect(completed).toHaveLength(1);
+      const beginIndex = messages.findIndex((m) => m.messageContent.description === "Begin response time");
+      const completedIndex = messages.findIndex((m) => m.messageContent.description === "Completed response time");
+      expect(beginIndex).toBeGreaterThanOrEqual(0);
+      expect(completedIndex).toBeGreaterThanOrEqual(0);
+      expect(beginIndex).toBeLessThan(completedIndex);
+      expect(timingRows(store)).toHaveLength(2);
     });
 
-    it("reports an elapsed duration consistent with performance.now() deltas", async () => {
+    it("reports the SAME full elapsed duration on Begin and Completed (begin == completed), " +
+      "consistent with performance.now() deltas — a submit-time Begin would read 0.00 s", async () => {
       const store = createLocalStore();
       let now = 1_000;
       const nowSpy = jest.spyOn(performance, "now").mockImplementation(() => now);
@@ -785,20 +826,23 @@ describe("handleMessageSubmitLocalLlm (DAVAI-126)", () => {
 
       await store.handleMessageSubmitLocalLlm("describe the graph");
 
+      const begin = store.transcriptStore.messages.find(
+        (m) => m.messageContent.description === "Begin response time"
+      );
       const completed = store.transcriptStore.messages.find(
         (m) => m.messageContent.description === "Completed response time"
       );
+      expect(begin?.messageContent.content).toBe("4.23 s");
       expect(completed?.messageContent.content).toBe("4.23 s");
 
       nowSpy.mockRestore();
     });
 
-    it("emits neither entry for a stale/cancelled turn (Begin fires before cancel is possible; " +
-      "only Completed's absence is meaningfully assertable for the stale resumption)", async () => {
-      // Begin response time is posted synchronously (before any `yield`), so it always fires for
-      // the turn that started. What the epoch guard must prevent is the STALE resumption (after
-      // cancel bumps the epoch) from posting its own late "Completed response time" once the
-      // abandoned runLocalTurn promise finally settles.
+    it("emits neither entry for a stale/cancelled turn (the pair posts only at completion, under " +
+      "the same isCurrent() guard, so a stale resumption posts nothing)", async () => {
+      // The epoch guard must prevent the STALE resumption (after cancel bumps the epoch) from
+      // posting a late Begin/Completed pair once the abandoned runLocalTurn promise settles —
+      // and since nothing posts at submit anymore, the cancelled turn leaves NO timing rows.
       const store = createLocalStore();
       let release: (v: string) => void = () => undefined;
       (runLocalTurn as jest.Mock).mockImplementationOnce(
@@ -809,19 +853,13 @@ describe("handleMessageSubmitLocalLlm (DAVAI-126)", () => {
       await Promise.resolve();
       await store.handleCancel();
 
-      const beforeSettle = store.transcriptStore.messages.filter(
-        (m) => m.messageContent.description === "Completed response time"
-      );
-      expect(beforeSettle).toHaveLength(0);
+      expect(timingRows(store)).toHaveLength(0);
 
       release("A late zombie reply.");
       await first;
       await Promise.resolve();
 
-      const afterSettle = store.transcriptStore.messages.filter(
-        (m) => m.messageContent.description === "Completed response time"
-      );
-      expect(afterSettle).toHaveLength(0);
+      expect(timingRows(store)).toHaveLength(0);
     });
   });
 });
