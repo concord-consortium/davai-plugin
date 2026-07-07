@@ -73,7 +73,7 @@ export const runLocalTurn = async (args: ILocalTurnArgs): Promise<string> => {
         return text || FALLBACK_RESPONSE;
       }
       invalidRetried = true;
-      conversation.push({ role: "assistant", content: raw });
+      conversation.push({ role: "assistant", content: text });
       conversation.push({
         role: "user",
         content: `Your response was not valid: ${envelope.error} Respond with a single JSON object only, using one of the allowed forms.`,
@@ -83,7 +83,12 @@ export const runLocalTurn = async (args: ILocalTurnArgs): Promise<string> => {
 
     // tool_call
     toolRounds++;
-    conversation.push({ role: "assistant", content: raw });
+    // Push the think-stripped text, not raw: parsing already strips <think> tags when reading
+    // THIS envelope, but the pushed history is what future generations see, and an unstripped
+    // <think> block would otherwise bloat the conversation window every round once thinking is
+    // enabled (harmless without it — stripThink is a no-op on text with no <think> tags). Follows
+    // Qwen's own strip-history convention.
+    conversation.push({ role: "assistant", content: stripThink(raw) });
 
     const key = callKey(envelope.name, envelope.args);
     const isRepeat = lastCall !== null && lastCall.key === key;

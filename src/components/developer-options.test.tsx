@@ -220,6 +220,26 @@ describe("test developer options component", () => {
     expect(setEffortSpy).toHaveBeenCalledWith("");
   });
 
+  it("shows none/think effort options for a Local entry with effortLevels (DAVAI-126 thinking toggle)", () => {
+    // The effort menu logic (findEntryByLlmId/resolveEffort) is already generic — this pins that
+    // a Local llmList entry carrying effortLevels renders the same way any other model's does.
+    // findEntryByLlmId looks the model up by id IN llmList (not off llmId's own JSON), so the
+    // matching llmList entry must be present too — mirroring the Local WebGPU tests below.
+    mockConfig.llmList = [
+      { id: "mock", provider: "Mock", effortLevels: [] },
+      { id: "Qwen3-1.7B-q4f16_1-MLC", provider: "Local", effortLevels: ["none", "think"], defaultEffort: "none" },
+    ];
+    mockConfig.llmId = JSON.stringify({ id: "Qwen3-1.7B-q4f16_1-MLC", provider: "Local" });
+    mockConfig.effort = "none";
+
+    renderDeveloperOptions();
+
+    const select = screen.getByTestId("effort-select");
+    expect(select).toBeEnabled();
+    const opts = within(select).getAllByRole("option").map((o) => o.getAttribute("value"));
+    expect(opts).toEqual(["none", "think"]);
+  });
+
   it("disables Local model options and annotates them when WebGPU is unavailable (DAVAI-126)", () => {
     mockIsWebGPUAvailable.mockReturnValue(false);
     mockConfig.llmList = [

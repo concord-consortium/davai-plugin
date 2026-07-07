@@ -171,7 +171,7 @@ export const localLlmService = {
     settling.catch(() => undefined);
     return loadPromise;
   },
-  async generate(messages: IChatMsg[]): Promise<string> {
+  async generate(messages: IChatMsg[], opts?: { maxTokens?: number }): Promise<string> {
     if (!engine) throw new Error("Local model is not loaded.");
     // No response_format here: @mlc-ai/web-llm 0.2.84 routes a schema-less
     // response_format: {type:"json_object"} straight into compileJSONSchema(undefined), which
@@ -184,7 +184,7 @@ export const localLlmService = {
     const create = engine.chat.completions.create({
       messages,
       temperature: 0,
-      max_tokens: 1024,
+      max_tokens: opts?.maxTokens ?? 1024,
     });
     let timer: ReturnType<typeof setTimeout> | undefined;
     const timeout = new Promise<never>((_resolve, reject) => {

@@ -64,7 +64,7 @@ it("emits load-state changes to subscribers and supports unsubscribe", async () 
   expect(seen[seen.length - 1]).toBe("ready"); // no events after unsubscribe
 });
 
-it("generates unconstrained (no response_format) with temperature 0 / max_tokens 1024", async () => {
+it("generates unconstrained (no response_format) with temperature 0 / max_tokens 1024 by default", async () => {
   mockCreate.mockResolvedValue({ choices: [{ message: { content: "{\"tool\":\"final\",\"response\":\"hi\"}" } }] });
   await localLlmService.loadEngine("Qwen3-1.7B-q4f16_1-MLC");
   const out = await localLlmService.generate([{ role: "user", content: "hello" }]);
@@ -77,6 +77,14 @@ it("generates unconstrained (no response_format) with temperature 0 / max_tokens
   // 0.2.84's schema-less json_object mode is broken (compileJSONSchema(undefined) throws a
   // wasm BindingError as an uncaught worker-side rejection) — response_format must never be sent.
   expect(call).not.toHaveProperty("response_format");
+});
+
+it("threads an explicit maxTokens through to the engine call (DAVAI-126 thinking toggle)", async () => {
+  mockCreate.mockResolvedValue({ choices: [{ message: { content: "hi" } }] });
+  await localLlmService.loadEngine("Qwen3-1.7B-q4f16_1-MLC");
+  await localLlmService.generate([{ role: "user", content: "hello" }], { maxTokens: 2048 });
+  const call = mockCreate.mock.calls[0][0];
+  expect(call).toEqual(expect.objectContaining({ max_tokens: 2048 }));
 });
 
 describe("generate watchdog (DAVAI-126)", () => {

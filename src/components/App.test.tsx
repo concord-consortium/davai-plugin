@@ -217,6 +217,20 @@ describe("test load app", () => {
     expect(mockAssistantStore.handleMessageSubmit).not.toHaveBeenCalled();
   });
 
+  it("sets the effort before dispatching a local submission, mirroring the server branch " +
+    "(DAVAI-126 thinking toggle)", () => {
+    (mockAppConfig as any).isLocalLlm = true;
+    (mockAppConfig as any).effort = "think";
+
+    renderApp();
+
+    fireEvent.change(screen.getByTestId("chat-input-textarea"), { target: { value: "describe the graph" } });
+    fireEvent.click(screen.getByTestId("chat-input-send"));
+
+    expect(mockAssistantStore.setEffort).toHaveBeenCalledWith("think");
+    expect(mockAssistantStore.handleMessageSubmitLocalLlm).toHaveBeenCalledWith("describe the graph");
+  });
+
   it("clears Escape/Stop suppression on submit so the next Processing message is read", () => {
     const mockService = createMockSpeechService();
     render(

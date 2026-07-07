@@ -602,15 +602,22 @@ export const AssistantModel = types
           refreshDataContexts: async () => { await (self as any).updateDataContexts(); },
           refreshGraphs: async () => { await (self as any).updateGraphs(); },
         };
+        // Reuses the DAVAI-125 effort machinery as the thinking toggle: effort "think" turns
+        // Qwen3 thinking on (via the /think prompt switch) and doubles the completion-token
+        // budget below (thinking consumes completion tokens; the default 1024 would truncate
+        // mid-think). Any other effort value (including "" / "none") keeps today's /no_think
+        // behavior and the 1024 budget.
+        const thinking = self.effort === "think";
         const selectedId = toolCtx.selectedGraphId();
         const graphSeed: string = selectedId ? yield buildGraphSeed(String(selectedId), self.dataContexts ?? {}) : "";
         const systemPrompt = buildLocalSystemPrompt({
           toolDocs: buildToolDocs(),
           schemaDigest: buildSchemaDigest(self.dataContexts ?? {}),
           graphSeed,
+          thinking,
         });
         const response: string = yield runLocalTurn({
-          generate: (messages) => localLlmService.generate(messages),
+          generate: (messages) => localLlmService.generate(messages, { maxTokens: thinking ? 2048 : 1024 }),
           executeTool: (name, args) => dispatchTool(name, args, toolCtx),
           systemPrompt,
           turns: buildTranscriptTurns(priorMessages),
@@ -695,18 +702,22 @@ export const AssistantModel = types
           refreshDataContexts: async () => { await (self as any).updateDataContexts(); },
           refreshGraphs: async () => { await (self as any).updateGraphs(); },
         };
+        // Same thinking wiring as handleMessageSubmitLocalLlm (see its comment): effort "think"
+        // enables the /think prompt switch and doubles the completion-token budget.
+        const thinking = self.effort === "think";
         const selectedId = toolCtx.selectedGraphId();
         const graphSeed: string = selectedId ? yield buildGraphSeed(String(selectedId), self.dataContexts ?? {}) : "";
         const systemPrompt = buildLocalSystemPrompt({
           toolDocs: buildToolDocs(),
           schemaDigest: buildSchemaDigest(self.dataContexts ?? {}),
           graphSeed,
+          thinking,
         });
 
         const runTurn = async (prompt: string): Promise<IEvalTurnResult> => {
           const toolCalls: string[] = [];
           const final = await runLocalTurn({
-            generate: (messages) => localLlmService.generate(messages),
+            generate: (messages) => localLlmService.generate(messages, { maxTokens: thinking ? 2048 : 1024 }),
             executeTool: (name, args) => dispatchTool(name, args, toolCtx),
             systemPrompt,
             turns: [], // eval cases are independent single-shot prompts, not a growing conversation

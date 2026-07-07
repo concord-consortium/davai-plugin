@@ -181,6 +181,65 @@ it("re-checks isCancelled after generate() resolves a tool envelope and skips ex
   expect(generate).toHaveBeenCalledTimes(1);
 });
 
+describe("think-stripped assistant pushes (DAVAI-126 thinking toggle)", () => {
+  // Harmless without thinking (raw has no <think> tags to strip); with thinking enabled, this
+  // prevents <think>...</think> blocks from bloating the conversation window on every round and
+  // follows Qwen's own strip-history convention. Parsing already strips think tags when reading
+  // the CURRENT envelope — this is specifically about what gets pushed into history for the NEXT
+  // generation to see.
+  it("strips <think> tags from the assistant push on a tool-call round", async () => {
+    const rawWithThink = "<think>let me check the graph</think>{\"tool\":\"get_graph_info\"}";
+    const generate = jest.fn()
+      .mockResolvedValueOnce(rawWithThink)
+      .mockResolvedValueOnce("{\"tool\":\"final\",\"response\":\"done\"}");
+    const executeTool = jest.fn().mockResolvedValue("{\"success\":true}");
+    await runLocalTurn({ ...baseArgs, generate, executeTool });
+
+    const secondMessages = generate.mock.calls[1][0];
+    const assistantMsg = secondMessages.find((m: { role: string }) => m.role === "assistant");
+    expect(assistantMsg.content).not.toContain("<think>");
+    expect(assistantMsg.content).not.toContain("let me check the graph");
+    expect(assistantMsg.content).toBe("{\"tool\":\"get_graph_info\"}");
+  });
+
+  it("strips <think> tags from the assistant push on the invalid-envelope retry", async () => {
+    const rawWithThink = "<think>hmm not sure</think>I think the answer is 5";
+    const generate = jest.fn()
+      .mockResolvedValueOnce(rawWithThink)
+      .mockResolvedValueOnce("{\"tool\":\"final\",\"response\":\"The answer is 5.\"}");
+    const out = await runLocalTurn({ ...baseArgs, generate, executeTool: jest.fn() });
+    expect(out).toBe("The answer is 5.");
+
+    const retryMessages = generate.mock.calls[1][0];
+    const assistantMsg = retryMessages.find((m: { role: string }) => m.role === "assistant");
+    expect(assistantMsg.content).not.toContain("<think>");
+    expect(assistantMsg.content).not.toContain("hmm not sure");
+    expect(assistantMsg.content).toBe("I think the answer is 5");
+  });
+
+  it("the repeat-guard's synthetic nudge (carrying the executed tool result) is unaffected by " +
+    "think-stripping — only model-generated assistant pushes are stripped", async () => {
+    const graphEnvelope = "<think>build it</think>{\"tool\":\"create_graph\",\"dataContext\":\"D\",\"xAttr\":\"Height\"}";
+    const generate = jest.fn()
+      .mockResolvedValueOnce(graphEnvelope)
+      .mockResolvedValueOnce(graphEnvelope) // identical repeat — intercepted
+      .mockResolvedValueOnce("{\"tool\":\"final\",\"response\":\"Made it.\"}");
+    const executeTool = jest.fn().mockResolvedValue("{\"success\":true,\"id\":42}");
+    const out = await runLocalTurn({ ...baseArgs, generate, executeTool });
+
+    expect(out).toBe("Made it.");
+    const thirdMessages = generate.mock.calls[2][0];
+    // The repeated assistant envelope itself is still think-stripped.
+    const secondToLast = thirdMessages[thirdMessages.length - 2];
+    expect(secondToLast.role).toBe("assistant");
+    expect(secondToLast.content).toBe("{\"tool\":\"create_graph\",\"dataContext\":\"D\",\"xAttr\":\"Height\"}");
+    // The synthetic nudge (user role) still carries the executed tool's raw JSON result verbatim.
+    const last = thirdMessages[thirdMessages.length - 1];
+    expect(last.role).toBe("user");
+    expect(last.content).toContain("{\"success\":true,\"id\":42}");
+  });
+});
+
 describe("repeat-call guard (DAVAI-126 eval round 1 F1)", () => {
   // A small local model sometimes repeats an already-successful tool call verbatim instead of
   // answering. The guard tracks the previous EXECUTED call as `${name}::${JSON.stringify(args)}`

@@ -17,6 +17,40 @@ it("assembles instructions + generated tool docs + digest + seed, ending with /n
   expect(sys.trimEnd().endsWith("/no_think")).toBe(true);
 });
 
+describe("thinking toggle (DAVAI-126)", () => {
+  const baseInput = { toolDocs: "- t: d", schemaDigest: "D", graphSeed: "" };
+
+  it("ends with /think when thinking is true", () => {
+    const sys = buildLocalSystemPrompt({ ...baseInput, thinking: true });
+    expect(sys.trimEnd().endsWith("/think")).toBe(true);
+    expect(sys.trimEnd().endsWith("/no_think")).toBe(false);
+  });
+
+  it("ends with /no_think when thinking is false", () => {
+    const sys = buildLocalSystemPrompt({ ...baseInput, thinking: false });
+    expect(sys.trimEnd().endsWith("/no_think")).toBe(true);
+  });
+
+  it("ends with /no_think when thinking is omitted (default stays today's behavior)", () => {
+    const sys = buildLocalSystemPrompt(baseInput);
+    expect(sys.trimEnd().endsWith("/no_think")).toBe(true);
+  });
+
+  it("trim preserves /think under digest truncation (parallel of the /no_think survival test)", () => {
+    const sys = buildLocalSystemPrompt({
+      toolDocs: "- t: d\n  {\"tool\": \"t\"}",
+      schemaDigest: "D".repeat(1200),
+      graphSeed: `Selected graph "G".\nx-axis: A.\nValues (A) — 3 cases: ${"9".repeat(800)}`,
+      thinking: true,
+    });
+    const user = { role: "user" as const, content: "question" };
+    const tighter = trimToBudget([{ role: "system", content: sys }, user], 2000);
+    expect(tighter[0].content).toContain("[schema digest truncated]");
+    expect(tighter[0].content.trimEnd().endsWith("/think")).toBe(true);
+    expect(tighter[0].content.trimEnd().endsWith("/no_think")).toBe(false);
+  });
+});
+
 it("REAL assembled base prompt (all 8 tools, representative digest+seed) fits with ≥25% margin", () => {
   initializeLocalTools();
   const digest = buildSchemaDigest({

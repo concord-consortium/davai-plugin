@@ -658,6 +658,43 @@ describe("handleMessageSubmitLocalLlm (DAVAI-126)", () => {
     const contents = store.transcriptStore.messages.map((m) => m.messageContent.content);
     expect(contents).toContain("real reply");
   });
+
+  describe("thinking toggle (DAVAI-126)", () => {
+    // buildLocalSystemPrompt/local-llm-prompt is NOT mocked in this file, so the systemPrompt
+    // runLocalTurn receives is the REAL assembled prompt — its trailing /think or /no_think
+    // switch is a direct, faithful signal of what `thinking` was passed in as.
+    it("effort 'think' builds the prompt with thinking:true (ends with /think) and calls " +
+      "generate with maxTokens 2048", async () => {
+        const store = createLocalStore();
+        store.setEffort("think");
+        await store.handleMessageSubmitLocalLlm("describe the graph");
+
+        const args = (runLocalTurn as jest.Mock).mock.calls.at(-1)![0];
+        expect(args.systemPrompt.trimEnd().endsWith("/think")).toBe(true);
+
+        (localLlmService.generate as jest.Mock).mockClear();
+        await args.generate([{ role: "user", content: "hi" }]);
+        expect(localLlmService.generate).toHaveBeenCalledWith(
+          [{ role: "user", content: "hi" }], { maxTokens: 2048 }
+        );
+      });
+
+    it("effort '' (none/default) builds the prompt with thinking:false (ends with /no_think) " +
+      "and calls generate with maxTokens 1024", async () => {
+        const store = createLocalStore();
+        store.setEffort("");
+        await store.handleMessageSubmitLocalLlm("describe the graph");
+
+        const args = (runLocalTurn as jest.Mock).mock.calls.at(-1)![0];
+        expect(args.systemPrompt.trimEnd().endsWith("/no_think")).toBe(true);
+
+        (localLlmService.generate as jest.Mock).mockClear();
+        await args.generate([{ role: "user", content: "hi" }]);
+        expect(localLlmService.generate).toHaveBeenCalledWith(
+          [{ role: "user", content: "hi" }], { maxTokens: 1024 }
+        );
+      });
+  });
 });
 
 describe("runLocalEvalTurns (DAVAI-126 Task 11)", () => {
@@ -1033,5 +1070,49 @@ describe("runLocalEvalTurns (DAVAI-126 Task 11)", () => {
       // eslint-disable-next-line no-console
       (console.log as jest.Mock).mockRestore();
     });
+  });
+
+  describe("thinking toggle (DAVAI-126)", () => {
+    it("effort 'think' builds the eval prompt with thinking:true and calls generate with " +
+      "maxTokens 2048", async () => {
+        const store = createLocalStore();
+        store.setEffort("think");
+        jest.spyOn(console, "log").mockImplementation(() => undefined);
+
+        await store.runLocalEvalTurns(twoCases as any);
+
+        const args = (runLocalTurn as jest.Mock).mock.calls.at(-1)![0];
+        expect(args.systemPrompt.trimEnd().endsWith("/think")).toBe(true);
+
+        (localLlmService.generate as jest.Mock).mockClear();
+        await args.generate([{ role: "user", content: "hi" }]);
+        expect(localLlmService.generate).toHaveBeenCalledWith(
+          [{ role: "user", content: "hi" }], { maxTokens: 2048 }
+        );
+
+        // eslint-disable-next-line no-console
+        (console.log as jest.Mock).mockRestore();
+      });
+
+    it("effort '' builds the eval prompt with thinking:false and calls generate with " +
+      "maxTokens 1024", async () => {
+        const store = createLocalStore();
+        store.setEffort("");
+        jest.spyOn(console, "log").mockImplementation(() => undefined);
+
+        await store.runLocalEvalTurns(twoCases as any);
+
+        const args = (runLocalTurn as jest.Mock).mock.calls.at(-1)![0];
+        expect(args.systemPrompt.trimEnd().endsWith("/no_think")).toBe(true);
+
+        (localLlmService.generate as jest.Mock).mockClear();
+        await args.generate([{ role: "user", content: "hi" }]);
+        expect(localLlmService.generate).toHaveBeenCalledWith(
+          [{ role: "user", content: "hi" }], { maxTokens: 1024 }
+        );
+
+        // eslint-disable-next-line no-console
+        (console.log as jest.Mock).mockRestore();
+      });
   });
 });

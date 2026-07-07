@@ -7,12 +7,16 @@ import { IChatMsg } from "./local-llm-service";
 export const DEFAULT_PROMPT_BUDGET_CHARS = (8192 - 1024) * 3;
 const MAX_TRANSCRIPT_TURNS = 6;
 const NO_THINK = "/no_think";
+const THINK = "/think";
+// Both switch tokens, so trim's switch-preservation logic can recognize whichever one the
+// prompt was built with without hardcoding a single value.
+const THINK_SWITCHES = [NO_THINK, THINK];
 
 const SEED_HEADER = "### Selected graph data:";
 const SEED_VALUES_PREFIX = "Values";
 const DIGEST_HEADER = "### Datasets (schema):";
 
-export interface ILocalPromptInput { toolDocs: string; schemaDigest: string; graphSeed: string; }
+export interface ILocalPromptInput { toolDocs: string; schemaDigest: string; graphSeed: string; thinking?: boolean; }
 
 export const buildLocalSystemPrompt = (input: ILocalPromptInput): string => {
   const parts = [
@@ -21,7 +25,8 @@ export const buildLocalSystemPrompt = (input: ILocalPromptInput): string => {
     `${DIGEST_HEADER}\n${input.schemaDigest || "(no datasets open)"}`,
   ];
   if (input.graphSeed) parts.push(`${SEED_HEADER}\n${input.graphSeed}`);
-  return `${parts.join("\n\n")}\n\n${NO_THINK}`;
+  const thinkSwitch = input.thinking ? THINK : NO_THINK;
+  return `${parts.join("\n\n")}\n\n${thinkSwitch}`;
 };
 
 export const buildTranscriptTurns = (
@@ -42,7 +47,8 @@ export const buildTranscriptTurns = (
 
 // Trim priority v2: (1) drop the seed VALUES line (structure/adornments stay), (2) drop
 // oldest transcript turns, (3) truncate the schema digest. Instructions and tool docs are
-// never trimmed — they are the capability surface. /no_think always survives (re-appended).
+// never trimmed — they are the capability surface. Whichever think-switch (/no_think or
+// /think) the prompt ends with always survives (re-appended).
 export const trimToBudget = (messages: IChatMsg[], maxChars = DEFAULT_PROMPT_BUDGET_CHARS): IChatMsg[] => {
   const total = (msgs: IChatMsg[]) => msgs.reduce((n, m) => n + m.content.length, 0);
   const out = messages.map((m) => ({ ...m }));
@@ -68,8 +74,9 @@ export const trimToBudget = (messages: IChatMsg[], maxChars = DEFAULT_PROMPT_BUD
     const room = Math.max(0, maxChars - others - 64);
     const content = sys().content;
     const keep = content.slice(0, room);
-    const noThink = content.endsWith(NO_THINK) ? `\n${NO_THINK}` : "";
-    out[0] = { ...sys(), content: `${keep}\n[schema digest truncated]${noThink}` };
+    const trailingSwitch = THINK_SWITCHES.find((s) => content.endsWith(s));
+    const switchSuffix = trailingSwitch ? `\n${trailingSwitch}` : "";
+    out[0] = { ...sys(), content: `${keep}\n[schema digest truncated]${switchSuffix}` };
   }
   return out;
 };
