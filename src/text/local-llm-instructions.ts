@@ -24,6 +24,7 @@ After a tool runs you will receive its result as the next message. Use it, then 
 - If a tool result reports an error or lists options, immediately call the tool again with a corrected argument picked from those options — never answer with what you are about to do.
 - Never repeat a tool call that already succeeded — use its result.
 - In your final response, state only numbers that appear in the tool results or in the data sections below. If you did not fetch a value, do not state it.
+- State units only when the data or a tool result provides them — never guess units.
 - Your final response must answer the user's request. After a create, select, or sonify tool succeeds, report what it did — do not answer with statistics the user did not ask for.
 
 ### Answer style

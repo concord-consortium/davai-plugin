@@ -72,6 +72,10 @@ it("REAL assembled base prompt (all 12 tools, representative digest+seed) fits w
   // phrasing (registration order also changed, which doesn't affect total doc length). Re-
   // measured: 3504 → 3605 docs chars, 7541 → 7642 prompt chars, margin ~53.2% → ~52.6%, still
   // comfortably over the ≥25% this test requires. No threshold change needed.
+  // DAVAI-126 matrix round 5 Task G2: added one Grounding rule line ("never guess units") to
+  // localLlmInstructions — docs chars unchanged (this lives in instructions, not tool docs); this
+  // fixture's assembled prompt grew by that line's length, margin ~52.6% → ~52.0%. No threshold
+  // change needed.
   initializeLocalTools();
   const digest = buildSchemaDigest({
     Mammals: { name: "Mammals", collections: [{ name: "Cases", attrs: Array.from({ length: 12 }, (_, i) => ({ name: `Attr_${i}`, type: "numeric" })) }] },

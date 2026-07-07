@@ -51,3 +51,14 @@ it("instructs the model to answer the request, not to summarize whatever the las
     "tool succeeds, report what it did — do not answer with statistics the user did not ask for."
   );
 });
+
+// DAVAI-126 matrix round 5 Task G2: two models across two eval rounds invented units absent from
+// the data — a 4B said "kilograms" for Mass, and this round's 1.7B said "units: cm" for Height
+// (wrong — meters) in the create-graph case. Invented units are actively harmful misinformation
+// for a blind user who cannot see the data to catch the error themselves.
+it("instructs the model never to guess units (DAVAI-126 matrix round 5 Task G2 — 4B invented " +
+  "\"kilograms\" for Mass, 1.7B invented \"units: cm\" for Height when the true unit was meters)", () => {
+  expect(localLlmInstructions).toContain(
+    "State units only when the data or a tool result provides them — never guess units."
+  );
+});

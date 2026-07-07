@@ -121,6 +121,24 @@ describe("graph sketch appended to the tool result", () => {
     );
   });
 
+  // DAVAI-126 matrix round 5 Task G3: the one round-5 failure — after create_graph succeeded, the
+  // model fetched get_graph_info and followed the describe-checklist so literally that its final
+  // never mentioned a graph was created at all (failed /graph|plot/i; the answer began "Axes:
+  // x-axis is..."). The checklist steered a post-create fetch into pure description, silently
+  // dropping the action the user actually cares about hearing confirmed. One added clause fixes
+  // it: acknowledge the just-completed action before falling into the description checklist.
+  it("extends the checklist with an action-first clause so a post-create/change fetch " +
+    "acknowledges the action before describing (DAVAI-126 matrix round 5 Task G3)", async () => {
+    (getCollectionItemsForAttributePair as jest.Mock).mockResolvedValue([
+      { id: "1", values: { Height: 1, Age: 2 } },
+      { id: "2", values: { Height: 2, Age: 4 } },
+      { id: "3", values: { Height: 3, Age: 6 } },
+    ]);
+    const v = getGraphInfoTool.validate({}, ctx);
+    const out = await getGraphInfoTool.execute((v as any).resolved, ctx);
+    expect(out).toContain("If you just created or changed a graph, say that first.");
+  });
+
   it("omits both the sketch and the checklist line when there's not enough numeric data " +
     "(fewer than 2 numeric pairs)", async () => {
     (getCollectionItemsForAttributePair as jest.Mock).mockResolvedValue([

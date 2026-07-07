@@ -9,9 +9,15 @@ import { graphLabel, resolveGraph } from "./resolve";
 // DAVAI-126 Task B: shown only when a sketch was actually produced (non-empty) — steers the
 // model toward using the client-computed facts in its answer instead of re-deriving (and
 // possibly inventing) cluster/outlier/relationship claims on its own.
+// DAVAI-126 matrix round 5 Task G3: the one round-5 failure — after create_graph succeeded, the
+// model fetched get_graph_info and followed this checklist so literally that its final never
+// mentioned a graph was created at all (failed /graph|plot/i; the answer began "Axes: x-axis
+// is..."). The checklist steered a post-create/change fetch into pure description, silently
+// dropping the action the user most wants confirmed. The added clause comes FIRST so the model
+// acknowledges the action before falling into the description checklist.
 const DESCRIBE_CHECKLIST =
-  "Describe: axes and units, where most points lie, the outliers above, and what the " +
-  "relationship numbers mean in plain words.";
+  "If you just created or changed a graph, say that first. Describe: axes and units, where most " +
+  "points lie, the outliers above, and what the relationship numbers mean in plain words.";
 
 export const getGraphInfoTool: ILocalTool = {
   name: "get_graph_info",

@@ -52,3 +52,70 @@ it("still strips <think> and recovers embedded JSON", () => {
     raw: 'Sure! {"tool":"get_graph_info"} thanks'.replace(/<think>[\s\S]*?<\/think>/g, "").trim(),
   });
 });
+
+// DAVAI-126 matrix round 5 Task G1: a live 1.7B final arrived as pretty-printed JSON missing its
+// closing brace, and the OLD fallback (extractJson throws when no "}" exists at all → parseEnvelope
+// returns kind: "invalid") surfaced the raw envelope text as if it were speakable prose — a screen
+// reader would speak "open brace, tool, final, comma...". A malformed "final" attempt must never
+// leak raw JSON syntax as the spoken response; recover the response string tolerantly instead.
+describe("recovers a malformed \"final\" envelope instead of surfacing raw JSON (DAVAI-126 matrix round 5 Task G1)", () => {
+  it("recovers the exact live sample: pretty-printed final envelope missing its closing brace", () => {
+    const raw = '{\n  "tool": "final",\n  "response": "The graph displays the \'Height\' attribute of ' +
+      "mammals. Values range from about 0.2 to 6 meters, with most mammals clustering between 1 " +
+      "and 2 meters. There are a few outliers with notably taller heights, with data points " +
+      'extending much higher."';
+    expect(parseEnvelope(raw)).toEqual({
+      kind: "final",
+      response: "The graph displays the 'Height' attribute of mammals. Values range from about 0.2 " +
+        "to 6 meters, with most mammals clustering between 1 and 2 meters. There are a few outliers " +
+        "with notably taller heights, with data points extending much higher.",
+    });
+  });
+
+  it("leaves a well-formed final envelope unchanged (no over-eager recovery)", () => {
+    expect(parseEnvelope('{"tool":"final","response":"Done."}')).toEqual({ kind: "final", response: "Done." });
+  });
+
+  it("leaves a well-formed tool_call envelope unchanged", () => {
+    expect(parseEnvelope('{"tool":"get_stats","dataContext":"Mammals","attribute":"Height"}')).toEqual({
+      kind: "tool_call", name: "get_stats",
+      args: { dataContext: "Mammals", attribute: "Height" },
+      raw: '{"tool":"get_stats","dataContext":"Mammals","attribute":"Height"}',
+    });
+  });
+
+  it("recovers an unterminated response string cut off mid-sentence", () => {
+    const raw = '{"tool": "final", "response": "The mean height is about 1.4 meters and most ' +
+      "mammals fall between 1 and 2 meters, though a few much taller outliers pull the average";
+    expect(parseEnvelope(raw)).toEqual({
+      kind: "final",
+      response: "The mean height is about 1.4 meters and most mammals fall between 1 and 2 meters, " +
+        "though a few much taller outliers pull the average",
+    });
+  });
+
+  it("recovers a response string containing escaped quotes", () => {
+    const raw = '{\n  "tool": "final",\n  "response": "The graph is titled \\"Height vs Age\\" and ' +
+      'shows a positive trend."';
+    expect(parseEnvelope(raw)).toEqual({
+      kind: "final",
+      response: 'The graph is titled "Height vs Age" and shows a positive trend.',
+    });
+  });
+
+  it("leaves garbage JSON without a \"final\" tool attempt on the existing invalid fallback", () => {
+    const result = parseEnvelope("not json at all, no tool field here");
+    expect(result.kind).toBe("invalid");
+  });
+
+  it("leaves garbage JSON that merely mentions \"final\" as a value (not tool: final) on the " +
+    "existing invalid fallback", () => {
+    const result = parseEnvelope('{"someField": "final", "other": "stuff"');
+    expect(result.kind).toBe("invalid");
+  });
+
+  it("does not recover when there is no response field at all to salvage", () => {
+    const result = parseEnvelope('{\n  "tool": "final",\n  "notResponse": "oops"');
+    expect(result.kind).toBe("invalid");
+  });
+});
