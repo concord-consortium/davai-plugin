@@ -76,4 +76,19 @@ export const evalCases: IEvalCase[] = [
   // a natural-language superlative question, no explicit tool/attribute name in the prompt.
   { id: "find-heaviest", prompt: "Which mammal is the heaviest?",
     expectTools: { contains: ["find_cases"] }, expectFinal: { matches: [/elephant/i, /6400|6,400/] } },
+  // DAVAI-126 Task H: live hallucination report — a Diet x Habitat graph (both categorical) is
+  // created here so the next case can describe it. Runs after find-heaviest (which relies on the
+  // post-group_by hierarchy from group-by-diet); creating a second graph here doesn't disturb
+  // that prior state since find-heaviest has already run.
+  { id: "create-categorical-graph", prompt: "Make a graph of Diet versus Habitat.",
+    expectTools: { contains: ["create_graph"] }, expectFinal: { matches: [/graph|plot/i], notMatches: [/fail/i] } },
+  // DAVAI-126 Task H: the regression test for the live hallucination report. Before this task,
+  // computeGraphSketch was numeric-only and returned "" for a categorical x categorical graph,
+  // so get_graph_info handed the model structure only — the model then filled the vacuum with
+  // invented world-knowledge categories ("herbivore, carnivore, omnivore", "forest, grassland,
+  // aquatic") that don't exist anywhere in the Mammals dataset. The notMatches list below is
+  // EXACTLY that hallucination.
+  { id: "describe-categorical", prompt: "Describe the Diet vs Habitat graph.",
+    expectTools: { contains: ["get_graph_info"] },
+    expectFinal: { matches: [/meat/i, /land/i, /\d/], notMatches: [/herbivore|carnivore|omnivore|forest|grassland|aquatic/i] } },
 ];

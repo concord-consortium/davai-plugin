@@ -92,14 +92,16 @@ describe("onCaseStart/onCaseResult callbacks (DAVAI-126 matrix round 3 E8)", () 
   });
 });
 
-it("ships the 16 spec cases with unique ids", () => {
+it("ships the 18 spec cases with unique ids", () => {
   // DAVAI-126 Task A: added "describe-by-axes" to exercise resolveGraph's rung 3.
   // DAVAI-126 Task C: added "set-attribute-unit" (update_attribute) and "find-heaviest"
   // (find_cases), bringing the total from 12 to 14.
   // DAVAI-126 Task D: added "update-graph-yaxis" (update_graph) and "group-by-diet" (group_by),
   // bringing the total from 14 to 16.
-  expect(evalCases).toHaveLength(16);
-  expect(new Set(evalCases.map((c) => c.id)).size).toBe(16);
+  // DAVAI-126 Task H: added "create-categorical-graph" and "describe-categorical" (the live
+  // hallucination-report regression test), bringing the total from 16 to 18.
+  expect(evalCases).toHaveLength(18);
+  expect(new Set(evalCases.map((c) => c.id)).size).toBe(18);
   const miscap = evalCases.find((c) => c.id === "miscapitalized-attribute");
   expect(miscap).toBeDefined();
 });
@@ -157,14 +159,56 @@ it("group-by-diet runs directly after update-graph-yaxis (DAVAI-126 Task D)", ()
   expect(c.expectFinal).toEqual({ matches: [/diet/i, /group/i, /\d/] });
 });
 
-it("find-heaviest is the last case in the battery, after miscapitalized-attribute (DAVAI-126 Task C)", () => {
+// DAVAI-126 Task H appended two cases after find-heaviest, so find-heaviest is no longer last —
+// this coupling (find-heaviest directly after miscapitalized-attribute) is preserved deliberately;
+// only its position relative to the END of the battery has changed.
+it("find-heaviest runs directly after miscapitalized-attribute (DAVAI-126 Task C coupling, " +
+  "preserved by Task H's append)", () => {
   const ids = evalCases.map((e) => e.id);
-  expect(ids[ids.length - 1]).toBe("find-heaviest");
-  expect(ids[ids.length - 2]).toBe("miscapitalized-attribute");
+  const miscapIdx = ids.indexOf("miscapitalized-attribute");
+  const findHeaviestIdx = ids.indexOf("find-heaviest");
+  expect(miscapIdx).toBeGreaterThanOrEqual(0);
+  expect(findHeaviestIdx).toBe(miscapIdx + 1);
   const c = evalCases.find((e) => e.id === "find-heaviest")!;
   expect(c.prompt).toBe("Which mammal is the heaviest?");
   expect(c.expectTools).toEqual({ contains: ["find_cases"] });
   expect(c.expectFinal).toEqual({ matches: [/elephant/i, /6400|6,400/] });
+});
+
+// DAVAI-126 Task H: the two new cases are now the tail of the battery, in this exact order —
+// create-categorical-graph must run before describe-categorical (you can't describe a graph
+// that doesn't exist yet), and both must run after find-heaviest.
+it("create-categorical-graph and describe-categorical are the last two cases, in that order, " +
+  "after find-heaviest (DAVAI-126 Task H)", () => {
+  const ids = evalCases.map((e) => e.id);
+  expect(ids[ids.length - 1]).toBe("describe-categorical");
+  expect(ids[ids.length - 2]).toBe("create-categorical-graph");
+  expect(ids[ids.length - 3]).toBe("find-heaviest");
+
+  const createCat = evalCases.find((e) => e.id === "create-categorical-graph")!;
+  expect(createCat.prompt).toBe("Make a graph of Diet versus Habitat.");
+  expect(createCat.expectTools).toEqual({ contains: ["create_graph"] });
+  expect(createCat.expectFinal).toEqual({ matches: [/graph|plot/i], notMatches: [/fail/i] });
+
+  const describeCat = evalCases.find((e) => e.id === "describe-categorical")!;
+  expect(describeCat.prompt).toBe("Describe the Diet vs Habitat graph.");
+  expect(describeCat.expectTools).toEqual({ contains: ["get_graph_info"] });
+  expect(describeCat.expectFinal).toEqual({
+    matches: [/meat/i, /land/i, /\d/],
+    notMatches: [/herbivore|carnivore|omnivore|forest|grassland|aquatic/i],
+  });
+});
+
+// DAVAI-126 Task H: this is the pinned regression test for the live hallucination report — the
+// exact invented category names from the user's report must appear in the notMatches list.
+it("describe-categorical's notMatches is exactly the live hallucination report's invented terms", () => {
+  const c = evalCases.find((e) => e.id === "describe-categorical")!;
+  const notMatches = c.expectFinal.notMatches!;
+  expect(notMatches).toHaveLength(1);
+  const pattern = notMatches[0];
+  expect(pattern.test("The graph shows herbivore, carnivore, and omnivore diets.")).toBe(true);
+  expect(pattern.test("Habitats include forest, grassland, and aquatic zones.")).toBe(true);
+  expect(pattern.test("Diet: meat (11), both (9), plants (7). Habitat: land (24), water (2), both (1).")).toBe(false);
 });
 
 describe("eval case corrections (DAVAI-126 eval round 2 item A)", () => {
