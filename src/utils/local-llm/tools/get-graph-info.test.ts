@@ -40,6 +40,18 @@ it("defaults to the selected graph and reports structure + adornments", async ()
   expect(out).toContain("12.3");
 });
 
+// Same LSRL branch as buildGraphSeed's adornments line: slope/intercept/rSquared, never
+// "mean undefined, min undefined, max undefined".
+it("renders an LSRL adornment as slope/intercept/R² on the adornments line", async () => {
+  (getGraphAdornments as jest.Mock).mockResolvedValue([
+    { type: "LSRL", isVisible: true, slope: 2.5, intercept: 1.2, rSquared: 0.87 },
+  ]);
+  const v = getGraphInfoTool.validate({}, ctx);
+  const out = await getGraphInfoTool.execute((v as any).resolved, ctx);
+  expect(out).toContain("Adornments: LSRL: slope 2.5, intercept 1.2, R² 0.87.");
+  expect(out).not.toContain("undefined");
+});
+
 it("errors correctively when no graph is selected and none named", () => {
   const v = getGraphInfoTool.validate({}, { ...ctx, selectedGraphId: () => null } as any);
   expect(v.ok).toBe(false);

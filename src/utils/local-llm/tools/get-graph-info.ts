@@ -2,7 +2,7 @@ import {
   getGraphByID, getGraphAdornments, getCollectionItemsForAttribute, getCollectionItemsForAttributePair
 } from "../../codap-api-utils";
 import { computeGraphSketch } from "../graph-sketch";
-import { findAttributeUnit } from "../local-llm-prefetch";
+import { findAttributeUnit, formatAdornment } from "../local-llm-prefetch";
 import { ILocalTool } from "./registry";
 import { resolveGraph } from "./resolve";
 
@@ -39,7 +39,7 @@ export const getGraphInfoTool: ILocalTool = {
       y ? `y-axis: ${y}` : "y-axis: (none)",
     ].join("; ");
     const adornmentText = adornments.length
-      ? adornments.map((a) => `${a.type}: ${a.value ?? `mean ${a.mean}, min ${a.min}, max ${a.max}`}`).join("; ")
+      ? adornments.map(formatAdornment).join("; ")
       : "none visible";
     let result = `Graph "${graph?.title ?? graph?.name ?? resolved.graphId}" (data context: ${graph?.dataContext ?? "unknown"}). ${axes}. Adornments: ${adornmentText}.`;
 

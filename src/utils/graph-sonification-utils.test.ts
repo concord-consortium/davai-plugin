@@ -57,6 +57,17 @@ describe("computeAdornmentCues", () => {
     expect(meanCues).toHaveLength(1);
   });
 
+  it("should ignore LSRL adornments, which have no positional cue", () => {
+    const adornments: IAdornmentData[] = [
+      { type: "LSRL", isVisible: true, slope: 2.5, intercept: 1.2, rSquared: 0.87 },
+      { type: "Mean", isVisible: true, value: 15 }
+    ];
+    const cues = computeAdornmentCues(adornments, 10, 20, duration);
+    expect(cues).toEqual([
+      { label: "mean", timeOffset: 2.5 }
+    ]);
+  });
+
   it("should skip adornment values outside the axis bounds", () => {
     const adornments: IAdornmentData[] = [
       { type: "Mean", isVisible: true, value: 5 },   // below lower bound
