@@ -947,6 +947,67 @@ describe("runLocalEvalTurns (DAVAI-126 Task 11)", () => {
     consoleLogSpy.mockRestore();
   });
 
+  it("records executeTool's result strings in call order into the eval result's toolResults " +
+    "(DAVAI-126 eval round 2 item B)", async () => {
+    const store = await createLocalStore();
+    const consoleLogSpy = jest.spyOn(console, "log").mockImplementation(() => undefined);
+    (dispatchTool as jest.Mock)
+      .mockResolvedValueOnce("The mean is 11.")
+      .mockResolvedValueOnce("Values: 10, 12, 14.");
+    (runLocalTurn as jest.Mock).mockImplementationOnce(async (args: any) => {
+      await args.executeTool("get_stats", {});
+      await args.executeTool("get_case_values", {});
+      return "The mean is 11 and the values are 10, 12, 14.";
+    });
+
+    await store.runLocalEvalTurns([twoCases[1]] as any);
+
+    const loggedJson = consoleLogSpy.mock.calls.find((c) => c[0] === "DAVAI local eval results")?.[1];
+    const parsed = JSON.parse(loggedJson);
+    expect(parsed[0].toolResults).toEqual(["The mean is 11.", "Values: 10, 12, 14."]);
+
+    consoleLogSpy.mockRestore();
+  });
+
+  it("truncates a recorded tool result to 300 chars (DAVAI-126 eval round 2 item B)", async () => {
+    const store = await createLocalStore();
+    const consoleLogSpy = jest.spyOn(console, "log").mockImplementation(() => undefined);
+    const longResult = "y".repeat(500);
+    (dispatchTool as jest.Mock).mockResolvedValueOnce(longResult);
+    (runLocalTurn as jest.Mock).mockImplementationOnce(async (args: any) => {
+      await args.executeTool("get_stats", {});
+      return "The mean is 11.";
+    });
+
+    await store.runLocalEvalTurns([twoCases[1]] as any);
+
+    const loggedJson = consoleLogSpy.mock.calls.find((c) => c[0] === "DAVAI local eval results")?.[1];
+    const parsed = JSON.parse(loggedJson);
+    expect(parsed[0].toolResults[0]).toHaveLength(300);
+
+    consoleLogSpy.mockRestore();
+  });
+
+  it("keeps whatever toolResults were recorded before a case's turn rejects " +
+    "(DAVAI-126 eval round 2 item B)", async () => {
+    const store = await createLocalStore();
+    const consoleLogSpy = jest.spyOn(console, "log").mockImplementation(() => undefined);
+    (dispatchTool as jest.Mock).mockResolvedValueOnce("The mean is 11.");
+    (runLocalTurn as jest.Mock).mockImplementationOnce(async (args: any) => {
+      await args.executeTool("get_stats", {});
+      throw new Error("engine died mid-turn");
+    });
+
+    await store.runLocalEvalTurns([twoCases[1]] as any);
+
+    const loggedJson = consoleLogSpy.mock.calls.find((c) => c[0] === "DAVAI local eval results")?.[1];
+    const parsed = JSON.parse(loggedJson);
+    expect(parsed[0].passed).toBe(false);
+    expect(parsed[0].toolResults).toEqual(["The mean is 11."]);
+
+    consoleLogSpy.mockRestore();
+  });
+
   it("reuses the ctx/seed/prompt building blocks exactly like handleMessageSubmitLocalLlm", async () => {
     const store = await createLocalStore();
     jest.spyOn(console, "log").mockImplementation(() => undefined);

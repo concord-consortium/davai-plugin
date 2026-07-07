@@ -41,6 +41,14 @@ export const selectCasesTool: ILocalTool = {
       return `Selection failed: ${reason}. Check the expression syntax (attribute names in backticks).`;
     }
     const selection = await getSelectionList(String(resolved.dataContextName));
+    // DAVAI-126 eval round 2 item E: a zero-match selection is silent otherwise — the most
+    // common cause the models hit is treating percentile's second argument as 0-100 instead of
+    // the 0-1 fraction CODAP's formula language actually expects, so nudge toward that fix
+    // directly rather than leaving "0 cases" for the model to puzzle out on its own.
+    if (selection.length === 0) {
+      return `Selected 0 cases in "${resolved.dataContextName}" — no cases matched. Check the expression ` +
+        "(percentile takes a fraction 0–1, e.g. percentile(`Height`, 0.75)).";
+    }
     return `Selected ${selection.length} cases in "${resolved.dataContextName}" (${resolved.mode} mode).`;
   },
 };

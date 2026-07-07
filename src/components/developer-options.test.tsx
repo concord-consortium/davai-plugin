@@ -30,6 +30,10 @@ jest.mock("../utils/local-llm/local-llm-service", () => ({
 // still recorded on this original reference. Assertions below must use this spy, not
 // `mockAssistantStore.runLocalEvalTurns`.
 const runLocalEvalTurnsSpy = jest.fn();
+// Same rationale as runLocalEvalTurnsSpy above: assert on this reference, not
+// `mockAssistantStore.setEffort`. This is assistantStore.setEffort (DAVAI-126 eval round 2 item
+// H), distinct from appConfig's own setEffortSpy used elsewhere in this file.
+const assistantSetEffortSpy = jest.fn();
 
 const MockAssistantModel = types
   .model("MockAssistantModel", {
@@ -41,7 +45,8 @@ const MockAssistantModel = types
   .actions((self) => ({
     createThread: jest.fn(),
     deleteThread: jest.fn(),
-    runLocalEvalTurns: runLocalEvalTurnsSpy
+    runLocalEvalTurns: runLocalEvalTurnsSpy,
+    setEffort: assistantSetEffortSpy
   }));
 
 const mockTranscriptStore = ChatTranscriptModel.create({
@@ -102,6 +107,7 @@ describe("test developer options component", () => {
     setEffortSpy.mockClear();
     setLlmIdSpy.mockClear();
     runLocalEvalTurnsSpy.mockClear();
+    assistantSetEffortSpy.mockClear();
     mockConfig = {
       ...mockAppConfig,
       isDevMode: true,
@@ -292,6 +298,30 @@ describe("test developer options component", () => {
     mockConfig.isLocalLlm = false;
     renderDeveloperOptions();
     fireEvent.click(screen.getByTestId("run-local-eval-button"));
+    expect(runLocalEvalTurnsSpy).not.toHaveBeenCalled();
+  });
+
+  it("syncs the Effort dropdown into the assistant store before running the eval " +
+    "(DAVAI-126 eval round 2 item H — the eval must run against the effort the user actually " +
+    "selected, not whatever a prior chat submit last set)", () => {
+    mockConfig.isLocalLlm = true;
+    mockConfig.effort = "think";
+    renderDeveloperOptions();
+    fireEvent.click(screen.getByTestId("run-local-eval-button"));
+    expect(assistantSetEffortSpy).toHaveBeenCalledWith("think");
+    // Order matters: effort must be synced before the eval reads self.effort.
+    const effortCallOrder = assistantSetEffortSpy.mock.invocationCallOrder[0];
+    const evalCallOrder = runLocalEvalTurnsSpy.mock.invocationCallOrder[0];
+    expect(effortCallOrder).toBeLessThan(evalCallOrder);
+  });
+
+  it("does not sync effort or run the eval when clicked without a Local model selected " +
+    "(DAVAI-126 eval round 2 item H)", () => {
+    mockConfig.isLocalLlm = false;
+    mockConfig.effort = "think";
+    renderDeveloperOptions();
+    fireEvent.click(screen.getByTestId("run-local-eval-button"));
+    expect(assistantSetEffortSpy).not.toHaveBeenCalled();
     expect(runLocalEvalTurnsSpy).not.toHaveBeenCalled();
   });
 });

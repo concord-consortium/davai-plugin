@@ -738,16 +738,35 @@ export const AssistantModel = types
 
         const runTurn = async (prompt: string): Promise<IEvalTurnResult> => {
           const toolCalls: string[] = [];
-          const final = await runLocalTurn({
-            generate: (messages) => localLlmService.generate(messages, { maxTokens: thinking ? 2048 : 1024 }),
-            executeTool: (name, args) => dispatchTool(name, args, toolCtx),
-            systemPrompt,
-            turns: [], // eval cases are independent single-shot prompts, not a growing conversation
-            userMessage: prompt,
-            onToolCall: (name) => toolCalls.push(name),
-            isCancelled: () => !isCurrent(),
-          });
-          return { toolCalls, final };
+          // DAVAI-126 eval round 2 item B: wrap executeTool (the eval's OWN wiring) to record
+          // each result string as it returns, in call order. Deliberately not a change to
+          // runLocalTurn's onToolCall contract (that hook only ever reported the name) — a
+          // rejected/errored tool call never resolves, so a truly failing call is simply absent
+          // here rather than recorded with a placeholder, and whatever succeeded before the
+          // turn later throws stays recorded.
+          const toolResults: string[] = [];
+          try {
+            const final = await runLocalTurn({
+              generate: (messages) => localLlmService.generate(messages, { maxTokens: thinking ? 2048 : 1024 }),
+              executeTool: async (name, args) => {
+                const result = await dispatchTool(name, args, toolCtx);
+                toolResults.push(result);
+                return result;
+              },
+              systemPrompt,
+              turns: [], // eval cases are independent single-shot prompts, not a growing conversation
+              userMessage: prompt,
+              onToolCall: (name) => toolCalls.push(name),
+              isCancelled: () => !isCurrent(),
+            });
+            return { toolCalls, toolResults, final };
+          } catch (err) {
+            // runLocalEval's own catch (eval-runner.ts) only sees this rejection's message —
+            // attach what was recorded so far so the case's toolResults trace isn't silently
+            // dropped just because the turn errored partway through.
+            if (err instanceof Error) (err as Error & { toolResults?: string[] }).toolResults = toolResults;
+            throw err;
+          }
         };
 
         const results = yield runLocalEval(cases, runTurn);

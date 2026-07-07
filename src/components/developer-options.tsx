@@ -61,6 +61,11 @@ export const DeveloperOptionsComponent = observer(({assistantStore, createToggle
     // disabled affordance (aria-disabled does not block clicks/keyboard activation like a real
     // disabled attribute would).
     if (!appConfig.isLocalLlm) return;
+    // DAVAI-126 eval round 2 item H: mirror App.tsx's handleChatInputSubmit, which syncs
+    // self.effort from the Effort dropdown before every local submit. Without this, the eval
+    // reads whatever effort the LAST chat submit happened to set, silently ignoring the
+    // dropdown's current value — this is what invalidated the think-vs-none eval matrix.
+    assistantStore.setEffort(appConfig.effort);
     assistantStore.runLocalEvalTurns(evalCases);
   };
 

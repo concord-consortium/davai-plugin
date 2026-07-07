@@ -1,27 +1,46 @@
 export interface IEvalCase {
   id: string;
   prompt: string;
-  expectTools: { exactly?: string[]; contains?: string[]; none?: boolean };
+  // allowOnly: every tool call the turn makes must be in this list (zero calls also passes) —
+  // for prompts where a redundant-but-harmless fetch (the model re-confirming data it already
+  // had) shouldn't fail the case the way a strict `none` or `exactly` would.
+  expectTools: { exactly?: string[]; contains?: string[]; none?: boolean; allowOnly?: string[] };
   expectFinal: { matches?: RegExp[]; notMatches?: RegExp[] };
 }
 
 // Fixture: open CODAP's Mammals sample document, create a dot plot of Height, select it.
 export const evalCases: IEvalCase[] = [
+  // DAVAI-126 eval round 2 item A: every matrix run called get_graph_info then answered
+  // correctly — a redundant-but-harmless fetch (the seed already has the data), so allowOnly
+  // (rather than a strict `none`) doesn't fail a model for double-checking. Grounding is also
+  // strengthened to a specific value from the Mammals/Height fixture, not just the word "height".
   { id: "describe-graph", prompt: "Describe this graph.",
-    expectTools: { none: true }, expectFinal: { matches: [/height/i], notMatches: [/error|sorry/i] } },
+    expectTools: { allowOnly: ["get_graph_info"] },
+    expectFinal: { matches: [/height/i, /27|0\.1|6\.5/], notMatches: [/error|sorry/i] } },
   { id: "mean", prompt: "What is the mean height?",
     expectTools: { contains: ["get_stats"] }, expectFinal: { matches: [/mean/i, /\d/] } },
   { id: "median", prompt: "What's the median of Height?",
     expectTools: { contains: ["get_stats"] }, expectFinal: { matches: [/median/i, /\d/] } },
   { id: "raw-values", prompt: "List the values of Mass.",
     expectTools: { contains: ["get_case_values"] }, expectFinal: { matches: [/\d/] } },
-  { id: "selection-percentile", prompt: "Select the mammals above the 75th percentile of Height.",
+  // DAVAI-126 eval round 2 item A: the prompt never asked for a count, but the regex below
+  // demands one — asking closes that gap (regexes unchanged).
+  { id: "selection-percentile",
+    prompt: "Select the mammals above the 75th percentile of Height, and tell me how many you selected.",
     expectTools: { contains: ["select_cases"] }, expectFinal: { matches: [/select/i, /\d+\s*(cases?|mammals?)/i] } },
   { id: "create-graph", prompt: "Make a graph of Height versus Mass.",
     expectTools: { contains: ["create_graph"] }, expectFinal: { matches: [/graph|plot/i], notMatches: [/fail/i] } },
-  { id: "create-attribute-formula", prompt: "Add an attribute called HeightInFeet computed as Height divided by 30.48.",
+  // DAVAI-126 eval round 2 item A: the case's own arithmetic was wrong — Height is in meters,
+  // and /30.48 is the cm-to-feet divisor, not a meters-to-feet conversion. Models obeyed the
+  // (wrong) instruction faithfully; the fix is the prompt, not the model. Assertions unchanged.
+  { id: "create-attribute-formula", prompt: "Add an attribute called HeightInFeet computed as Height times 3.281.",
     expectTools: { contains: ["create_attribute"] }, expectFinal: { matches: [/HeightInFeet/i] } },
-  { id: "create-adornment", prompt: "Add a mean line to the graph.",
+  // DAVAI-126 eval round 2 item A: "the graph" is ambiguous once create-graph (above) has run —
+  // the sonification store auto-selects the newest graph, so "the graph" resolved to the
+  // Height-vs-Mass scatterplot, where Mean is legitimately unavailable (a 4B refusal there was
+  // correct behavior, not a model failure). Naming the graph removes the ambiguity. Assertions
+  // unchanged.
+  { id: "create-adornment", prompt: "Add a mean line to the Height graph.",
     expectTools: { contains: ["create_adornment"] }, expectFinal: { matches: [/mean/i, /\d/] } },
   { id: "sonify", prompt: "Play this graph as sound.",
     expectTools: { contains: ["sonify_graph"] }, expectFinal: { matches: [/sonif/i] } },

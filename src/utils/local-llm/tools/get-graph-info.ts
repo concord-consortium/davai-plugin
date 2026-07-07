@@ -4,7 +4,14 @@ import { resolveGraph } from "./resolve";
 
 export const getGraphInfoTool: ILocalTool = {
   name: "get_graph_info",
-  description: "Get a graph's axes, attributes, and visible statistic adornments. Defaults to the selected graph.",
+  // DAVAI-126 eval round 2 item D: every matrix run called this tool then answered correctly on
+  // describe-intent prompts, even though the same structure/values are already in the prompt's
+  // "Selected graph data" section — the steering line below saves that redundant ~3-5s round
+  // trip. Editing this string changes the generated tool-list section of the prompt (registry.ts
+  // builds it from these descriptions), so the prompt-budget test re-measures with it included.
+  description: "Get a graph's axes, attributes, and visible statistic adornments. Defaults to the selected graph. " +
+    "The selected graph's structure and values are already in the \"Selected graph data\" section — call this " +
+    "only for a different graph or after making a change.",
   argsExample: '{"tool": "get_graph_info"} or {"tool": "get_graph_info", "graph": "Height vs Age"}',
   validate(args, ctx) {
     const graph = resolveGraph(args.graph as string | undefined, ctx.graphs(), ctx.selectedGraphId());

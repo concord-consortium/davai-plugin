@@ -77,3 +77,24 @@ it("falls back to values.error when the top-level error is absent (tolerance)", 
   expect(out).toMatch(/selection failed/i);
   expect(out).toContain("nested bad expression");
 });
+
+it("nudges toward the percentile-as-fraction fix when the selection matches zero cases " +
+  "(DAVAI-126 eval round 2 item E)", async () => {
+  (getSelectionList as jest.Mock).mockResolvedValue([]);
+  const v = selectCasesTool.validate(
+    { dataContext: "Mammals", expression: "`Weight` > percentile(`Weight`, 75)", mode: "replace" }, ctx);
+  expect(v.ok).toBe(true);
+  const out = await selectCasesTool.execute((v as any).resolved, ctx);
+  expect(out).toBe(
+    'Selected 0 cases in "Mammals" — no cases matched. Check the expression (percentile takes a ' +
+    "fraction 0–1, e.g. percentile(`Height`, 0.75))."
+  );
+});
+
+it("keeps the existing non-zero wording unchanged (DAVAI-126 eval round 2 item E)", async () => {
+  (getSelectionList as jest.Mock).mockResolvedValue([{ caseID: 1 }]);
+  const v = selectCasesTool.validate(
+    { dataContext: "Mammals", expression: "`Weight` > 5", mode: "replace" }, ctx);
+  const out = await selectCasesTool.execute((v as any).resolved, ctx);
+  expect(out).toBe('Selected 1 cases in "Mammals" (replace mode).');
+});

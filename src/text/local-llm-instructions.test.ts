@@ -41,3 +41,13 @@ it("instructs the model to ground numbers in its final response in fetched data 
     "sections below. If you did not fetch a value, do not state it."
   );
 });
+
+it("instructs the model to answer the request, not to summarize whatever the last tool " +
+  "returned (DAVAI-126 eval round 2 item C — anti-recency grounding, targets the 1.7B-think " +
+  "create-graph failure where the final answer summarized the last tool result instead of " +
+  "the request)", () => {
+  expect(localLlmInstructions).toContain(
+    "Your final response must answer the user's request. After a create, select, or sonify " +
+    "tool succeeds, report what it did — do not answer with statistics the user did not ask for."
+  );
+});

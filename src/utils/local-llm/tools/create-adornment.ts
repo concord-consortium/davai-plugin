@@ -23,6 +23,24 @@ const formatData = (type: string, d: Record<string, number> | undefined): string
   return `slope ${d.slope}, intercept ${d.intercept}, R² ${d.rSquared}`;
 };
 
+// DAVAI-126 eval round 2 item F: on a wrong-plot-type rejection, list the retry options the
+// model can actually pick from — the "rung-3 corrective-with-options" pattern the models
+// demonstrably follow elsewhere (resolve.ts's own corrective errors). Reads the same
+// xAttributeName/yAttributeName fields codap-graph-model.ts stores (and get-graph-info.ts
+// already reads), not invented ones.
+const hasAxis = (g: any): boolean => typeof g?.xAttributeName === "string" || typeof g?.yAttributeName === "string";
+const hasBothAxes = (g: any): boolean => typeof g?.xAttributeName === "string" && typeof g?.yAttributeName === "string";
+const isUnivariate = (g: any): boolean => hasAxis(g) && !hasBothAxes(g);
+const graphLabel = (g: any): string => g?.title ?? g?.name;
+
+const compatibleGraphsMessage = (type: string, graphs: any[]): string => {
+  const wantScatterplot = type === "LSRL";
+  const candidates = graphs.filter(wantScatterplot ? hasBothAxes : isUnivariate);
+  if (candidates.length === 0) return "No compatible graph exists — create one with create_graph.";
+  const titles = candidates.map(graphLabel).join(", ");
+  return wantScatterplot ? `Scatterplots: ${titles}.` : `Univariate graphs: ${titles}.`;
+};
+
 export const createAdornmentTool: ILocalTool = {
   name: "create_adornment",
   description: "Add a statistic adornment to a graph: mean, median, or standard deviation (univariate numeric plots) or lsrl (scatterplots). Reports the computed value.",
@@ -46,7 +64,8 @@ export const createAdornmentTool: ILocalTool = {
       // Documented shape is a top-level `error` (sam-server/src/text/codap-api-documentation.ts);
       // fall back to values.error for tolerance against older/nested response shapes.
       const reason = res?.error ?? res?.values?.error ?? "it may not apply to this plot type";
-      return `The ${resolved.type} adornment could not be added to "${resolved.graphTitle}": ${reason}. Mean/median/standard deviation need a univariate numeric plot; LSRL needs a scatterplot.`;
+      const options = compatibleGraphsMessage(String(resolved.type), ctx.graphs());
+      return `The ${resolved.type} adornment could not be added to "${resolved.graphTitle}": ${reason}. Mean/median/standard deviation need a univariate numeric plot; LSRL needs a scatterplot. ${options}`;
     }
     return `Added ${resolved.type} adornment to "${resolved.graphTitle}": ${formatData(String(resolved.type), res?.values?.data?.[0])}.`;
   },

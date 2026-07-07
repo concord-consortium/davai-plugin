@@ -60,6 +60,10 @@ export const createAttributeTool: ILocalTool = {
       return `Attribute creation failed: ${reason}.`;
     }
     await ctx.refreshDataContexts();
-    return `Created attribute "${resolved.name}" in "${resolved.dataContextName}"${resolved.formula ? ` with formula ${resolved.formula}` : ""}. It is now available for graphs and statistics.`;
+    // DAVAI-126 eval round 2 item G: echo the (canonicalized) formula verbatim so the eval's
+    // toolResults trace (item B) shows exactly what formula reached CODAP — this is what makes
+    // a model silently writing a different formula than asked visible in the trace.
+    const formulaClause = resolved.formula ? ` computed as ${resolved.formula}` : "";
+    return `Created attribute "${resolved.name}" in "${resolved.dataContextName}"${formulaClause}.`;
   },
 };

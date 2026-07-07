@@ -59,3 +59,51 @@ it("falls back to values.error when the top-level error is absent (tolerance)", 
   expect(out).toMatch(/could not be added/i);
   expect(out).toContain("nested not applicable");
 });
+
+describe("corrective retry options on failure (DAVAI-126 eval round 2 item F)", () => {
+  // A richer graph list than the top-level `graphs` fixture: one univariate (x only, no y),
+  // one scatterplot (both axes), and one with neither axis set (should never be listed).
+  const mixedGraphs = [
+    { id: 42, title: "Heights", xAttributeName: "Height" }, // univariate
+    { id: 43, title: "Height vs Mass", xAttributeName: "Height", yAttributeName: "Mass" }, // scatterplot
+    { id: 44, title: "Empty" }, // neither axis — not compatible with anything
+  ];
+  const mixedCtx = { ...ctx, graphs: () => mixedGraphs } as unknown as ILocalToolContext;
+
+  it("a Mean/Median/Standard-Deviation failure lists only univariate graphs (by title), " +
+    "not scatterplots", async () => {
+    send.mockResolvedValue({ success: false, error: "not applicable" });
+    const v = createAdornmentTool.validate({ type: "mean", graph: "Heights" }, mixedCtx);
+    const out = await createAdornmentTool.execute((v as any).resolved, mixedCtx);
+    expect(out).toContain("Univariate graphs: Heights.");
+    expect(out).not.toContain("Height vs Mass");
+  });
+
+  it("an LSRL failure lists only scatterplots (both axes set), not univariate graphs", async () => {
+    send.mockResolvedValue({ success: false, error: "not applicable" });
+    const v = createAdornmentTool.validate({ type: "lsrl", graph: "Heights" }, mixedCtx);
+    const out = await createAdornmentTool.execute((v as any).resolved, mixedCtx);
+    expect(out).toContain("Scatterplots: Height vs Mass.");
+    expect(out).not.toContain("Univariate graphs");
+  });
+
+  it("says no compatible graph exists when none qualify", async () => {
+    send.mockResolvedValue({ success: false, error: "not applicable" });
+    const noneCompatibleCtx = {
+      ...ctx, graphs: () => [{ id: 44, title: "Empty" }], selectedGraphId: () => "44",
+    } as unknown as ILocalToolContext;
+    const v = createAdornmentTool.validate({ type: "mean" }, noneCompatibleCtx);
+    const out = await createAdornmentTool.execute((v as any).resolved, noneCompatibleCtx);
+    expect(out).toContain("No compatible graph exists — create one with create_graph.");
+  });
+
+  it("falls back to a graph's name when it has no title", async () => {
+    send.mockResolvedValue({ success: false, error: "not applicable" });
+    const untitledCtx = {
+      ...ctx, graphs: () => [{ id: 50, name: "graph50", xAttributeName: "Height" }], selectedGraphId: () => "50",
+    } as unknown as ILocalToolContext;
+    const v = createAdornmentTool.validate({ type: "mean" }, untitledCtx);
+    const out = await createAdornmentTool.execute((v as any).resolved, untitledCtx);
+    expect(out).toContain("Univariate graphs: graph50.");
+  });
+});

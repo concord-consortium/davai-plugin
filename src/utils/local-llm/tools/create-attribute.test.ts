@@ -82,3 +82,20 @@ it("falls back to values.error when the top-level error is absent (tolerance)", 
   expect(out).toMatch(/attribute creation failed/i);
   expect(out).toContain("nested duplicate attribute name");
 });
+
+it("echoes the formula verbatim (canonicalized) in the success result " +
+  "(DAVAI-126 eval round 2 item G — makes visible exactly what formula reached CODAP)", async () => {
+  const v = createAttributeTool.validate(
+    { dataContext: "Mammals", name: "HeightInFeet", formula: "`Speed`*3.281" }, ctx);
+  expect(v.ok).toBe(true);
+  const out = await createAttributeTool.execute((v as any).resolved, ctx);
+  expect(out).toBe('Created attribute "HeightInFeet" in "Mammals" computed as `Speed`*3.281.');
+});
+
+it("omits the formula clause when no formula was given", async () => {
+  const v = createAttributeTool.validate({ dataContext: "Mammals", name: "PlainAttr" }, ctx);
+  expect(v.ok).toBe(true);
+  const out = await createAttributeTool.execute((v as any).resolved, ctx);
+  expect(out).toBe('Created attribute "PlainAttr" in "Mammals".');
+  expect(out).not.toContain("computed as");
+});

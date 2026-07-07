@@ -35,3 +35,9 @@ it("errors correctively when no graph is selected and none named", () => {
   expect(v.ok).toBe(false);
   expect(!v.ok && v.error).toMatch(/no graph is selected/i);
 });
+
+it("steers the model away from a redundant call when the data is already in the seed " +
+  "(DAVAI-126 eval round 2 item D)", () => {
+  expect(getGraphInfoTool.description).toContain("Selected graph data");
+  expect(getGraphInfoTool.description).toMatch(/call this only for a different graph or after making a change/i);
+});
