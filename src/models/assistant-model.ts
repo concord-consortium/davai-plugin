@@ -112,8 +112,22 @@ export const AssistantModel = types
     },
     setLlmId(llmId: string) {
       // A model switch invalidates any in-flight local turn: bump the epoch so a turn started
-      // under the previous model can't post its reply into the new model's conversation.
-      if (llmId !== self.llmId) self.turnEpoch++;
+      // under the previous model can't post its reply into the new model's conversation. Unlike
+      // a stale turn superseded by a NEWER turn (whose own finally will eventually clear the
+      // flags), a switch has no newer turn coming — so nothing else will ever clear
+      // isLoadingResponse/showLoadingIndicator, permanently disabling the chat input. Clear them
+      // here too, and drop any queued messages (their context is the transcript this switch just
+      // reset), mirroring handleCancel's local-turn branch. Written as direct property/array
+      // writes rather than via setShowLoadingIndicator/clearUserMessageQueue: those wrapper
+      // actions are defined in LATER `.actions()` blocks, which MST's type inference doesn't
+      // expose on `self` within this (earlier) block, even though same-block sibling calls
+      // would work fine at runtime.
+      if (llmId !== self.llmId) {
+        self.turnEpoch++;
+        self.isLoadingResponse = false;
+        self.showLoadingIndicator = false;
+        self.messageQueue.clear();
+      }
       self.llmId = llmId;
     },
     bumpTurnEpoch() {

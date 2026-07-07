@@ -154,3 +154,27 @@ it("does not even run the first generation when already cancelled (DAVAI-126 C1)
   expect(out).toMatch(/wasn't able to complete/i);
   expect(generate).not.toHaveBeenCalled();
 });
+
+it("re-checks isCancelled after generate() resolves a tool envelope and skips executeTool " +
+  "if cancel landed during generation (DAVAI-126 review round 2 F3)", async () => {
+  // Cancel flips true DURING the await on generate() itself (not between iterations, which C1
+  // above already covers) — e.g. the user hits Cancel while the model is still producing a
+  // create_graph envelope. The loop must not run the tool just because generate() already
+  // started; it must re-check isCancelled once generate() resolves and BEFORE executeTool/
+  // onToolCall run.
+  let cancelled = false;
+  const generate = jest.fn().mockImplementation(async () => {
+    cancelled = true; // flips while "awaiting" the (mocked) generation
+    return "{\"tool\":\"create_graph\",\"dataContext\":\"D\"}";
+  });
+  const executeTool = jest.fn().mockResolvedValue("{\"success\":true}");
+  const onToolCall = jest.fn();
+  const out = await runLocalTurn({
+    ...baseArgs, generate, executeTool, onToolCall, isCancelled: () => cancelled,
+  });
+  expect(out).toMatch(/wasn't able to complete/i);
+  expect(executeTool).not.toHaveBeenCalled();
+  expect(onToolCall).not.toHaveBeenCalled();
+  // The loop must return immediately on the cancel recheck, not loop back for another generation.
+  expect(generate).toHaveBeenCalledTimes(1);
+});

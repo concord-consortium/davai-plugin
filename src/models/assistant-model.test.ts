@@ -571,6 +571,91 @@ describe("handleMessageSubmitLocalLlm (DAVAI-126)", () => {
     const contents = store.transcriptStore.messages.map((m) => m.messageContent.content);
     expect(contents).not.toContain("stale reply from the old model");
   });
+
+  it("clears the busy flags and message queue immediately when the model is switched mid-turn " +
+    "(DAVAI-126 review round 2 F2)", async () => {
+    // The epoch design intentionally makes a STALE turn's finally skip clearing the flags (so it
+    // can't clobber a NEWER turn — see "does not let a cancelled turn's stale finally clobber a
+    // fresh turn's loading flag" above). But a model switch creates no newer turn to eventually
+    // clear them: nothing else will ever flip isLoadingResponse/showLoadingIndicator back to
+    // false, so the chat input would stay disabled forever unless setLlmId clears them itself,
+    // the same way handleCancel's local branch does.
+    const store = createLocalStore();
+    let release: (v: string) => void = () => undefined;
+    (runLocalTurn as jest.Mock).mockImplementationOnce(
+      () => new Promise((res) => { release = res; })
+    );
+
+    const first = store.handleMessageSubmitLocalLlm("describe the graph");
+    await Promise.resolve();
+    expect(store.isLoadingResponse).toBe(true);
+
+    // A message queued behind the in-flight turn: switching models invalidates the transcript
+    // context it would have run against, so it must be dropped too (mirrors handleCancel).
+    const queued = store.handleMessageSubmitLocalLlm("queued before switch");
+    await Promise.resolve();
+    expect(store.messageQueue.length).toBe(1);
+
+    store.setLlmId(JSON.stringify({ id: "Qwen3-4B-q4f16_1-MLC", provider: "Local" }));
+
+    // Cleared immediately by the switch itself — no need to wait for the stale turn to settle.
+    expect(store.isLoadingResponse).toBe(false);
+    expect(store.showLoadingIndicator).toBe(false);
+    expect(store.messageQueue.length).toBe(0);
+
+    // The stale turn resuming afterward must not re-set the flags or post anything (existing
+    // epoch semantics, unchanged by this fix).
+    release("stale reply from the old model");
+    await first;
+    await queued;
+    await Promise.resolve();
+
+    expect(store.isLoadingResponse).toBe(false);
+    expect(store.showLoadingIndicator).toBe(false);
+    const contents = store.transcriptStore.messages.map((m) => m.messageContent.content);
+    expect(contents).not.toContain("stale reply from the old model");
+  });
+
+  it("still clears the busy flags normally when a turn completes without a model switch " +
+    "(DAVAI-126 review round 2 F2 no-regression)", async () => {
+    // setLlmId's flag-clearing addition must only affect an ACTUAL switch (a real epoch bump);
+    // an ordinary completed turn (no switch involved) must clear the flags via its own finally,
+    // exactly as before.
+    const store = createLocalStore();
+    await store.handleMessageSubmitLocalLlm("describe the graph");
+
+    expect(store.isLoadingResponse).toBe(false);
+    expect(store.showLoadingIndicator).toBe(false);
+    const last = store.transcriptStore.messages.at(-1);
+    expect(last?.messageContent.content).toBe("A local description.");
+  });
+
+  it("setting the SAME llmId does not clear busy flags or the queue (no-op switch, DAVAI-126 " +
+    "review round 2 F2 no-regression)", async () => {
+    // setLlmId only bumps the epoch (and, per this fix, clears the flags/queue) on a REAL
+    // change. Calling it with the value it already has must not interrupt an in-flight turn.
+    const store = createLocalStore();
+    let release: (v: string) => void = () => undefined;
+    (runLocalTurn as jest.Mock).mockImplementationOnce(
+      () => new Promise((res) => { release = res; })
+    );
+
+    const first = store.handleMessageSubmitLocalLlm("describe the graph");
+    await Promise.resolve();
+    expect(store.isLoadingResponse).toBe(true);
+
+    store.setLlmId(store.llmId); // same value: not a switch
+
+    expect(store.isLoadingResponse).toBe(true); // untouched
+
+    release("real reply");
+    await first;
+    await Promise.resolve();
+
+    expect(store.isLoadingResponse).toBe(false);
+    const contents = store.transcriptStore.messages.map((m) => m.messageContent.content);
+    expect(contents).toContain("real reply");
+  });
 });
 
 describe("runLocalEvalTurns (DAVAI-126 Task 11)", () => {
@@ -706,6 +791,39 @@ describe("runLocalEvalTurns (DAVAI-126 Task 11)", () => {
     await evalRun;
     await Promise.resolve();
 
+    const contents = store.transcriptStore.messages.map((m) => m.messageContent.content);
+    expect(contents.some((c) => typeof c === "string" && /passed/.test(c))).toBe(false);
+    expect(consoleLogSpy).not.toHaveBeenCalledWith("DAVAI local eval results", expect.anything());
+
+    consoleLogSpy.mockRestore();
+  });
+
+  it("clears the busy flags when the model is switched mid-eval-run, posting no summary " +
+    "(DAVAI-126 review round 2 F2)", async () => {
+    // Same fix as the chat-turn case: a model switch during an eval run is not superseded by any
+    // newer turn, so nothing else will ever clear isLoadingResponse/showLoadingIndicator unless
+    // setLlmId does it itself.
+    const store = createLocalStore();
+    const consoleLogSpy = jest.spyOn(console, "log").mockImplementation(() => undefined);
+    let release: (v: string) => void = () => undefined;
+    (runLocalTurn as jest.Mock).mockImplementationOnce(
+      () => new Promise((res) => { release = res; })
+    );
+
+    const evalRun = store.runLocalEvalTurns(twoCases as any);
+    await Promise.resolve();
+    expect(store.isLoadingResponse).toBe(true);
+
+    store.setLlmId(JSON.stringify({ id: "Qwen3-4B-q4f16_1-MLC", provider: "Local" }));
+
+    expect(store.isLoadingResponse).toBe(false);
+    expect(store.showLoadingIndicator).toBe(false);
+
+    release("late reply after switch");
+    await evalRun;
+    await Promise.resolve();
+
+    expect(store.isLoadingResponse).toBe(false);
     const contents = store.transcriptStore.messages.map((m) => m.messageContent.content);
     expect(contents.some((c) => typeof c === "string" && /passed/.test(c))).toBe(false);
     expect(consoleLogSpy).not.toHaveBeenCalledWith("DAVAI local eval results", expect.anything());

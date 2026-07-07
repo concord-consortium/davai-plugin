@@ -81,6 +81,11 @@ export const runLocalTurn = async (args: ILocalTurnArgs): Promise<string> => {
       if (lastEnvelope.kind === "final") return lastEnvelope.response;
       return stripThink(lastRaw) || FALLBACK_RESPONSE;
     }
+    // Recheck here (not just at the top of the loop): generate() above is an await, so a cancel
+    // can land WHILE it's producing this tool envelope — after the iteration-top check already
+    // passed. Without this recheck, that cancel would still let a tool with real side effects
+    // (create_graph/create_attribute/select_cases) execute against CODAP.
+    if (isCancelled?.()) return FALLBACK_RESPONSE;
     onToolCall?.(envelope.name);
     const result = await executeTool(envelope.name, envelope.args);
     conversation.push({ role: "user", content: `Tool result: ${capToolResult(result)}` });
