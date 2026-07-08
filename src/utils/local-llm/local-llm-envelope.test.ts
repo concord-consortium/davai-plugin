@@ -103,6 +103,16 @@ describe("recovers a malformed \"final\" envelope instead of surfacing raw JSON 
     });
   });
 
+  it("decodes \\uXXXX unicode escapes in a recovered response (accented/CJK text stays intact)", () => {
+    // A truncated final envelope whose response contains a JSON \u escape — a naive single-char
+    // unescape would emit the literal "u00e9"; correct decoding yields "é".
+    const raw = '{\n  "tool": "final",\n  "response": "The caf\\u00e9 dataset has 3 r\\u00e9gions"';
+    expect(parseEnvelope(raw)).toEqual({
+      kind: "final",
+      response: "The café dataset has 3 régions",
+    });
+  });
+
   it("leaves garbage JSON without a \"final\" tool attempt on the existing invalid fallback", () => {
     const result = parseEnvelope("not json at all, no tool field here");
     expect(result.kind).toBe("invalid");

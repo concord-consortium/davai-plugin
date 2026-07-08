@@ -154,6 +154,15 @@ export const localLlmService = {
       // Only the current load may publish an error / reset shared state; a stale load that
       // rejected after being superseded must stay silent.
       if (generation === loadGeneration) {
+        // A still-current load that rejected (e.g. CreateWebWorkerMLCEngine threw before doLoad
+        // cleared its registration) left its worker in inflightLoad. Nothing else reclaims it
+        // unless a NEWER load happens along to supersede it, so terminate it here — otherwise a
+        // failed load leaks a live Worker (and its GPU/WASM resources) indefinitely. Guarded on
+        // the generation so we only ever tear down THIS load's own worker.
+        if (inflightLoad && inflightLoad.generation === generation) {
+          inflightLoad.worker.terminate();
+          inflightLoad = null;
+        }
         engine = null;
         loadedModelId = null;
         setState({ status: "error", modelId, error: err instanceof Error ? err.message : String(err) });
@@ -186,6 +195,12 @@ export const localLlmService = {
       temperature: 0,
       max_tokens: opts?.maxTokens ?? 1024,
     });
+    // If the watchdog timeout wins the race below, this create() promise is left pending and may
+    // still reject later (e.g. the 0.2.84 worker-side BindingError, or a late interruptGenerate()
+    // rejection) with nothing awaiting it — surfacing as an unhandled promise rejection. Attach a
+    // no-op catch so that late rejection is always observed; it runs independently of the race
+    // (which registers its own handlers) and mirrors the same guard on loadEngine's `settling`.
+    create.catch(() => undefined);
     let timer: ReturnType<typeof setTimeout> | undefined;
     const timeout = new Promise<never>((_resolve, reject) => {
       timer = setTimeout(() => {

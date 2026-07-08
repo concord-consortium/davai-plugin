@@ -140,6 +140,16 @@ it("sets error state when engine creation fails", async () => {
   );
 });
 
+it("terminates the worker of a still-current load that fails so it does not leak (PR #114 review)", async () => {
+  mockCreateWebWorkerMLCEngine.mockRejectedValueOnce(new Error("boom"));
+  await expect(localLlmService.loadEngine("Qwen3-1.7B-q4f16_1-MLC")).rejects.toThrow("boom");
+  // The worker created for this failed-but-still-current load must be terminated, not left
+  // registered in inflightLoad (which would leak a live Worker + GPU/WASM until a later load
+  // superseded it, or forever if the user gives up).
+  const worker = mockCreateLocalLlmWorker.mock.results.at(-1)!.value as { terminate: jest.Mock };
+  expect(worker.terminate).toHaveBeenCalledTimes(1);
+});
+
 // A distinct engine per CreateWebWorkerMLCEngine call, each with its own unload spy, so a
 // stale-load's engine can be told apart from the winner's.
 const makeEngine = () => ({

@@ -64,14 +64,27 @@ const RESPONSE_FIELD = /"response"\s*:\s*"((?:[^"\\]|\\.)*)"?/;
 // an escape character, before its second character ever arrived.
 const unescapeJsonString = (s: string): string => {
   const trimmed = s.endsWith("\\") && !s.endsWith("\\\\") ? s.slice(0, -1) : s;
-  return trimmed.replace(/\\(.)/g, (_match, ch) => {
-    switch (ch) {
-      case "n": return "\n";
-      case "t": return "\t";
-      case "r": return "\r";
-      default: return ch; // \" \\ \/ and anything else: the escaped character itself
-    }
-  });
+  // Prefer a real JSON.parse of the reconstructed string literal: it decodes EVERY standard JSON
+  // escape correctly — including \uXXXX, \b and \f — which a hand-rolled single-character switch
+  // cannot (a naive switch turns "é" into the literal "u00e9", garbling accented/CJK text
+  // that a truncated international description may contain). The RESPONSE_FIELD capture never holds
+  // an unescaped '"', so the only ways this throws are a raw control character or a stray escape
+  // the tolerant regex admitted — both handled by the best-effort manual fallback below.
+  try {
+    return JSON.parse(`"${trimmed}"`);
+  } catch {
+    return trimmed.replace(/\\(u[0-9a-fA-F]{4}|.)/g, (_match, esc: string) => {
+      if (esc[0] === "u") return String.fromCharCode(parseInt(esc.slice(1), 16));
+      switch (esc) {
+        case "n": return "\n";
+        case "t": return "\t";
+        case "r": return "\r";
+        case "b": return "\b";
+        case "f": return "\f";
+        default: return esc; // \" \\ \/ and anything else: the escaped character itself
+      }
+    });
+  }
 };
 
 // Last-resort recovery for text that plainly attempted a "final" envelope but failed strict/brace-
