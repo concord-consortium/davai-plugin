@@ -21,6 +21,11 @@ export const resolveByName = <T>(
   requested: string,
   candidates: { name: string; value: T }[]
 ): ResolveResult<T> => {
+  // Gate 2 (PR #114 review #2 root cause): callers type `requested` as `string` via a
+  // compile-time-only cast (e.g. `args.graph as string`); when the model's JSON encodes an
+  // id-like value unquoted, the runtime value is actually a `number`. Coerce at this shared
+  // boundary so every caller is safe even if one forgets to coerce first.
+  requested = String(requested);
   const exact = candidates.find((c) => c.name === requested);
   if (exact) return { ok: true, value: exact.value, repaired: false };
 
@@ -39,17 +44,23 @@ export const resolveByName = <T>(
 };
 
 export const resolveDataContext = (
-  requested: string,
+  requested: string | undefined,
   dataContexts: Record<string, any>
 ): ResolveResult<any> => {
+  // Gate 2 boundary coercion (PR #114 review #2 root cause): only when DEFINED, so undefined
+  // still means "not provided" rather than becoming the literal string "undefined".
+  if (requested !== undefined) requested = String(requested);
   const candidates = Object.values(dataContexts ?? {}).map((dc: any) => ({ name: dc?.name ?? "", value: dc }));
-  return resolveByName("data context", requested, candidates);
+  return resolveByName("data context", requested ?? "", candidates);
 };
 
 export const resolveCollection = (
   requested: string | undefined,
   dataContext: any
 ): ResolveResult<any> => {
+  // Gate 2 boundary coercion (PR #114 review #2 root cause): only when DEFINED, so undefined
+  // still means "not provided" rather than becoming the literal string "undefined".
+  if (requested !== undefined) requested = String(requested);
   const collections: any[] = dataContext?.collections ?? [];
   if (requested === undefined || requested === "") {
     if (collections.length === 1) return { ok: true, value: collections[0], repaired: false };
@@ -92,6 +103,8 @@ export const resolveAttribute = (
   requested: string,
   dataContext: any
 ): ResolveResult<{ attr: any; collection: any }> => {
+  // Gate 2 boundary coercion (PR #114 review #2 root cause).
+  requested = String(requested);
   const candidates: { name: string; value: { attr: any; collection: any } }[] = [];
   for (const collection of dataContext?.collections ?? []) {
     for (const attr of collection?.attrs ?? []) {
@@ -343,6 +356,13 @@ export const resolveGraph = (
   graphs: any[],
   selectedGraphId: string | null
 ): ResolveResult<any> => {
+  // Gate 2 boundary coercion (PR #114 review #2 — the exact crash site): callers pass
+  // `args.graph as string`, a compile-time-only cast, so a model echoing a printed numeric id
+  // back as an unquoted JSON number reaches `requested.trim()` below as a runtime `number`,
+  // throwing `TypeError: requested.trim is not a function`. Coerce here, only when DEFINED, so
+  // undefined still means "no graph specified" rather than becoming the literal string
+  // "undefined".
+  if (requested !== undefined) requested = String(requested);
   if (requested === undefined || requested === "") {
     const selected = graphs.find((g) => String(g?.id) === String(selectedGraphId));
     if (selected) return { ok: true, value: selected, repaired: false };

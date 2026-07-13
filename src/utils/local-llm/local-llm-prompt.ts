@@ -15,6 +15,12 @@ const THINK_SWITCHES = [NO_THINK, THINK];
 const SEED_HEADER = "### Selected graph data:";
 const SEED_VALUES_PREFIX = "Values";
 const DIGEST_HEADER = "### Datasets (schema):";
+const DIGEST_TRUNCATED_LABEL = "\n[schema digest truncated]";
+// Sized from the actual marker strings trimToBudget's step 3 appends after the kept content (the
+// label, plus whichever think-switch token gets re-appended) — rather than a hand-counted magic
+// number that would silently under-reserve room if either string grows (PR #114 review nitpick).
+const TRIM_MARKER_RESERVE_CHARS =
+  DIGEST_TRUNCATED_LABEL.length + Math.max(...THINK_SWITCHES.map((s) => `\n${s}`.length));
 
 export interface ILocalPromptInput { toolDocs: string; schemaDigest: string; graphSeed: string; thinking?: boolean; }
 
@@ -68,15 +74,32 @@ export const trimToBudget = (messages: IChatMsg[], maxChars = DEFAULT_PROMPT_BUD
   }
   // 2. Drop oldest transcript turns (out[0] system, last = current user message).
   while (total(out) > maxChars && out.length > 2) out.splice(1, 1);
-  // 3. Truncate the schema digest section tail.
+  // 3. Truncate the schema digest section tail — anchored to the digest header's own offset so
+  //    the cut can never precede it (PR #114 review Gate 1). The old `content.slice(0, room)` cut
+  //    the WHOLE system prompt from the front; `room` shrinks with the size of the CURRENT USER
+  //    MESSAGE (via `others`, below), so a large enough user turn could drive `room` below
+  //    len(instructions + tool docs) and slice straight through the tool documentation — the
+  //    model's capability surface — while still labeling the result "[schema digest truncated]"
+  //    regardless of what was actually removed.
   if (total(out) > maxChars) {
     const others = total(out.slice(1));
-    const room = Math.max(0, maxChars - others - 64);
     const content = sys().content;
+    const digestIdx = content.indexOf(DIGEST_HEADER);
+    // Everything before the digest header (instructions + tool docs) is the untrimmable prefix.
+    // Fall back to the whole content if some caller's prompt never carries the header at all —
+    // an untrimmed whole prompt overshooting budget is still safer than guessing where to cut it.
+    const prefixEnd = digestIdx >= 0 ? digestIdx : content.length;
+    const room = Math.max(prefixEnd, maxChars - others - TRIM_MARKER_RESERVE_CHARS);
+    // Clamped to prefixEnd: if even the untrimmable prefix alone exceeds room, keep it whole
+    // anyway — instructions + tool docs are the capability surface a local model needs to do
+    // anything useful at all; overshooting the char budget slightly beats silently disabling
+    // every tool call.
     const keep = content.slice(0, room);
     const trailingSwitch = THINK_SWITCHES.find((s) => content.endsWith(s));
     const switchSuffix = trailingSwitch ? `\n${trailingSwitch}` : "";
-    out[0] = { ...sys(), content: `${keep}\n[schema digest truncated]${switchSuffix}` };
+    // The label is now honest unconditionally: this rung only ever removes digest/seed tail,
+    // never the instructions/tool-docs prefix above.
+    out[0] = { ...sys(), content: `${keep}${DIGEST_TRUNCATED_LABEL}${switchSuffix}` };
   }
   return out;
 };

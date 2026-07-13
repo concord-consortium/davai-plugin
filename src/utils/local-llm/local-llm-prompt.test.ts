@@ -154,3 +154,70 @@ it("trim's first rung (drop seed values) leaves the Sketch line intact — only 
   expect(out[0].content).toContain(sketchLine);
   expect(out[0].content).not.toMatch(/^Values \(A\)/m);
 });
+
+// PR #114 review Gate 1: the old step-3 truncation did a blind `content.slice(0, room)` over the
+// WHOLE system prompt, and `room` shrinks with the size of the CURRENT USER MESSAGE (`others`
+// includes it) — a large enough user turn could drive `room` below len(instructions + tool docs)
+// and slice straight through the tool documentation, silently disabling every tool call. The fix
+// anchors the cut to the schema-digest header's own offset so it can never precede it.
+describe("trim never severs instructions/tool docs, regardless of what's oversized (PR #114 Gate 1)", () => {
+  const toolDocs = "- t: d\n  {\"tool\": \"t\"}\n- t2: d2\n  {\"tool\": \"t2\"}";
+
+  it("an oversized CURRENT USER MESSAGE never cuts into instructions/tool docs — only the " +
+    "digest tail is truncated, with the honest label", () => {
+    const sys = buildLocalSystemPrompt({ toolDocs, schemaDigest: "D".repeat(2000), graphSeed: "" });
+    const prefixEnd = sys.indexOf("### Datasets (schema):");
+    const untrimmedPrefix = sys.slice(0, prefixEnd);
+    const hugeUserMessage = "U".repeat(5000);
+    const out = trimToBudget(
+      [{ role: "system", content: sys }, { role: "user", content: hugeUserMessage }],
+      3000
+    );
+    // The never-trimmed prefix survives byte-identical.
+    expect(out[0].content.slice(0, prefixEnd)).toBe(untrimmedPrefix);
+    expect(out[0].content).toContain("### Tools:");
+    expect(out[0].content).toContain(toolDocs);
+    expect(out[0].content).toContain("[schema digest truncated]");
+    // The digest itself was actually shortened (this rung did SOMETHING, not a no-op).
+    expect(out[0].content).not.toContain("D".repeat(2000));
+  });
+
+  it("an oversized schema digest alone (ordinary-sized user message) hits the exact same " +
+    "invariant — the digest, not the prefix, absorbs the cut", () => {
+    const sys = buildLocalSystemPrompt({ toolDocs, schemaDigest: "D".repeat(50000), graphSeed: "" });
+    const prefixEnd = sys.indexOf("### Datasets (schema):");
+    const untrimmedPrefix = sys.slice(0, prefixEnd);
+    const out = trimToBudget(
+      [{ role: "system", content: sys }, { role: "user", content: "small question" }],
+      500
+    );
+    expect(out[0].content.slice(0, prefixEnd)).toBe(untrimmedPrefix);
+    expect(out[0].content).toContain(toolDocs);
+    expect(out[0].content).toContain("[schema digest truncated]");
+  });
+
+  it("the never-trimmed prefix is byte-identical pre- and post-trim under aggressive pressure " +
+    "from BOTH an oversized digest and an oversized user message at once", () => {
+    const sys = buildLocalSystemPrompt({ toolDocs, schemaDigest: "D".repeat(3000), graphSeed: "" });
+    const prefixEnd = sys.indexOf("### Datasets (schema):");
+    const before = sys.slice(0, prefixEnd);
+    const out = trimToBudget(
+      [{ role: "system", content: sys }, { role: "user", content: "U".repeat(6000) }],
+      1000
+    );
+    expect(out[0].content.slice(0, prefixEnd)).toBe(before);
+  });
+
+  it("even when the untrimmable prefix alone exceeds the whole budget, it is kept WHOLE rather " +
+    "than cut — overshooting the budget beats disabling every tool call", () => {
+    const sys = buildLocalSystemPrompt({ toolDocs, schemaDigest: "D".repeat(500), graphSeed: "" });
+    const prefixEnd = sys.indexOf("### Datasets (schema):");
+    const out = trimToBudget(
+      [{ role: "system", content: sys }, { role: "user", content: "hi" }],
+      // A budget far smaller than the prefix itself.
+      Math.floor(prefixEnd / 4)
+    );
+    expect(out[0].content.slice(0, prefixEnd)).toBe(sys.slice(0, prefixEnd));
+    expect(out[0].content).toContain(toolDocs);
+  });
+});

@@ -609,6 +609,52 @@ describe("resolveGraph rung 3/4: plotType-driven shape words (DAVAI-126 review f
   });
 });
 
+// PR #114 review Gate 2: `resolveGraph` (and its sibling resolvers) called `.trim()` on
+// `requested` unconditionally. Callers type it `args.graph as string`, a compile-time-only cast —
+// when the model echoes a printed numeric id back as an unquoted JSON number, `args.graph` is a
+// runtime `number`, and `.trim()` throws `TypeError: requested.trim is not a function`, which
+// dispatchTool then surfaced as a misleading, non-corrective internal-error string. Root-cause fix
+// per the reviewer: coerce `String(requested)` at the boundary (only when defined, so the
+// undefined/"" defaulting semantics every resolver relies on are unchanged) rather than trusting
+// every caller to coerce first.
+describe("boundary coercion: a runtime number for `requested` never throws (PR #114 Gate 2)", () => {
+  it("resolveGraph: a number-typed graph id resolves via rung 0 (exact id match), not a TypeError", () => {
+    const graphs = [{ id: 885090985993956, title: "Heights" }];
+    const r = resolveGraph(885090985993956 as unknown as string, graphs, null);
+    if (!r.ok) throw new Error(`should succeed, got error: ${r.error}`);
+    expect(r.value.id).toBe(885090985993956);
+    expect(r.repaired).toBe(false);
+  });
+
+  it("resolveDataContext: a number-typed requested value hits the normal ladder (no match, " +
+    "corrective error), never a TypeError", () => {
+    const r = resolveDataContext(42 as unknown as string, dcs);
+    if (r.ok) throw new Error("should fail — no data context named 42");
+    expect(r.error).toMatch(/unknown data context/i);
+  });
+
+  it("resolveAttribute: a number-typed requested value hits the normal ladder, never a TypeError", () => {
+    const r = resolveAttribute(42 as unknown as string, dc);
+    if (r.ok) throw new Error("should fail — no attribute named 42");
+    expect(r.error).toMatch(/unknown attribute/i);
+  });
+
+  it("resolveCollection: a number-typed requested value hits the normal ladder, never a TypeError", () => {
+    const multi = { name: "M", collections: [{ name: "A", attrs: [] }, { name: "B", attrs: [] }] };
+    const r = resolveCollection(42 as unknown as string, multi);
+    if (r.ok) throw new Error("should fail — no collection named 42");
+    expect(r.error).toMatch(/unknown collection/i);
+  });
+
+  it("resolveDataContext: a number that happens to match a data context's name still resolves " +
+    "(coercion is genuinely useful, not just non-throwing)", () => {
+    const numericDcs = { 42: { name: "42", collections: [] } };
+    const r = resolveDataContext(42 as unknown as string, numericDcs);
+    if (!r.ok) throw new Error(`should succeed, got error: ${r.error}`);
+    expect(r.value.name).toBe("42");
+  });
+});
+
 describe("helpers", () => {
   it("extracts backticked refs from expressions", () => {
     expect(extractBacktickRefs("`Weight` > mean(`Weight in kg`)")).toEqual(["Weight", "Weight in kg"]);
