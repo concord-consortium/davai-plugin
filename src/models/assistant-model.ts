@@ -9,12 +9,27 @@ import { isGraphSonifiable } from "../utils/graph-sonification-utils";
 import { ChatTranscriptModel } from "./chat-transcript-model";
 import { IToolCallData, IToolRequestError, IMessageResponse, ToolOutput } from "../types";
 import { postMessage } from "../utils/llm-utils";
+import { WsTransport, SeedMessage } from "../utils/ws-transport";
 
 // A tool call the server could not prepare comes back as an error payload rather
 // than a normal CODAP request. This guard narrows the union so the normal path can
 // safely use action/resource/etc.
 const isToolRequestError = (request: IToolCallData["request"]): request is IToolRequestError =>
   "status" in request && request.status === "error";
+
+// Best-effort transcript -> seed messages for WebSocket idle re-seed (after a
+// microVM recycle). Only user/assistant text is replayed; debug entries are skipped.
+const buildReseedMessages = (transcriptStore: any): SeedMessage[] => {
+  const msgs = transcriptStore?.messages ?? [];
+  const out: SeedMessage[] = [];
+  for (const m of msgs) {
+    const content = m?.messageContent?.content;
+    if (typeof content !== "string" || !content.trim()) continue;
+    if (m.speaker === DEBUG_SPEAKER) continue;
+    out.push({ role: m.speaker === DAVAI_SPEAKER ? "assistant" : "user", content });
+  }
+  return out;
+};
 
 // Post a timing debug entry (e.g. "Begin response time"/"Completed response time")
 // measured from the user-submit start. No-op if no start time is recorded.
@@ -56,6 +71,10 @@ export const AssistantModel = types
     streamEnabled: true as boolean,
     responseStartTime: null as number | null,
     effort: "" as string,
+    // WebSocket transport (P3). Off by default: the poll path is unchanged unless enabled.
+    useWebSocket: false as boolean,
+    wsTransport: null as WsTransport | null,
+    wsTransportThreadId: null as string | null,
   }))
   .views((self) => ({
     get isAssistantMocked() {
@@ -255,6 +274,38 @@ export const AssistantModel = types
       }
     });
 
+    const setUseWebSocket = (enabled: boolean) => {
+      self.useWebSocket = enabled;
+    };
+
+    // Lazily create (and re-pin on threadId change) the session-pinned WebSocket
+    // transport. WS_SERVER_URL points at the AgentCore /ws endpoint.
+    const ensureTransport = (): WsTransport => {
+      if (!self.wsTransport || self.wsTransportThreadId !== self.threadId) {
+        self.wsTransport?.close();
+        self.wsTransport = new WsTransport({
+          url: process.env.WS_SERVER_URL || "ws://localhost:8080/ws",
+          authToken: process.env.AUTH_TOKEN || undefined,
+          onReconnect: () => buildReseedMessages(self.transcriptStore),
+        });
+        self.wsTransportThreadId = self.threadId ?? null;
+      }
+      return self.wsTransport;
+    };
+
+    // Run one turn over the WebSocket, mapping streamed tokens to the same
+    // ingestStreamChunk the poll path uses. Returns the terminal output (identical
+    // shape to the poll path's `data`).
+    const wsRunTurn = flow(function* (input: any) {
+      const transport = ensureTransport();
+      const output = yield transport.runTurn(input, {
+        onToken: (text: string) => {
+          if (self.streamEnabled) self.ingestStreamChunk(text);
+        },
+      });
+      return output;
+    });
+
     const sendToolOutputToLlm = flow(function* (toolCallId: string, content: ToolOutput) {
       if (self.isAssistantMocked) return;
 
@@ -268,6 +319,17 @@ export const AssistantModel = types
             content
           }
         };
+
+        // WebSocket: return the tool result over the same socket — no second job, no poll.
+        if (self.useWebSocket) {
+          const wsOut = yield wsRunTurn({ ...reqBody, kind: "tool" });
+          if (wsOut?.status === "cancelled") {
+            self.finishStream();
+            self.addDbgMsg("Tool call job was cancelled on the server", toolCallId);
+            return;
+          }
+          return wsOut;
+        }
 
         // Send tool output to the server
         const submissionResponse = yield postMessage(reqBody, "tool");
@@ -374,6 +436,17 @@ export const AssistantModel = types
             messageId
           };
 
+          let data: IMessageResponse | null = null;
+
+          if (self.useWebSocket) {
+            const wsOut = yield wsRunTurn({ ...reqBody, kind: "message" });
+            if (wsOut?.status === "cancelled") {
+              self.finishStream();
+              self.addDbgMsg("Job was cancelled on the server", messageId);
+              return;
+            }
+            data = wsOut;
+          } else {
           const submissionResponse = yield postMessage(reqBody, "message");
           if (!submissionResponse.ok) {
             throw new Error(`Failed to submit message: ${submissionResponse.statusText}`);
@@ -384,7 +457,6 @@ export const AssistantModel = types
           // 2. Poll server until response is ready. No-progress budget (reset whenever
           // streamed bytes arrive) instead of a fixed attempt count, so long streams
           // aren't dropped mid-flight.
-          let data: IMessageResponse | null = null;
           const idleBudgetMs = 60_000;
           let lastProgressAt = performance.now();
           let lastLen = 0;
@@ -431,6 +503,7 @@ export const AssistantModel = types
             self.finishStream();
             self.addDbgMsg("Polling expired before response received", messageId);
             return;
+          }
           }
 
           self.addDbgMsg("Response from server", formatJsonMessage(data));
@@ -521,7 +594,7 @@ export const AssistantModel = types
       }
     });
 
-    return { createThread, initializeAssistant, handleMessageSubmit, handleCancel, updateDataContexts, updateGraphs };
+    return { createThread, initializeAssistant, handleMessageSubmit, handleCancel, updateDataContexts, updateGraphs, setUseWebSocket };
   })
   .actions((self) => ({
     afterCreate() {

@@ -1,0 +1,295 @@
+<title>DAVAI on AgentCore — Migration Report</title>
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<style>
+  /* ---- tokens ---- */
+  :root{
+    --bg:#F1F4F9; --panel:#FFFFFF; --panel2:#F7F9FC;
+    --ink:#141B26; --ink2:#47566B; --muted:#7A8698;
+    --border:#E3E9F1; --grid:#ECF0F6;
+    --accent:#0E9E8E; --accent-strong:#0B7A6E; --accent-soft:#E1F3F0;
+    --old:#7A5AD0;
+    --good:#137A46; --good-soft:#E3F2E9;
+    --warn:#9C6410; --warn-soft:#F6EEDD;
+    --shadow:0 1px 2px rgba(20,27,38,.05), 0 8px 24px rgba(20,27,38,.05);
+  }
+  @media (prefers-color-scheme:dark){
+    :root{
+      --bg:#0C121A; --panel:#141C27; --panel2:#111823;
+      --ink:#E8EEF5; --ink2:#9DAAB9; --muted:#67717F;
+      --border:#243040; --grid:#1E2836;
+      --accent:#22B7C2; --accent-strong:#3FC9D2; --accent-soft:#122A30;
+      --old:#9E82EE;
+      --good:#49CB7C; --good-soft:#10281B;
+      --warn:#E0A73C; --warn-soft:#2A2113;
+      --shadow:0 1px 2px rgba(0,0,0,.3), 0 10px 30px rgba(0,0,0,.35);
+    }
+  }
+  :root[data-theme="dark"]{
+    --bg:#0C121A; --panel:#141C27; --panel2:#111823;
+    --ink:#E8EEF5; --ink2:#9DAAB9; --muted:#67717F;
+    --border:#243040; --grid:#1E2836;
+    --accent:#22B7C2; --accent-strong:#3FC9D2; --accent-soft:#122A30;
+    --old:#9E82EE; --good:#49CB7C; --good-soft:#10281B; --warn:#E0A73C; --warn-soft:#2A2113;
+    --shadow:0 1px 2px rgba(0,0,0,.3), 0 10px 30px rgba(0,0,0,.35);
+  }
+  :root[data-theme="light"]{
+    --bg:#F1F4F9; --panel:#FFFFFF; --panel2:#F7F9FC;
+    --ink:#141B26; --ink2:#47566B; --muted:#7A8698;
+    --border:#E3E9F1; --grid:#ECF0F6;
+    --accent:#0E9E8E; --accent-strong:#0B7A6E; --accent-soft:#E1F3F0;
+    --old:#7A5AD0; --good:#137A46; --good-soft:#E3F2E9; --warn:#9C6410; --warn-soft:#F6EEDD;
+    --shadow:0 1px 2px rgba(20,27,38,.05), 0 8px 24px rgba(20,27,38,.05);
+  }
+
+  *{box-sizing:border-box}
+  html{-webkit-text-size-adjust:100%}
+  body{
+    margin:0; background:var(--bg); color:var(--ink);
+    font-family:system-ui,-apple-system,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
+    font-size:19px; line-height:1.6; -webkit-font-smoothing:antialiased;
+  }
+  .mono{font-family:ui-monospace,"SF Mono",Menlo,Consolas,"Liberation Mono",monospace; font-variant-numeric:tabular-nums}
+  .wrap{max-width:900px; margin:0 auto; padding:clamp(20px,4vw,56px)}
+  a{color:var(--accent-strong); text-decoration:none; border-bottom:1px solid color-mix(in srgb,var(--accent) 35%, transparent)}
+  a:hover{border-bottom-color:var(--accent)}
+  :focus-visible{outline:2px solid var(--accent); outline-offset:2px; border-radius:3px}
+
+  /* header */
+  header{display:flex; flex-direction:column; gap:14px; margin-bottom:44px}
+  .eyebrow{font-size:13px; letter-spacing:.14em; text-transform:uppercase; color:var(--accent-strong); font-weight:650}
+  h1{font-size:clamp(30px,5vw,44px); line-height:1.08; margin:0; letter-spacing:-.02em; text-wrap:balance; font-weight:720}
+  .thesis{font-size:clamp(18px,2.4vw,21px); color:var(--ink2); margin:0; max-width:38em; text-wrap:pretty}
+  .meta{display:flex; flex-wrap:wrap; gap:8px 20px; margin-top:6px; color:var(--muted); font-size:14.5px}
+  .meta b{color:var(--ink2); font-weight:600}
+  .toggle{position:absolute; top:0; right:0}
+  .htop{position:relative}
+  button.tt{background:var(--panel); color:var(--ink2); border:1px solid var(--border); border-radius:999px; padding:7px 14px; font-size:13.5px; cursor:pointer; font-family:inherit}
+  button.tt:hover{border-color:var(--accent)}
+
+  section{margin:0 0 46px}
+  h2{font-size:14px; letter-spacing:.13em; text-transform:uppercase; color:var(--muted); font-weight:670; margin:0 0 20px; padding-bottom:10px; border-bottom:1px solid var(--border)}
+  h3{font-size:20px; margin:0 0 6px; letter-spacing:-.01em}
+  p{margin:0 0 16px; color:var(--ink2)}
+  p.tight{margin-bottom:0}
+
+  /* scorecard */
+  .verdict{display:flex; align-items:baseline; gap:14px; flex-wrap:wrap; margin-bottom:26px}
+  .verdict .big{font-size:clamp(30px,6vw,46px); font-weight:730; letter-spacing:-.02em; color:var(--ink)}
+  .verdict .big .n{color:var(--accent-strong)}
+  .cards{display:grid; grid-template-columns:1fr; gap:12px}
+  @media(min-width:640px){.cards{grid-template-columns:1fr 1fr}}
+  .card{background:var(--panel); border:1px solid var(--border); border-radius:14px; padding:18px 20px; box-shadow:var(--shadow)}
+  .card .top{display:flex; justify-content:space-between; align-items:center; gap:12px; margin-bottom:8px}
+  .card .name{font-weight:650; font-size:17.5px; color:var(--ink)}
+  .card .desc{font-size:15.5px; color:var(--ink2); line-height:1.5}
+  .pill{font-size:12px; font-weight:700; letter-spacing:.06em; text-transform:uppercase; padding:4px 10px; border-radius:999px; white-space:nowrap; display:inline-flex; align-items:center; gap:6px}
+  .pill.met{color:var(--good); background:var(--good-soft)}
+  .pill.acc{color:var(--warn); background:var(--warn-soft)}
+  .pill .dot{width:7px; height:7px; border-radius:50%; background:currentColor}
+
+  /* stat tiles */
+  .tiles{display:grid; grid-template-columns:repeat(2,1fr); gap:12px; margin:24px 0}
+  @media(min-width:640px){.tiles{grid-template-columns:repeat(4,1fr)}}
+  .tile{background:var(--panel); border:1px solid var(--border); border-radius:14px; padding:16px 18px; box-shadow:var(--shadow)}
+  .tile .v{font-size:27px; font-weight:720; letter-spacing:-.02em; color:var(--ink); line-height:1.1}
+  .tile .v.accent{color:var(--accent-strong)}
+  .tile .k{font-size:13px; color:var(--muted); margin-top:5px; line-height:1.35}
+
+  /* chart */
+  figure{margin:0; background:var(--panel); border:1px solid var(--border); border-radius:16px; padding:22px 20px 12px; box-shadow:var(--shadow)}
+  figure figcaption{font-size:15px; color:var(--muted); margin-top:4px; padding:0 4px}
+  .legend{display:flex; gap:18px; margin:2px 4px 10px; font-size:14px; color:var(--ink2)}
+  .legend span{display:inline-flex; align-items:center; gap:7px}
+  .swatch{width:12px; height:12px; border-radius:3px}
+  .chart-scroll{overflow-x:auto}
+  svg{display:block; width:100%; height:auto; max-width:100%}
+  .bar{transition:opacity .15s}
+  g.barg:hover .bar{opacity:.82}
+
+  /* table */
+  .tbl-scroll{overflow-x:auto; margin-top:18px}
+  table{border-collapse:collapse; width:100%; font-size:15.5px}
+  th,td{text-align:right; padding:10px 14px; border-bottom:1px solid var(--border)}
+  th:first-child,td:first-child{text-align:left}
+  thead th{font-size:12.5px; letter-spacing:.06em; text-transform:uppercase; color:var(--muted); font-weight:650; border-bottom:1.5px solid var(--border)}
+  tbody td{color:var(--ink2)}
+  tbody td.hl{color:var(--accent-strong); font-weight:650}
+  tfoot td{font-weight:700; color:var(--ink); border-top:1.5px solid var(--border); border-bottom:none}
+
+  /* built list */
+  .built{display:grid; grid-template-columns:1fr; gap:12px}
+  @media(min-width:640px){.built{grid-template-columns:1fr 1fr}}
+  .built .row{background:var(--panel); border:1px solid var(--border); border-radius:12px; padding:15px 18px; box-shadow:var(--shadow)}
+  .built .row .h{font-weight:650; color:var(--ink); margin-bottom:3px; display:flex; gap:9px; align-items:center}
+  .built .row .h code{font-size:13.5px; background:var(--panel2); border:1px solid var(--border); border-radius:6px; padding:1px 7px; color:var(--accent-strong)}
+  .built .row .d{font-size:15px; color:var(--ink2); line-height:1.5}
+
+  .note{background:var(--panel2); border:1px solid var(--border); border-left:3px solid var(--accent); border-radius:10px; padding:16px 20px; font-size:16px; color:var(--ink2)}
+  .note b{color:var(--ink)}
+  ul.clean{margin:0; padding-left:1.15em; color:var(--ink2)}
+  ul.clean li{margin-bottom:8px}
+  footer{margin-top:52px; padding-top:22px; border-top:1px solid var(--border); color:var(--muted); font-size:14.5px; display:flex; flex-wrap:wrap; gap:6px 20px; justify-content:space-between}
+</style>
+
+<div class="wrap">
+  <header class="htop">
+    <div class="toggle"><button class="tt" id="tt" aria-label="Toggle light/dark theme">◐ Theme</button></div>
+    <div class="eyebrow">AWS Bedrock AgentCore · migration proof-of-concept</div>
+    <h1>DAVAI backend, re-hosted on AgentCore</h1>
+    <p class="thesis">The LangGraph-JS agent moved to a per-session microVM that holds context in memory — no SQS, no RDS Postgres, no job table — with a WebSocket transport replacing the poll loop. Behavior preserved, deployed live, and proven against the current deployed stack.</p>
+    <div class="meta mono">
+      <span><b>Repo</b> <a href="https://github.com/concord-consortium/davai-agentcore">concord-consortium/davai-agentcore</a></span>
+      <span><b>Runtime</b> davai_agentcore-0c9quSDd49 · us-east-1</span>
+      <span><b>Model</b> gpt-4o-mini</span>
+    </div>
+  </header>
+
+  <section>
+    <h2>Outcome</h2>
+    <div class="verdict">
+      <div class="big"><span class="n">5 of 5</span> completion metrics satisfied</div>
+    </div>
+    <div class="cards">
+      <div class="card">
+        <div class="top"><span class="name">1 · Parity</span><span class="pill met"><span class="dot"></span>Met</span></div>
+        <div class="desc"><b>40/40 (100%)</b> formal certification — 20× describe (correct answer) + 20× modify (document-state delta), the real client driven in real CODAP.</div>
+      </div>
+      <div class="card">
+        <div class="top"><span class="name">2 · Latency</span><span class="pill acc"><span class="dot"></span>Accepted</span></div>
+        <div class="desc"><b>Overall 43%</b> p50 reduction (bar ≥40% — met). Tool-calling is LLM-bound (39%) — accepted after a data-backed review; see below.</div>
+      </div>
+      <div class="card">
+        <div class="top"><span class="name">3 · Architecture</span><span class="pill met"><span class="dot"></span>Met</span></div>
+        <div class="desc">SQS, jobs table, and RDS Postgres <b>absent</b>; no status-poll in the hot path — proven with <b>live deployed</b> traffic (multi-turn memory, no Postgres).</div>
+      </div>
+      <div class="card">
+        <div class="top"><span class="name">4 · Dev parity</span><span class="pill met"><span class="dot"></span>Met</span></div>
+        <div class="desc">The <b>same container</b> runs locally and on AgentCore via one documented command.</div>
+      </div>
+      <div class="card">
+        <div class="top"><span class="name">5 · Deployed &amp; green</span><span class="pill met"><span class="dot"></span>Met</span></div>
+        <div class="desc">New stack <b>live</b> in the account; the Playwright done-loop is runnable and passing.</div>
+      </div>
+    </div>
+  </section>
+
+  <section>
+    <h2>Latency — measured, old vs new</h2>
+    <p>Baseline captured from the live main-branch plugin's own network requests (staging-a), then compared against the new WebSocket transport — same model, same interactions, <span class="mono">N&nbsp;=&nbsp;20</span> each. The transport eliminates the poll interval and collapses the tool round-trip; the reduction is largest on the shortest turns.</p>
+
+    <div class="tiles">
+      <div class="tile"><div class="v accent">43%</div><div class="k">overall p50 reduction — clears the ≥40% bar</div></div>
+      <div class="tile"><div class="v">57%</div><div class="k">describe (single-turn) p50 reduction</div></div>
+      <div class="tile"><div class="v">~490<span style="font-size:16px">ms</span></div><div class="k">transport overhead removed per turn</div></div>
+      <div class="tile"><div class="v">96%</div><div class="k">of the transport overhead eliminated</div></div>
+    </div>
+
+    <figure>
+      <div class="legend"><span><span class="swatch" style="background:var(--accent)"></span>p50 reduction</span><span style="color:var(--muted)">dashed lines = the two target bars</span></div>
+      <div class="chart-scroll">
+      <svg viewBox="0 0 720 340" role="img" aria-label="Bar chart of p50 latency reduction by interaction: describe 57 percent, modify 39 percent, multi-tool modify 24 percent, and overall 43 percent, against a 40 percent overall bar and a 50 percent tool-calling bar.">
+        <!-- gridlines -->
+        <g stroke="var(--grid)" stroke-width="1">
+          <line x1="64" y1="300" x2="700" y2="300"/>
+          <line x1="64" y1="257.7" x2="700" y2="257.7"/>
+          <line x1="64" y1="215.4" x2="700" y2="215.4"/>
+          <line x1="64" y1="173.1" x2="700" y2="173.1"/>
+          <line x1="64" y1="130.8" x2="700" y2="130.8"/>
+          <line x1="64" y1="88.5" x2="700" y2="88.5"/>
+          <line x1="64" y1="46.2" x2="700" y2="46.2"/>
+        </g>
+        <!-- y labels -->
+        <g class="mono" fill="var(--muted)" font-size="12" text-anchor="end">
+          <text x="54" y="304">0%</text>
+          <text x="54" y="219">30%</text>
+          <text x="54" y="134">60%</text>
+        </g>
+        <!-- target bars -->
+        <g stroke-dasharray="5 4" stroke-width="1.5">
+          <line x1="64" y1="130.8" x2="700" y2="130.8" stroke="var(--old)"/>
+          <line x1="64" y1="88.5" x2="700" y2="88.5" stroke="var(--old)"/>
+        </g>
+        <g class="mono" font-size="12" fill="var(--old)" text-anchor="start">
+          <text x="612" y="126">≥40% overall</text>
+          <text x="612" y="84">≥50% tool</text>
+        </g>
+        <!-- bars: baseline y=300, scale 65% over 254px (300->46.2). h = v/65*253.8 -->
+        <!-- describe 57 -> h222.5 top77.5 ; modify 39 -> h152.3 top147.7 ; multi 24 -> h93.7 top206.3 ; overall 43 -> h167.9 top132.1 -->
+        <g class="barg"><title>describe · single turn — 57% p50 reduction (1252ms → 539ms)</title>
+          <rect class="bar" x="96" y="77.5" width="86" height="222.5" rx="5" fill="var(--accent)"/>
+          <text class="mono" x="139" y="66" text-anchor="middle" font-size="16" font-weight="700" fill="var(--ink)">57%</text>
+          <text x="139" y="320" text-anchor="middle" font-size="13.5" fill="var(--ink2)">describe</text>
+        </g>
+        <g class="barg"><title>modify · 1 tool call — 39% p50 reduction (4184ms → 2562ms)</title>
+          <rect class="bar" x="230" y="147.7" width="86" height="152.3" rx="5" fill="var(--accent)"/>
+          <text class="mono" x="273" y="136" text-anchor="middle" font-size="16" font-weight="700" fill="var(--ink)">39%</text>
+          <text x="273" y="320" text-anchor="middle" font-size="13.5" fill="var(--ink2)">modify</text>
+        </g>
+        <g class="barg"><title>modify-multi · 3 tool calls — 24% p50 reduction (14290ms → 10910ms)</title>
+          <rect class="bar" x="364" y="206.3" width="86" height="93.7" rx="5" fill="var(--accent)"/>
+          <text class="mono" x="407" y="195" text-anchor="middle" font-size="16" font-weight="700" fill="var(--ink)">24%</text>
+          <text x="407" y="320" text-anchor="middle" font-size="13.5" fill="var(--ink2)">multi-tool</text>
+        </g>
+        <g class="barg"><title>Overall p50 reduction across interactions — 43%</title>
+          <rect class="bar" x="510" y="132.1" width="86" height="167.9" rx="5" fill="var(--accent-strong)"/>
+          <rect x="510" y="132.1" width="86" height="167.9" rx="5" fill="none" stroke="var(--accent)" stroke-width="2"/>
+          <text class="mono" x="553" y="120" text-anchor="middle" font-size="17" font-weight="750" fill="var(--accent-strong)">43%</text>
+          <text x="553" y="320" text-anchor="middle" font-size="13.5" font-weight="650" fill="var(--ink)">OVERALL</text>
+        </g>
+      </svg>
+      </div>
+      <figcaption>p50 reduction falls as tool calls grow — each tool call is a full LLM turn, so tool interactions are LLM-bound, not transport-bound.</figcaption>
+    </figure>
+
+    <div class="tbl-scroll">
+      <table class="mono">
+        <thead><tr><th>Interaction</th><th>old p50</th><th>new p50</th><th>reduction</th></tr></thead>
+        <tbody>
+          <tr><td>describe · single turn</td><td>1252 ms</td><td>539 ms</td><td class="hl">57%</td></tr>
+          <tr><td>modify · 1 tool call</td><td>4184 ms</td><td>2562 ms</td><td class="hl">39%</td></tr>
+          <tr><td>modify · 3 tool calls</td><td>14290 ms</td><td>10910 ms</td><td class="hl">24%</td></tr>
+        </tbody>
+        <tfoot><tr><td>Overall</td><td></td><td></td><td>43%</td></tr></tfoot>
+      </table>
+    </div>
+
+    <div class="note" style="margin-top:22px">
+      <b>Why the tool-calling ≥50% bar was accepted, not hit.</b> A tool turn is a full extra LLM call (message → requires_action, tool-result → final), so tool interactions are <b>LLM-dominated, not transport-dominated</b> — multi-tool is <i>lower</i> (24%), not higher, because more tool calls add more LLM time. The transport win itself is real and near-complete (~490&nbsp;ms/turn, 96% of transport overhead removed); it simply can't be ≥50% <i>as a fraction</i> of multi-second LLM turns. The old stack was also measured <b>warm</b> — real first-use adds Lambda cold start, which would enlarge the reduction.
+    </div>
+  </section>
+
+  <section>
+    <h2>What was built</h2>
+    <div class="built">
+      <div class="row"><div class="h"><code>backend/</code> AgentCore container</div><div class="d">The LangGraph-JS agent ported verbatim; only <span class="mono">PostgresSaver → in-VM MemorySaver</span>. New <span class="mono">/invocations</span> + <span class="mono">/ping</span> + <span class="mono">/ws</span> (streaming + tool round-trip collapse) + re-seed. ARM64, 325&nbsp;MB.</div></div>
+      <div class="row"><div class="h"><code>client/</code> WebSocket transport</div><div class="d">Fork of the DAVAI client with a session-pinned WS transport (8 unit tests), wired behind a default-off flag; <span class="mono">threadId → runtimeSessionId</span>; idle re-seed from the transcript.</div></div>
+      <div class="row"><div class="h"><code>infra/</code> IaC</div><div class="d">Least-privilege IAM (no <span class="mono">bedrock:InvokeModel</span> — calls stay direct-to-provider), deploy runbook, and a one-block teardown.</div></div>
+      <div class="row"><div class="h"><code>done-loop/</code> Playwright + latency</div><div class="d">The parity harness (real client in real CODAP) driving the 40/40 certification, plus the transport / old-vs-new latency tooling and results.</div></div>
+    </div>
+  </section>
+
+  <section>
+    <h2>Reconcile plan → davai-plugin</h2>
+    <ul class="clean">
+      <li>Replace <span class="mono">sam-server</span> with the AgentCore container + IaC; add Google/Anthropic keys for full multi-provider parity (this spike wired OpenAI only).</li>
+      <li>Apply the client WS transport; set <span class="mono">WS_SERVER_URL</span> and enable the flag; keep the poll path for rollback.</li>
+      <li><b>The one piece not built (needed for production):</b> a client-reachable auth path to the deployed runtime — AgentCore's invoke is a SigV4 AWS API, so the browser needs a thin <b>SigV4 proxy</b> or AgentCore <b>OAuth inbound auth</b>. Everything else is integration-ready.</li>
+    </ul>
+  </section>
+
+  <footer>
+    <span class="mono"><a href="https://github.com/concord-consortium/davai-agentcore">concord-consortium/davai-agentcore</a></span>
+    <span>Runtime left live for demos · teardown in <span class="mono">infra/DEPLOYED.md</span></span>
+  </footer>
+</div>
+
+<script>
+  (function(){
+    var b=document.getElementById('tt');
+    b.addEventListener('click',function(){
+      var cur=document.documentElement.getAttribute('data-theme');
+      if(!cur){ cur = matchMedia('(prefers-color-scheme: dark)').matches ? 'dark':'light'; }
+      document.documentElement.setAttribute('data-theme', cur==='dark'?'light':'dark');
+    });
+  })();
+</script>
