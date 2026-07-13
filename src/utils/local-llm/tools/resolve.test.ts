@@ -23,7 +23,7 @@ describe("normalizeName", () => {
   // leading/trailing SPACE that survives uncollapsed, breaking the normalized-match repair
   // against a differently-formatted name with no such leading space.
   it("re-trims after collapsing separators, so a leading/trailing underscore doesn't survive as " +
-    "a leading/trailing space (PR #114 review item 11)", () => {
+    "a leading/trailing space", () => {
     expect(normalizeName("_sleep_hours")).toBe("sleep hours");
     expect(normalizeName("sleep_hours_")).toBe("sleep hours");
     expect(normalizeName("-sleep-hours-")).toBe("sleep hours");
@@ -78,7 +78,7 @@ describe("domain resolvers", () => {
   // resolveDataContext defaults to the sole context in a single-dataset document, the same way
   // resolveCollection does above — an omitted dataContext must resolve silently rather than
   // bouncing with an "Unknown data context" error and forcing an avoidable round trip.
-  describe("resolveDataContext sole-context default (PR #114 review item 8)", () => {
+  describe("resolveDataContext sole-context default", () => {
     it("an omitted (undefined) dataContext resolves to the only one, not repaired", () => {
       const r = resolveDataContext(undefined, dcs);
       if (!r.ok) throw new Error(`should succeed, got error: ${r.error}`);
@@ -217,7 +217,7 @@ describe("domain resolvers", () => {
 // anymore — a model that copies an id like `885090985993956` from the seed into
 // get_graph_info/sonify calls needs it to resolve directly rather than falling through to
 // title/name matching. Rung 0 runs BEFORE rung 1 (title/name matching).
-describe("resolveGraph rung 0: exact numeric id (DAVAI-126 matrix round 3 E2)", () => {
+describe("resolveGraph rung 0: exact numeric id", () => {
   it("an exact string-equal-to-id request resolves, not repaired (it IS an exact reference)", () => {
     const graphs = [{ id: 885090985993956, title: "Heights" }];
     const r = resolveGraph("885090985993956", graphs, null);
@@ -260,7 +260,7 @@ describe("resolveGraph rung 0: exact numeric id (DAVAI-126 matrix round 3 E2)", 
   });
 });
 
-describe("resolveGraph rung 3: axis + plot-type matching (DAVAI-126)", () => {
+describe("resolveGraph rung 3: axis + plot-type matching", () => {
   // Fixture used across this describe block: a Height dot plot and a Height-vs-Mass scatterplot,
   // both sharing "Height" so substring scoring must disambiguate via the OTHER axis / plot type.
   const heightDotPlot = { id: 10, title: "Height", name: "graph10", xAttributeName: "Height" };
@@ -354,7 +354,7 @@ describe("resolveGraph rung 3: axis + plot-type matching (DAVAI-126)", () => {
 // falling back to an unnecessary rung-4 ask. It runs AFTER the true-duplicate tiebreak (which only
 // fires for content-identical graphs — these two are NOT identical, their axes are swapped) and
 // BEFORE falling to rung 4.
-describe("resolveGraph rung 3 word-order tiebreak (DAVAI-126 matrix round 3 E3)", () => {
+describe("resolveGraph rung 3 word-order tiebreak", () => {
   const heightVsMass = { id: 1, title: "", xAttributeName: "Height", yAttributeName: "Mass" };
   const massVsHeight = { id: 2, title: "", xAttributeName: "Mass", yAttributeName: "Height" };
 
@@ -422,7 +422,7 @@ describe("resolveGraph rung 3 word-order tiebreak (DAVAI-126 matrix round 3 E3)"
   });
 });
 
-describe("resolveGraph true-duplicate tiebreak: newest wins (DAVAI-126)", () => {
+describe("resolveGraph true-duplicate tiebreak: newest wins", () => {
   it("rung 2: two graphs identical in title/name/plotType/axes/dataContext — highest id wins, repaired", () => {
     // CODAP component ids increase with creation order, so the highest numeric id is the most
     // recently created graph — the user's chosen tiebreak for genuinely indistinguishable dupes.
@@ -485,7 +485,7 @@ describe("resolveGraph true-duplicate tiebreak: newest wins (DAVAI-126)", () => 
   });
 });
 
-describe("resolveGraph rung 4: descriptive corrective (DAVAI-126)", () => {
+describe("resolveGraph rung 4: descriptive corrective", () => {
   const heightDotPlot = { id: 10, title: "Height", name: "graph10", xAttributeName: "Height" };
   const heightVsMass = {
     id: 20, title: "Height vs Mass", name: "graph20", xAttributeName: "Height", yAttributeName: "Mass",
@@ -548,7 +548,7 @@ describe("resolveGraph rung 4: descriptive corrective (DAVAI-126)", () => {
   });
 });
 
-describe("resolveGraph rung 3/4: plotType-driven shape words (DAVAI-126 review fix)", () => {
+describe("resolveGraph rung 3/4: plotType-driven shape words", () => {
   // Real runtime plotType values, confirmed against graph-sonification-utils.ts (isDotPlot check,
   // isUnsplitScatterPlot) and graph-sonification-model.test.ts's barChart fixture — NOT guessed.
   it("describeGraphOption labels a barChart as \"bar chart\", not \"dot plot\", even with only one axis set", () => {
@@ -659,7 +659,7 @@ describe("resolveGraph rung 3/4: plotType-driven shape words (DAVAI-126 review f
 // then surface as a misleading, non-corrective internal-error string. Coercing `String(requested)`
 // at the boundary (only when defined, so the undefined/"" defaulting semantics every resolver
 // relies on are unchanged) avoids trusting every caller to coerce first.
-describe("boundary coercion: a runtime number for `requested` never throws (PR #114 Gate 2)", () => {
+describe("boundary coercion: a runtime number for `requested` never throws", () => {
   it("resolveGraph: a number-typed graph id resolves via rung 0 (exact id match), not a TypeError", () => {
     const graphs = [{ id: 885090985993956, title: "Heights" }];
     const r = resolveGraph(885090985993956 as unknown as string, graphs, null);
@@ -704,7 +704,7 @@ describe("boundary coercion: a runtime number for `requested` never throws (PR #
 // coercing to the non-blank string "null" (or surviving as literal whitespace) and defeating the
 // default with a corrective like `No graph matches "null"`. An explicit non-blank value's
 // behavior is completely unchanged.
-describe("Codex hardening F5/F6: null and whitespace-only are treated as omitted, exactly like " +
+describe("null and whitespace-only are treated as omitted, exactly like " +
   "undefined, at every resolver default boundary", () => {
   describe("F5: JSON null does not defeat the omitted default", () => {
     it("resolveGraph(null, ...) resolves the selected graph, same as undefined", () => {
@@ -824,7 +824,7 @@ describe("helpers", () => {
 // shape logic, e.g. "the Height dot plot") -> "graph <id>" when there are no axes to describe at
 // all. Empty string is treated as absent at every tier — never a literal blank label like
 // `Graphs: "" (dot plot of Height)` or `Added Mean adornment to "undefined"`.
-describe("graphLabel (DAVAI-126 matrix round 3 E1)", () => {
+describe("graphLabel", () => {
   it("non-empty title wins", () => {
     expect(graphLabel({ id: 1, title: "Heights", name: "graph1" })).toBe("Heights");
   });

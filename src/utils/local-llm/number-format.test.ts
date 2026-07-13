@@ -3,7 +3,7 @@ import { roundSig } from "./number-format";
 // A non-finite value can never be a meaningful magnitude; roundSig degrades it to a plain
 // "unavailable" rather than a bare "NaN"/"-NaN" a screen reader would speak as if it were a real
 // number.
-describe("roundSig NaN/Infinity guard (PR #114 review item 11)", () => {
+describe("roundSig NaN/Infinity guard", () => {
   it("renders NaN as 'unavailable', never the literal string 'NaN'", () => {
     expect(roundSig(NaN)).toBe("unavailable");
   });
@@ -31,7 +31,7 @@ describe("roundSig NaN/Infinity guard (PR #114 review item 11)", () => {
 // toFixed is even reached. (2) `toFixed` ALWAYS renders |value| >= 1e21 in exponential notation,
 // regardless of the requested decimals — unspeakable/unreadable prose, and the literal opposite
 // of this module's whole "never emit e-notation" purpose.
-describe("roundSig extreme-magnitude hardening (Codex hardening F4)", () => {
+describe("roundSig extreme-magnitude hardening", () => {
   it("denormal-range values never throw a RangeError and never render exponential notation", () => {
     expect(() => roundSig(1e-307)).not.toThrow();
     expect(() => roundSig(2e-307)).not.toThrow();

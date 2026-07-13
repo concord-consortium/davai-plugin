@@ -226,7 +226,7 @@ describe("test developer options component", () => {
     expect(setEffortSpy).toHaveBeenCalledWith("");
   });
 
-  it("shows none/think effort options for a Local entry with effortLevels (DAVAI-126 thinking toggle)", () => {
+  it("shows none/think effort options for a Local entry with effortLevels", () => {
     // The effort menu logic (findEntryByLlmId/resolveEffort) is already generic — this pins that
     // a Local llmList entry carrying effortLevels renders the same way any other model's does.
     // findEntryByLlmId looks the model up by id IN llmList (not off llmId's own JSON), so the
@@ -246,7 +246,7 @@ describe("test developer options component", () => {
     expect(opts).toEqual(["none", "think"]);
   });
 
-  it("disables Local model options and annotates them when WebGPU is unavailable (DAVAI-126)", () => {
+  it("disables Local model options and annotates them when WebGPU is unavailable", () => {
     mockIsWebGPUAvailable.mockReturnValue(false);
     mockConfig.llmList = [
       { id: "mock", provider: "Mock", effortLevels: [] },
@@ -257,7 +257,7 @@ describe("test developer options component", () => {
     expect(option.disabled).toBe(true);
   });
 
-  it("enables Local model options when WebGPU is available (DAVAI-126)", () => {
+  it("enables Local model options when WebGPU is available", () => {
     mockIsWebGPUAvailable.mockReturnValue(true);
     mockConfig.llmList = [
       { id: "mock", provider: "Mock", effortLevels: [] },
@@ -268,33 +268,33 @@ describe("test developer options component", () => {
     expect(option.disabled).toBe(false);
   });
 
-  it("renders the Run Local Eval button (DAVAI-126 Task 11)", () => {
+  it("renders the Run Local Eval button", () => {
     renderDeveloperOptions();
     const button = screen.getByTestId("run-local-eval-button");
     expect(button).toBeInTheDocument();
     expect(button).toHaveTextContent("Run Local Eval");
   });
 
-  it("aria-disables the Run Local Eval button when the selected LLM is not Local (DAVAI-126 Task 11)", () => {
+  it("aria-disables the Run Local Eval button when the selected LLM is not Local", () => {
     mockConfig.isLocalLlm = false;
     renderDeveloperOptions();
     expect(screen.getByTestId("run-local-eval-button")).toHaveAttribute("aria-disabled", "true");
   });
 
-  it("enables (not aria-disabled) the Run Local Eval button when the selected LLM is Local (DAVAI-126 Task 11)", () => {
+  it("enables (not aria-disabled) the Run Local Eval button when the selected LLM is Local", () => {
     mockConfig.isLocalLlm = true;
     renderDeveloperOptions();
     expect(screen.getByTestId("run-local-eval-button")).toHaveAttribute("aria-disabled", "false");
   });
 
-  it("calls assistantStore.runLocalEvalTurns when clicked with a Local model selected (DAVAI-126 Task 11)", () => {
+  it("calls assistantStore.runLocalEvalTurns when clicked with a Local model selected", () => {
     mockConfig.isLocalLlm = true;
     renderDeveloperOptions();
     fireEvent.click(screen.getByTestId("run-local-eval-button"));
     expect(runLocalEvalTurnsSpy).toHaveBeenCalledTimes(1);
   });
 
-  it("does not call assistantStore.runLocalEvalTurns when clicked without a Local model selected (DAVAI-126 Task 11)", () => {
+  it("does not call assistantStore.runLocalEvalTurns when clicked without a Local model selected", () => {
     mockConfig.isLocalLlm = false;
     renderDeveloperOptions();
     fireEvent.click(screen.getByTestId("run-local-eval-button"));
@@ -302,8 +302,8 @@ describe("test developer options component", () => {
   });
 
   it("syncs the Effort dropdown into the assistant store before running the eval " +
-    "(DAVAI-126 eval round 2 item H — the eval must run against the effort the user actually " +
-    "selected, not whatever a prior chat submit last set)", () => {
+    "(the eval must run against the effort the user actually selected, not whatever a prior " +
+    "chat submit last set)", () => {
     mockConfig.isLocalLlm = true;
     mockConfig.effort = "think";
     renderDeveloperOptions();
@@ -315,8 +315,7 @@ describe("test developer options component", () => {
     expect(effortCallOrder).toBeLessThan(evalCallOrder);
   });
 
-  it("does not sync effort or run the eval when clicked without a Local model selected " +
-    "(DAVAI-126 eval round 2 item H)", () => {
+  it("does not sync effort or run the eval when clicked without a Local model selected", () => {
     mockConfig.isLocalLlm = false;
     mockConfig.effort = "think";
     renderDeveloperOptions();

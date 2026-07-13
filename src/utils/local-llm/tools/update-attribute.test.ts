@@ -61,8 +61,7 @@ describe("validate", () => {
     expect((v as any).resolved.position).toBe(0);
   });
 
-  it("rejects a negative position, including one that only becomes negative after flooring " +
-    "(PR #114 review)", () => {
+  it("rejects a negative position, including one that only becomes negative after flooring", () => {
     const whole = updateAttributeTool.validate(
       { dataContext: "Mammals", attribute: "Height", position: -1 }, ctx);
     expect(whole.ok).toBe(false);

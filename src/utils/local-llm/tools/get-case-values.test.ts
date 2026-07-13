@@ -42,7 +42,7 @@ it("unknown attribute yields the corrective options list", () => {
 // `String(it.values[attribute])` renders a literal "null"/"undefined" for a blank cell — a
 // screen-reader user would hear those words as if they were real data values. A readable
 // "(blank)" placeholder replaces both.
-describe("blank/null/undefined cells render a readable placeholder, never literal null/undefined text (PR #114 review item 11)", () => {
+describe("blank/null/undefined cells render a readable placeholder, never literal null/undefined text", () => {
   it("single-attribute fetch: null and undefined cells both render (blank)", async () => {
     (getCollectionItemsForAttribute as jest.Mock).mockResolvedValue([
       { id: "1", values: { Height: 10 } },
@@ -67,7 +67,7 @@ describe("blank/null/undefined cells render a readable placeholder, never litera
   });
 });
 
-describe("no sampling — ships all case values (DAVAI-126 user directive)", () => {
+describe("no sampling — ships all case values", () => {
   it("returns all 250 values for a 250-value fixture (spot-check first+last), with the full count " +
     "and no sampling text", async () => {
     const items = Array.from({ length: 250 }, (_, i) => ({ id: String(i), values: { Height: i } }));

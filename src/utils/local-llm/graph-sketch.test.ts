@@ -162,7 +162,7 @@ describe("scatter sketch without an LSRL adornment", () => {
   // <axis>" word is never taken from just the single largest |deviation| and applied to every
   // listed value on that axis, which would mislabel a smaller-deviation outlier on the other side.
   it("mixed high+low outliers on ONE axis are split into separate 'Unusually high'/'Unusually " +
-    "low' clauses, never mislabeling the smaller-deviation side (PR #114 item 4)", () => {
+    "low' clauses, never mislabeling the smaller-deviation side", () => {
     // X: tight core 10-12 plus a high outlier (200) and a low outlier (-100); Y: no outliers, so
     // this isolates the fix to a single axis.
     const xValues2 = [10, 11, 12, 10, 11, 12, 11, 200, -100];
@@ -173,7 +173,7 @@ describe("scatter sketch without an LSRL adornment", () => {
   });
 
   it("mixed high+low outliers on BOTH axes each get their own high/low clauses, in x-then-y " +
-    "order (PR #114 item 4)", () => {
+    "order", () => {
     const xValues2 = [-500, 500, 48, 49, 50, 51, 52, 49, 50, 51];
     const yValues2 = [5, 6, 5, 6, 5, 6, 5, 6, -50, 50];
     const sketch = computeGraphSketch({ xName: "X", yName: "Y", xValues: xValues2, yValues: yValues2 });
@@ -309,7 +309,7 @@ it("reports a negative direction word for negative r", () => {
 // axis is constant, producing NaN. An undefined correlation is a real fact, not a defect, so
 // state it plainly and skip the entire r-dependent remainder (LSRL/R², per-axis outliers) rather
 // than printing any NaN-derived text.
-describe("zero-variance axis: an undefined correlation is stated plainly, never as NaN (PR #114 item 3)", () => {
+describe("zero-variance axis: an undefined correlation is stated plainly, never as NaN", () => {
   it("constant X axis: names X as the constant axis, with no r/NaN/R² mention anywhere", () => {
     const sketch = computeGraphSketch({
       xName: "Height", yName: "Mass", xValues: [5, 5, 5, 5, 5], yValues: [1, 2, 3, 4, 10],
@@ -358,7 +358,7 @@ describe("zero-variance axis: an undefined correlation is stated plainly, never 
 // r === 0 exactly is a real, valid "no linear relationship" result (NOT the zero-variance/NaN
 // case above) — "positive"/"negative" would assert a direction that does not exist for an
 // exactly-uncorrelated pair.
-describe("r = 0 exactly: 'no linear relationship' wording, not a false direction (PR #114 item 3)", () => {
+describe("r = 0 exactly: 'no linear relationship' wording, not a false direction", () => {
   it("reads 'no linear relationship (r = 0)' instead of 'positive, weak (r = 0)'", () => {
     // y = (x-3)^2, symmetric about x=3 -> cov(x,y) sums to exactly 0 (integer arithmetic, no
     // floating-point risk) while both axes still have real variance (not the zero-variance case).
@@ -373,7 +373,7 @@ describe("r = 0 exactly: 'no linear relationship' wording, not a false direction
 // A floating-point artifact (or a malformed but present rSquared from CODAP's own adornment
 // data) slightly over 1 must never be spoken as "explains about 101%+ of the variation" — R²
 // cannot exceed 1 by definition.
-describe("R² clamp: displayed R² never exceeds 100% (PR #114 item 3)", () => {
+describe("R² clamp: displayed R² never exceeds 100%", () => {
   it("clamps a >1 rSquared (a floating-point artifact large enough to survive rounding, e.g. " +
     "from CODAP's own adornment data) to 1 / 100%, never a nonsensical >100%", () => {
     const sketch = computeGraphSketch({
@@ -393,7 +393,7 @@ describe("R² clamp: displayed R² never exceeds 100% (PR #114 item 3)", () => {
 // "explains about NaN% of the variation"). A numeric rSquared, or one simply absent and computed
 // from r via the existing `?? r * r` fallback, is unaffected.
 describe("LSRL graceful degrade: a malformed rSquared shape is treated as no-LSRL, never " +
-  "printing undefined/NaN (PR #114 review item 11)", () => {
+  "printing undefined/NaN", () => {
   const xValues = [1, 2, 3, 4, 5, 6, 7, 8];
   const yValues = [10, 12, 11, 13, 12, 14, 13, 400];
 
@@ -426,7 +426,7 @@ describe("LSRL graceful degrade: a malformed rSquared shape is treated as no-LSR
 // rSquared does not reject the adornment outright (slope/intercept alone decide eligibility): NaN
 // is not null/undefined, so the `?? r * r` fallback never substitutes it, but it only suppresses
 // the R²-dependent sentence at render time, leaving the equation line intact.
-describe("Codex hardening F2: NaN slope/intercept/rSquared never leak into the LSRL sketch", () => {
+describe("NaN slope/intercept/rSquared never leak into the LSRL sketch", () => {
   const xValues = [1, 2, 3, 4, 5, 6, 7, 8];
   const yValues = [10, 12, 11, 13, 12, 14, 13, 400];
 
@@ -488,7 +488,7 @@ describe("selected pairs line", () => {
   // "N cases" count must adjust to match what's actually listed — never selectedPairs.length (the
   // original, pre-filter count).
   it("skips a non-numeric pair and reports the count of SURVIVING numeric pairs, never a " +
-    "miscount (PR #114 review item 11)", () => {
+    "miscount", () => {
     const sketch = computeGraphSketch({
       ...base, selectedPairs: [[5, 1100], ["junk", "also junk"], [6, 1200]],
     });
@@ -498,7 +498,7 @@ describe("selected pairs line", () => {
   // When EVERY selected pair is non-numeric, the coordinate list is empty, so the Selected line
   // must be omitted entirely — never "Selected: N cases at .", an empty, nonsensical clause.
   it("omits the Selected line entirely when every pair is non-numeric — never 'Selected: N " +
-    "cases at .' (PR #114 review item 11)", () => {
+    "cases at .'", () => {
     const sketch = computeGraphSketch({ ...base, selectedPairs: [["junk", "also junk"]] });
     expect(sketch).not.toMatch(/Selected:/);
     expect(sketch).not.toMatch(/at \./);

@@ -60,7 +60,7 @@ const createStore = () => {
   return AssistantModel.create({ transcriptStore, threadId: "thread-1" });
 };
 
-describe("AssistantModel streaming busy-state (DAVAI-118)", () => {
+describe("AssistantModel streaming busy-state", () => {
   afterEach(() => {
     jest.clearAllMocks();
   });
@@ -220,7 +220,7 @@ describe("AssistantModel streaming busy-state (DAVAI-118)", () => {
   });
 });
 
-describe("AssistantModel effort (DAVAI-125)", () => {
+describe("AssistantModel effort", () => {
   afterEach(() => {
     jest.clearAllMocks();
   });
@@ -236,7 +236,7 @@ describe("AssistantModel effort (DAVAI-125)", () => {
   });
 });
 
-describe("AssistantModel isLocalLlm (DAVAI-126)", () => {
+describe("AssistantModel isLocalLlm", () => {
   it("isLocalLlm reflects the Local provider in llmId", () => {
     const assistantStore = createStore();
     assistantStore.setLlmId(JSON.stringify({ id: "Qwen3-1.7B-q4f16_1-MLC", provider: "Local" }));
@@ -246,7 +246,7 @@ describe("AssistantModel isLocalLlm (DAVAI-126)", () => {
   });
 });
 
-describe("handleMessageSubmitLocalLlm (DAVAI-126)", () => {
+describe("handleMessageSubmitLocalLlm", () => {
   afterEach(() => {
     jest.clearAllMocks();
   });
@@ -343,8 +343,7 @@ describe("handleMessageSubmitLocalLlm (DAVAI-126)", () => {
     await first.catch(() => undefined);
   });
 
-  it("createThread (reset) also drops a queued local message instead of leaking it to the " +
-    "server (PR #114 review item 7)", async () => {
+  it("createThread (reset) also drops a queued local message instead of leaking it to the server", async () => {
     // createThread already bumps turnEpoch (invalidating the in-flight local turn — it has no
     // currentMessageId to gate the handleCancel branch above, since only the SERVER path sets
     // that). It must also clear messageQueue, the way handleCancel and setLlmId both do: a queued
@@ -373,7 +372,7 @@ describe("handleMessageSubmitLocalLlm (DAVAI-126)", () => {
     await first.catch(() => undefined);
   });
 
-  it("posts no reply after cancel when the in-flight turn later settles (DAVAI-126 C1)", async () => {
+  it("posts no reply after cancel when the in-flight turn later settles", async () => {
     // Cancel interrupts generation and clears the flags, but the flow suspended at
     // `yield runLocalTurn` still resumes when that promise settles. Without an
     // epoch guard, its addDavaiMsg would post a zombie reply AFTER "I've cancelled…", and its
@@ -407,7 +406,7 @@ describe("handleMessageSubmitLocalLlm (DAVAI-126)", () => {
     expect(store.showLoadingIndicator).toBe(false);
   });
 
-  it("posts no error zombie when a cancelled turn later rejects (DAVAI-126 C1)", async () => {
+  it("posts no error zombie when a cancelled turn later rejects", async () => {
     const store = createLocalStore();
     let reject: (e: Error) => void = () => undefined;
     (runLocalTurn as jest.Mock).mockImplementationOnce(
@@ -427,7 +426,7 @@ describe("handleMessageSubmitLocalLlm (DAVAI-126)", () => {
     expect(store.isLoadingResponse).toBe(false);
   });
 
-  it("does not let a cancelled turn's stale finally clobber a fresh turn's loading flag (DAVAI-126 C1)", async () => {
+  it("does not let a cancelled turn's stale finally clobber a fresh turn's loading flag", async () => {
     const store = createLocalStore();
     let releaseFirst: (v: string) => void = () => undefined;
     let releaseSecond: (v: string) => void = () => undefined;
@@ -490,7 +489,7 @@ describe("handleMessageSubmitLocalLlm (DAVAI-126)", () => {
     expect(store.transcriptStore.messages.at(-1)?.messageContent.content).toBe("Result: tool ok");
   });
 
-  it("assembles a drained queue turn without dropping the prior reply or duplicating the queued text (DAVAI-126 I3/P2b)", async () => {
+  it("assembles a drained queue turn without dropping the prior reply or duplicating the queued text", async () => {
     // Reproduce the transcript state at the moment a queued turn is drained: the queued user
     // message was added by App at submit time, and the PRIOR turn's DAVAI reply is the last
     // row (not the queued user row) — trailing-only removal leaves the queued row in place, so
@@ -516,7 +515,7 @@ describe("handleMessageSubmitLocalLlm (DAVAI-126)", () => {
     expect(args.userMessage).toBe("second question");
   });
 
-  it("still drops the trailing user row for a direct submit (DAVAI-126 I3/P2b)", async () => {
+  it("still drops the trailing user row for a direct submit", async () => {
     // Direct submit path: App adds the user row immediately before dispatch, so the last row IS
     // the just-submitted message and must be excluded from the mapped turns.
     const store = createLocalStore();
@@ -534,7 +533,7 @@ describe("handleMessageSubmitLocalLlm (DAVAI-126)", () => {
     expect(args.userMessage).toBe("describe the graph");
   });
 
-  it("keeps an earlier identical user question when removing only the last-occurring queued row (DAVAI-126 P2b)", async () => {
+  it("keeps an earlier identical user question when removing only the last-occurring queued row", async () => {
     // A history where the SAME question text was asked earlier (and answered differently) must
     // keep that earlier row intact — only the most recent (queued) occurrence is the one being
     // drained and must be excluded from `turns`.
@@ -555,7 +554,7 @@ describe("handleMessageSubmitLocalLlm (DAVAI-126)", () => {
     expect(args.userMessage).toBe("describe the graph");
   });
 
-  it("tags status messages as kind 'announcement' so they stay out of model history (DAVAI-126 I2)", async () => {
+  it("tags status messages as kind 'announcement' so they stay out of model history", async () => {
     const store = createLocalStore();
 
     // WebGPU-unavailable notice.
@@ -580,7 +579,7 @@ describe("handleMessageSubmitLocalLlm (DAVAI-126)", () => {
     expect(replyMsg?.messageContent.kind).toBeUndefined();
   });
 
-  it("tags the local cancel confirmation as an announcement (DAVAI-126 I2)", async () => {
+  it("tags the local cancel confirmation as an announcement", async () => {
     const store = createLocalStore();
     let release: (v: string) => void = () => undefined;
     (runLocalTurn as jest.Mock).mockImplementationOnce(() => new Promise((res) => { release = res; }));
@@ -594,7 +593,7 @@ describe("handleMessageSubmitLocalLlm (DAVAI-126)", () => {
     await first.catch(() => undefined);
   });
 
-  it("discards an in-flight local turn when the model is switched mid-turn (DAVAI-126 C1)", async () => {
+  it("discards an in-flight local turn when the model is switched mid-turn", async () => {
     // Switching models (setLlmId) bumps the same epoch as cancel, so a turn started under the
     // old model must not post its reply into the new model's conversation.
     const store = createLocalStore();
@@ -616,8 +615,7 @@ describe("handleMessageSubmitLocalLlm (DAVAI-126)", () => {
     expect(contents).not.toContain("stale reply from the old model");
   });
 
-  it("clears the busy flags and message queue immediately when the model is switched mid-turn " +
-    "(DAVAI-126 review round 2 F2)", async () => {
+  it("clears the busy flags and message queue immediately when the model is switched mid-turn", async () => {
     // The epoch design intentionally makes a STALE turn's finally skip clearing the flags (so it
     // can't clobber a NEWER turn — see "does not let a cancelled turn's stale finally clobber a
     // fresh turn's loading flag" above). But a model switch creates no newer turn to eventually
@@ -660,8 +658,7 @@ describe("handleMessageSubmitLocalLlm (DAVAI-126)", () => {
     expect(contents).not.toContain("stale reply from the old model");
   });
 
-  it("still clears the busy flags normally when a turn completes without a model switch " +
-    "(DAVAI-126 review round 2 F2 no-regression)", async () => {
+  it("still clears the busy flags normally when a turn completes without a model switch", async () => {
     // setLlmId's flag-clearing addition must only affect an ACTUAL switch (a real epoch bump);
     // an ordinary completed turn (no switch involved) must clear the flags via its own finally,
     // independent of setLlmId.
@@ -674,8 +671,7 @@ describe("handleMessageSubmitLocalLlm (DAVAI-126)", () => {
     expect(last?.messageContent.content).toBe("A local description.");
   });
 
-  it("setting the SAME llmId does not clear busy flags or the queue (no-op switch, DAVAI-126 " +
-    "review round 2 F2 no-regression)", async () => {
+  it("setting the SAME llmId does not clear busy flags or the queue (no-op switch)", async () => {
     // setLlmId only bumps the epoch (and clears the flags/queue) on a REAL change. Calling it
     // with the value it already has must not interrupt an in-flight turn.
     const store = createLocalStore();
@@ -701,7 +697,7 @@ describe("handleMessageSubmitLocalLlm (DAVAI-126)", () => {
     expect(contents).toContain("real reply");
   });
 
-  describe("thinking toggle (DAVAI-126)", () => {
+  describe("thinking toggle", () => {
     // buildLocalSystemPrompt/local-llm-prompt is NOT mocked in this file, so the systemPrompt
     // runLocalTurn receives is the REAL assembled prompt — its trailing /think or /no_think
     // switch is a direct, faithful signal of what `thinking` was passed in as.
@@ -738,7 +734,7 @@ describe("handleMessageSubmitLocalLlm (DAVAI-126)", () => {
       });
   });
 
-  describe("current-graph derivation (DAVAI-126): single-graph documents need no manual " +
+  describe("current-graph derivation: single-graph documents need no manual " +
     "sonification selection", () => {
     it("builds the graph seed for the sole graph even with no sonification-store selection " +
       "(this bare store's getRoot(self) has no sonificationStore, i.e. no explicit selection)", async () => {
@@ -760,7 +756,7 @@ describe("handleMessageSubmitLocalLlm (DAVAI-126)", () => {
     });
   });
 
-  describe("response-time debug entries (DAVAI-126 Task 12: local-turn parity with the server path)", () => {
+  describe("response-time debug entries (local-turn parity with the server path)", () => {
     // timingDebug posts an ELAPSED duration from responseStartTime, so a Begin posted at submit
     // would always read 0. The local turn is non-streamed (no "first chunk" moment), so — like
     // finalizeStream's non-streamed branch on the server path — the Begin/Completed pair posts
@@ -893,7 +889,7 @@ describe("handleMessageSubmitLocalLlm (DAVAI-126)", () => {
   });
 });
 
-describe("runLocalEvalTurns (DAVAI-126 Task 11)", () => {
+describe("runLocalEvalTurns", () => {
   afterEach(() => {
     jest.clearAllMocks();
   });
@@ -1055,8 +1051,7 @@ describe("runLocalEvalTurns (DAVAI-126 Task 11)", () => {
     consoleLogSpy.mockRestore();
   });
 
-  it("records executeTool's result strings in call order into the eval result's toolResults " +
-    "(DAVAI-126 eval round 2 item B)", async () => {
+  it("records executeTool's result strings in call order into the eval result's toolResults", async () => {
     const store = await createLocalStore();
     const consoleLogSpy = jest.spyOn(console, "log").mockImplementation(() => undefined);
     (dispatchTool as jest.Mock)
@@ -1077,7 +1072,7 @@ describe("runLocalEvalTurns (DAVAI-126 Task 11)", () => {
     consoleLogSpy.mockRestore();
   });
 
-  it("truncates a recorded tool result to 300 chars (DAVAI-126 eval round 2 item B)", async () => {
+  it("truncates a recorded tool result to 300 chars", async () => {
     const store = await createLocalStore();
     const consoleLogSpy = jest.spyOn(console, "log").mockImplementation(() => undefined);
     const longResult = "y".repeat(500);
@@ -1096,8 +1091,7 @@ describe("runLocalEvalTurns (DAVAI-126 Task 11)", () => {
     consoleLogSpy.mockRestore();
   });
 
-  it("keeps whatever toolResults were recorded before a case's turn rejects " +
-    "(DAVAI-126 eval round 2 item B)", async () => {
+  it("keeps whatever toolResults were recorded before a case's turn rejects", async () => {
     const store = await createLocalStore();
     const consoleLogSpy = jest.spyOn(console, "log").mockImplementation(() => undefined);
     (dispatchTool as jest.Mock).mockResolvedValueOnce("The mean is 11.");
@@ -1162,8 +1156,7 @@ describe("runLocalEvalTurns (DAVAI-126 Task 11)", () => {
     consoleLogSpy.mockRestore();
   });
 
-  it("clears the busy flags when the model is switched mid-eval-run, posting no summary " +
-    "(DAVAI-126 review round 2 F2)", async () => {
+  it("clears the busy flags when the model is switched mid-eval-run, posting no summary", async () => {
     // Same reasoning as the chat-turn case: a model switch during an eval run is not superseded
     // by any newer turn, so nothing else will ever clear isLoadingResponse/showLoadingIndicator
     // unless setLlmId does it itself.
@@ -1201,7 +1194,7 @@ describe("runLocalEvalTurns (DAVAI-126 Task 11)", () => {
     consoleLogSpy.mockRestore();
   });
 
-  it("announces already-in-progress and does not start a second run when an eval is already running (DAVAI-126 review F1)", async () => {
+  it("announces already-in-progress and does not start a second run when an eval is already running", async () => {
     const store = await createLocalStore();
     const consoleLogSpy = jest.spyOn(console, "log").mockImplementation(() => undefined);
     let release: () => void = () => undefined;
@@ -1240,7 +1233,7 @@ describe("runLocalEvalTurns (DAVAI-126 Task 11)", () => {
     consoleLogSpy.mockRestore();
   });
 
-  it("sets isLoadingResponse/showLoadingIndicator during the run and clears them on completion and on rejection (DAVAI-126 review F1/F2)", async () => {
+  it("sets isLoadingResponse/showLoadingIndicator during the run and clears them on completion and on rejection", async () => {
     const store = await createLocalStore();
     const consoleLogSpy = jest.spyOn(console, "log").mockImplementation(() => undefined);
 
@@ -1267,7 +1260,7 @@ describe("runLocalEvalTurns (DAVAI-126 Task 11)", () => {
     consoleLogSpy.mockRestore();
   });
 
-  it("resolves (no unhandled rejection), announces the error, and posts no summary or console dump when loadEngine rejects (DAVAI-126 review F2)", async () => {
+  it("resolves (no unhandled rejection), announces the error, and posts no summary or console dump when loadEngine rejects", async () => {
     const store = await createLocalStore();
     const consoleLogSpy = jest.spyOn(console, "log").mockImplementation(() => undefined);
     const consoleErrorSpy = jest.spyOn(console, "error").mockImplementation(() => undefined);
@@ -1288,7 +1281,7 @@ describe("runLocalEvalTurns (DAVAI-126 Task 11)", () => {
     consoleErrorSpy.mockRestore();
   });
 
-  it("resolves, announces the error, and posts no summary or console dump when a step after loadEngine throws (DAVAI-126 review F2)", async () => {
+  it("resolves, announces the error, and posts no summary or console dump when a step after loadEngine throws", async () => {
     // Exercises the catch block via a distinct failure point from loadEngine (buildSchemaDigest,
     // called unconditionally in the body) so the guard isn't just special-cased around the engine
     // load — any synchronous failure in the eval setup must resolve cleanly, not reject/hang.
@@ -1312,7 +1305,7 @@ describe("runLocalEvalTurns (DAVAI-126 Task 11)", () => {
     consoleErrorSpy.mockRestore();
   });
 
-  describe("fixture guard: a graph must be selected before the eval runs (DAVAI-126 eval round 1 F3)", () => {
+  describe("fixture guard: a graph must be selected before the eval runs", () => {
     it("announces instead of running the battery when no graph is selected and there are zero " +
       "graphs, and sticks no flags", async () => {
       const store = await createLocalStore(null); // no selectedGraphID, no graphs
@@ -1338,7 +1331,7 @@ describe("runLocalEvalTurns (DAVAI-126 Task 11)", () => {
     });
 
     it("still announces (mentioning the Sonification section) when two graphs exist and neither " +
-      "is selected — ambiguous, so the single-graph fallback cannot apply (DAVAI-126 current-graph fix)", async () => {
+      "is selected — ambiguous, so the single-graph fallback cannot apply", async () => {
       const store = await createLocalStore(null, [{ id: 10 }, { id: 20 }]);
       const consoleLogSpy = jest.spyOn(console, "log").mockImplementation(() => undefined);
 
@@ -1369,7 +1362,7 @@ describe("runLocalEvalTurns (DAVAI-126 Task 11)", () => {
     });
 
     it("runs the battery normally with one graph and NO sonification selection (single-graph " +
-      "documents need no manual pick, DAVAI-126 current-graph fix)", async () => {
+      "documents need no manual pick)", async () => {
       const store = await createLocalStore(null, [{ id: 99 }]); // no selectedGraphID, exactly one graph
       const consoleLogSpy = jest.spyOn(console, "log").mockImplementation(() => undefined);
 
@@ -1404,7 +1397,7 @@ describe("runLocalEvalTurns (DAVAI-126 Task 11)", () => {
     });
   });
 
-  describe("thinking toggle (DAVAI-126)", () => {
+  describe("thinking toggle", () => {
     it("effort 'think' builds the eval prompt with thinking:true and calls generate with " +
       "maxTokens 2048", async () => {
         const store = await createLocalStore();
@@ -1449,7 +1442,7 @@ describe("runLocalEvalTurns (DAVAI-126 Task 11)", () => {
   });
 });
 
-describe("sonification auto-select on local create_graph (DAVAI-126)", () => {
+describe("sonification auto-select on local create_graph", () => {
   // On the server path, the registered sendCODAPRequest flow (processToolCall,
   // assistant-model.ts ~line 268) runs `root.sonificationStore.setGraphs({ selectNewest: true })`
   // right after a successful `create component (graph)` request. The local path's create_graph
@@ -1536,7 +1529,7 @@ describe("sonification auto-select on local create_graph (DAVAI-126)", () => {
   });
 });
 
-describe("refreshGraphList: refills graphs WITHOUT the selectNewest side effect (DAVAI-126 Task D)", () => {
+describe("refreshGraphList: refills graphs WITHOUT the selectNewest side effect", () => {
   // update_graph (src/utils/local-llm/tools/update-graph.ts) mutates an EXISTING graph, so it
   // must refresh the graph list through ctx.refreshGraphList(), never ctx.refreshGraphs() — the
   // latter's setGraphs({ selectNewest: true }) call would risk stealing the current sonification

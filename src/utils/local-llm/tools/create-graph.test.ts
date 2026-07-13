@@ -61,7 +61,7 @@ it("falls back to values.error when the top-level error is absent (tolerance)", 
 
 // When args.title is absent/empty, default to a real title (bivariate: "X vs Y"; univariate:
 // "X") and SEND it to CODAP.
-describe("default title (DAVAI-126 matrix round 3 E4)", () => {
+describe("default title", () => {
   it("omitted title on a bivariate graph defaults to \"X vs Y\" and SENDS it to CODAP", async () => {
     send.mockResolvedValue({ success: true, values: { id: 55, title: "Height vs Age" } });
     const v = createGraphTool.validate({ dataContext: "Mammals", xAttribute: "Height", yAttribute: "Age" }, ctx);
@@ -126,7 +126,7 @@ describe("default title (DAVAI-126 matrix round 3 E4)", () => {
   });
 });
 
-describe("legendAttribute (DAVAI-126 Task C)", () => {
+describe("legendAttribute", () => {
   it("resolves and sends legendAttributeName", async () => {
     const v = createGraphTool.validate(
       { dataContext: "Mammals", xAttribute: "Height", legendAttribute: "Habitat" }, ctx);

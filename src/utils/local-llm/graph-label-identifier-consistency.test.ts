@@ -63,8 +63,7 @@ const assertResolves = (surface: string, label: string, expectedId: number): str
   return label;
 };
 
-describe("umbrella closure: every surface's printed graph label resolves via resolveGraph " +
-  "(DAVAI-126 matrix round 3)", () => {
+describe("umbrella closure: every surface's printed graph label resolves via resolveGraph", () => {
   const labelInventory: Record<string, { untitledDotPlot: string; titledScatterplot: string }> = {};
 
   beforeEach(() => {
@@ -209,6 +208,6 @@ describe("umbrella closure: every surface's printed graph label resolves via res
       expect(labelInventory[surface].titledScatterplot).toBeTruthy();
     }
     // eslint-disable-next-line no-console
-    console.log("DAVAI-126 matrix round 3 umbrella closure — label inventory:", JSON.stringify(labelInventory, null, 2));
+    console.log("Label inventory:", JSON.stringify(labelInventory, null, 2));
   });
 });

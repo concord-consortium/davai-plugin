@@ -202,7 +202,7 @@ describe("test load app", () => {
     expect(window.speechSynthesis.cancel).toHaveBeenCalled();
   });
 
-  it("routes chat submission to the local LLM handler when isLocalLlm is true (DAVAI-126)", () => {
+  it("routes chat submission to the local LLM handler when isLocalLlm is true", () => {
     (mockAppConfig as any).isLocalLlm = true;
 
     renderApp();
@@ -248,7 +248,7 @@ describe("test load app", () => {
     expect(mockService.resumeSpeech).toHaveBeenCalled(); // lifts a prior Escape/Stop suppression
   });
 
-  it("starts loading the local engine when a Local model is selected (DAVAI-126)", () => {
+  it("starts loading the local engine when a Local model is selected", () => {
     mockAppConfig.llmId = JSON.stringify({ id: "Qwen3-1.7B-q4f16_1-MLC", provider: "Local" });
     mockAppConfig.llmList = [
       { id: "mock", provider: "Mock", effortLevels: [] },
@@ -260,14 +260,13 @@ describe("test load app", () => {
     expect(localLlmService.loadEngine).toHaveBeenCalledWith("Qwen3-1.7B-q4f16_1-MLC");
   });
 
-  it("unloads the local engine when a server model is selected (DAVAI-126)", () => {
+  it("unloads the local engine when a server model is selected", () => {
     renderApp(); // default (non-Local) config
 
     expect(localLlmService.unload).toHaveBeenCalled();
   });
 
-  it("also unloads the local engine on unmount, independent of the llmId-driven unload effect " +
-    "(PR #114 review item 11)", () => {
+  it("also unloads the local engine on unmount, independent of the llmId-driven unload effect", () => {
     mockAppConfig.llmId = JSON.stringify({ id: "Qwen3-1.7B-q4f16_1-MLC", provider: "Local" });
     mockAppConfig.llmList = [
       { id: "mock", provider: "Mock", effortLevels: [] },
@@ -284,7 +283,7 @@ describe("test load app", () => {
     expect(localLlmService.unload).toHaveBeenCalledTimes(1);
   });
 
-  it("announces only coarse 25% milestones and a single readiness message, never per-percent (DAVAI-126)", () => {
+  it("announces only coarse 25% milestones and a single readiness message, never per-percent", () => {
     mockAppConfig.llmId = JSON.stringify({ id: "Qwen3-1.7B-q4f16_1-MLC", provider: "Local" });
     mockAppConfig.llmList = [
       { id: "mock", provider: "Mock", effortLevels: [] },
@@ -353,7 +352,7 @@ describe("test load app", () => {
       expect.objectContaining({ content: expect.stringMatching(/local model is ready/) }));
   });
 
-  it("re-announces milestones for a second model loaded after the first (DAVAI-126 I1)", () => {
+  it("re-announces milestones for a second model loaded after the first", () => {
     mockAppConfig.llmId = JSON.stringify({ id: "Qwen3-1.7B-q4f16_1-MLC", provider: "Local" });
     mockAppConfig.llmList = [
       { id: "mock", provider: "Mock", effortLevels: [] },
@@ -390,7 +389,7 @@ describe("test load app", () => {
       expect.objectContaining({ content: expect.stringMatching(/25% complete/) }));
   });
 
-  it("suppresses download/milestone announcements for a cache-read load, announcing only readiness (DAVAI-126)", () => {
+  it("suppresses download/milestone announcements for a cache-read load, announcing only readiness", () => {
     // WebLLM fires initProgressCallback for cache reads too, with progress climbing 0 -> 1 in
     // seconds. Its `text` distinguishes the phases: cache reads say "Loading model from
     // cache[...]" rather than "Fetching ...". An already-downloaded model must not spam
@@ -431,7 +430,7 @@ describe("test load app", () => {
       }));
   });
 
-  it("unsubscribes from load-state changes on unmount (DAVAI-126)", () => {
+  it("unsubscribes from load-state changes on unmount", () => {
     const { unmount } = renderApp();
 
     expect(loadStateChangeCallback).toBeDefined();
@@ -446,7 +445,7 @@ describe("test load app", () => {
     expect(mockUnsubscribeLoadStateChange).toHaveBeenCalledTimes(1);
   });
 
-  it("leads with a phase-neutral loading message and announces the expected size for the 1.7B local model (DAVAI-126)", () => {
+  it("leads with a phase-neutral loading message and announces the expected size for the 1.7B local model", () => {
     // Phrasing must not claim a download is happening — WebLLM's own progress callback fires
     // for cache reads too, so an already-downloaded model loads from cache, not the network.
     mockAppConfig.llmId = JSON.stringify({ id: "Qwen3-1.7B-q4f16_1-MLC", provider: "Local" });
@@ -464,7 +463,7 @@ describe("test load app", () => {
       }));
   });
 
-  it("leads with a phase-neutral loading message and announces the expected size for the 4B local model (DAVAI-126)", () => {
+  it("leads with a phase-neutral loading message and announces the expected size for the 4B local model", () => {
     mockAppConfig.llmId = JSON.stringify({ id: "Qwen3-4B-q4f16_1-MLC", provider: "Local" });
     mockAppConfig.llmList = [
       { id: "mock", provider: "Mock", effortLevels: [] },
@@ -480,7 +479,7 @@ describe("test load app", () => {
       }));
   });
 
-  it("explains the WebGPU requirement and skips loadEngine when WebGPU is unavailable (DAVAI-126)", () => {
+  it("explains the WebGPU requirement and skips loadEngine when WebGPU is unavailable", () => {
     (localLlmService.isWebGPUAvailable as jest.Mock).mockReturnValue(false);
     mockAppConfig.llmId = JSON.stringify({ id: "Qwen3-1.7B-q4f16_1-MLC", provider: "Local" });
     mockAppConfig.llmList = [
@@ -495,7 +494,7 @@ describe("test load app", () => {
     expect(localLlmService.loadEngine).not.toHaveBeenCalled();
   });
 
-  it("announces a failure message when the local engine fails to load (DAVAI-126)", async () => {
+  it("announces a failure message when the local engine fails to load", async () => {
     (localLlmService.loadEngine as jest.Mock).mockRejectedValueOnce(new Error("download failed"));
     mockAppConfig.llmId = JSON.stringify({ id: "Qwen3-1.7B-q4f16_1-MLC", provider: "Local" });
     mockAppConfig.llmList = [

@@ -180,7 +180,7 @@ describe("execute: single-change updates", () => {
   });
 });
 
-describe("execute: graphLabel wiring (DAVAI-126 matrix round 3 E1)", () => {
+describe("execute: graphLabel wiring", () => {
   it("uses graphLabel's descriptive fallback in the result sentence when the graph has neither " +
     "title nor name, and no rename is requested", async () => {
     const untitledGraphs = [{ id: 77, dataContext: "Mammals", xAttributeName: "Height" }];

@@ -17,7 +17,7 @@ it("assembles instructions + generated tool docs + digest + seed, ending with /n
   expect(sys.trimEnd().endsWith("/no_think")).toBe(true);
 });
 
-describe("thinking toggle (DAVAI-126)", () => {
+describe("thinking toggle", () => {
   const baseInput = { toolDocs: "- t: d", schemaDigest: "D", graphSeed: "" };
 
   it("ends with /think when thinking is true", () => {
@@ -73,7 +73,7 @@ it("maps the last 6 transcript turns to chat roles", () => {
   expect(turns[5]).toEqual({ role: "assistant", content: "m9" });
 });
 
-it("excludes announcement-kind messages from transcript turns (DAVAI-126 I2)", () => {
+it("excludes announcement-kind messages from transcript turns", () => {
   const messages = [
     { speaker: USER_SPEAKER, messageContent: { content: "describe the graph" } },
     { speaker: DAVAI_SPEAKER, messageContent: { content: "Model loading: 25% complete.", kind: "announcement" } },
@@ -135,7 +135,7 @@ it("trim's first rung (drop seed values) leaves the Sketch line intact — only 
 // it) — a large enough user turn could drive `room` below len(instructions + tool docs) and
 // slice straight through the tool documentation, silently disabling every tool call. Anchoring
 // the cut to the schema-digest header's own offset ensures it can never precede it.
-describe("trim never severs instructions/tool docs, regardless of what's oversized (PR #114 Gate 1)", () => {
+describe("trim never severs instructions/tool docs, regardless of what's oversized", () => {
   const toolDocs = "- t: d\n  {\"tool\": \"t\"}\n- t2: d2\n  {\"tool\": \"t2\"}";
 
   it("an oversized CURRENT USER MESSAGE never cuts into instructions/tool docs — only the " +

@@ -83,7 +83,7 @@ it("falls back to values.error when the top-level error is absent (tolerance)", 
 });
 
 it("echoes the formula verbatim (canonicalized) in the success result " +
-  "(DAVAI-126 eval round 2 item G — makes visible exactly what formula reached CODAP)", async () => {
+  "(makes visible exactly what formula reached CODAP)", async () => {
   const v = createAttributeTool.validate(
     { dataContext: "Mammals", name: "HeightInFeet", formula: "`Speed`*3.281" }, ctx);
   expect(v.ok).toBe(true);

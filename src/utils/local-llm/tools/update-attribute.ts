@@ -22,7 +22,7 @@ export const updateAttributeTool: ILocalTool = {
     const position = positionArg !== undefined && Number.isFinite(positionArg) ? Math.floor(positionArg) : undefined;
 
     // "position" is documented as 0-based; Math.floor(-0.1) silently produces -1 (a value CODAP
-    // was never meant to receive) unless explicitly rejected here (PR #114 review).
+    // was never meant to receive) unless explicitly rejected here.
     if (hasPosition && (position === undefined || position < 0)) {
       return { ok: false, error: "\"position\" must be a non-negative integer (0-based)." };
     }

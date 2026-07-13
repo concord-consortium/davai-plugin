@@ -9,7 +9,7 @@ import {
 } from "../codap-api-utils";
 import { buildSchemaDigest, buildGraphSeed, deriveCurrentGraphId, formatAdornment } from "./local-llm-prefetch";
 
-describe("deriveCurrentGraphId (DAVAI-126 current-graph fix)", () => {
+describe("deriveCurrentGraphId", () => {
   it("explicit selection wins over any graph list, including when it's a number", () => {
     expect(deriveCurrentGraphId(42, [{ id: 1 }, { id: 2 }])).toBe("42");
     expect(deriveCurrentGraphId("42", [{ id: 1 }, { id: 2 }])).toBe("42");
@@ -78,7 +78,7 @@ it("adds the unit to a digest entry when the attribute object carries a `unit` f
 // literal text "undefined" into the digest — a screen-reader user (or the model) would read/see
 // "undefined" as if it were a real name.
 it("never renders literal \"undefined\" into the digest when a dataContext/collection/attribute " +
-  "is missing its name field (PR #114 review item 11)", () => {
+  "is missing its name field", () => {
   const malformed = {
     NoName: {
       // dataContext itself has no `name`
@@ -98,7 +98,7 @@ it("never renders literal \"undefined\" into the digest when a dataContext/colle
 });
 
 describe("formatAdornment never renders literal \"undefined\" for a malformed/incomplete " +
-  "adornment (PR #114 review item 11)", () => {
+  "adornment", () => {
   it("an LSRL adornment missing rSquared", () => {
     expect(formatAdornment({ type: "LSRL", slope: 2, intercept: 1 } as any)).not.toMatch(/undefined/);
   });
@@ -111,7 +111,7 @@ describe("formatAdornment never renders literal \"undefined\" for a malformed/in
 // The `?? "unavailable"` guard is nullish-only (null/undefined); a NaN/Infinity numeric field —
 // neither null nor undefined — would sail through unguarded, rendering the literal "slope NaN"
 // or "mean Infinity" a screen reader would speak as if it were a real number.
-describe("formatAdornment never renders a non-finite numeric literal (Codex hardening F3)", () => {
+describe("formatAdornment never renders a non-finite numeric literal", () => {
   it("a NaN slope renders 'slope unavailable', not 'slope NaN'", () => {
     const out = formatAdornment({ type: "LSRL", slope: NaN, intercept: 1, rSquared: 0.5 } as any);
     expect(out).toContain("slope unavailable");
@@ -187,8 +187,7 @@ describe("buildGraphSeed", () => {
     expect(seed).not.toContain("undefined");
   });
 
-  it("includes ALL values with no sampling note when the graph has over 100 cases " +
-    "(DAVAI-126 user directive)", async () => {
+  it("includes ALL values with no sampling note when the graph has over 100 cases", async () => {
     const items = Array.from({ length: 150 }, (_, i) => ({ id: String(i), values: { Height: i } }));
     (getCollectionItemsForAttribute as jest.Mock).mockResolvedValue(items);
 

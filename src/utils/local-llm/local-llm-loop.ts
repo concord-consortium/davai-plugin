@@ -33,9 +33,9 @@ const capToolResult = (result: string): string =>
     : `${result.slice(0, MAX_TOOL_RESULT_CHARS)}\n${TOOL_RESULT_TRUNCATED_MARKER}`;
 
 // A JSON.stringify replacer that sorts object keys at every level so semantically-identical args
-// produce the same string regardless of the order the model happened to emit them in on a retry
-// (PR #114 review: a plain JSON.stringify(args) is key-order-sensitive, so a repeat with reordered
-// keys would slip past the repeat-call guard below and let a mutating tool double-execute).
+// produce the same string regardless of the order the model happened to emit them in on a retry —
+// a plain JSON.stringify(args) is key-order-sensitive, so a repeat with reordered keys could slip
+// past the repeat-call guard below and let a mutating tool double-execute.
 const sortKeysReplacer = (_key: string, value: unknown): unknown => {
   if (value === null || typeof value !== "object" || Array.isArray(value)) return value;
   return Object.keys(value as Record<string, unknown>).sort().reduce((sorted, k) => {

@@ -37,7 +37,7 @@ beforeEach(() => {
 // The description names the canonical "which mammal is the heaviest?" question verbatim, so
 // models pattern-match the natural-language superlative to this tool instead of reaching for
 // get_case_values/get_stats.
-it("description gains the canonical phrasing naming the heaviest-mammal question (DAVAI-126 matrix round 3 E6)", () => {
+it("description gains the canonical phrasing naming the heaviest-mammal question", () => {
   expect(findCasesTool.description).toContain(
     "Find the top/bottom cases by an attribute or cases matching a condition — use for questions " +
     "like \"which mammal is the heaviest?\"."
@@ -208,9 +208,8 @@ describe("execute: orderBy-form (client-side sort/slice)", () => {
   });
 
   it("non-numeric orderBy values sort last regardless of direction; blank/missing values omit " +
-    "the parenthetical entirely rather than showing a numeric-formatted \"n/a\" (PR #114 review " +
-    "item 6/11 — deliberately updated assertion: \"n/a\" read as MISSING to a listener about a " +
-    "row that is, in fact, present)", async () => {
+    "the parenthetical entirely rather than showing a numeric-formatted \"n/a\" (which would " +
+    "read as MISSING to a listener about a row that is, in fact, present)", async () => {
     (getAllCollectionCases as jest.Mock).mockResolvedValue([
       { case: { id: 1, values: { Mammal: "Elephant", Mass: 6400 } } },
       { case: { id: 2, values: { Mammal: "Missing Data", Mass: "" } } },
@@ -238,7 +237,7 @@ describe("execute: orderBy-form (client-side sort/slice)", () => {
   // zero — sorting it among genuine zeros instead of last with the other non-numeric/blank
   // values, and displaying a fake "0" instead of omitting the parenthetical.
   it("treats a whitespace-only value as blank, not a numeric zero: sorts last and omits the " +
-    "parenthetical (PR #114 review item 11)", async () => {
+    "parenthetical", async () => {
     (getAllCollectionCases as jest.Mock).mockResolvedValue([
       { case: { id: 1, values: { Mammal: "Elephant", Mass: 6400 } } },
       { case: { id: 2, values: { Mammal: "Whitespace Mass", Mass: "   " } } },
@@ -252,7 +251,7 @@ describe("execute: orderBy-form (client-side sort/slice)", () => {
   });
 });
 
-describe("hierarchy contexts after group_by (leaf-collection default; DAVAI-126 Task D fix pass)", () => {
+describe("hierarchy contexts after group_by (leaf-collection default)", () => {
   // Shaped exactly like the Mammals dataContext after group_by has run: group_by moves Diet into
   // a new parent collection named "Diet" (collections are stored parent-first; leaf/childmost is
   // LAST), everything else stays in the childmost "Cases" collection. find_cases must default to
@@ -366,7 +365,7 @@ describe("execute: both-form (where narrows, then orderBy sorts/slices the match
 // for a value that IS present, and "n/a" reads as MISSING to a listener, not "not a number".
 // Prints the raw string for a non-numeric-but-present value, and omits the parenthetical
 // entirely (not "n/a") for a genuinely blank/missing one.
-describe("categorical stat values (PR #114 review item 6)", () => {
+describe("categorical stat values", () => {
   const catDc = {
     name: "Mammals",
     collections: [{
@@ -424,8 +423,7 @@ describe("categorical stat values (PR #114 review item 6)", () => {
 // findLabelAttribute must not trust schema `attr.type === "categorical"` alone — get-stats.ts
 // documents that `type` is unreliable in real documents and value-sniffs instead. Aligns the
 // label-attribute stance with that same value-sniffing rather than trusting attr.type.
-describe("label attribute selection value-sniffs case data instead of trusting attr.type alone " +
-  "(PR #114 review item 6 consistency note)", () => {
+describe("label attribute selection value-sniffs case data instead of trusting attr.type alone", () => {
   it("picks a schema-categorical-typed attribute whose ACTUAL values are non-numeric, same as " +
     "before, when attr.type happens to agree with the data", async () => {
     (getAllCollectionCases as jest.Mock).mockResolvedValue([

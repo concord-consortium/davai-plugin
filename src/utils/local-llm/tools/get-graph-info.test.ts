@@ -89,8 +89,7 @@ it("treats an empty-string title as absent, not as a printed blank label", async
   expect(out).toContain('Graph "the Height vs Age scatterplot"');
 });
 
-it("steers the model away from a redundant call when the data is already in the seed " +
-  "(DAVAI-126 eval round 2 item D)", () => {
+it("steers the model away from a redundant call when the data is already in the seed", () => {
   expect(getGraphInfoTool.description).toContain("Selected graph data");
   expect(getGraphInfoTool.description).toMatch(/call this only for a different graph or after making a change/i);
 });
@@ -131,7 +130,7 @@ describe("graph sketch appended to the tool result", () => {
   // description checklist — otherwise the checklist can steer the model into pure description,
   // silently dropping the action confirmation the user actually cares about hearing.
   it("extends the checklist with an action-first clause so a post-create/change fetch " +
-    "acknowledges the action before describing (DAVAI-126 matrix round 5 Task G3)", async () => {
+    "acknowledges the action before describing", async () => {
     (getCollectionItemsForAttributePair as jest.Mock).mockResolvedValue([
       { id: "1", values: { Height: 1, Age: 2 } },
       { id: "2", values: { Height: 2, Age: 4 } },
@@ -172,7 +171,7 @@ describe("graph sketch appended to the tool result", () => {
 // The checklist trailer must match the sketch's mode — a numeric-flavored checklist ("the
 // outliers above", "relationship numbers") makes no sense appended to a categorical sketch
 // (there is no "outliers above" or "relationship numbers" in category counts).
-describe("checklist trailer adapts to the sketch mode (DAVAI-126 Task H)", () => {
+describe("checklist trailer adapts to the sketch mode", () => {
   const dcWithDietHabitat = {
     name: "Mammals",
     collections: [{ name: "Cases", attrs: [{ name: "Diet" }, { name: "Habitat" }] }],
@@ -204,8 +203,8 @@ describe("checklist trailer adapts to the sketch mode (DAVAI-126 Task H)", () =>
     expect(out).not.toMatch(/the outliers above|relationship numbers/);
   });
 
-  it("still leads with the action-first clause on a categorical sketch (Task G's clause applies " +
-    "to both trailer flavors)", async () => {
+  it("still leads with the action-first clause on a categorical sketch (applies to both trailer " +
+    "flavors)", async () => {
     (getCollectionItemsForAttributePair as jest.Mock).mockResolvedValue([
       { id: "1", values: { Diet: "meat", Habitat: "land" } },
       { id: "2", values: { Diet: "meat", Habitat: "land" } },
@@ -216,7 +215,7 @@ describe("checklist trailer adapts to the sketch mode (DAVAI-126 Task H)", () =>
     expect(out).toContain("If you just created or changed a graph, say that first.");
   });
 
-  it("keeps the numeric checklist wording unchanged for a numeric sketch (regression: Task H " +
+  it("keeps the numeric checklist wording unchanged for a numeric sketch (regression: " +
     "must not alter the existing numeric-mode trailer)", async () => {
     // Explicit numeric-graph mock (not the outer file's beforeEach) — this describe block's own
     // beforeEach overrides getGraphByID for the Diet/Habitat fixture, so the numeric case needs

@@ -34,7 +34,7 @@ it("executes a tool call, feeds the result back, then returns the final", async 
   expect(secondMessages[secondMessages.length - 1].content).toContain("Tool result");
 });
 
-it("invokes the optional onToolCall hook with each tool name, in round order, before executing it (DAVAI-126)", async () => {
+it("invokes the optional onToolCall hook with each tool name, in round order, before executing it", async () => {
   const generate = jest.fn()
     .mockResolvedValueOnce("{\"tool\":\"get_graph_info\"}")
     .mockResolvedValueOnce("{\"tool\":\"get_stats\",\"dataContext\":\"D\",\"attribute\":\"A\"}")
@@ -85,8 +85,7 @@ it("degrades to raw text as the final answer after two invalid envelopes", async
 // mid-sentence at maxTokens) must not bypass the one-retry mechanism just because there's nothing
 // left after stripping — it goes through the SAME one-retry path any other invalid envelope gets,
 // so the model gets one chance to produce a real answer before ever falling back.
-describe("unclosed <think> dump routes into the retry-once path instead of leaking as a final " +
-  "(DAVAI-126 matrix round 3 E7)", () => {
+describe("unclosed <think> dump routes into the retry-once path instead of leaking as a final", () => {
   const unclosedThinkDump = "<think>let me think about the 75th percentile but how do I compute";
 
   it("an unclosed <think> dump on the FIRST invalid envelope gets the retry, not an immediate " +
@@ -160,7 +159,7 @@ it("forces a final answer at the round cap", async () => {
 // like a JSON attempt (trimmed starts with "{" -> FALLBACK); plain prose remains speakable (a
 // prose answer to the nudge is a good answer); a malformed-but-recoverable "final" (parseEnvelope's
 // own tolerant recovery) still wins outright.
-describe("forced-final fallthrough never speaks a raw tool-call envelope (PR #114 item 5)", () => {
+describe("forced-final fallthrough never speaks a raw tool-call envelope", () => {
   it("round-cap forced final answered with ANOTHER tool call degrades to FALLBACK_RESPONSE, " +
     "never the raw tool-call JSON", async () => {
     const generate = jest.fn()
@@ -220,7 +219,7 @@ describe("forced-final fallthrough never speaks a raw tool-call envelope (PR #11
 // FALSE just because the text starts with a backtick. Fenced PROSE, by contrast, is a perfectly
 // good answer once the fence itself is stripped — it must still be spoken (not degraded to
 // FALLBACK_RESPONSE).
-describe("forced-final fenced JSON is never spoken raw (Codex hardening F1)", () => {
+describe("forced-final fenced JSON is never spoken raw", () => {
   it("a fenced, unclosed tool-call attempt degrades to FALLBACK_RESPONSE, never the raw fenced JSON", async () => {
     const generate = jest.fn()
       .mockResolvedValueOnce("{\"tool\":\"get_stats\",\"dataContext\":\"D\",\"attribute\":\"Height\"}")
@@ -269,7 +268,7 @@ it("returns a fallback message if the forced final is also unusable", async () =
   expect(out).toMatch(/wasn't able to complete/i);
 });
 
-it("caps an oversized tool result before feeding it back (DAVAI-126 C2)", async () => {
+it("caps an oversized tool result before feeding it back", async () => {
   const generate = jest.fn()
     .mockResolvedValueOnce("{\"tool\":\"get_graph_info\"}")
     .mockResolvedValueOnce("{\"tool\":\"final\",\"response\":\"done\"}");
@@ -288,7 +287,7 @@ it("caps an oversized tool result before feeding it back (DAVAI-126 C2)", async 
   expect(body.length).toBeLessThanOrEqual(MAX_TOOL_RESULT_CHARS + "\n[tool result truncated]".length);
 });
 
-it("stops between rounds when isCancelled becomes true, returning the fallback (DAVAI-126 C1)", async () => {
+it("stops between rounds when isCancelled becomes true, returning the fallback", async () => {
   const toolEnvelope = "{\"tool\":\"get_graph_info\"}";
   // Cancel flips true after the first generation (during tool execution). The loop must NOT
   // run a second generation.
@@ -307,7 +306,7 @@ it("stops between rounds when isCancelled becomes true, returning the fallback (
   expect(executeTool).toHaveBeenCalledTimes(1);
 });
 
-it("does not even run the first generation when already cancelled (DAVAI-126 C1)", async () => {
+it("does not even run the first generation when already cancelled", async () => {
   const generate = jest.fn().mockResolvedValue("{\"tool\":\"final\",\"response\":\"nope\"}");
   const out = await runLocalTurn({
     ...baseArgs, generate, executeTool: jest.fn(), isCancelled: () => true,
@@ -317,7 +316,7 @@ it("does not even run the first generation when already cancelled (DAVAI-126 C1)
 });
 
 it("re-checks isCancelled after generate() resolves a tool envelope and skips executeTool " +
-  "if cancel landed during generation (DAVAI-126 review round 2 F3)", async () => {
+  "if cancel landed during generation", async () => {
   // Cancel flips true DURING the await on generate() itself (not between iterations, which the
   // test above already covers) — e.g. the user hits Cancel while the model is still producing a
   // create_graph envelope. The loop must not run the tool just because generate() already
@@ -340,7 +339,7 @@ it("re-checks isCancelled after generate() resolves a tool envelope and skips ex
   expect(generate).toHaveBeenCalledTimes(1);
 });
 
-describe("think-stripped assistant pushes (DAVAI-126 thinking toggle)", () => {
+describe("think-stripped assistant pushes", () => {
   // Harmless without thinking (raw has no <think> tags to strip); with thinking enabled, this
   // prevents <think>...</think> blocks from bloating the conversation window on every round and
   // follows Qwen's own strip-history convention. Parsing already strips think tags when reading
@@ -400,7 +399,7 @@ describe("think-stripped assistant pushes (DAVAI-126 thinking toggle)", () => {
 
 });
 
-describe("repeat-call guard (DAVAI-126 eval round 1 F1)", () => {
+describe("repeat-call guard", () => {
   // A small local model sometimes repeats an already-successful tool call verbatim instead of
   // answering. The guard tracks the previous EXECUTED call as a name+args key (sorted-key JSON,
   // so key order doesn't matter) plus its result; an identical next call is intercepted instead
@@ -500,7 +499,7 @@ describe("repeat-call guard (DAVAI-126 eval round 1 F1)", () => {
   });
 
   it("(d3) recognizes a repeat even when the model emits the SAME args with keys in a different " +
-    "order (PR #114 review)", async () => {
+    "order", async () => {
     const firstOrder = "{\"tool\":\"create_graph\",\"dataContext\":\"D\",\"xAttr\":\"Height\"}";
     const reorderedRepeat = "{\"tool\":\"create_graph\",\"xAttr\":\"Height\",\"dataContext\":\"D\"}";
     const generate = jest.fn()

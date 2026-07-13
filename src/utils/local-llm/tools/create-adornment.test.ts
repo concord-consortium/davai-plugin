@@ -60,7 +60,7 @@ it("falls back to values.error when the top-level error is absent (tolerance)", 
   expect(out).toContain("nested not applicable");
 });
 
-describe("corrective retry options on failure (DAVAI-126 eval round 2 item F)", () => {
+describe("corrective retry options on failure", () => {
   // A richer graph list than the top-level `graphs` fixture: one univariate (x only, no y),
   // one scatterplot (both axes), and one with neither axis set (should never be listed).
   const mixedGraphs = [
@@ -167,7 +167,7 @@ describe("corrective retry options on failure (DAVAI-126 eval round 2 item F)", 
 
 // resolved.graphTitle (used in BOTH the success and failure result sentences) uses the shared
 // graphLabel, which is empty-string-safe.
-describe("resolved graphTitle uses the shared graphLabel (DAVAI-126 matrix round 3 E1)", () => {
+describe("resolved graphTitle uses the shared graphLabel", () => {
   it("an empty-string title does not surface as \"undefined\" or a blank quoted label in the " +
     "success message", async () => {
     send.mockResolvedValue({ success: true, values: { type: "Mean", data: [{ mean: 10.79 }] } });

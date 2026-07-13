@@ -51,7 +51,7 @@ it("computes stats from fetched values, ignoring non-numeric entries", async () 
 // value's integer part has more digits than the requested precision (e.g. "1.23457e+6"), which
 // reads badly spoken aloud. Reusing graph-sketch.ts's roundSig (via the shared number-format.ts)
 // at 6 significant figures keeps the same precision level but never emits e-notation.
-it("never emits exponential notation for a large non-integer mean (PR #114 review item 11)", async () => {
+it("never emits exponential notation for a large non-integer mean", async () => {
   (getCollectionItemsForAttribute as jest.Mock).mockResolvedValue([
     { id: "1", values: { Height: 1234567 } },
     { id: "2", values: { Height: 1234568.78 } },
@@ -65,8 +65,7 @@ it("never emits exponential notation for a large non-integer mean (PR #114 revie
 // An extreme-magnitude value (e.g. a malformed/adversarial dataset entry) must never crash
 // get_stats' own formatter (roundSig at sig=6) with a RangeError, and must never render in
 // exponential notation (unspeakable prose).
-it("does not throw and never emits exponential notation for extreme-magnitude values " +
-  "(Codex hardening F4)", async () => {
+it("does not throw and never emits exponential notation for extreme-magnitude values", async () => {
   (getCollectionItemsForAttribute as jest.Mock).mockResolvedValue([
     { id: "1", values: { Height: 1e-307 } },
     { id: "2", values: { Height: 2e-307 } },

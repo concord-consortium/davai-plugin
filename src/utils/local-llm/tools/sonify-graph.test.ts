@@ -37,7 +37,7 @@ it("explains when the graph is not sonifiable", async () => {
 
 // Both messages use the shared, empty-string-safe graphLabel rather than falling back to a raw
 // numeric id, which the model could not reliably resolve back to this graph.
-describe("graphLabel wiring (DAVAI-126 matrix round 3 E1)", () => {
+describe("graphLabel wiring", () => {
   it("uses graphLabel's descriptive fallback (not the raw id) in the not-sonifiable message " +
     "when the graph has no name", async () => {
     (isGraphSonifiable as jest.Mock).mockReturnValue(false);

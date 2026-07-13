@@ -79,7 +79,7 @@ it("generates unconstrained (no response_format) with temperature 0 / max_tokens
   expect(call).not.toHaveProperty("response_format");
 });
 
-it("threads an explicit maxTokens through to the engine call (DAVAI-126 thinking toggle)", async () => {
+it("threads an explicit maxTokens through to the engine call", async () => {
   mockCreate.mockResolvedValue({ choices: [{ message: { content: "hi" } }] });
   await localLlmService.loadEngine("Qwen3-1.7B-q4f16_1-MLC");
   await localLlmService.generate([{ role: "user", content: "hello" }], { maxTokens: 2048 });
@@ -87,7 +87,7 @@ it("threads an explicit maxTokens through to the engine call (DAVAI-126 thinking
   expect(call).toEqual(expect.objectContaining({ max_tokens: 2048 }));
 });
 
-describe("generate watchdog (DAVAI-126)", () => {
+describe("generate watchdog", () => {
   beforeEach(() => {
     jest.useFakeTimers();
   });
@@ -140,7 +140,7 @@ it("sets error state when engine creation fails", async () => {
   );
 });
 
-it("terminates the worker of a still-current load that fails so it does not leak (PR #114 review)", async () => {
+it("terminates the worker of a still-current load that fails so it does not leak", async () => {
   mockCreateWebWorkerMLCEngine.mockRejectedValueOnce(new Error("boom"));
   await expect(localLlmService.loadEngine("Qwen3-1.7B-q4f16_1-MLC")).rejects.toThrow("boom");
   // The worker created for this failed-but-still-current load must be terminated, not left
@@ -167,7 +167,7 @@ const waitForCreateCalls = async (n: number) => {
   }
 };
 
-it("keeps only the second model's engine when models are switched mid-load (DAVAI-126 I1)", async () => {
+it("keeps only the second model's engine when models are switched mid-load", async () => {
   const engineA = makeEngine();
   const engineB = makeEngine();
   let resolveA: (e: any) => void = () => undefined;
@@ -206,7 +206,7 @@ it("keeps only the second model's engine when models are switched mid-load (DAVA
   off();
 });
 
-it("does not announce ready when unloaded mid-load (DAVAI-126 I1)", async () => {
+it("does not announce ready when unloaded mid-load", async () => {
   const engineA = makeEngine();
   let resolveA: (e: any) => void = () => undefined;
   mockCreateWebWorkerMLCEngine.mockImplementationOnce(() => new Promise((res) => { resolveA = res; }));
@@ -238,7 +238,7 @@ const withTimeoutGuard = <T,>(promise: Promise<T>, ms = 1000): Promise<T> =>
     new Promise<T>((_res, rej) => setTimeout(() => rej(new Error("timed out waiting for promise to settle")), ms)),
   ]);
 
-it("terminates a superseded in-flight load's worker and resolves (not rejects) its promise (DAVAI-126 P2a)", async () => {
+it("terminates a superseded in-flight load's worker and resolves (not rejects) its promise", async () => {
   // A's engine creation never settles — simulates a 1-2 GB download/compile still running.
   mockCreateWebWorkerMLCEngine.mockImplementationOnce(() => new Promise(() => undefined));
   const engineB = makeEngine();
@@ -264,7 +264,7 @@ it("terminates a superseded in-flight load's worker and resolves (not rejects) i
   );
 });
 
-it("terminates the in-flight load's worker and resolves its promise on unload() (DAVAI-126 P2a)", async () => {
+it("terminates the in-flight load's worker and resolves its promise on unload()", async () => {
   mockCreateWebWorkerMLCEngine.mockImplementationOnce(() => new Promise(() => undefined));
 
   const states: string[] = [];

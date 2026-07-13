@@ -8,7 +8,7 @@ it("strips <think> blocks defensively", () => {
 // Also strips a trailing unclosed <think> block: maxTokens truncation always cuts at the end of
 // raw generation, so any trailing "<think>" that never closes is a truncation artifact, not
 // valid content — strip it to the end of the string, leaving preceding valid text intact.
-describe("stripThink strips a trailing unclosed <think> block (DAVAI-126 matrix round 3 E7)", () => {
+describe("stripThink strips a trailing unclosed <think> block", () => {
   it("strips a closed pair (existing behavior, unchanged)", () => {
     expect(stripThink("<think>reasoning...</think>{\"tool\":\"final\",\"response\":\"hi\"}"))
       .toBe("{\"tool\":\"final\",\"response\":\"hi\"}");
@@ -55,7 +55,7 @@ it("still strips <think> and recovers embedded JSON", () => {
 // A malformed "final" attempt (e.g. pretty-printed JSON missing its closing brace) must never
 // leak raw JSON syntax as the spoken response — a screen reader would speak "open brace, tool,
 // final, comma...". Recover the response string tolerantly instead.
-describe("recovers a malformed \"final\" envelope instead of surfacing raw JSON (DAVAI-126 matrix round 5 Task G1)", () => {
+describe("recovers a malformed \"final\" envelope instead of surfacing raw JSON", () => {
   it("recovers the exact live sample: pretty-printed final envelope missing its closing brace", () => {
     const raw = '{\n  "tool": "final",\n  "response": "The graph displays the \'Height\' attribute of ' +
       "mammals. Values range from about 0.2 to 6 meters, with most mammals clustering between 1 " +
@@ -114,7 +114,7 @@ describe("recovers a malformed \"final\" envelope instead of surfacing raw JSON 
   // \u is truncated or followed by non-hex — parseInt of an empty/invalid hex string is NaN, and
   // String.fromCharCode(NaN) is a NUL character, which must never leak silently into the
   // "recovered" text.
-  describe("a malformed \\u escape falls through to literal text, never a NUL character (PR #114 review item 11)", () => {
+  describe("a malformed \\u escape falls through to literal text, never a NUL character", () => {
     const NUL = String.fromCharCode(0);
 
     it("generation truncated immediately after \\u (no hex digits at all)", () => {

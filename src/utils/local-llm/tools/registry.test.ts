@@ -32,7 +32,7 @@ beforeEach(() => registerTools([okTool, throwTool, validateThrowTool]));
 // shadow an earlier tool with no error at all — buildToolDocs would document one, dispatchTool
 // would only ever reach the LAST one registered under that name, and the earlier tool becomes
 // permanently unreachable. Catch this at registration time instead.
-it("registerTools throws on a duplicate tool name (PR #114 review item 11)", () => {
+it("registerTools throws on a duplicate tool name", () => {
   const duplicate: ILocalTool = { ...throwTool, name: "demo_ok" };
   expect(() => registerTools([okTool, duplicate])).toThrow(/duplicate/i);
   expect(() => registerTools([okTool, duplicate])).toThrow(/demo_ok/);
@@ -100,7 +100,7 @@ it("initializeLocalTools registers all 12 tools with docs for each", () => {
 // Registration order IS prompt order (buildToolDocs, registry.ts, maps registered tools in array
 // order) — find_cases is registered above get_case_values to raise its salience, without
 // touching the (alphabetically-asserted, so order-independent) full-registry test above.
-it("registers find_cases ABOVE get_case_values (prompt order = salience, DAVAI-126 matrix round 3 E6)", () => {
+it("registers find_cases ABOVE get_case_values (prompt order = salience)", () => {
   initializeLocalTools();
   const names = getRegisteredTools().map((t) => t.name);
   const findCasesIdx = names.indexOf("find_cases");

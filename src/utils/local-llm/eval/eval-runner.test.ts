@@ -33,7 +33,7 @@ it("a runTurn rejection fails that case without aborting the run", async () => {
 // Per-case incremental observability: the pure runner itself stays console-free — it only
 // invokes optional onCaseStart/onCaseResult callbacks; assistant-model.ts supplies the actual
 // console.log implementations.
-describe("onCaseStart/onCaseResult callbacks (DAVAI-126 matrix round 3 E8)", () => {
+describe("onCaseStart/onCaseResult callbacks", () => {
   it("onCaseStart fires before each case, in order, with the case's 1-based index/total/id/prompt", async () => {
     const runTurn = jest.fn().mockResolvedValue({ toolCalls: [], final: "ok" });
     const onCaseStart = jest.fn();
@@ -97,7 +97,7 @@ it("ships the 18 spec cases with unique ids", () => {
 });
 
 it("describe-by-axes runs after create-graph and before create-adornment, with flipped axis " +
-  "word order so title matching alone cannot resolve it (DAVAI-126 Task A)", () => {
+  "word order so title matching alone cannot resolve it", () => {
   const ids = evalCases.map((e) => e.id);
   const createGraphIdx = ids.indexOf("create-graph");
   const describeByAxesIdx = ids.indexOf("describe-by-axes");
@@ -113,7 +113,7 @@ it("describe-by-axes runs after create-graph and before create-adornment, with f
   expect(c.expectFinal).toEqual({ matches: [/mass/i, /height/i, /\d/], notMatches: [/error|sorry/i] });
 });
 
-it("set-attribute-unit runs immediately after create-attribute-formula (DAVAI-126 Task C)", () => {
+it("set-attribute-unit runs immediately after create-attribute-formula", () => {
   const ids = evalCases.map((e) => e.id);
   const createAttributeFormulaIdx = ids.indexOf("create-attribute-formula");
   const setAttributeUnitIdx = ids.indexOf("set-attribute-unit");
@@ -125,7 +125,7 @@ it("set-attribute-unit runs immediately after create-attribute-formula (DAVAI-12
   expect(c.expectFinal).toEqual({ matches: [/height/i, /meter/i] });
 });
 
-it("update-graph-yaxis runs directly after create-adornment (DAVAI-126 Task D)", () => {
+it("update-graph-yaxis runs directly after create-adornment", () => {
   const ids = evalCases.map((e) => e.id);
   const createAdornmentIdx = ids.indexOf("create-adornment");
   const updateGraphYaxisIdx = ids.indexOf("update-graph-yaxis");
@@ -137,7 +137,7 @@ it("update-graph-yaxis runs directly after create-adornment (DAVAI-126 Task D)",
   expect(c.expectFinal).toEqual({ matches: [/sleep/i], notMatches: [/error|fail/i] });
 });
 
-it("group-by-diet runs directly after update-graph-yaxis (DAVAI-126 Task D)", () => {
+it("group-by-diet runs directly after update-graph-yaxis", () => {
   const ids = evalCases.map((e) => e.id);
   const updateGraphYaxisIdx = ids.indexOf("update-graph-yaxis");
   const groupByDietIdx = ids.indexOf("group-by-diet");
@@ -151,8 +151,7 @@ it("group-by-diet runs directly after update-graph-yaxis (DAVAI-126 Task D)", ()
 
 // This coupling (find-heaviest directly after miscapitalized-attribute) is preserved
 // deliberately — its position relative to the end of the battery is not pinned.
-it("find-heaviest runs directly after miscapitalized-attribute (DAVAI-126 Task C coupling, " +
-  "preserved by Task H's append)", () => {
+it("find-heaviest runs directly after miscapitalized-attribute", () => {
   const ids = evalCases.map((e) => e.id);
   const miscapIdx = ids.indexOf("miscapitalized-attribute");
   const findHeaviestIdx = ids.indexOf("find-heaviest");
@@ -168,7 +167,7 @@ it("find-heaviest runs directly after miscapitalized-attribute (DAVAI-126 Task C
 // must run before describe-categorical (you can't describe a graph that doesn't exist yet), and
 // both must run after find-heaviest.
 it("create-categorical-graph and describe-categorical are the last two cases, in that order, " +
-  "after find-heaviest (DAVAI-126 Task H)", () => {
+  "after find-heaviest", () => {
   const ids = evalCases.map((e) => e.id);
   expect(ids[ids.length - 1]).toBe("describe-categorical");
   expect(ids[ids.length - 2]).toBe("create-categorical-graph");
@@ -200,7 +199,7 @@ it("describe-categorical's notMatches is exactly the live hallucination report's
   expect(pattern.test("Diet: meat (11), both (9), plants (7). Habitat: land (24), water (2), both (1).")).toBe(false);
 });
 
-describe("eval case corrections (DAVAI-126 eval round 2 item A)", () => {
+describe("eval case corrections", () => {
   it("describe-graph allows only a redundant get_graph_info call (not a strict zero-tools case) " +
     "and strengthens grounding to a specific value", () => {
     const c = evalCases.find((e) => e.id === "describe-graph")!;
@@ -236,7 +235,7 @@ describe("eval case corrections (DAVAI-126 eval round 2 item A)", () => {
   });
 });
 
-describe("per-case timing (DAVAI-126 Task 12)", () => {
+describe("per-case timing", () => {
   it("records durationMs per case using an injected clock, including a rejecting case", async () => {
     // Sequence of performance.now()-like readings: one pair (start, end) per case, in call order.
     const readings = [0, 1500, 1500, 1500, 1500, 4200]; // case0: 1500ms, case1: 0ms, case2: 2700ms
@@ -279,7 +278,7 @@ describe("per-case timing (DAVAI-126 Task 12)", () => {
   });
 });
 
-describe("allowOnly tool expectation (DAVAI-126 eval round 2 item A)", () => {
+describe("allowOnly tool expectation", () => {
   const allowOnlyCase: IEvalCase = {
     id: "allow-only-case",
     prompt: "describe",
@@ -317,7 +316,7 @@ describe("allowOnly tool expectation (DAVAI-126 eval round 2 item A)", () => {
   });
 });
 
-describe("toolResults capture (DAVAI-126 eval round 2 item B)", () => {
+describe("toolResults capture", () => {
   it("records tool result strings in call order onto the eval result", async () => {
     const runTurn = jest.fn().mockResolvedValueOnce({
       toolCalls: ["get_stats", "get_case_values"],
@@ -358,8 +357,7 @@ describe("toolResults capture (DAVAI-126 eval round 2 item B)", () => {
   });
 });
 
-it("selection-percentile's final-answer check uses a single widened count regex " +
-  "(DAVAI-126 eval round 1 F3)", () => {
+it("selection-percentile's final-answer check uses a single widened count regex", () => {
   const selectionCase = evalCases.find((c) => c.id === "selection-percentile");
   expect(selectionCase).toBeDefined();
   const matches = selectionCase!.expectFinal.matches!;

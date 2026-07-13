@@ -16,13 +16,13 @@ beforeEach(() => {
 // A worked percentile example in argsExample (the model's most-imitated part of a tool doc)
 // steers toward calling select_cases directly with the correct CODAP percentile form, rather
 // than hand-computing percentiles or picking the wrong threshold shape.
-it("argsExample is a worked percentile example (DAVAI-126 matrix round 3 E5)", () => {
+it("argsExample is a worked percentile example", () => {
   expect(selectCasesTool.argsExample).toBe(
     '{"tool": "select_cases", "dataContext": "Mammals", "expression": "`Height` > percentile(`Height`, 0.75)", "mode": "replace"}'
   );
 });
 
-it("description keeps the 0-1 percentile note (DAVAI-126 matrix round 3 E5)", () => {
+it("description keeps the 0-1 percentile note", () => {
   expect(selectCasesTool.description).toMatch(/percentile takes 0.1/); // "0–1" (en dash) or "0-1"
 });
 
@@ -91,8 +91,7 @@ it("falls back to values.error when the top-level error is absent (tolerance)", 
   expect(out).toContain("nested bad expression");
 });
 
-it("nudges toward the percentile-as-fraction fix when the selection matches zero cases " +
-  "(DAVAI-126 eval round 2 item E)", async () => {
+it("nudges toward the percentile-as-fraction fix when the selection matches zero cases", async () => {
   (getSelectionList as jest.Mock).mockResolvedValue([]);
   const v = selectCasesTool.validate(
     { dataContext: "Mammals", expression: "`Weight` > percentile(`Weight`, 75)", mode: "replace" }, ctx);
@@ -104,7 +103,7 @@ it("nudges toward the percentile-as-fraction fix when the selection matches zero
   );
 });
 
-it("keeps the existing non-zero wording unchanged (DAVAI-126 eval round 2 item E)", async () => {
+it("keeps the existing non-zero wording unchanged", async () => {
   (getSelectionList as jest.Mock).mockResolvedValue([{ caseID: 1 }]);
   const v = selectCasesTool.validate(
     { dataContext: "Mammals", expression: "`Weight` > 5", mode: "replace" }, ctx);

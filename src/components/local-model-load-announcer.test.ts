@@ -4,7 +4,7 @@ import { DAVAI_SPEAKER } from "../constants";
 // Focused unit coverage for the load-announcement logic extracted out of App.tsx's own effect —
 // exercises the exact milestone/first-progress/cache-load/per-model-reset behavior App.test.tsx
 // already covers end-to-end, but without rendering the whole App component.
-describe("createLoadAnnouncer (PR #114 review item 10)", () => {
+describe("createLoadAnnouncer", () => {
   it("announces once immediately on the very first download-progress tick, before any 25% milestone", () => {
     const addMessage = jest.fn();
     const announce = createLoadAnnouncer(addMessage);
