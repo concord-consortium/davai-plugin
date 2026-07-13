@@ -344,6 +344,36 @@ describe("handleMessageSubmitLocalLlm (DAVAI-126)", () => {
     await first.catch(() => undefined);
   });
 
+  it("createThread (reset) also drops a queued local message instead of leaking it to the " +
+    "server (PR #114 review item 7)", async () => {
+    // createThread already bumps turnEpoch (invalidating the in-flight local turn — it has no
+    // currentMessageId to gate the handleCancel branch above, since only the SERVER path sets
+    // that), but did not clear messageQueue the way handleCancel and setLlmId both do. A queued
+    // local message would survive the reset and then fall through to the shared afterCreate/
+    // onSnapshot reactor (hardcoded to the server's handleMessageSubmit) the moment
+    // isLoadingResponse flips to false, leaking a local-turn message to the server path.
+    const store = createLocalStore();
+    let release: (v: string) => void = () => undefined;
+    (runLocalTurn as jest.Mock).mockImplementationOnce(
+      () => new Promise((res) => { release = res; })
+    );
+
+    const first = store.handleMessageSubmitLocalLlm("first");
+    await Promise.resolve();
+    await store.handleMessageSubmitLocalLlm("second"); // queued while "first" is in flight
+    expect(store.messageQueue.length).toBe(1);
+
+    await store.createThread();
+    await Promise.resolve();
+    await Promise.resolve();
+
+    expect(mockedPostMessage).not.toHaveBeenCalled();
+    expect(store.messageQueue.length).toBe(0);
+
+    release("done"); // let the abandoned first turn settle so the test can exit cleanly
+    await first.catch(() => undefined);
+  });
+
   it("posts no reply after cancel when the in-flight turn later settles (DAVAI-126 C1)", async () => {
     // Cancel interrupts generation and clears the flags, but the flow suspended at
     // `yield runLocalTurn` still resumes when the (now-abandoned) promise settles. Without an

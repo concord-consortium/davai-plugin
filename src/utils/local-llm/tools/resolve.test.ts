@@ -64,6 +64,40 @@ describe("domain resolvers", () => {
     if (r.ok) throw new Error("should fail");
     expect(r.error).toMatch(/A, B/);
   });
+  // PR #114 review item 8: resolveDataContext had no sole-context default, unlike
+  // resolveCollection above — an omitted dataContext in a single-dataset document bounced with
+  // "Unknown data context \"\"" instead of resolving silently, forcing an avoidable round trip.
+  describe("resolveDataContext sole-context default (PR #114 review item 8)", () => {
+    it("an omitted (undefined) dataContext resolves to the only one, not repaired", () => {
+      const r = resolveDataContext(undefined, dcs);
+      if (!r.ok) throw new Error(`should succeed, got error: ${r.error}`);
+      expect(r.value.name).toBe("Mammals");
+      expect(r.repaired).toBe(false);
+    });
+
+    it("an omitted (empty-string) dataContext resolves to the only one too — tool call sites " +
+      "pass String(args.dataContext ?? \"\"), so \"\" is the common omitted shape", () => {
+        const r = resolveDataContext("", dcs);
+        if (!r.ok) throw new Error(`should succeed, got error: ${r.error}`);
+        expect(r.value.name).toBe("Mammals");
+    });
+
+    it("a multi-context document keeps today's corrective when dataContext is omitted", () => {
+      const multiDcs = { Mammals: dc, Birds: { name: "Birds", collections: [] } };
+      const r = resolveDataContext(undefined, multiDcs);
+      if (r.ok) throw new Error("should fail — ambiguous across two data contexts");
+      expect(r.error).toMatch(/unknown data context/i);
+    });
+
+    it("an explicitly-named dataContext still resolves normally in a multi-context document " +
+      "(the default only engages when nothing was named)", () => {
+      const multiDcs = { Mammals: dc, Birds: { name: "Birds", collections: [] } };
+      const r = resolveDataContext("birds", multiDcs);
+      if (!r.ok) throw new Error(`should succeed, got error: ${r.error}`);
+      expect(r.value.name).toBe("Birds");
+      expect(r.repaired).toBe(true);
+    });
+  });
   // DAVAI-126 Task D fix pass: leaf-collection default (opt-in variant used by find_cases).
   // Collections are stored parent-first (see resolve.ts's helper comment for the evidence chain),
   // so "leaf/childmost" = LAST element — the collection that still holds the lookup attributes

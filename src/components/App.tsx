@@ -23,6 +23,7 @@ import { StreamingAnnouncer } from "./streaming-announcer";
 import { forSpeechMultiline } from "../utils/speech-text";
 import { localLlmService } from "../utils/local-llm/local-llm-service";
 import { findEntryByLlmId } from "../utils/llm-effort";
+import { createLoadAnnouncer } from "./local-model-load-announcer";
 
 import "./App.scss";
 
@@ -160,7 +161,7 @@ export const App = observer(() => {
     // Drive the local in-browser engine's lifecycle off the same LLM-selection change:
     // load it when a Local model is selected, and unload it (freeing GPU/WASM memory)
     // when switching away to a server-backed model.
-    const entry = findEntryByLlmId(appConfig.llmList as any, appConfig.llmId);
+    const entry = findEntryByLlmId(appConfig.llmList, appConfig.llmId);
     if (entry?.provider === "Local") {
       if (!localLlmService.isWebGPUAvailable()) {
         transcriptStore.addMessage(DAVAI_SPEAKER, {
@@ -191,53 +192,12 @@ export const App = observer(() => {
   }, [appConfig.llmId, handleInitializeAssistant]);
 
   useEffect(() => {
-    // Announce coarse load milestones (25% steps) and readiness through the transcript so
-    // the aria-live path reads them; per-percent updates would spam the screen reader.
-    let lastMilestone = 0;
-    // Track which model the milestone counter belongs to. Switching models restarts progress
-    // at 0 for the new model, but a stale lastMilestone (e.g. 75 from the previous model) would
-    // otherwise suppress the new model's 25/50/75 announcements. Reset when the model changes.
-    let milestoneModelId: string | undefined;
-    // Whether the one-time "download started" progress announcement has fired for the current
-    // model's load. The first 25% milestone can take minutes on a slow connection, so this gives
-    // feedback within seconds of the very first progress tick instead. Reset alongside the
-    // milestone tracker (same per-modelId reset above) so a second load announces again.
-    let announcedFirstProgress = false;
-    const off = localLlmService.onLoadStateChange((s) => {
-      if (s.status === "loading" && typeof s.progress === "number") {
-        if (s.modelId !== milestoneModelId) {
-          milestoneModelId = s.modelId;
-          lastMilestone = 0;
-          announcedFirstProgress = false;
-        }
-        // WebLLM's initProgressCallback fires for cache reads (an already-downloaded model)
-        // too, with progress climbing 0 -> 1 in seconds. Its `text` distinguishes the phases:
-        // network downloads say "Fetching param cache[...]"; cache reads say "Loading model
-        // from cache[...]". Gate both the first-progress feedback and the 25/50/75% milestones
-        // on the CURRENT event's text containing "Fetching" so a cache load — the common case
-        // once a model is already downloaded — announces nothing but the final "ready" message.
-        const isDownloadProgress = typeof s.text === "string" && s.text.includes("Fetching");
-        if (isDownloadProgress) {
-          if (!announcedFirstProgress && s.progress > 0) {
-            announcedFirstProgress = true;
-            transcriptStore.addMessage(DAVAI_SPEAKER, {
-              content: "Downloading the local model — progress will be announced at 25% steps.",
-              kind: "announcement",
-            });
-          }
-          const milestone = Math.floor(s.progress * 4) * 25;
-          if (milestone > lastMilestone && milestone < 100) {
-            lastMilestone = milestone;
-            transcriptStore.addMessage(DAVAI_SPEAKER, { content: `Model download: ${milestone}% complete.`, kind: "announcement" });
-          }
-        }
-      } else if (s.status === "ready") {
-        lastMilestone = 0;
-        milestoneModelId = undefined;
-        announcedFirstProgress = false;
-        transcriptStore.addMessage(DAVAI_SPEAKER, { content: "The local model is ready.", kind: "announcement" });
-      }
-    });
+    // Announce coarse load milestones (25% steps) and readiness through the transcript so the
+    // aria-live path reads them — per-percent updates would spam the screen reader. The stateful
+    // logic itself lives in createLoadAnnouncer (local-model-load-announcer.ts), extracted out of
+    // this effect so it's unit-testable without rendering the whole App component; see its own
+    // focused tests.
+    const off = localLlmService.onLoadStateChange(createLoadAnnouncer(transcriptStore.addMessage));
     return off;
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);

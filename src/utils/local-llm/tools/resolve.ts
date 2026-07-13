@@ -51,6 +51,14 @@ export const resolveDataContext = (
   // still means "not provided" rather than becoming the literal string "undefined".
   if (requested !== undefined) requested = String(requested);
   const candidates = Object.values(dataContexts ?? {}).map((dc: any) => ({ name: dc?.name ?? "", value: dc }));
+  // Sole-context default (PR #114 review item 8): mirrors resolveCollection's precedent above —
+  // an omitted dataContext in a single-dataset document resolves silently instead of bouncing
+  // the model with an avoidable "Unknown data context" round trip. Tool call sites pass
+  // String(args.dataContext ?? ""), so "" is the common omitted shape alongside undefined. A
+  // multi-dataset document still requires an explicit name (today's corrective, unchanged).
+  if ((requested === undefined || requested === "") && candidates.length === 1) {
+    return { ok: true, value: candidates[0].value, repaired: false };
+  }
   return resolveByName("data context", requested ?? "", candidates);
 };
 

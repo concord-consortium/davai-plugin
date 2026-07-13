@@ -139,9 +139,6 @@ describe("test load app", () => {
 
   afterEach(() => {
     cleanupMockSpeechSynthesis();
-    // Several assistantStore/CODAP mocks are shared module-level jest.fn()s; clear their
-    // call history between tests so a submit assertion here can't see a call left over
-    // from an earlier test in this file (e.g. handleMessageSubmit from a prior submit).
     jest.clearAllMocks();
   });
 
@@ -217,8 +214,7 @@ describe("test load app", () => {
     expect(mockAssistantStore.handleMessageSubmit).not.toHaveBeenCalled();
   });
 
-  it("sets the effort before dispatching a local submission, mirroring the server branch " +
-    "(DAVAI-126 thinking toggle)", () => {
+  it("sets the effort before dispatching a local submission, mirroring the server branch", () => {
     (mockAppConfig as any).isLocalLlm = true;
     (mockAppConfig as any).effort = "think";
 

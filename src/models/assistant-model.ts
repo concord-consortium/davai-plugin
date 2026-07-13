@@ -892,10 +892,18 @@ export const AssistantModel = types
           yield handleCancel();
         }
         // Invalidate any in-flight LOCAL turn too (which has no currentMessageId to gate the
-        // branch above): a reset thread must not receive a prior turn's late reply.
+        // branch above): a reset thread must not receive a prior turn's late reply. Also drop
+        // any queued local message (PR #114 review item 7, mirrors handleCancel's local branch
+        // and setLlmId): handleMessageSubmitLocalLlm drains messageQueue itself in its own
+        // `finally` block so a queued local message is never routed through the shared
+        // afterCreate/onSnapshot reactor below (hardcoded to the server's handleMessageSubmit) —
+        // but createThread bypasses that `finally` entirely, so an uncleared queue would
+        // otherwise fall through to that reactor the moment isLoadingResponse flips to false and
+        // leak the message to the SERVER path.
         self.bumpTurnEpoch();
         self.isLoadingResponse = false;
         self.isCancelling = false;
+        self.clearUserMessageQueue();
         self.threadId = nanoid();
       } catch (err) {
         console.error("Error creating thread:", err);
