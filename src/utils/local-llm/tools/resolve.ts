@@ -1,4 +1,4 @@
-// The resolution ladder (spec: first-class requirement). For every name argument:
+// The resolution ladder. For every name argument:
 // rung 1 exact match; rung 2 unique normalized match repairs silently (absorbs user/model
 // miscapitalization); rung 3 corrective error listing real candidates. Safety rule: repair
 // only when unambiguous — never guess among multiple normalized matches.

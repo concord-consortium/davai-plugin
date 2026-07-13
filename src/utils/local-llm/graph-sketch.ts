@@ -45,7 +45,7 @@ export type AxisKind = "numeric" | "categorical";
 
 // An axis is NUMERIC when MORE than 80% of its non-empty values coerce via the shared
 // coerceNumericValues (get_stats's own coercion — reused, never modified here). The threshold is
-// strictly ">80%", not ">=80%", per the brief: exactly 80% is categorical. Empty values ("", null,
+// strictly ">80%", not ">=80%": exactly 80% is categorical. Empty values ("", null,
 // undefined) are excluded from BOTH the numerator and denominator — they carry no signal about
 // the axis's type either way, and counting them toward the categorical side would understate a
 // genuinely-numeric axis that merely has some missing values (a common, unremarkable case in real
@@ -70,9 +70,8 @@ export const isNumericAxis = (values: unknown[]): boolean => {
 };
 
 // Tukey hinges: median of the lower half and median of the upper half, excluding the overall
-// median itself when n is odd. This is the same "most between" split the brief's own worked
-// examples use (Height 0.7-2.2 as Q1-Q3 on a presumably-27-point fixture) and is the most common
-// definition students encounter for the box-and-whisker Q1/Q3 CODAP itself draws.
+// median itself when n is odd — the most common definition students encounter for the
+// box-and-whisker Q1/Q3 CODAP itself draws.
 const median = (sorted: number[]): number => {
   const n = sorted.length;
   return n % 2 === 1 ? sorted[(n - 1) / 2] : (sorted[n / 2 - 1] + sorted[n / 2]) / 2;

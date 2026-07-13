@@ -375,7 +375,7 @@ describe("handleMessageSubmitLocalLlm (DAVAI-126)", () => {
 
   it("posts no reply after cancel when the in-flight turn later settles (DAVAI-126 C1)", async () => {
     // Cancel interrupts generation and clears the flags, but the flow suspended at
-    // `yield runLocalTurn` still resumes when the (now-abandoned) promise settles. Without an
+    // `yield runLocalTurn` still resumes when that promise settles. Without an
     // epoch guard, its addDavaiMsg would post a zombie reply AFTER "I've cancelled…", and its
     // finally would clear isLoadingResponse mid-next-turn. The captured epoch must make the
     // resumed flow a no-op.
@@ -402,7 +402,7 @@ describe("handleMessageSubmitLocalLlm (DAVAI-126)", () => {
     // The zombie reply must NOT be posted, and no fallback/error zombie either.
     expect(contents).not.toContain("A late zombie reply.");
     expect(contents.filter((c) => c === "I've cancelled processing your message.")).toHaveLength(1);
-    // Flags stay cleared — the stale finally did not resurrect loading state.
+    // Guards against a stale cleanup callback resurrecting loading state after cancel.
     expect(store.isLoadingResponse).toBe(false);
     expect(store.showLoadingIndicator).toBe(false);
   });
@@ -492,7 +492,7 @@ describe("handleMessageSubmitLocalLlm (DAVAI-126)", () => {
 
   it("assembles a drained queue turn without dropping the prior reply or duplicating the queued text (DAVAI-126 I3/P2b)", async () => {
     // Reproduce the transcript state at the moment a queued turn is drained: the queued user
-    // message was added by App at submit time, and the PRIOR turn's DAVAI reply is now the last
+    // message was added by App at submit time, and the PRIOR turn's DAVAI reply is the last
     // row (not the queued user row) — trailing-only removal leaves the queued row in place, so
     // it stays in `turns` AND repeats as `userMessage`. Removal must instead find the LAST
     // occurrence of a USER_SPEAKER row matching messageText, wherever it sits.
