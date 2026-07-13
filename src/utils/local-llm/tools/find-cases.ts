@@ -1,4 +1,5 @@
 import { getAllCollectionCases } from "../../codap-api-utils";
+import { isNumericAxis } from "../graph-sketch";
 import { ILocalTool } from "./registry";
 import { extractBacktickRefs, resolveAttribute, resolveCollectionDefaultLeaf, resolveDataContext } from "./resolve";
 
@@ -26,11 +27,17 @@ const canonicalizeExpression = (
   return { ok: true, value };
 };
 
-// First categorical attribute of the collection (brief's label heuristic) — e.g. "Mammal" in the
-// Mammals fixture. `undefined` when the collection has no categorical attribute, in which case
-// the caller falls back to a 1-based case index label ("Case 1", "Case 2", ...).
-const findLabelAttribute = (collection: any): string | undefined =>
-  (collection?.attrs ?? []).find((a: any) => a?.type === "categorical")?.name;
+// First attribute of the collection whose ACTUAL case values value-sniff as non-numeric (PR #114
+// review item 6 consistency note: schema `attr.type === "categorical"` is unreliable in real
+// documents — get-stats.ts's own coercion doc says so and value-sniffs instead — so this tool
+// shouldn't trust attr.type alone either; reuses graph-sketch.ts's isNumericAxis, the exact same
+// >80%-numeric threshold get_graph_info's own axis-type detection uses). `undefined` when every
+// attribute value-sniffs numeric (or the collection has no attrs), in which case the caller falls
+// back to a 1-based case index label ("Case 1", "Case 2", ...).
+const findLabelAttribute = (collection: any, rows: Record<string, unknown>[]): string | undefined =>
+  (collection?.attrs ?? []).find((a: any) =>
+    typeof a?.name === "string" && !isNumericAxis(rows.map((r) => r[a.name]))
+  )?.name;
 
 // Numeric coercion consistent with get-stats.ts's coerceNumericValues, but returning NaN (not
 // filtering it out) — find_cases needs to keep every row for the "of N cases" count while still
@@ -38,12 +45,15 @@ const findLabelAttribute = (collection: any): string | undefined =>
 const toNumberOrNaN = (v: unknown): number =>
   typeof v === "number" ? v : v !== "" && v !== null && v !== undefined ? Number(v) : NaN;
 
-// Renders one row's parenthetical value, e.g. "19.9" or "n/a" for a non-numeric orderBy value
-// (brief: "non-numeric values sort last" — they still need a shown value so the count in the
-// sentence stays accurate).
-const formatValue = (value: unknown): string => {
+// Renders one row's parenthetical value: the coerced number when numeric, the RAW STRING when
+// non-numeric-but-present (PR #114 review item 6 — e.g. a categorical stat attribute like Diet
+// previously printed the numeric-formatted "n/a", which reads as MISSING to a listener about a
+// value that IS there), or `undefined` when the value is genuinely blank/missing — the caller
+// omits the parenthetical entirely for that case rather than showing a fake "n/a" value.
+const formatValue = (value: unknown): string | undefined => {
+  if (value === "" || value === null || value === undefined) return undefined;
   const numeric = toNumberOrNaN(value);
-  return Number.isFinite(numeric) ? String(numeric) : "n/a";
+  return Number.isFinite(numeric) ? String(numeric) : String(value);
 };
 
 // Strips backticks for the human-facing sentence — CODAP needs `Sleep` (name-exact formula
@@ -126,15 +136,12 @@ export const findCasesTool: ILocalTool = {
     const dataContextName = String(resolved.dataContextName);
     const collectionName = String(resolved.collectionName);
     const collection = resolved.collection as any;
-    const labelAttr = findLabelAttribute(collection);
     const where = resolved.where as string | undefined;
     const orderBy = resolved.orderBy as string | undefined;
 
-    // Row shape shared by both fetch paths: { label, values } where `values` is the full
-    // attribute map for that case (needed for labeling AND for the orderBy stat, whichever
-    // fetch path produced it).
-    let rows: { label: string; values: Record<string, unknown> }[];
-    let totalCount: number;
+    // Raw per-case value maps from whichever fetch path runs — the label attribute (below) needs
+    // these ACTUAL values to value-sniff, so it's resolved after fetching, not before.
+    let rawValues: Record<string, unknown>[];
 
     if (where) {
       const res = await ctx.sendCODAPRequest({
@@ -156,22 +163,21 @@ export const findCasesTool: ILocalTool = {
         const allCases = await getAllCollectionCases(dataContextName, collectionName);
         return `No cases match ${forDisplay(where)} — check the condition (${allCases.length} cases total).`;
       }
-      rows = matches.map((m, i) => ({
-        label: labelAttr ? String(m?.values?.[labelAttr] ?? `Case ${i + 1}`) : `Case ${i + 1}`,
-        values: m?.values ?? {},
-      }));
-      totalCount = rows.length;
+      rawValues = matches.map((m) => m?.values ?? {});
     } else {
       const allCases = await getAllCollectionCases(dataContextName, collectionName);
       if (allCases.length === 0) {
         return `No cases found in "${dataContextName}" to order by ${orderBy}.`;
       }
-      rows = allCases.map((c: any, i: number) => ({
-        label: labelAttr ? String(c?.case?.values?.[labelAttr] ?? `Case ${i + 1}`) : `Case ${i + 1}`,
-        values: c?.case?.values ?? {},
-      }));
-      totalCount = rows.length;
+      rawValues = allCases.map((c: any) => c?.case?.values ?? {});
     }
+
+    const labelAttr = findLabelAttribute(collection, rawValues);
+    const rows: { label: string; values: Record<string, unknown> }[] = rawValues.map((values, i) => ({
+      label: labelAttr ? String(values[labelAttr] ?? `Case ${i + 1}`) : `Case ${i + 1}`,
+      values,
+    }));
+    const totalCount = rows.length;
 
     if (!orderBy) {
       // where-only: stat by the condition's own attribute (brief's example uses Sleep — the
@@ -193,7 +199,10 @@ export const findCasesTool: ILocalTool = {
     const direction = resolved.direction === "asc" ? "asc" : "desc";
     const ranked = sortByOrderBy(rows.map((r) => ({ label: r.label, value: r.values[orderBy] })), direction);
     const top = ranked.slice(0, limit);
-    const shown = top.map((r) => `${r.label} (${formatValue(r.value)})`);
+    const shown = top.map((r) => {
+      const value = formatValue(r.value);
+      return value === undefined ? r.label : `${r.label} (${value})`;
+    });
     const whereClause = where ? ` where ${forDisplay(where as string)}` : "";
     return `Top ${top.length} by ${orderBy}${whereClause}: ${shown.join(", ")} (of ${totalCount} cases).`;
   },

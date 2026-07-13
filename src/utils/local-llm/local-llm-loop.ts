@@ -1,5 +1,5 @@
 import { IChatMsg } from "./local-llm-service";
-import { parseEnvelope, stripThink } from "./local-llm-envelope";
+import { ParsedEnvelope, parseEnvelope, stripThink } from "./local-llm-envelope";
 import { trimToBudget } from "./local-llm-prompt";
 
 export interface ILocalTurnArgs {
@@ -39,6 +39,24 @@ const callKey = (name: string, args: Record<string, unknown>): string => `${name
 
 const FORCED_FINAL_PROMPT =
   "You have used all of your tool requests. You must answer now: respond with {\"tool\": \"final\", \"response\": \"...\"} using what you already know.";
+
+// PR #114 review item 5: shared tail for both forced-final generations (the round-cap path and
+// the 2nd-consecutive-identical-repeat path) — the "answer now" nudge only ASKS for
+// {"tool":"final",...}; nothing stops the model from answering with another tool call, or with
+// still-malformed text. A well-formed final always wins outright (including parseEnvelope's own
+// G1 tolerant recovery of a malformed-but-recognizable "final" attempt — that already arrives
+// here as kind: "final", so it is unaffected by anything below). A well-formed TOOL CALL must
+// never be spoken raw (the user would hear "{tool: get_stats, ...}" read aloud) — degrade
+// straight to FALLBACK_RESPONSE. Anything else (kind: "invalid") gets ONE more chance: if its
+// stripped text plainly looks like ANOTHER JSON attempt (starts with "{"), that is still
+// unspeakable syntax, so fall back too; otherwise it is ordinary prose — a real, if informal,
+// answer to the nudge — and is safe to speak as-is.
+const resolveForcedFinal = (raw: string, envelope: ParsedEnvelope): string => {
+  if (envelope.kind === "final") return envelope.response;
+  if (envelope.kind === "tool_call") return FALLBACK_RESPONSE;
+  const text = stripThink(raw);
+  return text.startsWith("{") ? FALLBACK_RESPONSE : (text || FALLBACK_RESPONSE);
+};
 
 export const runLocalTurn = async (args: ILocalTurnArgs): Promise<string> => {
   const { generate, executeTool, systemPrompt, turns, userMessage, maxRounds = 5, isCancelled, onToolCall } = args;
@@ -114,9 +132,7 @@ export const runLocalTurn = async (args: ILocalTurnArgs): Promise<string> => {
       conversation.push({ role: "user", content: FORCED_FINAL_PROMPT });
       if (isCancelled?.()) return FALLBACK_RESPONSE;
       const lastRaw = await generate(budgeted());
-      const lastEnvelope = parseEnvelope(lastRaw);
-      if (lastEnvelope.kind === "final") return lastEnvelope.response;
-      return stripThink(lastRaw) || FALLBACK_RESPONSE;
+      return resolveForcedFinal(lastRaw, parseEnvelope(lastRaw));
     }
 
     // First repeat of an already-executed call: don't re-execute (this protects mutating tools
@@ -137,9 +153,7 @@ export const runLocalTurn = async (args: ILocalTurnArgs): Promise<string> => {
       conversation.push({ role: "user", content: FORCED_FINAL_PROMPT });
       if (isCancelled?.()) return FALLBACK_RESPONSE;
       const lastRaw = await generate(budgeted());
-      const lastEnvelope = parseEnvelope(lastRaw);
-      if (lastEnvelope.kind === "final") return lastEnvelope.response;
-      return stripThink(lastRaw) || FALLBACK_RESPONSE;
+      return resolveForcedFinal(lastRaw, parseEnvelope(lastRaw));
     }
     // Recheck here (not just at the top of the loop): generate() above is an await, so a cancel
     // can land WHILE it's producing this tool envelope — after the iteration-top check already

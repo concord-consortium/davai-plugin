@@ -161,6 +161,32 @@ describe("scatter sketch without an LSRL adornment", () => {
     const sketch = computeGraphSketch({ xName: "X", yName: "Y", xValues: xValues2, yValues: yValues2 });
     expect(sketch).toContain("Unusually high Y: (11, 900), (12, 900).");
   });
+
+  // PR #114 review item 4: the "Unusually high/low <axis>" word was taken from outliers[0] ONLY
+  // (the largest |deviation|), then applied to EVERY listed value on that axis — so a low outlier
+  // with a smaller deviation than a high one got mislabeled as "high" (or vice versa). Each axis's
+  // outliers must be grouped and labeled by their OWN side.
+  it("mixed high+low outliers on ONE axis are split into separate 'Unusually high'/'Unusually " +
+    "low' clauses, never mislabeling the smaller-deviation side (PR #114 item 4)", () => {
+    // X: tight core 10-12 plus a high outlier (200) and a low outlier (-100); Y: no outliers, so
+    // this isolates the fix to a single axis.
+    const xValues2 = [10, 11, 12, 10, 11, 12, 11, 200, -100];
+    const yValues2 = [1, 2, 3, 4, 5, 6, 7, 8, 9];
+    const sketch = computeGraphSketch({ xName: "X", yName: "Y", xValues: xValues2, yValues: yValues2 });
+    expect(sketch).toContain("Unusually high X: (200, 8); Unusually low X: (-100, 9).");
+    expect(sketch).not.toMatch(/Unusually (high|low) Y/);
+  });
+
+  it("mixed high+low outliers on BOTH axes each get their own high/low clauses, in x-then-y " +
+    "order (PR #114 item 4)", () => {
+    const xValues2 = [-500, 500, 48, 49, 50, 51, 52, 49, 50, 51];
+    const yValues2 = [5, 6, 5, 6, 5, 6, 5, 6, -50, 50];
+    const sketch = computeGraphSketch({ xName: "X", yName: "Y", xValues: xValues2, yValues: yValues2 });
+    expect(sketch).toContain(
+      "Unusually high X: (500, 6); Unusually low X: (-500, 5); " +
+      "Unusually high Y: (51, 50); Unusually low Y: (50, -50)."
+    );
+  });
 });
 
 describe("scatter sketch with an LSRL adornment (Mammals-like fixture, n=27)", () => {
@@ -283,6 +309,88 @@ it("reports a negative direction word for negative r", () => {
     xName: "X", yName: "Y", xValues: [1, 2, 3, 4, 5, 6, 7, 8], yValues: [80, 70, 65, 50, 45, 30, 20, 5],
   });
   expect(sketch).toContain("Relationship: negative, strong (r = -0.99).");
+});
+
+// PR #114 review item 3: pearsonR's denominator (product of the two axes' standard deviations)
+// is 0 whenever EITHER axis is constant, producing NaN — which pre-fix rendered as the
+// confidently-wrong "positive, strong (r = NaN)" plus a "NaN%" R² line. An undefined correlation
+// is a real fact, not a defect, so state it plainly and skip the entire r-dependent remainder
+// (LSRL/R², per-axis outliers) rather than printing any NaN-derived text.
+describe("zero-variance axis: an undefined correlation is stated plainly, never as NaN (PR #114 item 3)", () => {
+  it("constant X axis: names X as the constant axis, with no r/NaN/R² mention anywhere", () => {
+    const sketch = computeGraphSketch({
+      xName: "Height", yName: "Mass", xValues: [5, 5, 5, 5, 5], yValues: [1, 2, 3, 4, 10],
+    });
+    expect(sketch).toContain("Relationship: undefined — every point has the same Height.");
+    expect(sketch).not.toMatch(/NaN/);
+    expect(sketch).not.toMatch(/r = /);
+    expect(sketch).not.toMatch(/R²/);
+  });
+
+  it("constant Y axis: names Y as the constant axis", () => {
+    const sketch = computeGraphSketch({
+      xName: "Height", yName: "Mass", xValues: [1, 2, 3, 4, 10], yValues: [7, 7, 7, 7, 7],
+    });
+    expect(sketch).toContain("Relationship: undefined — every point has the same Mass.");
+    expect(sketch).not.toMatch(/NaN/);
+  });
+
+  it("both axes constant: names both", () => {
+    const sketch = computeGraphSketch({
+      xName: "Height", yName: "Mass", xValues: [5, 5, 5], yValues: [7, 7, 7],
+    });
+    expect(sketch).toContain("Relationship: undefined — every point has the same Height and Mass.");
+  });
+
+  it("suppresses the LSRL/R² line entirely even when an LSRL adornment is present on a " +
+    "constant axis — never derives a line/R² from a vertical or horizontal scatter", () => {
+    const sketch = computeGraphSketch({
+      xName: "Height", yName: "Mass", xValues: [5, 5, 5, 5, 5], yValues: [1, 2, 3, 4, 10],
+      adornments: [{ type: "LSRL", slope: 0, intercept: 5, rSquared: 0 }],
+    });
+    expect(sketch).not.toMatch(/LSRL:/);
+    expect(sketch).not.toMatch(/R²/);
+  });
+
+  it("still reports the Selected line for a constant-axis scatter (orthogonal to the undefined " +
+    "correlation)", () => {
+    const sketch = computeGraphSketch({
+      xName: "Height", yName: "Mass", xValues: [5, 5, 5, 5, 5], yValues: [1, 2, 3, 4, 10],
+      selectedPairs: [[5, 2]],
+    });
+    expect(sketch).toContain("Selected: 1 case at (5, 2).");
+  });
+});
+
+// PR #114 review item 3 (directionWord(0)): r === 0 exactly (a real, valid "no linear
+// relationship" result, NOT the zero-variance/NaN case above) read "positive, weak (r = 0)"
+// pre-fix, asserting a direction that does not exist for an exactly-uncorrelated pair.
+describe("r = 0 exactly: 'no linear relationship' wording, not a false direction (PR #114 item 3)", () => {
+  it("reads 'no linear relationship (r = 0)' instead of 'positive, weak (r = 0)'", () => {
+    // y = (x-3)^2, symmetric about x=3 -> cov(x,y) sums to exactly 0 (integer arithmetic, no
+    // floating-point risk) while both axes still have real variance (not the zero-variance case).
+    const xValues = [1, 2, 3, 4, 5];
+    const yValues = [4, 1, 0, 1, 4];
+    const sketch = computeGraphSketch({ xName: "X", yName: "Y", xValues, yValues });
+    expect(sketch).toContain("Relationship: no linear relationship (r = 0).");
+    expect(sketch).not.toMatch(/positive|negative/);
+  });
+});
+
+// PR #114 review item 3 (R² clamp): a floating-point artifact (or a malformed but present
+// rSquared from CODAP's own adornment data) slightly over 1 must never be spoken as "explains
+// about 101%+ of the variation" — R² cannot exceed 1 by definition.
+describe("R² clamp: displayed R² never exceeds 100% (PR #114 item 3)", () => {
+  it("clamps a >1 rSquared (a floating-point artifact large enough to survive rounding, e.g. " +
+    "from CODAP's own adornment data) to 1 / 100%, never a nonsensical >100%", () => {
+    const sketch = computeGraphSketch({
+      xName: "A", yName: "B", xValues: [1, 2, 3, 4, 5], yValues: [5, 7, 9, 11, 13],
+      adornments: [{ type: "LSRL", slope: 2, intercept: 3, rSquared: 1.02 }],
+    });
+    expect(sketch).toContain("R² = 1");
+    expect(sketch).toContain("100% of the variation");
+    expect(sketch).not.toMatch(/10[1-9]%|1[1-9]\d%/);
+  });
 });
 
 describe("selected pairs line", () => {

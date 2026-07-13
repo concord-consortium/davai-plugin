@@ -209,7 +209,10 @@ describe("execute: orderBy-form (client-side sort/slice)", () => {
     expect(out).toContain("Human (70), African Elephant (6400)");
   });
 
-  it("non-numeric orderBy values sort last regardless of direction", async () => {
+  it("non-numeric orderBy values sort last regardless of direction; blank/missing values omit " +
+    "the parenthetical entirely rather than showing a numeric-formatted \"n/a\" (PR #114 review " +
+    "item 6/11 — deliberately updated assertion: \"n/a\" read as MISSING to a listener about a " +
+    "row that is, in fact, present)", async () => {
     (getAllCollectionCases as jest.Mock).mockResolvedValue([
       { case: { id: 1, values: { Mammal: "Elephant", Mass: 6400 } } },
       { case: { id: 2, values: { Mammal: "Missing Data", Mass: "" } } },
@@ -222,7 +225,7 @@ describe("execute: orderBy-form (client-side sort/slice)", () => {
     // original relative order. Only 4 candidates exist (below the default limit of 5), so the
     // header honestly reports "Top 4" (what's actually shown), not the requested limit.
     expect(out).toBe(
-      "Top 4 by Mass: Elephant (6400), Bat (20), Missing Data (n/a), Also Missing (n/a) (of 4 cases)."
+      "Top 4 by Mass: Elephant (6400), Bat (20), Missing Data, Also Missing (of 4 cases)."
     );
   });
 
@@ -342,5 +345,107 @@ describe("execute: both-form (where narrows, then orderBy sorts/slices the match
     const v = findCasesTool.validate({ dataContext: "Mammals", where: "`Sleep` > 30", orderBy: "Mass" }, ctx);
     const out = await findCasesTool.execute((v as any).resolved, ctx);
     expect(out).toBe("No cases match Sleep > 30 — check the condition (27 cases total).");
+  });
+});
+
+// PR #114 review item 6: the where/orderBy stat attribute's value display ran numeric-only
+// formatValue on EVERY stat value, so a categorical attribute (e.g. Diet) printed the
+// numeric-formatted "n/a" for a value that IS present — "n/a" reads as MISSING to a listener,
+// not "not a number". Fixed to print the raw string for a non-numeric-but-present value, and to
+// omit the parenthetical entirely (not "n/a") for a genuinely blank/missing one.
+describe("categorical stat values (PR #114 review item 6)", () => {
+  const catDc = {
+    name: "Mammals",
+    collections: [{
+      name: "Mammals",
+      attrs: [
+        { name: "Mammal", type: "categorical" }, { name: "Diet", type: "categorical" },
+        { name: "Sleep", type: "numeric" },
+      ],
+    }],
+  };
+  const catCtx = { dataContexts: () => ({ Mammals: catDc }), sendCODAPRequest: send } as unknown as ILocalToolContext;
+
+  it("prints the raw string value for a categorical WHERE stat attribute instead of a numeric-" +
+    "formatted \"n/a\"", async () => {
+    send.mockResolvedValueOnce({
+      success: true,
+      values: [
+        searchCase(1, { Mammal: "Lion", Diet: "meat", Sleep: 13.5 }),
+        searchCase(2, { Mammal: "Tiger", Diet: "meat", Sleep: 15.8 }),
+      ],
+    });
+    const v = findCasesTool.validate({ dataContext: "Mammals", where: "`Diet` == \"meat\"" }, catCtx);
+    const out = await findCasesTool.execute((v as any).resolved, catCtx);
+    expect(out).toBe('Found 2 cases where Diet == "meat": Lion (Diet meat), Tiger (meat).');
+  });
+
+  it("prints the raw string value for a categorical ORDERBY attribute (non-numeric values still " +
+    "sort last per the existing contract, unchanged — here EVERY value is non-numeric, so " +
+    "original relative order is preserved)", async () => {
+    (getAllCollectionCases as jest.Mock).mockResolvedValue([
+      { case: { id: 1, values: { Mammal: "Lion", Diet: "meat" } } },
+      { case: { id: 2, values: { Mammal: "Elephant", Diet: "plants" } } },
+    ]);
+    const v = findCasesTool.validate({ dataContext: "Mammals", orderBy: "Diet" }, catCtx);
+    const out = await findCasesTool.execute((v as any).resolved, catCtx);
+    expect(out).toBe("Top 2 by Diet: Lion (meat), Elephant (plants) (of 2 cases).");
+  });
+
+  it("omits the parenthetical (never \"n/a\") for a blank/missing categorical stat value", async () => {
+    send.mockResolvedValueOnce({
+      success: true,
+      values: [
+        searchCase(1, { Mammal: "Lion", Diet: "meat" }),
+        searchCase(2, { Mammal: "Unknown Diet Animal", Diet: "" }),
+      ],
+    });
+    // The stat attribute comes from the where expression's OWN backticked ref (existing
+    // contract) — reference Diet there so its blank second value is what's under test.
+    const v = findCasesTool.validate({ dataContext: "Mammals", where: '`Diet` != ""' }, catCtx);
+    const out = await findCasesTool.execute((v as any).resolved, catCtx);
+    expect(out).toBe('Found 2 cases where Diet != "": Lion (Diet meat), Unknown Diet Animal.');
+  });
+});
+
+// PR #114 review item 6 (consistency note): findLabelAttribute trusted schema `attr.type ===
+// "categorical"` alone, even though get-stats.ts documents that `type` is unreliable in real
+// documents and value-sniffs instead. Aligns the label-attribute stance with that same
+// value-sniffing rather than trusting attr.type.
+describe("label attribute selection value-sniffs case data instead of trusting attr.type alone " +
+  "(PR #114 review item 6 consistency note)", () => {
+  it("picks a schema-categorical-typed attribute whose ACTUAL values are non-numeric, same as " +
+    "before, when attr.type happens to agree with the data", async () => {
+    (getAllCollectionCases as jest.Mock).mockResolvedValue([
+      { case: { id: 1, values: { Mammal: "African Elephant", Mass: 6400 } } },
+      { case: { id: 2, values: { Mammal: "Human", Mass: 70 } } },
+    ]);
+    const v = findCasesTool.validate({ dataContext: "Mammals", orderBy: "Mass" }, ctx);
+    const out = await findCasesTool.execute((v as any).resolved, ctx);
+    expect(out).toContain("African Elephant (6400)");
+  });
+
+  it("falls back to a case-index label when the collection's ONLY attrs value-sniff as numeric, " +
+    "even if schema metadata mislabels one as categorical", async () => {
+    const mislabeledDc = {
+      name: "Mammals",
+      collections: [{
+        name: "Mammals",
+        // Schema claims "Code" is categorical, but its real values are all numeric — value-
+        // sniffing (not attr.type) must decide, so no attribute here qualifies as a label.
+        attrs: [{ name: "Code", type: "categorical" }, { name: "Sleep", type: "numeric" }],
+      }],
+    };
+    const mislabeledCtx = { dataContexts: () => ({ Mammals: mislabeledDc }), sendCODAPRequest: send } as unknown as ILocalToolContext;
+    send.mockResolvedValueOnce({
+      success: true,
+      values: [
+        searchCase(1, { Code: "100", Sleep: 19.9 }),
+        searchCase(2, { Code: "200", Sleep: 18.1 }),
+      ],
+    });
+    const v = findCasesTool.validate({ dataContext: "Mammals", where: "`Sleep` > 12" }, mislabeledCtx);
+    const out = await findCasesTool.execute((v as any).resolved, mislabeledCtx);
+    expect(out).toBe("Found 2 cases where Sleep > 12: Case 1 (Sleep 19.9), Case 2 (18.1).");
   });
 });

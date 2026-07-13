@@ -156,6 +156,67 @@ it("forces a final answer at the round cap", async () => {
   expect(finalMessages[finalMessages.length - 1].content).toMatch(/answer now/i);
 });
 
+// PR #114 review item 5: both forced-final sites (round-cap and 2nd-consecutive-repeat) ended
+// with `return stripThink(lastRaw) || FALLBACK_RESPONSE` — so if the model answered the "answer
+// now" nudge with ANOTHER well-formed tool-call envelope, that raw JSON was spoken verbatim
+// ({"tool":"get_stats",...} read aloud), the very thing recoverFinalResponse already prevents for
+// malformed "final" attempts. Fix: a tool_call degrades to FALLBACK_RESPONSE; an invalid/malformed
+// attempt is only spoken when it does NOT look like a JSON attempt (trimmed starts with "{" ->
+// FALLBACK); plain prose remains speakable (a prose answer to the nudge is a good answer); a
+// malformed-but-recoverable "final" (parseEnvelope's own G1 recovery) still wins outright.
+describe("forced-final fallthrough never speaks a raw tool-call envelope (PR #114 item 5)", () => {
+  it("round-cap forced final answered with ANOTHER tool call degrades to FALLBACK_RESPONSE, " +
+    "never the raw tool-call JSON", async () => {
+    const generate = jest.fn()
+      .mockResolvedValueOnce("{\"tool\":\"get_stats\",\"dataContext\":\"D\",\"attribute\":\"Height\"}")
+      .mockResolvedValueOnce("{\"tool\":\"get_stats\",\"dataContext\":\"D\",\"attribute\":\"Mass\"}")
+      .mockResolvedValueOnce("{\"tool\":\"get_stats\",\"dataContext\":\"D\",\"attribute\":\"Age\"}");
+    const executeTool = jest.fn().mockResolvedValue("{\"success\":true}");
+    const out = await runLocalTurn({ ...baseArgs, generate, executeTool, maxRounds: 1 });
+    expect(out).toMatch(/wasn't able to complete/i);
+    expect(out).not.toContain("{\"tool\"");
+    // Only round 1 (before the cap) ever executed; round 2 hit the cap before executing, and the
+    // forced-final's own tool-call response is never dispatched either.
+    expect(executeTool).toHaveBeenCalledTimes(1);
+  });
+
+  it("round-cap forced final answered with plain prose (not JSON) is spoken as-is — a prose " +
+    "answer to the nudge is a good answer", async () => {
+    const generate = jest.fn()
+      .mockResolvedValueOnce("{\"tool\":\"get_stats\",\"dataContext\":\"D\",\"attribute\":\"Height\"}")
+      .mockResolvedValueOnce("{\"tool\":\"get_stats\",\"dataContext\":\"D\",\"attribute\":\"Mass\"}")
+      .mockResolvedValueOnce("The mean height is about 1.4 meters.");
+    const executeTool = jest.fn().mockResolvedValue("{\"success\":true}");
+    const out = await runLocalTurn({ ...baseArgs, generate, executeTool, maxRounds: 1 });
+    expect(out).toBe("The mean height is about 1.4 meters.");
+  });
+
+  it("round-cap forced final answered with a malformed (unterminated) final envelope still " +
+    "recovers the response text — the existing G1 recovery path still wins", async () => {
+    const generate = jest.fn()
+      .mockResolvedValueOnce("{\"tool\":\"get_stats\",\"dataContext\":\"D\",\"attribute\":\"Height\"}")
+      .mockResolvedValueOnce("{\"tool\":\"get_stats\",\"dataContext\":\"D\",\"attribute\":\"Mass\"}")
+      .mockResolvedValueOnce('{"tool": "final", "response": "The mean height is about 1.4 meters');
+    const executeTool = jest.fn().mockResolvedValue("{\"success\":true}");
+    const out = await runLocalTurn({ ...baseArgs, generate, executeTool, maxRounds: 1 });
+    expect(out).toBe("The mean height is about 1.4 meters");
+  });
+
+  it("the repeat-triggered forced final ALSO degrades to FALLBACK_RESPONSE when answered with " +
+    "another tool call (both forced-final sites share the same fix)", async () => {
+    const graphEnvelope = "{\"tool\":\"create_graph\",\"dataContext\":\"D\",\"xAttr\":\"Height\"}";
+    const generate = jest.fn()
+      .mockResolvedValueOnce(graphEnvelope) // round 1: executes
+      .mockResolvedValueOnce(graphEnvelope) // round 2: 1st repeat — intercepted, nudged
+      .mockResolvedValueOnce(graphEnvelope) // round 3: 2nd consecutive repeat — forces final
+      .mockResolvedValueOnce("{\"tool\":\"get_stats\",\"dataContext\":\"D\",\"attribute\":\"Height\"}");
+    const executeTool = jest.fn().mockResolvedValue("{\"success\":true}");
+    const out = await runLocalTurn({ ...baseArgs, generate, executeTool });
+    expect(out).toMatch(/wasn't able to complete/i);
+    expect(executeTool).toHaveBeenCalledTimes(1);
+  });
+});
+
 it("returns a fallback message if the forced final is also unusable", async () => {
   const toolEnvelope = "{\"tool\":\"get_graph_info\"}";
   // DAVAI-126 matrix round 3 item E7: an empty generation is now an ordinary invalid envelope

@@ -255,6 +255,36 @@ const buildUnivariateSketch = (name: string, unit: string | undefined, values: n
   return lines.join("\n");
 };
 
+// PR #114 review item 4: splits one axis's IQR outliers (already sorted largest-|deviation|-first
+// by findAxisOutliers) into "high"/"low" clauses. Pre-fix, the word came from outliers[0] ONLY
+// (the single largest-deviation entry) and was then applied to every OTHER listed value on that
+// axis too — so a low outlier with a smaller deviation than a same-axis high one was read out
+// under "Unusually high", contradicting the coordinate actually spoken. Each side keeps
+// findAxisOutliers' own largest-deviation-first order (filter preserves relative order).
+const formatSideOutliers = (
+  axisName: string, outliers: IAxisOutlier[], coordFor: (o: IAxisOutlier) => string
+): string[] => {
+  const above = outliers.filter((o) => o.aboveMedian);
+  const below = outliers.filter((o) => !o.aboveMedian);
+  const clauses: string[] = [];
+  if (above.length > 0) clauses.push(`Unusually high ${axisName}: ${above.map(coordFor).join(", ")}`);
+  if (below.length > 0) clauses.push(`Unusually low ${axisName}: ${below.map(coordFor).join(", ")}`);
+  return clauses;
+};
+
+const buildSelectedLine = (selectedPairs: [unknown, unknown][]): string => {
+  const coords = selectedPairs
+    .map(([x, y]) => coerceNumericValues([x, y]))
+    .filter((c) => c.length === 2)
+    .map(([x, y]) => formatCoord(x, y));
+  const count = selectedPairs.length;
+  const noun = count === 1 ? "case" : "cases";
+  const shown = coords.slice(0, MAX_SELECTED);
+  const more = coords.length - shown.length;
+  const coordText = more > 0 ? `${shown.join(", ")} … and ${more} more` : shown.join(", ");
+  return `Selected: ${count} ${noun} at ${coordText}.`;
+};
+
 const buildScatterSketch = (input: IGraphSketchInput, pairs: { x: number; y: number }[]): string => {
   const xs = pairs.map((p) => p.x);
   const ys = pairs.map((p) => p.y);
@@ -267,19 +297,45 @@ const buildScatterSketch = (input: IGraphSketchInput, pairs: { x: number; y: num
       `${axisRangeClause(input.yName as string, input.yUnit, Math.min(...ys), Math.max(...ys), q1y, q3y)}.`,
   ];
 
+  // PR #114 review item 3: pearsonR's denominator (sdx * sdy) is 0 whenever EITHER axis is
+  // constant, producing NaN — which read as the confidently-wrong "positive, strong (r = NaN)"
+  // plus a "NaN%" R² line. An undefined correlation is a real fact, not a defect: state it
+  // plainly and skip the entire r-dependent remainder (LSRL/R², per-axis outliers) — none of
+  // those numbers are meaningful either when one axis never varies (its own IQR fences collapse
+  // to a single point, so "outliers" on that axis are vacuous, and an LSRL slope/R² fit to a
+  // vertical or horizontal scatter does not describe what its numbers would claim).
+  const xConstant = xs.every((x) => x === xs[0]);
+  const yConstant = ys.every((y) => y === ys[0]);
+  if (xConstant || yConstant) {
+    const constantNames = [xConstant ? input.xName : undefined, yConstant ? (input.yName as string) : undefined]
+      .filter((n): n is string => n !== undefined);
+    lines.push(`Relationship: undefined — every point has the same ${constantNames.join(" and ")}.`);
+    if (input.selectedPairs && input.selectedPairs.length > 0) lines.push(buildSelectedLine(input.selectedPairs));
+    return lines.join("\n");
+  }
+
   const r = pearsonR(xs, ys);
-  // Round for display FIRST, then derive the strength word FROM the displayed value (see
-  // strengthWord's comment) — the word must never contradict the number the listener hears.
-  // Direction still keys off the true r's sign (roundSig preserves sign, so they can't differ).
-  const rDisplay = roundSig(r, 2);
-  lines.push(`Relationship: ${directionWord(r)}, ${strengthWord(Number(rDisplay))} (r = ${rDisplay}).`);
+  if (r === 0) {
+    // directionWord(0) reads "positive" today, asserting a direction that doesn't exist for an
+    // exactly-uncorrelated (but otherwise valid, non-degenerate) pair — state the fact plainly.
+    lines.push("Relationship: no linear relationship (r = 0).");
+  } else {
+    // Round for display FIRST, then derive the strength word FROM the displayed value (see
+    // strengthWord's comment) — the word must never contradict the number the listener hears.
+    // Direction still keys off the true r's sign (roundSig preserves sign, so they can't differ).
+    const rDisplay = roundSig(r, 2);
+    lines.push(`Relationship: ${directionWord(r)}, ${strengthWord(Number(rDisplay))} (r = ${rDisplay}).`);
+  }
 
   const lsrl = findLSRL(input.adornments);
   if (lsrl) {
     const slope = lsrl.slope as number;
     const intercept = lsrl.intercept as number;
     const interceptClause = intercept < 0 ? `− ${roundSig(Math.abs(intercept))}` : `+ ${roundSig(intercept)}`;
-    const rSquared = lsrl.rSquared ?? r * r;
+    // Clamp to 1: R² cannot exceed 1 by definition — a slightly-over-1 value (CODAP's own
+    // adornment data, or in principle our r*r fallback) is a floating-point artifact, never a
+    // real >100%-of-the-variation result (PR #114 review item 3).
+    const rSquared = Math.min(1, lsrl.rSquared ?? r * r);
     lines.push(
       `LSRL: ${input.yName} = ${roundSig(slope)} × ${input.xName} ${interceptClause}; R² = ${roundSig(rSquared)} — ` +
         `${input.xName} explains about ${Math.round(rSquared * 100)}% of the variation in ${input.yName}.`
@@ -295,34 +351,14 @@ const buildScatterSketch = (input: IGraphSketchInput, pairs: { x: number; y: num
     // value on the outlier axis (see graph-sketch.test.ts's duplicate-value regression case).
     const xOutliers = findAxisOutliers(xs, MAX_OUTLIERS);
     const yOutliers = findAxisOutliers(ys, MAX_OUTLIERS);
-    const unusualParts: string[] = [];
-    if (xOutliers.length > 0) {
-      unusualParts.push(
-        `Unusually ${xOutliers[0].aboveMedian ? "high" : "low"} ${input.xName}: ` +
-          `${xOutliers.map((o) => formatCoord(o.value, ys[o.index])).join(", ")}`
-      );
-    }
-    if (yOutliers.length > 0) {
-      unusualParts.push(
-        `Unusually ${yOutliers[0].aboveMedian ? "high" : "low"} ${input.yName}: ` +
-          `${yOutliers.map((o) => formatCoord(xs[o.index], o.value)).join(", ")}`
-      );
-    }
+    const unusualParts: string[] = [
+      ...formatSideOutliers(input.xName, xOutliers, (o) => formatCoord(o.value, ys[o.index])),
+      ...formatSideOutliers(input.yName as string, yOutliers, (o) => formatCoord(xs[o.index], o.value)),
+    ];
     if (unusualParts.length > 0) lines.push(`${unusualParts.join("; ")}.`);
   }
 
-  if (input.selectedPairs && input.selectedPairs.length > 0) {
-    const coords = input.selectedPairs
-      .map(([x, y]) => coerceNumericValues([x, y]))
-      .filter((c) => c.length === 2)
-      .map(([x, y]) => formatCoord(x, y));
-    const count = input.selectedPairs.length;
-    const noun = count === 1 ? "case" : "cases";
-    const shown = coords.slice(0, MAX_SELECTED);
-    const more = coords.length - shown.length;
-    const coordText = more > 0 ? `${shown.join(", ")} … and ${more} more` : shown.join(", ");
-    lines.push(`Selected: ${count} ${noun} at ${coordText}.`);
-  }
+  if (input.selectedPairs && input.selectedPairs.length > 0) lines.push(buildSelectedLine(input.selectedPairs));
 
   return lines.join("\n");
 };
