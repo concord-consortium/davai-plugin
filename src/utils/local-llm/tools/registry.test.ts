@@ -28,6 +28,16 @@ const validateThrowTool: ILocalTool = {
 
 beforeEach(() => registerTools([okTool, throwTool, validateThrowTool]));
 
+// PR #114 review item 11 (dev-time guard): a copy-pasted tool file that forgets to rename its
+// `name` field would silently shadow an earlier tool with no error at all — buildToolDocs would
+// document one, dispatchTool would only ever reach the LAST one registered under that name, and
+// the earlier tool becomes permanently unreachable. Catch this at registration time instead.
+it("registerTools throws on a duplicate tool name (PR #114 review item 11)", () => {
+  const duplicate: ILocalTool = { ...throwTool, name: "demo_ok" };
+  expect(() => registerTools([okTool, duplicate])).toThrow(/duplicate/i);
+  expect(() => registerTools([okTool, duplicate])).toThrow(/demo_ok/);
+});
+
 it("dispatches to validate + execute", async () => {
   await expect(dispatchTool("demo_ok", { x: "7" }, ctx)).resolves.toBe("ran with 7");
 });

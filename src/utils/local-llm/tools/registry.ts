@@ -28,7 +28,17 @@ export interface ILocalTool {
 
 let registered: ILocalTool[] = [];
 
+// PR #114 review item 11 (dev-time guard): a copy-pasted tool file that forgets to rename its
+// `name` field would otherwise silently shadow an earlier tool — buildToolDocs would document
+// one, dispatchTool would only ever reach the LAST tool registered under that name, and the
+// earlier tool becomes permanently unreachable with no error at all. Fail loudly at registration
+// time instead, when the mistake is easy to trace to its source.
 export const registerTools = (tools: ILocalTool[]): void => {
+  const seen = new Set<string>();
+  for (const t of tools) {
+    if (seen.has(t.name)) throw new Error(`registerTools: duplicate tool name "${t.name}".`);
+    seen.add(t.name);
+  }
   registered = [...tools];
 };
 

@@ -7,8 +7,12 @@ export interface IResolveHit<T> { ok: true; value: T; repaired: boolean; }
 export interface IResolveMiss { ok: false; error: string; }
 export type ResolveResult<T> = IResolveHit<T> | IResolveMiss;
 
+// Re-trims AFTER collapsing separators (PR #114 review item 11): the first .trim() only strips
+// whitespace, so a leading/trailing underscore or hyphen (not whitespace) survives it, then
+// collapses into a leading/trailing SPACE that a bare .trim() before the collapse can't catch —
+// breaking the normalized-match repair against a differently-formatted name with no such space.
 export const normalizeName = (s: string): string =>
-  s.toLowerCase().trim().replace(/[\s_-]+/g, " ");
+  s.toLowerCase().trim().replace(/[\s_-]+/g, " ").trim();
 
 export const listNames = (names: string[]): string => {
   const MAX = 12;

@@ -7,7 +7,7 @@ jest.mock("../codap-api-utils", () => ({
 import {
   getGraphByID, getGraphAdornments, getCollectionItemsForAttribute, getCollectionItemsForAttributePair
 } from "../codap-api-utils";
-import { buildSchemaDigest, buildGraphSeed, deriveCurrentGraphId } from "./local-llm-prefetch";
+import { buildSchemaDigest, buildGraphSeed, deriveCurrentGraphId, formatAdornment } from "./local-llm-prefetch";
 
 describe("deriveCurrentGraphId (DAVAI-126 current-graph fix)", () => {
   it("explicit selection wins over any graph list, including when it's a number", () => {
@@ -72,6 +72,40 @@ it("adds the unit to a digest entry when the attribute object carries a `unit` f
   expect(digest).toContain("Height (numeric, meters)");
   expect(digest).toContain("Habitat (categorical)");
   expect(digest).not.toContain("Habitat (categorical, ");
+});
+
+// PR #114 review item 11: a data context, collection, or attribute object missing its own
+// `name` field rendered the literal text "undefined" into the digest — a screen-reader user (or
+// the model) would read/see "undefined" as if it were a real name.
+it("never renders literal \"undefined\" into the digest when a dataContext/collection/attribute " +
+  "is missing its name field (PR #114 review item 11)", () => {
+  const malformed = {
+    NoName: {
+      // dataContext itself has no `name`
+      collections: [
+        {
+          // collection has no `name`
+          attrs: [
+            { type: "numeric" }, // attribute has no `name`, but does have a type
+            { name: "Mass" },
+          ],
+        },
+      ],
+    },
+  };
+  const digest = buildSchemaDigest(malformed);
+  expect(digest).not.toMatch(/undefined/);
+});
+
+describe("formatAdornment never renders literal \"undefined\" for a malformed/incomplete " +
+  "adornment (PR #114 review item 11)", () => {
+  it("an LSRL adornment missing rSquared", () => {
+    expect(formatAdornment({ type: "LSRL", slope: 2, intercept: 1 } as any)).not.toMatch(/undefined/);
+  });
+
+  it("a non-LSRL adornment missing value AND mean/min/max", () => {
+    expect(formatAdornment({ type: "Median" } as any)).not.toMatch(/undefined/);
+  });
 });
 
 describe("buildGraphSeed", () => {

@@ -9,11 +9,14 @@ import { graphLabel } from "./tools/resolve";
 // mean/min/max, so it needs its own branch (the fallback would render "mean undefined, min
 // undefined, max undefined"); the format matches create-adornment.ts's formatData so the model
 // sees one consistent LSRL phrasing. Exported so get-graph-info.ts (the tool's own adornments
-// line) reuses this exact formatting instead of duplicating it.
+// line) reuses this exact formatting instead of duplicating it. Every field is guarded (PR #114
+// review item 11) so a malformed/incomplete adornment (e.g. a legend-split multi-line LSRL
+// missing one of these fields) never renders the literal text "undefined".
 export const formatAdornment = (a: IAdornmentData): string =>
   a.type === "LSRL"
-    ? `${a.type}: slope ${a.slope}, intercept ${a.intercept}, R² ${a.rSquared}`
-    : `${a.type}: ${a.value ?? `mean ${a.mean}, min ${a.min}, max ${a.max}`}`;
+    ? `${a.type}: slope ${a.slope ?? "unavailable"}, intercept ${a.intercept ?? "unavailable"}, ` +
+      `R² ${a.rSquared ?? "unavailable"}`
+    : `${a.type}: ${a.value ?? `mean ${a.mean ?? "unavailable"}, min ${a.min ?? "unavailable"}, max ${a.max ?? "unavailable"}`}`;
 
 // The sonification store's explicit selection wins; otherwise, when the document has exactly
 // one graph, that graph is unambiguously "the graph" — clicking a graph in CODAP does not
@@ -32,6 +35,8 @@ export const deriveCurrentGraphId = (
 // — fail-soft, only shown when present; an attribute with no `unit` keeps the plain "(type)"
 // format, and one with no `type` at all stays a bare name, same as before this addition).
 // Replaces the raw trimmed-JSON context dump (smaller, and no IDs for the model to fixate on).
+// Every name field is guarded with `?? ""` (PR #114 review item 11) so a dataContext, collection,
+// or attribute missing its own `name` never renders the literal text "undefined" into the digest.
 export const buildSchemaDigest = (dataContexts: Record<string, any>): string =>
   Object.values(dataContexts ?? {})
     .map((dc: any) => {
@@ -39,14 +44,14 @@ export const buildSchemaDigest = (dataContexts: Record<string, any>): string =>
         .map((c: any) => {
           const attrs = (c?.attrs ?? [])
             .map((a: any) => {
-              if (!a?.type) return a?.name;
-              return a?.unit ? `${a.name} (${a.type}, ${a.unit})` : `${a.name} (${a.type})`;
+              if (!a?.type) return a?.name ?? "";
+              return a?.unit ? `${a.name ?? ""} (${a.type}, ${a.unit})` : `${a.name ?? ""} (${a.type})`;
             })
             .join(", ");
-          return `${c.name}: ${attrs}`;
+          return `${c?.name ?? ""}: ${attrs}`;
         })
         .join(" | ");
-      return `${dc?.name} — ${collections}`;
+      return `${dc?.name ?? ""} — ${collections}`;
     })
     .join("\n");
 

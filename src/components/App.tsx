@@ -192,6 +192,20 @@ export const App = observer(() => {
   }, [appConfig.llmId, handleInitializeAssistant]);
 
   useEffect(() => {
+    // Cleanup-on-UNMOUNT only (empty deps — never re-runs while mounted): frees the local
+    // engine's GPU/WASM resources when the whole plugin unmounts (e.g. CODAP closes/reloads it),
+    // regardless of which model was last selected (PR #114 review item 11). Deliberately a
+    // SEPARATE effect from the llmId-driven load/unload effect above: that effect's own unload
+    // branch already handles switching AWAY from a Local model while mounted, and folding this
+    // into the same effect would re-fire this cleanup on every llmId change too (React cleans up
+    // the previous run before each re-run, not just on unmount), unloading mid-switch instead of
+    // only at the very end of the component's life.
+    return () => {
+      localLlmService.unload().catch(console.error);
+    };
+  }, []);
+
+  useEffect(() => {
     // Announce coarse load milestones (25% steps) and readiness through the transcript so the
     // aria-live path reads them — per-percent updates would spam the screen reader. The stateful
     // logic itself lives in createLoadAnnouncer (local-model-load-announcer.ts), extracted out of

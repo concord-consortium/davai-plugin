@@ -39,6 +39,34 @@ it("unknown attribute yields the corrective options list", () => {
   expect(!v.ok && v.error).toContain("Height");
 });
 
+// PR #114 review item 11: `String(it.values[attribute])` renders a literal "null"/"undefined"
+// for a blank cell — a screen-reader user would hear those words as if they were real data
+// values. A readable "(blank)" placeholder replaces both.
+describe("blank/null/undefined cells render a readable placeholder, never literal null/undefined text (PR #114 review item 11)", () => {
+  it("single-attribute fetch: null and undefined cells both render (blank)", async () => {
+    (getCollectionItemsForAttribute as jest.Mock).mockResolvedValue([
+      { id: "1", values: { Height: 10 } },
+      { id: "2", values: { Height: null } },
+      { id: "3", values: {} }, // Height is undefined here
+    ]);
+    const v = getCaseValuesTool.validate({ dataContext: "Mammals", attribute: "Height" }, ctx);
+    const out = await getCaseValuesTool.execute((v as any).resolved, ctx);
+    expect(out).toBe("Height — 3 cases: 10; (blank); (blank)");
+    expect(out).not.toMatch(/\bnull\b|\bundefined\b/);
+  });
+
+  it("attribute-pair fetch: a blank cell in either column of the pair renders (blank)", async () => {
+    (getCollectionItemsForAttributePair as jest.Mock).mockResolvedValue([
+      { id: "1", values: { Height: 10, Mass: null } },
+      { id: "2", values: { Height: undefined, Mass: 4 } },
+    ]);
+    const v = getCaseValuesTool.validate({ dataContext: "Mammals", attribute: "Height", attribute2: "Mass" }, ctx);
+    const out = await getCaseValuesTool.execute((v as any).resolved, ctx);
+    expect(out).toBe("Height, Mass — 2 cases: 10, (blank); (blank), 4");
+    expect(out).not.toMatch(/\bnull\b|\bundefined\b/);
+  });
+});
+
 describe("no sampling — ships all case values (DAVAI-126 user directive)", () => {
   it("returns all 250 values for a 250-value fixture (spot-check first+last), with the full count " +
     "and no sampling text", async () => {

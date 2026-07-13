@@ -266,6 +266,24 @@ describe("test load app", () => {
     expect(localLlmService.unload).toHaveBeenCalled();
   });
 
+  it("also unloads the local engine on unmount, independent of the llmId-driven unload effect " +
+    "(PR #114 review item 11)", () => {
+    mockAppConfig.llmId = JSON.stringify({ id: "Qwen3-1.7B-q4f16_1-MLC", provider: "Local" });
+    mockAppConfig.llmList = [
+      { id: "mock", provider: "Mock", effortLevels: [] },
+      { id: "Qwen3-1.7B-q4f16_1-MLC", provider: "Local", effortLevels: [] },
+    ];
+    const { unmount } = renderApp();
+    // A Local model is selected, so the llmId-driven effect's unload branch never fires on
+    // mount — establish a clean baseline the same way the load-state-change unsubscribe test
+    // does, so this assertion is specifically about the UNMOUNT cleanup, not mount-time noise.
+    (localLlmService.unload as jest.Mock).mockClear();
+
+    unmount();
+
+    expect(localLlmService.unload).toHaveBeenCalledTimes(1);
+  });
+
   it("announces only coarse 25% milestones and a single readiness message, never per-percent (DAVAI-126)", () => {
     mockAppConfig.llmId = JSON.stringify({ id: "Qwen3-1.7B-q4f16_1-MLC", provider: "Local" });
     mockAppConfig.llmList = [

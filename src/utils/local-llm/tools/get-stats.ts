@@ -1,4 +1,5 @@
 import { getCollectionItemsForAttribute } from "../../codap-api-utils";
+import { roundSig } from "../number-format";
 import { ILocalTool } from "./registry";
 import { resolveAttribute, resolveDataContext } from "./resolve";
 
@@ -16,13 +17,27 @@ export const computeStats = (values: number[]) => {
   return { count, mean, median, stdDev: Math.sqrt(variance), min: sorted[0], max: sorted[count - 1] };
 };
 
-const round = (n: number) => (Number.isInteger(n) ? String(n) : n.toPrecision(6).replace(/\.?0+$/, ""));
+// PR #114 review item 11: bare `n.toPrecision(6)` switches to exponential notation once a
+// non-integer value's integer part has more digits than the requested precision (e.g.
+// "1.23457e+6" for a large mean) — reads badly spoken aloud. roundSig (shared with graph-sketch.ts
+// via number-format.ts) never emits e-notation; sig=6 keeps this tool's existing precision level.
+const round = (n: number) => roundSig(n, 6);
 
 // Numeric detection by value-sniffing (schema `type` is unreliable in real documents). Exported
-// so other consumers (graph-sketch.ts) reuse this exact coercion instead of duplicating it.
+// so other consumers (graph-sketch.ts, find-cases.ts) reuse this exact coercion instead of
+// duplicating it.
 export const coerceNumericValues = (values: unknown[]): number[] =>
   values
-    .map((v) => (typeof v === "number" ? v : v !== "" && v !== null && v !== undefined ? Number(v) : NaN))
+    .map((v) => {
+      if (typeof v === "number") return v;
+      // Whitespace-only strings are blank data, not zero (PR #114 review item 11) — Number(" ")
+      // is a finite 0, which would otherwise count a blank cell as a real numeric zero. Booleans
+      // deliberately are NOT guarded here: Number(true)/Number(false) staying 1/0 is intentional
+      // (a mean over a boolean attribute is a real "proportion true" statistic), so only strings
+      // are trimmed before the blank check.
+      const trimmed = typeof v === "string" ? v.trim() : v;
+      return trimmed !== "" && trimmed !== null && trimmed !== undefined ? Number(trimmed) : NaN;
+    })
     .filter((n): n is number => Number.isFinite(n));
 
 export const getStatsTool: ILocalTool = {

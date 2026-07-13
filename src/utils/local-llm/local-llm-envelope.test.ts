@@ -113,6 +113,30 @@ describe("recovers a malformed \"final\" envelope instead of surfacing raw JSON 
     });
   });
 
+  // PR #114 review item 11: the fallback's `esc[0] === "u"` check doesn't verify the captured
+  // group actually has 4 hex digits — the tolerant regex's SECOND alternative (a bare `.`) can
+  // capture just "u" (1 char) when the \u is truncated or followed by non-hex, and the old code
+  // still tried to parseInt("", 16) = NaN, then String.fromCharCode(NaN) = a NUL character
+  // silently inserted into the "recovered" text.
+  describe("a malformed \\u escape falls through to literal text, never a NUL character (PR #114 review item 11)", () => {
+    const NUL = String.fromCharCode(0);
+
+    it("generation truncated immediately after \\u (no hex digits at all)", () => {
+      const raw = '{\n  "tool": "final",\n  "response": "The caf\\u';
+      const result = parseEnvelope(raw);
+      if (result.kind !== "final") throw new Error(`expected a recovered final, got: ${result.kind}`);
+      expect(result.response).toBe("The cafu");
+      expect(result.response).not.toContain(NUL);
+    });
+
+    it("\\u followed by invalid (non-hex) characters", () => {
+      const raw = '{\n  "tool": "final",\n  "response": "The caf\\uZZZZ later text"';
+      const result = parseEnvelope(raw);
+      if (result.kind !== "final") throw new Error(`expected a recovered final, got: ${result.kind}`);
+      expect(result.response).not.toContain(NUL);
+    });
+  });
+
   it("leaves garbage JSON without a \"final\" tool attempt on the existing invalid fallback", () => {
     const result = parseEnvelope("not json at all, no tool field here");
     expect(result.kind).toBe("invalid");

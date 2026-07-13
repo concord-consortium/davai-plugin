@@ -7,10 +7,15 @@ const dc = { name: "Mammals", collections: [{ name: "Cases", attrs: [{ name: "He
 const ctx = { dataContexts: () => ({ Mammals: dc }) } as unknown as ILocalToolContext;
 
 // DAVAI-126 Task B: graph-sketch.ts reuses this exact coercion (imported, not duplicated) — this
-// test locks its contract (numbers pass through, numeric strings coerce, "", null, and
-// non-numeric strings are dropped) so both call sites can rely on identical behavior.
-it("coerceNumericValues: numbers pass through, numeric strings coerce, junk is dropped", () => {
-  expect(coerceNumericValues([10, "12", "", null, "n/a", undefined, "3.5"])).toEqual([10, 12, 3.5]);
+// test locks its contract (numbers pass through, numeric strings coerce, "", null, whitespace-
+// only strings, and non-numeric strings are dropped) so both call sites can rely on identical
+// behavior. Booleans deliberately STAY coerced to 1/0 (Number(true)=1, Number(false)=0) — a mean
+// over a boolean attribute is a real "proportion true" statistic, not a coercion bug; this is
+// INTENTIONAL, not an oversight (PR #114 review item 11).
+it("coerceNumericValues: numbers pass through, numeric strings coerce, booleans become 1/0 " +
+  "(intentional), whitespace-only strings and other junk are dropped", () => {
+  expect(coerceNumericValues([10, "12", "", null, "n/a", undefined, "3.5", "   ", true, false]))
+    .toEqual([10, 12, 3.5, 1, 0]);
 });
 
 it("computeStats: known values (sample stdDev, n-1)", () => {
@@ -40,6 +45,22 @@ it("computes stats from fetched values, ignoring non-numeric entries", async () 
   expect(out).toContain("computed from 2 numeric cases");
   expect(out).toContain("mean 11");
   expect(out).toContain("min 10");
+});
+
+// PR #114 review item 11: the old `n.toPrecision(6)` formatter switches to exponential notation
+// once a non-integer value's integer part has more digits than the requested precision (e.g.
+// "1.23457e+6"), which reads badly spoken aloud. Reusing graph-sketch.ts's roundSig (via the
+// shared number-format.ts) at 6 significant figures keeps the same precision level but never
+// emits e-notation.
+it("never emits exponential notation for a large non-integer mean (PR #114 review item 11)", async () => {
+  (getCollectionItemsForAttribute as jest.Mock).mockResolvedValue([
+    { id: "1", values: { Height: 1234567 } },
+    { id: "2", values: { Height: 1234568.78 } },
+  ]);
+  const v = getStatsTool.validate({ dataContext: "Mammals", attribute: "Height" }, ctx);
+  const out = await getStatsTool.execute((v as any).resolved, ctx);
+  expect(out).not.toMatch(/e[+-]\d/i);
+  expect(out).toContain("mean 1234570");
 });
 
 it("errors correctively when fewer than 2 numeric values exist", async () => {

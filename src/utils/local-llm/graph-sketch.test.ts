@@ -393,6 +393,41 @@ describe("R² clamp: displayed R² never exceeds 100% (PR #114 item 3)", () => {
   });
 });
 
+// PR #114 review item 11: findLSRL already type-checks slope/intercept (must be numbers) before
+// accepting an adornment as a usable LSRL, but did not check rSquared's shape — an adornment
+// with a malformed rSquared (e.g. array-shaped, from a hypothetical legend-split multi-line
+// representation) would still be accepted, and the LSRL/R² line would then embed that malformed
+// value directly (e.g. "explains about NaN% of the variation"). Extending the SAME type-check to
+// reject a present-but-non-number rSquared degrades gracefully to the per-axis-outliers branch
+// instead — without changing behavior for the verified shape (a numeric rSquared, or one simply
+// absent and computed from r via the existing `?? r * r` fallback).
+describe("LSRL graceful degrade: a malformed rSquared shape is treated as no-LSRL, never " +
+  "printing undefined/NaN (PR #114 review item 11)", () => {
+  const xValues = [1, 2, 3, 4, 5, 6, 7, 8];
+  const yValues = [10, 12, 11, 13, 12, 14, 13, 400];
+
+  it("an array-shaped rSquared degrades to the per-axis-outliers branch instead of a broken LSRL/R² line", () => {
+    const sketch = computeGraphSketch({
+      xName: "X", yName: "Y", xValues, yValues,
+      adornments: [{ type: "LSRL", slope: 1, intercept: 5, rSquared: [0.887] as any }],
+    });
+    expect(sketch).not.toMatch(/LSRL:/);
+    expect(sketch).not.toMatch(/undefined/);
+    expect(sketch).not.toMatch(/NaN/);
+    expect(sketch).toContain("Unusually high Y: (8, 400)."); // the graceful-degrade path
+  });
+
+  it("a genuinely MISSING rSquared is unchanged — still computes R² from r (the verified, " +
+    "already-working shape)", () => {
+    const sketch = computeGraphSketch({
+      xName: "Height", yName: "Mass", xValues: [1, 2, 3, 4, 5], yValues: [5, 7, 9, 11, 13],
+      adornments: [{ type: "LSRL", slope: 2, intercept: 3 }], // no rSquared at all
+    });
+    expect(sketch).toContain("R² = 1"); // r = 1 exactly for this fixture -> r*r fallback = 1
+    expect(sketch).not.toMatch(/undefined/);
+  });
+});
+
 describe("selected pairs line", () => {
   const base = { xName: "Height", yName: "Mass", xValues: [1, 2, 3, 4, 5, 6, 7, 8], yValues: [10, 20, 30, 40, 50, 60, 70, 80] };
 
@@ -414,6 +449,27 @@ describe("selected pairs line", () => {
       ...base, selectedPairs: [[1, 10], [2, 20], [3, 30], [4, 40]],
     });
     expect(sketch).toContain("Selected: 4 cases at (1, 10), (2, 20), (3, 30) … and 1 more.");
+  });
+
+  // PR #114 review item 11: a non-numeric coordinate in a pair was silently skipped from the
+  // listed coordinates, but the "N cases" count still used selectedPairs.length (the ORIGINAL,
+  // pre-filter count) — miscounting how many are actually described. Skipping the pair should
+  // adjust the reported count to match what's actually listed.
+  it("skips a non-numeric pair and reports the count of SURVIVING numeric pairs, never a " +
+    "miscount (PR #114 review item 11)", () => {
+    const sketch = computeGraphSketch({
+      ...base, selectedPairs: [[5, 1100], ["junk", "also junk"], [6, 1200]],
+    });
+    expect(sketch).toContain("Selected: 2 cases at (5, 1100), (6, 1200).");
+  });
+
+  // PR #114 review item 11: when EVERY selected pair is non-numeric, the coordinate list is
+  // empty but the line still claimed "Selected: N cases at ." — an empty, nonsensical clause.
+  it("omits the Selected line entirely when every pair is non-numeric — never 'Selected: N " +
+    "cases at .' (PR #114 review item 11)", () => {
+    const sketch = computeGraphSketch({ ...base, selectedPairs: [["junk", "also junk"]] });
+    expect(sketch).not.toMatch(/Selected:/);
+    expect(sketch).not.toMatch(/at \./);
   });
 });
 

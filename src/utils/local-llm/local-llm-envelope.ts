@@ -74,7 +74,15 @@ const unescapeJsonString = (s: string): string => {
     return JSON.parse(`"${trimmed}"`);
   } catch {
     return trimmed.replace(/\\(u[0-9a-fA-F]{4}|.)/g, (_match, esc: string) => {
-      if (esc[0] === "u") return String.fromCharCode(parseInt(esc.slice(1), 16));
+      // Only a FULL 5-char capture ("u" + 4 hex digits, matched via the regex's FIRST
+      // alternative) is a real \uXXXX escape — parseInt on it can never be NaN. A malformed or
+      // truncated \u (generation cut off right after "\u", or followed by non-hex characters)
+      // falls through to the regex's SECOND alternative instead, which captures just the bare
+      // "u" character (length 1) — treating THAT as a unicode escape (the old bug) fed
+      // parseInt("", 16) = NaN, and String.fromCharCode(NaN) silently inserted a NUL character
+      // into the "recovered" text (PR #114 review item 11). Fall through to the same literal-
+      // passthrough the switch's default case already gives any other unrecognized escape.
+      if (esc.length === 5 && esc[0] === "u") return String.fromCharCode(parseInt(esc.slice(1), 16));
       switch (esc) {
         case "n": return "\n";
         case "t": return "\t";

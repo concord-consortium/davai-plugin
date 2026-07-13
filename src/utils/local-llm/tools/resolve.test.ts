@@ -17,6 +17,17 @@ describe("normalizeName", () => {
     expect(normalizeName("sleep-HOURS")).toBe("sleep hours");
     expect(normalizeName("Sleep  Hours")).toBe("sleep hours");
   });
+
+  // PR #114 review item 11: `.trim()` runs BEFORE the separator-collapse replace, so a LEADING
+  // (or trailing) underscore/hyphen — not whitespace, so .trim() doesn't touch it — collapses
+  // into a leading/trailing SPACE that survives uncollapsed, breaking the normalized-match repair
+  // against a differently-formatted name with no such leading space.
+  it("re-trims after collapsing separators, so a leading/trailing underscore doesn't survive as " +
+    "a leading/trailing space (PR #114 review item 11)", () => {
+    expect(normalizeName("_sleep_hours")).toBe("sleep hours");
+    expect(normalizeName("sleep_hours_")).toBe("sleep hours");
+    expect(normalizeName("-sleep-hours-")).toBe("sleep hours");
+  });
 });
 
 describe("resolveByName ladder", () => {

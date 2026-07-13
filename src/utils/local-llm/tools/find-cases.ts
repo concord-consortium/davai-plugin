@@ -41,19 +41,27 @@ const findLabelAttribute = (collection: any, rows: Record<string, unknown>[]): s
 
 // Numeric coercion consistent with get-stats.ts's coerceNumericValues, but returning NaN (not
 // filtering it out) — find_cases needs to keep every row for the "of N cases" count while still
-// sorting non-numeric values last.
-const toNumberOrNaN = (v: unknown): number =>
-  typeof v === "number" ? v : v !== "" && v !== null && v !== undefined ? Number(v) : NaN;
+// sorting non-numeric values last. Whitespace-only strings are blank data, not zero (PR #114
+// review item 11, same fix as get-stats.ts's coerceNumericValues) — Number(" ") is a finite 0,
+// which would otherwise sort/display a blank cell as a real numeric zero.
+const toNumberOrNaN = (v: unknown): number => {
+  if (typeof v === "number") return v;
+  const trimmed = typeof v === "string" ? v.trim() : v;
+  return trimmed !== "" && trimmed !== null && trimmed !== undefined ? Number(trimmed) : NaN;
+};
 
 // Renders one row's parenthetical value: the coerced number when numeric, the RAW STRING when
 // non-numeric-but-present (PR #114 review item 6 — e.g. a categorical stat attribute like Diet
 // previously printed the numeric-formatted "n/a", which reads as MISSING to a listener about a
 // value that IS there), or `undefined` when the value is genuinely blank/missing — the caller
-// omits the parenthetical entirely for that case rather than showing a fake "n/a" value.
+// omits the parenthetical entirely for that case rather than showing a fake "n/a" value. A
+// whitespace-only string is blank too (same reasoning as toNumberOrNaN above), so it's trimmed
+// before the blank check rather than being displayed as literal whitespace.
 const formatValue = (value: unknown): string | undefined => {
-  if (value === "" || value === null || value === undefined) return undefined;
+  const trimmed = typeof value === "string" ? value.trim() : value;
+  if (trimmed === "" || trimmed === null || trimmed === undefined) return undefined;
   const numeric = toNumberOrNaN(value);
-  return Number.isFinite(numeric) ? String(numeric) : String(value);
+  return Number.isFinite(numeric) ? String(numeric) : String(trimmed);
 };
 
 // Strips backticks for the human-facing sentence — CODAP needs `Sleep` (name-exact formula

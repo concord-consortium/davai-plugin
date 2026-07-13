@@ -1,4 +1,10 @@
 import { coerceNumericValues } from "./tools/get-stats";
+// Re-exported (not just imported) so existing consumers of `roundSig` from THIS module (e.g.
+// graph-sketch.test.ts) are unaffected — the implementation moved to number-format.ts so
+// get-stats.ts can reuse it too without a get-stats.ts <-> graph-sketch.ts circular import
+// (graph-sketch.ts already imports coerceNumericValues FROM get-stats.ts).
+import { roundSig } from "./number-format";
+export { roundSig };
 
 // DAVAI-126 Task B: local models (esp. the 1.7B) cannot reliably derive cluster boundaries,
 // outliers, or R²-meaning from raw case values — a 1.7B run invented "data points clustering
@@ -61,27 +67,6 @@ export const isNumericAxis = (values: unknown[]): boolean => {
   if (nonEmpty.length === 0) return false;
   const numericCount = coerceNumericValues(nonEmpty).length;
   return numericCount / nonEmpty.length > 0.8;
-};
-
-// Round to N significant figures, formatted as a plain (non-exponential) decimal string, with
-// trailing zeros after the decimal point trimmed. `toPrecision`/`toExponential` alone would
-// render values like 6277.8 as "6.28e+3", which reads badly in prose — this never does that.
-export const roundSig = (n: number, sig = 3): string => {
-  if (n === 0) return "0";
-  const negative = n < 0;
-  const abs = Math.abs(n);
-  const magnitude = Math.floor(Math.log10(abs));
-  // The exponent can be negative (magnitude >= sig, e.g. 6277.8 at 3 sig figs needs rounding to
-  // the nearest 10 — a NEGATIVE decimal-places count, which toFixed cannot express directly), so
-  // round via a scale/round/unscale on the unclamped exponent, and clamp only for the final
-  // toFixed call (which needs a non-negative digit count to format the result as plain decimal).
-  const roundingExponent = sig - 1 - magnitude;
-  const scale = Math.pow(10, roundingExponent);
-  const rounded = Math.round(abs * scale) / scale;
-  const decimals = Math.max(0, roundingExponent);
-  let s = rounded.toFixed(decimals);
-  if (s.includes(".")) s = s.replace(/0+$/, "").replace(/\.$/, "");
-  return (negative ? "-" : "") + s;
 };
 
 // Tukey hinges: median of the lower half and median of the upper half, excluding the overall
@@ -151,8 +136,20 @@ const strengthWord = (displayedR: number): string => {
 
 const directionWord = (r: number): string => (r < 0 ? "negative" : "positive");
 
+// PR #114 review item 11 (LSRL graceful degrade): extends the existing slope/intercept type-check
+// to ALSO reject a rSquared that's PRESENT but not a number (e.g. array-shaped, from a
+// hypothetical legend-split multi-line representation) — without changing behavior for the
+// verified, already-working shape, where rSquared is either a real number or simply absent
+// (handled by the `?? r * r` fallback in buildScatterSketch). A malformed rSquared makes the
+// WHOLE adornment ineligible, falling through to the per-axis-outliers branch instead of
+// embedding a broken value into the LSRL/R² line (e.g. "explains about NaN% of the variation").
 const findLSRL = (adornments: IGraphAdornmentInput[] | undefined): IGraphAdornmentInput | undefined =>
-  adornments?.find((a) => a.type === "LSRL" && typeof a.slope === "number" && typeof a.intercept === "number");
+  adornments?.find((a) =>
+    a.type === "LSRL" &&
+    typeof a.slope === "number" &&
+    typeof a.intercept === "number" &&
+    (a.rSquared === undefined || typeof a.rSquared === "number")
+  );
 
 // Residual outliers (y minus the fitted value), largest |residual| first, capped at `max`. Each
 // entry keeps the original (x, y) pair so the "Farthest from the line" line can report
@@ -272,12 +269,19 @@ const formatSideOutliers = (
   return clauses;
 };
 
-const buildSelectedLine = (selectedPairs: [unknown, unknown][]): string => {
+// PR #114 review item 11 (selectedPairs formatting hardening): a non-numeric coordinate already
+// dropped its whole pair from `coords` via the length-2 filter, but the reported count used
+// selectedPairs.length (the ORIGINAL, pre-filter count) — miscounting how many are actually
+// listed. Using coords.length instead keeps the stated count honest, AND naturally covers the
+// all-non-numeric case: `undefined` is returned when nothing survives, so the caller omits the
+// line entirely instead of the old "Selected: N cases at ." (an empty, nonsensical clause).
+const buildSelectedLine = (selectedPairs: [unknown, unknown][]): string | undefined => {
   const coords = selectedPairs
     .map(([x, y]) => coerceNumericValues([x, y]))
     .filter((c) => c.length === 2)
     .map(([x, y]) => formatCoord(x, y));
-  const count = selectedPairs.length;
+  if (coords.length === 0) return undefined;
+  const count = coords.length;
   const noun = count === 1 ? "case" : "cases";
   const shown = coords.slice(0, MAX_SELECTED);
   const more = coords.length - shown.length;
@@ -310,7 +314,10 @@ const buildScatterSketch = (input: IGraphSketchInput, pairs: { x: number; y: num
     const constantNames = [xConstant ? input.xName : undefined, yConstant ? (input.yName as string) : undefined]
       .filter((n): n is string => n !== undefined);
     lines.push(`Relationship: undefined — every point has the same ${constantNames.join(" and ")}.`);
-    if (input.selectedPairs && input.selectedPairs.length > 0) lines.push(buildSelectedLine(input.selectedPairs));
+    if (input.selectedPairs && input.selectedPairs.length > 0) {
+    const selectedLine = buildSelectedLine(input.selectedPairs);
+    if (selectedLine) lines.push(selectedLine);
+  }
     return lines.join("\n");
   }
 
@@ -358,7 +365,10 @@ const buildScatterSketch = (input: IGraphSketchInput, pairs: { x: number; y: num
     if (unusualParts.length > 0) lines.push(`${unusualParts.join("; ")}.`);
   }
 
-  if (input.selectedPairs && input.selectedPairs.length > 0) lines.push(buildSelectedLine(input.selectedPairs));
+  if (input.selectedPairs && input.selectedPairs.length > 0) {
+    const selectedLine = buildSelectedLine(input.selectedPairs);
+    if (selectedLine) lines.push(selectedLine);
+  }
 
   return lines.join("\n");
 };

@@ -235,6 +235,23 @@ describe("execute: orderBy-form (client-side sort/slice)", () => {
     const out = await findCasesTool.execute((v as any).resolved, ctx);
     expect(out).toBe("No cases found in \"Mammals\" to order by Mass.");
   });
+
+  // PR #114 review item 11: Number(" ") is a finite 0, so a whitespace-only value was counted
+  // as a real numeric zero — sorting it among genuine zeros instead of last with the other
+  // non-numeric/blank values, and displaying a fake "0" instead of omitting the parenthetical.
+  it("treats a whitespace-only value as blank, not a numeric zero: sorts last and omits the " +
+    "parenthetical (PR #114 review item 11)", async () => {
+    (getAllCollectionCases as jest.Mock).mockResolvedValue([
+      { case: { id: 1, values: { Mammal: "Elephant", Mass: 6400 } } },
+      { case: { id: 2, values: { Mammal: "Whitespace Mass", Mass: "   " } } },
+      { case: { id: 3, values: { Mammal: "Zero Mass", Mass: 0 } } },
+    ]);
+    const v = findCasesTool.validate({ dataContext: "Mammals", orderBy: "Mass" }, ctx);
+    const out = await findCasesTool.execute((v as any).resolved, ctx);
+    // A genuine numeric 0 sorts normally (last among numerics, desc); the whitespace-only value
+    // sorts LAST of all (non-numeric bucket) and shows no parenthetical.
+    expect(out).toBe("Top 3 by Mass: Elephant (6400), Zero Mass (0), Whitespace Mass (of 3 cases).");
+  });
 });
 
 describe("hierarchy contexts after group_by (leaf-collection default; DAVAI-126 Task D fix pass)", () => {
