@@ -58,6 +58,17 @@ it("errors correctively when no graph is selected and none named", () => {
   expect(!v.ok && v.error).toMatch(/no graph is selected/i);
 });
 
+// Codex second-pass hardening F5: validate() passes `args.graph as string | undefined` straight
+// to resolveGraph with no `?? ""` guard — a model emitting `{"tool": "get_graph_info", "graph":
+// null}` (JSON null, not an omitted key) reaches resolveGraph as a real runtime `null`, which
+// pre-fix defeated the selected-graph default (`String(null)` is the non-blank string "null").
+it("graph:null (an explicit JSON null, not an omitted key) still resolves the selected graph, " +
+  "same as omitting \"graph\" entirely", () => {
+  const v = getGraphInfoTool.validate({ graph: null }, ctx);
+  expect(v.ok).toBe(true);
+  expect(v.ok && v.resolved.graphId).toBe(42);
+});
+
 // DAVAI-126 matrix round 3 item E1: result string used `graph?.title ?? graph?.name ??
 // resolved.graphId` — evidence: `Added Mean adornment to "undefined"` style bugs elsewhere from
 // the same raw-fallback pattern. Now uses the shared graphLabel (empty-string-safe, descriptive

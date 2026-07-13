@@ -700,6 +700,116 @@ describe("boundary coercion: a runtime number for `requested` never throws (PR #
   });
 });
 
+// Codex second-pass hardening F5/F6: every "was this argument omitted" check in resolve.ts
+// compared `requested` against `undefined`/`""` only, AFTER a boundary coercion that ran
+// `String(requested)` whenever `requested !== undefined` — so a JSON `null` (a model literally
+// writing `"graph": null`) became the non-blank string "null" BEFORE the omitted-check ever saw
+// it, defeating every sole-default/leaf-default below (a corrective like `No graph matches
+// "null"` instead of the intended default). Separately, a whitespace-only string ("   ") was
+// never recognized as omitted either, for the same "compares to undefined/'' only" reason. Fix:
+// every omitted-check now uses `value == null || String(value).trim() === ""`, checked BEFORE
+// any coercion — null and blank now behave EXACTLY like undefined at every one of these
+// boundaries, while an explicit non-blank value's behavior is completely unchanged.
+describe("Codex hardening F5/F6: null and whitespace-only are treated as omitted, exactly like " +
+  "undefined, at every resolver default boundary", () => {
+  describe("F5: JSON null does not defeat the omitted default", () => {
+    it("resolveGraph(null, ...) resolves the selected graph, same as undefined", () => {
+      const graphs = [{ id: 42, name: "G1", title: "Height vs Age" }];
+      const r = resolveGraph(null as unknown as string | undefined, graphs, "42");
+      if (!r.ok) throw new Error(`should succeed, got error: ${r.error}`);
+      expect(r.value.id).toBe(42);
+      expect(r.repaired).toBe(false);
+    });
+
+    it("resolveDataContext(null, ...) on a single-context document resolves the sole context, " +
+      "same as undefined", () => {
+      const r = resolveDataContext(null as unknown as string | undefined, dcs);
+      if (!r.ok) throw new Error(`should succeed, got error: ${r.error}`);
+      expect(r.value.name).toBe("Mammals");
+      expect(r.repaired).toBe(false);
+    });
+
+    it("resolveCollection(null, ...) on a single-collection context resolves the sole " +
+      "collection, same as undefined", () => {
+      const r = resolveCollection(null as unknown as string | undefined, dc);
+      if (!r.ok) throw new Error(`should succeed, got error: ${r.error}`);
+      expect(r.value.name).toBe("Cases");
+    });
+
+    it("resolveAttribute(null, ...) is UNCHANGED — still the normal missing-arg corrective " +
+      "(no crash, no silent default: attribute has no omitted-value default to defeat)", () => {
+      const r = resolveAttribute(null as unknown as string, dc);
+      if (r.ok) throw new Error("should fail — null is not a real attribute name");
+      expect(r.error).toMatch(/unknown attribute/i);
+    });
+
+    it("a multi-context document with dataContext:null still gets the ambiguous corrective " +
+      "(never silently picks one)", () => {
+      const multiDcs = { Mammals: dc, Birds: { name: "Birds", collections: [] } };
+      const r = resolveDataContext(null as unknown as string | undefined, multiDcs);
+      if (r.ok) throw new Error("should fail — ambiguous across two data contexts");
+      expect(r.error).toMatch(/unknown data context/i);
+    });
+  });
+
+  describe("F6: whitespace-only is treated as omitted, exactly like \"\"", () => {
+    it("resolveDataContext(\"   \", ...) on a single-context document resolves the sole context", () => {
+      const r = resolveDataContext("   ", dcs);
+      if (!r.ok) throw new Error(`should succeed, got error: ${r.error}`);
+      expect(r.value.name).toBe("Mammals");
+    });
+
+    it("resolveCollection(\"  \", ...) on a single-collection context resolves the sole collection", () => {
+      const r = resolveCollection("  ", dc);
+      if (!r.ok) throw new Error(`should succeed, got error: ${r.error}`);
+      expect(r.value.name).toBe("Cases");
+    });
+
+    it("resolveGraph(\"  \", ...) resolves the selected graph, same as omitted", () => {
+      const graphs = [{ id: 42, name: "G1", title: "Height vs Age" }];
+      const r = resolveGraph("  ", graphs, "42");
+      if (!r.ok) throw new Error(`should succeed, got error: ${r.error}`);
+      expect(r.value.id).toBe(42);
+    });
+
+    it("a multi-context document with dataContext:\"   \" gets the SAME omitted-style " +
+      "corrective as undefined — never literally quotes the whitespace back " +
+      "(not 'Unknown data context \"   \"')", () => {
+      const multiDcs = { Mammals: dc, Birds: { name: "Birds", collections: [] } };
+      const whitespace = resolveDataContext("   ", multiDcs);
+      const omitted = resolveDataContext(undefined, multiDcs);
+      if (whitespace.ok || omitted.ok) throw new Error("both should fail — ambiguous");
+      expect(whitespace.error).toBe(omitted.error);
+      expect(whitespace.error).not.toContain('"   "');
+    });
+
+    it("an explicit non-blank value is completely unaffected (still trims nothing, matches " +
+      "exactly as before)", () => {
+      const r = resolveDataContext("mammals", dcs);
+      if (!r.ok) throw new Error(`should succeed, got error: ${r.error}`);
+      expect(r.value.name).toBe("Mammals");
+      expect(r.repaired).toBe(true);
+    });
+  });
+
+  describe("resolveCollectionDefaultLeaf: same null/blank robustness as resolveCollection " +
+    "(sibling function, same omitted-default pattern)", () => {
+    const multi = { name: "M", collections: [{ name: "Diet", attrs: [] }, { name: "Cases", attrs: [] }] };
+
+    it("null defaults to the leaf collection, same as undefined", () => {
+      const r = resolveCollectionDefaultLeaf(null as unknown as string | undefined, multi);
+      if (!r.ok) throw new Error(`should succeed, got error: ${r.error}`);
+      expect(r.value.name).toBe("Cases");
+    });
+
+    it("whitespace-only defaults to the leaf collection, same as omitted", () => {
+      const r = resolveCollectionDefaultLeaf("   ", multi);
+      if (!r.ok) throw new Error(`should succeed, got error: ${r.error}`);
+      expect(r.value.name).toBe("Cases");
+    });
+  });
+});
+
 describe("helpers", () => {
   it("extracts backticked refs from expressions", () => {
     expect(extractBacktickRefs("`Weight` > mean(`Weight in kg`)")).toEqual(["Weight", "Weight in kg"]);

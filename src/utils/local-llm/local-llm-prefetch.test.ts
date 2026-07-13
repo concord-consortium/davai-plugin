@@ -108,6 +108,35 @@ describe("formatAdornment never renders literal \"undefined\" for a malformed/in
   });
 });
 
+// Codex second-pass hardening F3: the `?? "unavailable"` guard is nullish-only (null/undefined),
+// so a NaN/Infinity numeric field — neither null nor undefined — sailed through unguarded,
+// rendering the literal "slope NaN" or "mean Infinity" a screen reader would speak as if it were
+// a real number.
+describe("formatAdornment never renders a non-finite numeric literal (Codex hardening F3)", () => {
+  it("a NaN slope renders 'slope unavailable', not 'slope NaN'", () => {
+    const out = formatAdornment({ type: "LSRL", slope: NaN, intercept: 1, rSquared: 0.5 } as any);
+    expect(out).toContain("slope unavailable");
+    expect(out).not.toMatch(/NaN/);
+  });
+
+  it("an Infinity mean renders 'mean unavailable', not 'mean Infinity'", () => {
+    const out = formatAdornment({ type: "Mean", mean: Infinity, min: 1, max: 2 } as any);
+    expect(out).toContain("mean unavailable");
+    expect(out).not.toMatch(/Infinity/);
+  });
+
+  it("a -Infinity value (the non-LSRL value field) renders '<Type>: unavailable', not '-Infinity'", () => {
+    const out = formatAdornment({ type: "Mean", value: -Infinity } as any);
+    expect(out).toBe("Mean: unavailable");
+  });
+
+  it("normal finite values render byte-identical to today's output (no regression)", () => {
+    expect(formatAdornment({ type: "LSRL", slope: 2.5, intercept: 1.2, rSquared: 0.87 } as any))
+      .toBe("LSRL: slope 2.5, intercept 1.2, R² 0.87");
+    expect(formatAdornment({ type: "Mean", value: 11 } as any)).toBe("Mean: 11");
+  });
+});
+
 describe("buildGraphSeed", () => {
   beforeEach(() => {
     jest.clearAllMocks();

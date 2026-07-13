@@ -20,6 +20,16 @@ export const listNames = (names: string[]): string => {
   return names.length > MAX ? `${shown}, …` : shown;
 };
 
+// Codex second-pass hardening F5/F6: every "was this argument omitted" check below used to
+// compare `requested` against `undefined`/`""` only, AFTER a boundary coercion ran
+// `String(requested)` whenever `requested !== undefined` — so a JSON `null` became the non-blank
+// string "null" BEFORE any omitted-check ever saw it, defeating the sole-context/single-
+// collection/selected-graph default. `value == null` (loose) catches null OR undefined in one
+// check, checked BEFORE any coercion; the trim-then-compare additionally treats a whitespace-only
+// string exactly like "". Neither check widens what an EXPLICIT, non-blank value goes on to do —
+// only what counts as "nothing was said" in the first place.
+const isOmitted = (value: unknown): boolean => value == null || String(value).trim() === "";
+
 export const resolveByName = <T>(
   kind: string,
   requested: string,
@@ -51,37 +61,38 @@ export const resolveDataContext = (
   requested: string | undefined,
   dataContexts: Record<string, any>
 ): ResolveResult<any> => {
-  // Gate 2 boundary coercion (PR #114 review #2 root cause): only when DEFINED, so undefined
-  // still means "not provided" rather than becoming the literal string "undefined".
-  if (requested !== undefined) requested = String(requested);
   const candidates = Object.values(dataContexts ?? {}).map((dc: any) => ({ name: dc?.name ?? "", value: dc }));
   // Sole-context default (PR #114 review item 8): mirrors resolveCollection's precedent above —
   // an omitted dataContext in a single-dataset document resolves silently instead of bouncing
   // the model with an avoidable "Unknown data context" round trip. Tool call sites pass
-  // String(args.dataContext ?? ""), so "" is the common omitted shape alongside undefined. A
-  // multi-dataset document still requires an explicit name (today's corrective, unchanged).
-  if ((requested === undefined || requested === "") && candidates.length === 1) {
+  // String(args.dataContext ?? ""), so "" is the common omitted shape alongside undefined; a
+  // JSON null or whitespace-only string are also omitted (Codex hardening F5/F6). A multi-dataset
+  // document still requires an explicit name (today's corrective, unchanged).
+  const omitted = isOmitted(requested);
+  if (omitted && candidates.length === 1) {
     return { ok: true, value: candidates[0].value, repaired: false };
   }
-  return resolveByName("data context", requested ?? "", candidates);
+  // Gate 2 boundary coercion (PR #114 review #2 root cause) folds in here: an omitted value
+  // (including null, which `??` alone would not have caught) becomes "" for the corrective
+  // message below, exactly like undefined already did; a non-omitted value is passed through as-
+  // is (resolveByName does its own String() coercion, so a runtime number is still safe here).
+  return resolveByName("data context", omitted ? "" : String(requested), candidates);
 };
 
 export const resolveCollection = (
   requested: string | undefined,
   dataContext: any
 ): ResolveResult<any> => {
-  // Gate 2 boundary coercion (PR #114 review #2 root cause): only when DEFINED, so undefined
-  // still means "not provided" rather than becoming the literal string "undefined".
-  if (requested !== undefined) requested = String(requested);
   const collections: any[] = dataContext?.collections ?? [];
-  if (requested === undefined || requested === "") {
+  // Codex hardening F5/F6: null and whitespace-only are omitted too, exactly like undefined/"".
+  if (isOmitted(requested)) {
     if (collections.length === 1) return { ok: true, value: collections[0], repaired: false };
     return {
       ok: false,
       error: `"${dataContext?.name}" has more than one collection — specify "collection". Available: ${listNames(collections.map((c) => c.name))}.`,
     };
   }
-  return resolveByName("collection", requested, collections.map((c) => ({ name: c.name, value: c })));
+  return resolveByName("collection", String(requested), collections.map((c) => ({ name: c.name, value: c })));
 };
 
 // DAVAI-126 Task D fix pass: opt-in leaf-collection default, a SEPARATE helper so
@@ -101,7 +112,12 @@ export const resolveCollectionDefaultLeaf = (
   requested: string | undefined,
   dataContext: any
 ): ResolveResult<any> => {
-  if (requested === undefined || requested === "") {
+  // Codex hardening F5/F6: same omitted-check as resolveCollection above (null and whitespace-
+  // only are omitted too) — otherwise a whitespace-only "collection" arg would skip this leaf
+  // default and fall into resolveCollection's OWN (now also-fixed) omitted branch below, which
+  // asks the model to specify a collection instead of defaulting to the leaf, the wrong corrective
+  // for this opt-in variant's callers (find_cases).
+  if (isOmitted(requested)) {
     const collections: any[] = dataContext?.collections ?? [];
     if (collections.length === 0) {
       return { ok: false, error: `"${dataContext?.name}" has no collections.` };
@@ -368,14 +384,11 @@ export const resolveGraph = (
   graphs: any[],
   selectedGraphId: string | null
 ): ResolveResult<any> => {
-  // Gate 2 boundary coercion (PR #114 review #2 — the exact crash site): callers pass
-  // `args.graph as string`, a compile-time-only cast, so a model echoing a printed numeric id
-  // back as an unquoted JSON number reaches `requested.trim()` below as a runtime `number`,
-  // throwing `TypeError: requested.trim is not a function`. Coerce here, only when DEFINED, so
-  // undefined still means "no graph specified" rather than becoming the literal string
-  // "undefined".
-  if (requested !== undefined) requested = String(requested);
-  if (requested === undefined || requested === "") {
+  // Codex hardening F5/F6: checked BEFORE the boundary coercion below, so a JSON null or a
+  // whitespace-only string is judged on its own — coercing null to the literal string "null"
+  // FIRST (as this boundary used to, unconditionally on "defined") would defeat this very check,
+  // since "null" is neither undefined nor "".
+  if (isOmitted(requested)) {
     const selected = graphs.find((g) => String(g?.id) === String(selectedGraphId));
     if (selected) return { ok: true, value: selected, repaired: false };
     if (graphs.length === 0) {
@@ -386,6 +399,13 @@ export const resolveGraph = (
     // dedupe is exactly the bug this design fixes.
     return { ok: false, error: describeCorrective(undefined, graphs) };
   }
+
+  // Gate 2 boundary coercion (PR #114 review #2 — the exact crash site): callers pass
+  // `args.graph as string`, a compile-time-only cast, so a model echoing a printed numeric id
+  // back as an unquoted JSON number reaches `requested.trim()` below as a runtime `number`,
+  // throwing `TypeError: requested.trim is not a function`. `requested` is now known non-omitted
+  // (defined, non-null, non-blank) from the check above, so this only ever normalizes a number.
+  requested = String(requested);
 
   // DAVAI-126 matrix round 3 item E2: rung 0, before rung 1 (title/name). A model can only echo
   // back a numeric id if WE printed one to it in the first place (a seed header before E1, or any

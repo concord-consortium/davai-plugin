@@ -12,11 +12,18 @@ import { graphLabel } from "./tools/resolve";
 // line) reuses this exact formatting instead of duplicating it. Every field is guarded (PR #114
 // review item 11) so a malformed/incomplete adornment (e.g. a legend-split multi-line LSRL
 // missing one of these fields) never renders the literal text "undefined".
+//
+// Codex second-pass hardening F3: that `?? "unavailable"` guard is nullish-only — a NaN/Infinity
+// field is neither null nor undefined, so it sailed straight through as a literal "slope NaN"/
+// "mean Infinity". This tiny helper additionally rejects any non-finite number; the branch-
+// selection logic below (LSRL vs value vs mean/min/max fallback) is unchanged.
+const formatNum = (n: number | undefined): string => (Number.isFinite(n) ? String(n) : "unavailable");
+
 export const formatAdornment = (a: IAdornmentData): string =>
   a.type === "LSRL"
-    ? `${a.type}: slope ${a.slope ?? "unavailable"}, intercept ${a.intercept ?? "unavailable"}, ` +
-      `R² ${a.rSquared ?? "unavailable"}`
-    : `${a.type}: ${a.value ?? `mean ${a.mean ?? "unavailable"}, min ${a.min ?? "unavailable"}, max ${a.max ?? "unavailable"}`}`;
+    ? `${a.type}: slope ${formatNum(a.slope)}, intercept ${formatNum(a.intercept)}, ` +
+      `R² ${formatNum(a.rSquared)}`
+    : `${a.type}: ${a.value != null ? formatNum(a.value) : `mean ${formatNum(a.mean)}, min ${formatNum(a.min)}, max ${formatNum(a.max)}`}`;
 
 // The sonification store's explicit selection wins; otherwise, when the document has exactly
 // one graph, that graph is unambiguously "the graph" — clicking a graph in CODAP does not

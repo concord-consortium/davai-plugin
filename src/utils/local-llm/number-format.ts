@@ -4,6 +4,23 @@
 // means without get-stats.ts <-> graph-sketch.ts becoming a circular import (graph-sketch.ts
 // already imports coerceNumericValues FROM get-stats.ts).
 
+// Expands a JS exponential-notation string (e.g. "1.23e-307", "1.00e+21") into a plain decimal
+// string with no exponent. Used only for the two magnitudes roundSig's own scale-multiply/divide
+// arithmetic and toFixed cannot express directly (see the two call sites below); toPrecision/
+// toExponential round correctly at any finite magnitude without this module's arithmetic
+// overflowing, so this only ever has to reformat their ALREADY-correctly-rounded digits, never
+// re-round anything itself.
+const expandExponential = (expStr: string): string => {
+  const m = /^(-?)(\d)(?:\.(\d+))?e([+-]\d+)$/.exec(expStr);
+  if (!m) return expStr;
+  const [, sign, lead, frac = "", expPart] = m;
+  const exp = Number(expPart);
+  const digits = lead + frac;
+  if (exp >= digits.length - 1) return sign + digits + "0".repeat(exp - digits.length + 1);
+  if (exp >= 0) return sign + digits.slice(0, exp + 1) + "." + digits.slice(exp + 1);
+  return sign + "0." + "0".repeat(-exp - 1) + digits;
+};
+
 // Round to N significant figures, formatted as a plain (non-exponential) decimal string, with
 // trailing zeros after the decimal point trimmed. `toPrecision`/`toExponential` alone would
 // render values like 6277.8 as "6.28e+3", which reads badly in prose — this never does that.
@@ -21,10 +38,28 @@ export const roundSig = (n: number, sig = 3): string => {
   // round via a scale/round/unscale on the unclamped exponent, and clamp only for the final
   // toFixed call (which needs a non-negative digit count to format the result as plain decimal).
   const roundingExponent = sig - 1 - magnitude;
-  const scale = Math.pow(10, roundingExponent);
-  const rounded = Math.round(abs * scale) / scale;
-  const decimals = Math.max(0, roundingExponent);
-  let s = rounded.toFixed(decimals);
+  let s: string;
+  // Codex second-pass hardening F4: at denormal-range magnitudes (e.g. ~1e-307), expressing `sig`
+  // significant figures needs more than 100 fractional digits — toFixed rejects any digit count
+  // over 100 outright (RangeError), and 10^roundingExponent itself overflows to Infinity at this
+  // magnitude, poisoning the scale/round arithmetic below into NaN before toFixed is even
+  // reached. toPrecision has no such overflow at any finite magnitude, so use it instead here.
+  if (roundingExponent > 100) {
+    s = expandExponential(abs.toPrecision(sig));
+  } else {
+    const scale = Math.pow(10, roundingExponent);
+    const rounded = Math.round(abs * scale) / scale;
+    if (Math.abs(rounded) >= 1e21) {
+      // toFixed ALWAYS renders |value| >= 1e21 in exponential notation regardless of the
+      // requested decimals, even though scale/rounded above computed without overflow — expand
+      // manually instead. toExponential's own digit-count argument (not the scale/round pair
+      // above) is what actually determines the rendered significant figures here.
+      s = expandExponential(rounded.toExponential(Math.max(0, sig - 1)));
+    } else {
+      const decimals = Math.max(0, roundingExponent);
+      s = rounded.toFixed(decimals);
+    }
+  }
   if (s.includes(".")) s = s.replace(/0+$/, "").replace(/\.$/, "");
   return (negative ? "-" : "") + s;
 };

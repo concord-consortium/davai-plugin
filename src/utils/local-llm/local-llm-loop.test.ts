@@ -217,6 +217,48 @@ describe("forced-final fallthrough never speaks a raw tool-call envelope (PR #11
   });
 });
 
+// Codex second-pass hardening F1: a forced-final reply wrapped in a markdown code fence (a
+// small local model's common "helpful" habit) — e.g. "```json\n{\"tool\": \"get_stats\"..."
+// with no closing fence — parses as kind: "invalid" (the leading backtick defeats JSON.parse
+// entirely, so there's no brace-slice to recover either), and pre-fix, `text.startsWith("{")` was
+// FALSE (the text starts with a backtick, not "{"), so this still-JSON-shaped, still-unspeakable
+// attempt was spoken raw. Fenced PROSE, by contrast, is a perfectly good answer once the fence
+// itself is stripped — it must still be spoken (not degraded to FALLBACK_RESPONSE).
+describe("forced-final fenced JSON is never spoken raw (Codex hardening F1)", () => {
+  it("a fenced, unclosed tool-call attempt degrades to FALLBACK_RESPONSE, never the raw fenced JSON", async () => {
+    const generate = jest.fn()
+      .mockResolvedValueOnce("{\"tool\":\"get_stats\",\"dataContext\":\"D\",\"attribute\":\"Height\"}")
+      .mockResolvedValueOnce("{\"tool\":\"get_stats\",\"dataContext\":\"D\",\"attribute\":\"Mass\"}")
+      .mockResolvedValueOnce("```json\n{\"tool\": \"get_stats\", \"dataContext\": \"D\"");
+    const executeTool = jest.fn().mockResolvedValue("{\"success\":true}");
+    const out = await runLocalTurn({ ...baseArgs, generate, executeTool, maxRounds: 1 });
+    expect(out).toMatch(/wasn't able to complete/i);
+    expect(out).not.toContain("```");
+    expect(out).not.toContain("{\"tool\"");
+  });
+
+  it("fenced PROSE is spoken with the fence stripped, not degraded to FALLBACK_RESPONSE", async () => {
+    const generate = jest.fn()
+      .mockResolvedValueOnce("{\"tool\":\"get_stats\",\"dataContext\":\"D\",\"attribute\":\"Height\"}")
+      .mockResolvedValueOnce("{\"tool\":\"get_stats\",\"dataContext\":\"D\",\"attribute\":\"Mass\"}")
+      .mockResolvedValueOnce("```\nThe mean is 5\n```");
+    const executeTool = jest.fn().mockResolvedValue("{\"success\":true}");
+    const out = await runLocalTurn({ ...baseArgs, generate, executeTool, maxRounds: 1 });
+    expect(out).toBe("The mean is 5");
+  });
+
+  it("a fenced envelope that DOES fully close and parse as valid JSON is still handled by the " +
+    "normal envelope path (tool_call -> FALLBACK), unaffected by the new fence-stripping logic", async () => {
+    const generate = jest.fn()
+      .mockResolvedValueOnce("{\"tool\":\"get_stats\",\"dataContext\":\"D\",\"attribute\":\"Height\"}")
+      .mockResolvedValueOnce("{\"tool\":\"get_stats\",\"dataContext\":\"D\",\"attribute\":\"Mass\"}")
+      .mockResolvedValueOnce("```json\n{\"tool\": \"get_stats\", \"dataContext\": \"D\"}\n```");
+    const executeTool = jest.fn().mockResolvedValue("{\"success\":true}");
+    const out = await runLocalTurn({ ...baseArgs, generate, executeTool, maxRounds: 1 });
+    expect(out).toMatch(/wasn't able to complete/i);
+  });
+});
+
 it("returns a fallback message if the forced final is also unusable", async () => {
   const toolEnvelope = "{\"tool\":\"get_graph_info\"}";
   // DAVAI-126 matrix round 3 item E7: an empty generation is now an ordinary invalid envelope

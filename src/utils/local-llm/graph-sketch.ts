@@ -143,11 +143,18 @@ const directionWord = (r: number): string => (r < 0 ? "negative" : "positive");
 // (handled by the `?? r * r` fallback in buildScatterSketch). A malformed rSquared makes the
 // WHOLE adornment ineligible, falling through to the per-axis-outliers branch instead of
 // embedding a broken value into the LSRL/R² line (e.g. "explains about NaN% of the variation").
+//
+// Codex second-pass hardening F2: `typeof x === "number"` is TRUE for NaN, so a NaN slope or
+// intercept used to slip through this check — Number.isFinite rejects it too, the same graceful
+// degrade a malformed-TYPE rSquared already gets. rSquared keeps its ORIGINAL (typeof, not
+// finiteness) check here: a present-but-NaN rSquared alone must not reject an otherwise-good
+// slope/intercept fit — the finiteness check at render time (below) is what suppresses just the
+// R²-dependent sentence for that specific case, leaving the equation line intact.
 const findLSRL = (adornments: IGraphAdornmentInput[] | undefined): IGraphAdornmentInput | undefined =>
   adornments?.find((a) =>
     a.type === "LSRL" &&
-    typeof a.slope === "number" &&
-    typeof a.intercept === "number" &&
+    Number.isFinite(a.slope) &&
+    Number.isFinite(a.intercept) &&
     (a.rSquared === undefined || typeof a.rSquared === "number")
   );
 
@@ -339,13 +346,22 @@ const buildScatterSketch = (input: IGraphSketchInput, pairs: { x: number; y: num
     const slope = lsrl.slope as number;
     const intercept = lsrl.intercept as number;
     const interceptClause = intercept < 0 ? `− ${roundSig(Math.abs(intercept))}` : `+ ${roundSig(intercept)}`;
+    const equation = `LSRL: ${input.yName} = ${roundSig(slope)} × ${input.xName} ${interceptClause}`;
     // Clamp to 1: R² cannot exceed 1 by definition — a slightly-over-1 value (CODAP's own
     // adornment data, or in principle our r*r fallback) is a floating-point artifact, never a
     // real >100%-of-the-variation result (PR #114 review item 3).
     const rSquared = Math.min(1, lsrl.rSquared ?? r * r);
+    // Codex second-pass hardening F2: rSquared can be PRESENT but non-finite (e.g. NaN) even
+    // though slope/intercept are both finite — findLSRL only checks rSquared's TYPE (so the
+    // `?? r * r` fallback above still fires when it's simply absent), not its finiteness.
+    // Rendering the R² sentence anyway would embed a literal "NaN%" (Math.round(NaN) is NaN).
+    // Omit ONLY that sentence; the equation line (independently finite-guarded via findLSRL)
+    // still stands on its own.
     lines.push(
-      `LSRL: ${input.yName} = ${roundSig(slope)} × ${input.xName} ${interceptClause}; R² = ${roundSig(rSquared)} — ` +
-        `${input.xName} explains about ${Math.round(rSquared * 100)}% of the variation in ${input.yName}.`
+      Number.isFinite(rSquared)
+        ? `${equation}; R² = ${roundSig(rSquared)} — ` +
+          `${input.xName} explains about ${Math.round(rSquared * 100)}% of the variation in ${input.yName}.`
+        : `${equation}.`
     );
 
     const residualOutliers = findResidualOutliers(xs, ys, slope, intercept, MAX_OUTLIERS);

@@ -40,6 +40,23 @@ const callKey = (name: string, args: Record<string, unknown>): string => `${name
 const FORCED_FINAL_PROMPT =
   "You have used all of your tool requests. You must answer now: respond with {\"tool\": \"final\", \"response\": \"...\"} using what you already know.";
 
+// Codex second-pass hardening F1: a forced-final reply wrapped in a markdown code fence (e.g.
+// "```json\n{\"tool\": \"get_stats\"...", closed or not) still ATTEMPTS JSON — the leading
+// backtick just hides that from the plain `startsWith("{")` check below. Strips a leading/
+// wrapping fence so the speakability test judges the actual content, not its markdown wrapper.
+// Only strips a fence anchored at the very start of the (already think-stripped) text; a fence
+// appearing mid-text is left alone. When the text isn't closed, the trailing-fence removal simply
+// finds no match and leaves everything after the opening fence line intact.
+const CODE_FENCE_OPEN = /^```[^\n]*\n/;
+const CODE_FENCE_CLOSE = /\n?```\s*$/;
+const stripWrappingCodeFence = (text: string): string =>
+  CODE_FENCE_OPEN.test(text) ? text.replace(CODE_FENCE_OPEN, "").replace(CODE_FENCE_CLOSE, "") : text;
+
+// Matches at the START (a de-fenced JSON attempt) or ANYWHERE (a `"tool": ...` field surviving
+// inside otherwise-unparseable text) — either shape means the model was still trying to produce
+// JSON, never a real prose answer to the nudge.
+const UNSPEAKABLE_JSON_SHAPE = /^\{|"tool"\s*:/;
+
 // PR #114 review item 5: shared tail for both forced-final generations (the round-cap path and
 // the 2nd-consecutive-identical-repeat path) — the "answer now" nudge only ASKS for
 // {"tool":"final",...}; nothing stops the model from answering with another tool call, or with
@@ -47,15 +64,18 @@ const FORCED_FINAL_PROMPT =
 // G1 tolerant recovery of a malformed-but-recognizable "final" attempt — that already arrives
 // here as kind: "final", so it is unaffected by anything below). A well-formed TOOL CALL must
 // never be spoken raw (the user would hear "{tool: get_stats, ...}" read aloud) — degrade
-// straight to FALLBACK_RESPONSE. Anything else (kind: "invalid") gets ONE more chance: if its
-// stripped text plainly looks like ANOTHER JSON attempt (starts with "{"), that is still
+// straight to FALLBACK_RESPONSE. Anything else (kind: "invalid") gets ONE more chance, judged
+// AFTER stripping a wrapping code fence (Codex hardening F1): if what's left plainly looks like
+// ANOTHER JSON attempt (starts with "{", or still contains a `"tool":` field), that is still
 // unspeakable syntax, so fall back too; otherwise it is ordinary prose — a real, if informal,
-// answer to the nudge — and is safe to speak as-is.
+// answer to the nudge — and is safe to speak as-is, fence stripped.
 const resolveForcedFinal = (raw: string, envelope: ParsedEnvelope): string => {
   if (envelope.kind === "final") return envelope.response;
   if (envelope.kind === "tool_call") return FALLBACK_RESPONSE;
   const text = stripThink(raw);
-  return text.startsWith("{") ? FALLBACK_RESPONSE : (text || FALLBACK_RESPONSE);
+  const defenced = stripWrappingCodeFence(text).trim();
+  if (UNSPEAKABLE_JSON_SHAPE.test(defenced)) return FALLBACK_RESPONSE;
+  return defenced || FALLBACK_RESPONSE;
 };
 
 export const runLocalTurn = async (args: ILocalTurnArgs): Promise<string> => {

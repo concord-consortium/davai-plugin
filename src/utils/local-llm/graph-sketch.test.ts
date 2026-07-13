@@ -428,6 +428,52 @@ describe("LSRL graceful degrade: a malformed rSquared shape is treated as no-LSR
   });
 });
 
+// Codex second-pass hardening F2: findLSRL's slope/intercept checks used `typeof x === "number"`,
+// which is TRUE for NaN (typeof NaN === "number") — a NaN slope/intercept was therefore ACCEPTED
+// as a usable LSRL adornment. For rSquared specifically, a present-but-NaN value also survives
+// the `?? r * r` fallback below (NaN is not null/undefined, so `??` never substitutes it),
+// reaching the R² sentence and rendering the literal "explains about NaN% of the variation"
+// (Math.round(NaN) is NaN) even though roundSig itself already guards NaN elsewhere. Fix:
+// findLSRL now requires slope AND intercept to be Number.isFinite (rejecting the whole adornment,
+// same graceful degrade the array-shaped-rSquared case above already gets, when either isn't); a
+// present-but-non-finite rSquared no longer rejects the adornment outright (slope/intercept alone
+// decide eligibility) but DOES suppress just the R²-dependent sentence at render time, leaving the
+// equation line intact.
+describe("Codex hardening F2: NaN slope/intercept/rSquared never leak into the LSRL sketch", () => {
+  const xValues = [1, 2, 3, 4, 5, 6, 7, 8];
+  const yValues = [10, 12, 11, 13, 12, 14, 13, 400];
+
+  it("a NaN rSquared omits only the R² sentence — the equation line still stands since " +
+    "slope/intercept are both finite", () => {
+    const sketch = computeGraphSketch({
+      xName: "X", yName: "Y", xValues, yValues,
+      adornments: [{ type: "LSRL", slope: 1, intercept: 5, rSquared: NaN }],
+    });
+    expect(sketch).toContain("LSRL: Y = 1 × X + 5.");
+    expect(sketch).not.toMatch(/R²/);
+    expect(sketch).not.toMatch(/NaN/);
+  });
+
+  it("a NaN slope rejects the whole LSRL adornment, falling back to the per-axis-outliers branch", () => {
+    const sketch = computeGraphSketch({
+      xName: "X", yName: "Y", xValues, yValues,
+      adornments: [{ type: "LSRL", slope: NaN, intercept: 5, rSquared: 0.9 }],
+    });
+    expect(sketch).not.toMatch(/LSRL:/);
+    expect(sketch).not.toMatch(/NaN/);
+    expect(sketch).toContain("Unusually high Y: (8, 400).");
+  });
+
+  it("a NaN intercept also rejects the whole LSRL adornment (same as a NaN slope)", () => {
+    const sketch = computeGraphSketch({
+      xName: "X", yName: "Y", xValues, yValues,
+      adornments: [{ type: "LSRL", slope: 1, intercept: NaN, rSquared: 0.9 }],
+    });
+    expect(sketch).not.toMatch(/LSRL:/);
+    expect(sketch).not.toMatch(/NaN/);
+  });
+});
+
 describe("selected pairs line", () => {
   const base = { xName: "Height", yName: "Mass", xValues: [1, 2, 3, 4, 5, 6, 7, 8], yValues: [10, 20, 30, 40, 50, 60, 70, 80] };
 

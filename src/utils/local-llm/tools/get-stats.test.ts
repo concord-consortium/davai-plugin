@@ -63,6 +63,20 @@ it("never emits exponential notation for a large non-integer mean (PR #114 revie
   expect(out).toContain("mean 1234570");
 });
 
+// Codex second-pass hardening F4: an extreme-magnitude value (e.g. a malformed/adversarial
+// dataset entry) must never crash get_stats' own formatter (roundSig at sig=6) with a
+// RangeError, and must never render in exponential notation (unspeakable prose).
+it("does not throw and never emits exponential notation for extreme-magnitude values " +
+  "(Codex hardening F4)", async () => {
+  (getCollectionItemsForAttribute as jest.Mock).mockResolvedValue([
+    { id: "1", values: { Height: 1e-307 } },
+    { id: "2", values: { Height: 2e-307 } },
+  ]);
+  const v = getStatsTool.validate({ dataContext: "Mammals", attribute: "Height" }, ctx);
+  const out = await getStatsTool.execute((v as any).resolved, ctx);
+  expect(out).not.toMatch(/e[+-]\d/i);
+});
+
 it("errors correctively when fewer than 2 numeric values exist", async () => {
   (getCollectionItemsForAttribute as jest.Mock).mockResolvedValue([
     { id: "1", values: { Habitat: "land" } },
