@@ -81,7 +81,7 @@ describe("validate", () => {
     expect(send).not.toHaveBeenCalled();
   });
 
-  it("rejects an unknown title-only change is fine — title needs no resolution", () => {
+  it("accepts a title-only change — title needs no resolution", () => {
     const v = updateGraphTool.validate({ graph: "Height vs Mass", title: "New Title" }, ctx);
     expect(v.ok).toBe(true);
     expect((v as any).resolved.title).toBe("New Title");

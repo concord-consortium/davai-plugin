@@ -397,12 +397,14 @@ describe("think-stripped assistant pushes (DAVAI-126 thinking toggle)", () => {
     expect(last.role).toBe("user");
     expect(last.content).toContain("{\"success\":true,\"id\":42}");
   });
+
 });
 
 describe("repeat-call guard (DAVAI-126 eval round 1 F1)", () => {
   // A small local model sometimes repeats an already-successful tool call verbatim instead of
-  // answering. The guard tracks the previous EXECUTED call as `${name}::${JSON.stringify(args)}`
-  // + its result; an identical next call is intercepted instead of re-executed.
+  // answering. The guard tracks the previous EXECUTED call as a name+args key (sorted-key JSON,
+  // so key order doesn't matter) plus its result; an identical next call is intercepted instead
+  // of re-executed.
   const graphEnvelope = "{\"tool\":\"create_graph\",\"dataContext\":\"D\",\"xAttr\":\"Height\"}";
 
   it("(a) does not execute an identical repeat; the synthetic nudge carries the prior result " +
@@ -495,6 +497,25 @@ describe("repeat-call guard (DAVAI-126 eval round 1 F1)", () => {
 
     expect(out).toBe("done");
     expect(executeTool).toHaveBeenCalledTimes(2);
+  });
+
+  it("(d3) recognizes a repeat even when the model emits the SAME args with keys in a different " +
+    "order (PR #114 review)", async () => {
+    const firstOrder = "{\"tool\":\"create_graph\",\"dataContext\":\"D\",\"xAttr\":\"Height\"}";
+    const reorderedRepeat = "{\"tool\":\"create_graph\",\"xAttr\":\"Height\",\"dataContext\":\"D\"}";
+    const generate = jest.fn()
+      .mockResolvedValueOnce(firstOrder) // round 1: executes
+      .mockResolvedValueOnce(reorderedRepeat) // round 2: same args, reordered keys — must still count as a repeat
+      .mockResolvedValueOnce("{\"tool\":\"final\",\"response\":\"Made it.\"}");
+    const executeTool = jest.fn().mockResolvedValue("{\"success\":true,\"id\":42}");
+    const out = await runLocalTurn({ ...baseArgs, generate, executeTool });
+
+    expect(out).toBe("Made it.");
+    // If key order defeated the guard, this would be 2 (the reordered call re-executed).
+    expect(executeTool).toHaveBeenCalledTimes(1);
+    const thirdMessages = generate.mock.calls[2][0];
+    const last = thirdMessages[thirdMessages.length - 1];
+    expect(last.content).toContain("You already called create_graph with those arguments.");
   });
 
   it("(e) onToolCall fires only for rounds that actually executed — not for the intercepted " +

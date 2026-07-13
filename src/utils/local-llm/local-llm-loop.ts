@@ -32,10 +32,22 @@ const capToolResult = (result: string): string =>
     ? result
     : `${result.slice(0, MAX_TOOL_RESULT_CHARS)}\n${TOOL_RESULT_TRUNCATED_MARKER}`;
 
+// A JSON.stringify replacer that sorts object keys at every level so semantically-identical args
+// produce the same string regardless of the order the model happened to emit them in on a retry
+// (PR #114 review: a plain JSON.stringify(args) is key-order-sensitive, so a repeat with reordered
+// keys would slip past the repeat-call guard below and let a mutating tool double-execute).
+const sortKeysReplacer = (_key: string, value: unknown): unknown => {
+  if (value === null || typeof value !== "object" || Array.isArray(value)) return value;
+  return Object.keys(value as Record<string, unknown>).sort().reduce((sorted, k) => {
+    sorted[k] = (value as Record<string, unknown>)[k];
+    return sorted;
+  }, {} as Record<string, unknown>);
+};
+
 // Identifies a tool call by name + arguments so an identical repeat can be recognized regardless
-// of key order sensitivity concerns: args come from parseEnvelope's own JSON.parse of the model's
-// output, so two calls with the same semantic args produce the same object shape/key order here.
-const callKey = (name: string, args: Record<string, unknown>): string => `${name}::${JSON.stringify(args)}`;
+// of the key order the model's raw JSON happened to use.
+const callKey = (name: string, args: Record<string, unknown>): string =>
+  `${name}::${JSON.stringify(args, sortKeysReplacer)}`;
 
 const FORCED_FINAL_PROMPT =
   "You have used all of your tool requests. You must answer now: respond with {\"tool\": \"final\", \"response\": \"...\"} using what you already know.";

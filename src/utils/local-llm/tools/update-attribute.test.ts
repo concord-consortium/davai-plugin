@@ -61,6 +61,21 @@ describe("validate", () => {
     expect((v as any).resolved.position).toBe(0);
   });
 
+  it("rejects a negative position, including one that only becomes negative after flooring " +
+    "(PR #114 review)", () => {
+    const whole = updateAttributeTool.validate(
+      { dataContext: "Mammals", attribute: "Height", position: -1 }, ctx);
+    expect(whole.ok).toBe(false);
+    expect((whole as any).error).toMatch(/non-negative/i);
+
+    // Math.floor(-0.1) === -1: a fractional value just above -1 must not slip past a naive
+    // "position < 0" check performed before flooring.
+    const fractional = updateAttributeTool.validate(
+      { dataContext: "Mammals", attribute: "Height", position: -0.1 }, ctx);
+    expect(fractional.ok).toBe(false);
+    expect((fractional as any).error).toMatch(/non-negative/i);
+  });
+
   it("accepts newName, description, and unit together with formula (multi-field)", () => {
     const v = updateAttributeTool.validate({
       dataContext: "Mammals", attribute: "Height", newName: "HeightM", description: "in meters", unit: "m", formula: "`Speed`",
