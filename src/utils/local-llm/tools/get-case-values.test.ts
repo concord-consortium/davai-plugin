@@ -39,9 +39,9 @@ it("unknown attribute yields the corrective options list", () => {
   expect(!v.ok && v.error).toContain("Height");
 });
 
-// PR #114 review item 11: `String(it.values[attribute])` renders a literal "null"/"undefined"
-// for a blank cell — a screen-reader user would hear those words as if they were real data
-// values. A readable "(blank)" placeholder replaces both.
+// `String(it.values[attribute])` renders a literal "null"/"undefined" for a blank cell — a
+// screen-reader user would hear those words as if they were real data values. A readable
+// "(blank)" placeholder replaces both.
 describe("blank/null/undefined cells render a readable placeholder, never literal null/undefined text (PR #114 review item 11)", () => {
   it("single-attribute fetch: null and undefined cells both render (blank)", async () => {
     (getCollectionItemsForAttribute as jest.Mock).mockResolvedValue([

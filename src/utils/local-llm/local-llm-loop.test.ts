@@ -81,13 +81,10 @@ it("degrades to raw text as the final answer after two invalid envelopes", async
   expect(generate).toHaveBeenCalledTimes(2);
 });
 
-// DAVAI-126 matrix round 3 item E7: both think runs' selection-percentile finals were RAW
-// <think> dumps truncated mid-sentence at maxTokens, returned AS the final answer — because the
-// invalid-envelope branch's own `!text` early-exit bypassed the one-retry mechanism entirely
-// whenever the stripped remainder was empty. This is now impossible to distinguish from a genuine
-// "nothing to retry with" case only by being empty — the fix routes an empty-after-strip result
-// into the SAME one-retry path any other invalid envelope gets, so the model gets one chance to
-// produce a real answer before ever falling back.
+// An empty-after-strip generation (raw text that was PURELY an unclosed <think> dump, truncated
+// mid-sentence at maxTokens) must not bypass the one-retry mechanism just because there's nothing
+// left after stripping — it goes through the SAME one-retry path any other invalid envelope gets,
+// so the model gets one chance to produce a real answer before ever falling back.
 describe("unclosed <think> dump routes into the retry-once path instead of leaking as a final " +
   "(DAVAI-126 matrix round 3 E7)", () => {
   const unclosedThinkDump = "<think>let me think about the 75th percentile but how do I compute";
@@ -141,8 +138,8 @@ it("forces a final answer at the round cap", async () => {
   // maxRounds 2: rounds 1 and 2 execute; the THIRD tool attempt exceeds the cap, skips
   // execution, and triggers the "answer now" nudge, whose reply is the forced final.
   // Each call is DISTINCT (different attribute) so this test isolates the round-cap invariant
-  // from the repeat-call guard (DAVAI-126 eval round 1 F1), which has its own dedicated tests
-  // and would otherwise intercept a run of three identical calls before the cap is ever reached.
+  // from the repeat-call guard, which has its own dedicated tests and would otherwise intercept a
+  // run of three identical calls before the cap is ever reached.
   const generate = jest.fn()
     .mockResolvedValueOnce("{\"tool\":\"get_stats\",\"dataContext\":\"D\",\"attribute\":\"Height\"}")
     .mockResolvedValueOnce("{\"tool\":\"get_stats\",\"dataContext\":\"D\",\"attribute\":\"Mass\"}")
@@ -156,14 +153,13 @@ it("forces a final answer at the round cap", async () => {
   expect(finalMessages[finalMessages.length - 1].content).toMatch(/answer now/i);
 });
 
-// PR #114 review item 5: both forced-final sites (round-cap and 2nd-consecutive-repeat) ended
-// with `return stripThink(lastRaw) || FALLBACK_RESPONSE` — so if the model answered the "answer
-// now" nudge with ANOTHER well-formed tool-call envelope, that raw JSON was spoken verbatim
-// ({"tool":"get_stats",...} read aloud), the very thing recoverFinalResponse already prevents for
-// malformed "final" attempts. Fix: a tool_call degrades to FALLBACK_RESPONSE; an invalid/malformed
-// attempt is only spoken when it does NOT look like a JSON attempt (trimmed starts with "{" ->
-// FALLBACK); plain prose remains speakable (a prose answer to the nudge is a good answer); a
-// malformed-but-recoverable "final" (parseEnvelope's own G1 recovery) still wins outright.
+// Both forced-final sites (round-cap and 2nd-consecutive-repeat) share one resolution rule: a
+// well-formed tool_call degrades to FALLBACK_RESPONSE rather than being spoken verbatim
+// ({"tool":"get_stats",...} read aloud), the same thing recoverFinalResponse already prevents for
+// malformed "final" attempts. An invalid/malformed attempt is only spoken when it does NOT look
+// like a JSON attempt (trimmed starts with "{" -> FALLBACK); plain prose remains speakable (a
+// prose answer to the nudge is a good answer); a malformed-but-recoverable "final" (parseEnvelope's
+// own tolerant recovery) still wins outright.
 describe("forced-final fallthrough never speaks a raw tool-call envelope (PR #114 item 5)", () => {
   it("round-cap forced final answered with ANOTHER tool call degrades to FALLBACK_RESPONSE, " +
     "never the raw tool-call JSON", async () => {
@@ -217,13 +213,13 @@ describe("forced-final fallthrough never speaks a raw tool-call envelope (PR #11
   });
 });
 
-// Codex second-pass hardening F1: a forced-final reply wrapped in a markdown code fence (a
-// small local model's common "helpful" habit) — e.g. "```json\n{\"tool\": \"get_stats\"..."
-// with no closing fence — parses as kind: "invalid" (the leading backtick defeats JSON.parse
-// entirely, so there's no brace-slice to recover either), and pre-fix, `text.startsWith("{")` was
-// FALSE (the text starts with a backtick, not "{"), so this still-JSON-shaped, still-unspeakable
-// attempt was spoken raw. Fenced PROSE, by contrast, is a perfectly good answer once the fence
-// itself is stripped — it must still be spoken (not degraded to FALLBACK_RESPONSE).
+// A forced-final reply wrapped in a markdown code fence (a small local model's common "helpful"
+// habit), possibly with no closing fence, parses as kind: "invalid" — the leading backtick
+// defeats JSON.parse entirely, so there's no brace-slice to recover either. Stripping the fence
+// lets the speakability check judge the actual content instead of `text.startsWith("{")` being
+// FALSE just because the text starts with a backtick. Fenced PROSE, by contrast, is a perfectly
+// good answer once the fence itself is stripped — it must still be spoken (not degraded to
+// FALLBACK_RESPONSE).
 describe("forced-final fenced JSON is never spoken raw (Codex hardening F1)", () => {
   it("a fenced, unclosed tool-call attempt degrades to FALLBACK_RESPONSE, never the raw fenced JSON", async () => {
     const generate = jest.fn()
@@ -261,11 +257,9 @@ describe("forced-final fenced JSON is never spoken raw (Codex hardening F1)", ()
 
 it("returns a fallback message if the forced final is also unusable", async () => {
   const toolEnvelope = "{\"tool\":\"get_graph_info\"}";
-  // DAVAI-126 matrix round 3 item E7: an empty generation is now an ordinary invalid envelope
-  // that gets the SAME one-retry-then-fallback treatment any other invalid envelope gets (see the
-  // dedicated E7 describe block below) — this test's own single "" mock previously relied on the
-  // old (buggy) immediate-bail-on-empty-text shortcut. A second "" mock completes the (now
-  // correctly longer) retry-once sequence so it still ends at the fallback, per this test's name.
+  // An empty generation is an ordinary invalid envelope that gets the SAME one-retry-then-
+  // fallback treatment any other invalid envelope gets. This test's second "" mock completes the
+  // retry-once sequence so it still ends at the fallback, per this test's name.
   const generate = jest.fn()
     .mockResolvedValueOnce(toolEnvelope)
     .mockResolvedValueOnce("")
@@ -324,8 +318,8 @@ it("does not even run the first generation when already cancelled (DAVAI-126 C1)
 
 it("re-checks isCancelled after generate() resolves a tool envelope and skips executeTool " +
   "if cancel landed during generation (DAVAI-126 review round 2 F3)", async () => {
-  // Cancel flips true DURING the await on generate() itself (not between iterations, which C1
-  // above already covers) — e.g. the user hits Cancel while the model is still producing a
+  // Cancel flips true DURING the await on generate() itself (not between iterations, which the
+  // test above already covers) — e.g. the user hits Cancel while the model is still producing a
   // create_graph envelope. The loop must not run the tool just because generate() already
   // started; it must re-check isCancelled once generate() resolves and BEFORE executeTool/
   // onToolCall run.
@@ -522,8 +516,8 @@ describe("repeat-call guard (DAVAI-126 eval round 1 F1)", () => {
     "exactly on the round cap is nudged, not silently forced-final on THIS round", async () => {
     // maxRounds 1: round 1 executes. Round 2 would exceed the cap under normal accounting, but
     // it is ALSO an identical repeat of round 1 — the repeat-guard's own "first repeat" path
-    // takes precedence over the round-cap forced-final for this round, per spec: "Round counter
-    // still increments (cap safety)" describes bookkeeping, not that the cap pre-empts the nudge.
+    // takes precedence over the round-cap forced-final for this round. "Round counter still
+    // increments (cap safety)" describes bookkeeping, not that the cap pre-empts the nudge.
     const generate = jest.fn()
       .mockResolvedValueOnce(graphEnvelope)
       .mockResolvedValueOnce(graphEnvelope)

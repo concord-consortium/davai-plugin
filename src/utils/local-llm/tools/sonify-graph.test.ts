@@ -35,9 +35,8 @@ it("explains when the graph is not sonifiable", async () => {
   expect(out).toMatch(/scatter plot or .*dot plot/i);
 });
 
-// DAVAI-126 matrix round 3 item E1: both messages fell back to `graph?.name ?? resolved.graphId`
-// (execute) or `graph?.name ?? graph.id` (ready-to-sonify) — a raw numeric id the model then
-// could not get accepted back (pre-E2). Now both use the shared graphLabel.
+// Both messages use the shared, empty-string-safe graphLabel rather than falling back to a raw
+// numeric id, which the model could not reliably resolve back to this graph.
 describe("graphLabel wiring (DAVAI-126 matrix round 3 E1)", () => {
   it("uses graphLabel's descriptive fallback (not the raw id) in the not-sonifiable message " +
     "when the graph has no name", async () => {

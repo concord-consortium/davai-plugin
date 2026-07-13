@@ -9,24 +9,21 @@ export interface IEvalResult {
   final: string; durationMs: number;
 }
 
-// DAVAI-126 eval round 2 item B: cap each recorded tool-result string so the console-logged
-// JSON dump (and anyone reading it) isn't overwhelmed by one huge CODAP payload — a truncated
-// trace is still useful for confirming what reached the model; a 30KB one is not.
+// Cap each recorded tool-result string so the console-logged JSON dump (and anyone reading it)
+// isn't overwhelmed by one huge CODAP payload — a truncated trace is still useful for confirming
+// what reached the model; a 30KB one is not.
 const MAX_TOOL_RESULT_TRACE_CHARS = 300;
 const truncateToolResult = (result: string): string => result.slice(0, MAX_TOOL_RESULT_TRACE_CHARS);
 
-// DAVAI-126 matrix round 3 item E8: per-case incremental observability (user-requested) —
-// evidence: MST axis-death spam and insertBefore errors interleave with the battery, and the
-// user cannot attribute them to a specific case without a BEFORE/AFTER marker per case. This
-// payload is deliberately console.log-agnostic (no message string baked in) so the pure runner
-// stays console-free, per the brief's explicit instruction — assistant-model.ts's caller supplies
-// the actual console.log wording from these fields.
+// Per-case incremental observability: this payload is deliberately console.log-agnostic (no
+// message string baked in) so the pure runner stays console-free — assistant-model.ts's caller
+// supplies the actual console.log wording from these fields.
 export interface IEvalCaseStart { index: number; total: number; id: string; prompt: string; }
 export type OnCaseStart = (payload: IEvalCaseStart) => void;
 export type OnCaseResult = (result: IEvalResult) => void;
 
-// DAVAI-126 Task 12: `now` is injectable (defaults to performance.now()) so tests can drive it
-// with a fake sequence instead of depending on wall-clock timing.
+// `now` is injectable (defaults to performance.now()) so tests can drive it with a fake sequence
+// instead of depending on wall-clock timing.
 export const runLocalEval = async (
   cases: IEvalCase[],
   runTurn: (prompt: string) => Promise<IEvalTurnResult>,
@@ -69,11 +66,11 @@ export const runLocalEval = async (
       }
     } catch (err) {
       failures.push(`turn failed: ${err instanceof Error ? err.message : String(err)}`);
-      // DAVAI-126 eval round 2 item B: a runTurn that throws mid-turn can still have executed
-      // (and recorded results for) tool calls before the error — callers that want those
-      // preserved attach them to the thrown error as `toolResults` (see assistant-model.ts's
-      // runLocalEvalTurns). Optional and defaulted so a plain Error (or any runTurn stub that
-      // doesn't do this) just yields the case's own already-initialized empty array.
+      // A runTurn that throws mid-turn can still have executed (and recorded results for) tool
+      // calls before the error — callers that want those preserved attach them to the thrown
+      // error as `toolResults` (see assistant-model.ts's runLocalEvalTurns). Optional and
+      // defaulted so a plain Error (or any runTurn stub that doesn't do this) just yields the
+      // case's own already-initialized empty array.
       const partial = (err as { toolResults?: string[] } | undefined)?.toolResults;
       if (partial) toolResults = partial.map(truncateToolResult);
     }

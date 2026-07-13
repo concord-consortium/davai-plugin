@@ -7,10 +7,10 @@ export interface IResolveHit<T> { ok: true; value: T; repaired: boolean; }
 export interface IResolveMiss { ok: false; error: string; }
 export type ResolveResult<T> = IResolveHit<T> | IResolveMiss;
 
-// Re-trims AFTER collapsing separators (PR #114 review item 11): the first .trim() only strips
-// whitespace, so a leading/trailing underscore or hyphen (not whitespace) survives it, then
-// collapses into a leading/trailing SPACE that a bare .trim() before the collapse can't catch —
-// breaking the normalized-match repair against a differently-formatted name with no such space.
+// Re-trims AFTER collapsing separators: the first .trim() only strips whitespace, so a
+// leading/trailing underscore or hyphen (not whitespace) survives it, then collapses into a
+// leading/trailing SPACE that a bare .trim() before the collapse can't catch — breaking the
+// normalized-match repair against a differently-formatted name with no such space.
 export const normalizeName = (s: string): string =>
   s.toLowerCase().trim().replace(/[\s_-]+/g, " ").trim();
 
@@ -20,14 +20,12 @@ export const listNames = (names: string[]): string => {
   return names.length > MAX ? `${shown}, …` : shown;
 };
 
-// Codex second-pass hardening F5/F6: every "was this argument omitted" check below used to
-// compare `requested` against `undefined`/`""` only, AFTER a boundary coercion ran
-// `String(requested)` whenever `requested !== undefined` — so a JSON `null` became the non-blank
-// string "null" BEFORE any omitted-check ever saw it, defeating the sole-context/single-
-// collection/selected-graph default. `value == null` (loose) catches null OR undefined in one
-// check, checked BEFORE any coercion; the trim-then-compare additionally treats a whitespace-only
-// string exactly like "". Neither check widens what an EXPLICIT, non-blank value goes on to do —
-// only what counts as "nothing was said" in the first place.
+// `value == null` (loose) catches null OR undefined in one check; checking this BEFORE any
+// `String()` coercion matters because coercion would otherwise turn a JSON `null` into the
+// non-blank string "null", defeating the sole-context/single-collection/selected-graph default.
+// The trim-then-compare additionally treats a whitespace-only string exactly like "". Neither
+// check widens what an EXPLICIT, non-blank value goes on to do — only what counts as "nothing was
+// said" in the first place.
 const isOmitted = (value: unknown): boolean => value == null || String(value).trim() === "";
 
 export const resolveByName = <T>(
@@ -35,10 +33,10 @@ export const resolveByName = <T>(
   requested: string,
   candidates: { name: string; value: T }[]
 ): ResolveResult<T> => {
-  // Gate 2 (PR #114 review #2 root cause): callers type `requested` as `string` via a
-  // compile-time-only cast (e.g. `args.graph as string`); when the model's JSON encodes an
-  // id-like value unquoted, the runtime value is actually a `number`. Coerce at this shared
-  // boundary so every caller is safe even if one forgets to coerce first.
+  // Callers type `requested` as `string` via a compile-time-only cast (e.g. `args.graph as
+  // string`); when the model's JSON encodes an id-like value unquoted, the runtime value is
+  // actually a `number`. Coerce at this shared boundary so every caller is safe even if one
+  // forgets to coerce first.
   requested = String(requested);
   const exact = candidates.find((c) => c.name === requested);
   if (exact) return { ok: true, value: exact.value, repaired: false };
@@ -62,20 +60,19 @@ export const resolveDataContext = (
   dataContexts: Record<string, any>
 ): ResolveResult<any> => {
   const candidates = Object.values(dataContexts ?? {}).map((dc: any) => ({ name: dc?.name ?? "", value: dc }));
-  // Sole-context default (PR #114 review item 8): mirrors resolveCollection's precedent above —
-  // an omitted dataContext in a single-dataset document resolves silently instead of bouncing
-  // the model with an avoidable "Unknown data context" round trip. Tool call sites pass
-  // String(args.dataContext ?? ""), so "" is the common omitted shape alongside undefined; a
-  // JSON null or whitespace-only string are also omitted (Codex hardening F5/F6). A multi-dataset
-  // document still requires an explicit name (today's corrective, unchanged).
+  // Sole-context default: mirrors resolveCollection's precedent above — an omitted dataContext in
+  // a single-dataset document resolves silently instead of bouncing the model with an avoidable
+  // "Unknown data context" round trip. Tool call sites pass String(args.dataContext ?? ""), so ""
+  // is the common omitted shape alongside undefined; a JSON null or whitespace-only string are
+  // also omitted. A multi-dataset document still requires an explicit name.
   const omitted = isOmitted(requested);
   if (omitted && candidates.length === 1) {
     return { ok: true, value: candidates[0].value, repaired: false };
   }
-  // Gate 2 boundary coercion (PR #114 review #2 root cause) folds in here: an omitted value
-  // (including null, which `??` alone would not have caught) becomes "" for the corrective
-  // message below, exactly like undefined already did; a non-omitted value is passed through as-
-  // is (resolveByName does its own String() coercion, so a runtime number is still safe here).
+  // Boundary coercion folds in here: an omitted value (including null, which `??` alone would not
+  // catch) becomes "" for the corrective message below, exactly like undefined already does; a
+  // non-omitted value is passed through as-is (resolveByName does its own String() coercion, so a
+  // runtime number is still safe here).
   return resolveByName("data context", omitted ? "" : String(requested), candidates);
 };
 
@@ -84,7 +81,7 @@ export const resolveCollection = (
   dataContext: any
 ): ResolveResult<any> => {
   const collections: any[] = dataContext?.collections ?? [];
-  // Codex hardening F5/F6: null and whitespace-only are omitted too, exactly like undefined/"".
+  // null and whitespace-only are omitted too, exactly like undefined/"".
   if (isOmitted(requested)) {
     if (collections.length === 1) return { ok: true, value: collections[0], repaired: false };
     return {
@@ -95,16 +92,16 @@ export const resolveCollection = (
   return resolveByName("collection", String(requested), collections.map((c) => ({ name: c.name, value: c })));
 };
 
-// DAVAI-126 Task D fix pass: opt-in leaf-collection default, a SEPARATE helper so
-// resolveCollection's ask-for-a-name corrective above stays intact for its other caller
-// (create_attribute, where "which collection gets the new attribute?" is a genuine question the
-// user must answer). For lookup tools (find_cases) the right unspecified-collection default is
-// the LEAF (childmost) collection instead: after group_by moves an attribute into a new parent
-// collection, the leaf still holds the case-level attributes a lookup targets, and CODAP's
-// formula engine resolves parent-attribute refs upward from child formula contexts — plus CODAP's
-// own precedent (codap-api-documentation.ts, selection lists: "Omitting `collection` defaults to
-// childmost collection"). Ordering evidence that leaf == LAST array element: `collections` is
-// stored verbatim from CODAP's get-dataContext response (trimDataset strips attr fields, never
+// Opt-in leaf-collection default, a SEPARATE helper so resolveCollection's ask-for-a-name
+// corrective above stays intact for its other caller (create_attribute, where "which collection
+// gets the new attribute?" is a genuine question the user must answer). For lookup tools
+// (find_cases) the right unspecified-collection default is the LEAF (childmost) collection
+// instead: after group_by moves an attribute into a new parent collection, the leaf still holds
+// the case-level attributes a lookup targets, and CODAP's formula engine resolves parent-attribute
+// refs upward from child formula contexts — plus CODAP's own precedent
+// (codap-api-documentation.ts, selection lists: "Omitting `collection` defaults to childmost
+// collection"). Ordering evidence that leaf == LAST array element: `collections` is stored
+// verbatim from CODAP's get-dataContext response (trimDataset strips attr fields, never
 // reorders), getCollectionItemsForAttributePair walks "from the least nested down to the most
 // nested collection" by INCREASING index (codap-api-utils.ts:241-248), and
 // graph-sonification-model.ts:206 reads collections[0] as "the parent collection".
@@ -112,11 +109,11 @@ export const resolveCollectionDefaultLeaf = (
   requested: string | undefined,
   dataContext: any
 ): ResolveResult<any> => {
-  // Codex hardening F5/F6: same omitted-check as resolveCollection above (null and whitespace-
-  // only are omitted too) — otherwise a whitespace-only "collection" arg would skip this leaf
-  // default and fall into resolveCollection's OWN (now also-fixed) omitted branch below, which
-  // asks the model to specify a collection instead of defaulting to the leaf, the wrong corrective
-  // for this opt-in variant's callers (find_cases).
+  // Same omitted-check as resolveCollection above (null and whitespace-only are omitted too) —
+  // otherwise a whitespace-only "collection" arg would skip this leaf default and fall into
+  // resolveCollection's own omitted branch below, which asks the model to specify a collection
+  // instead of defaulting to the leaf, the wrong corrective for this opt-in variant's callers
+  // (find_cases).
   if (isOmitted(requested)) {
     const collections: any[] = dataContext?.collections ?? [];
     if (collections.length === 0) {
@@ -131,7 +128,7 @@ export const resolveAttribute = (
   requested: string,
   dataContext: any
 ): ResolveResult<{ attr: any; collection: any }> => {
-  // Gate 2 boundary coercion (PR #114 review #2 root cause).
+  // Same boundary coercion as resolveByName above.
   requested = String(requested);
   const candidates: { name: string; value: { attr: any; collection: any } }[] = [];
   for (const collection of dataContext?.collections ?? []) {
@@ -142,11 +139,11 @@ export const resolveAttribute = (
   return resolveByName("attribute", requested, candidates);
 };
 
-// DAVAI-126 Task A: graph resolution needs more than title/name matching (rungs 1-2, still
-// handled by resolveByName above) — users describe graphs by axes and shape ("the height dot
-// plot"), and CODAP's UI happily creates multiple graphs with the same title, which rungs 1-2
-// alone cannot disambiguate. Rung 3 (axis + plot-type matching) and rung 4 (descriptive
-// corrective) below are additive: they only engage when rungs 1-2 produce no unique hit.
+// Graph resolution needs more than title/name matching (rungs 1-2, still handled by
+// resolveByName above) — users describe graphs by axes and shape ("the height dot plot"), and
+// CODAP's UI happily creates multiple graphs with the same title, which rungs 1-2 alone cannot
+// disambiguate. Rung 3 (axis + plot-type matching) and rung 4 (descriptive corrective) below are
+// additive: they only engage when rungs 1-2 produce no unique hit.
 
 // Shape source: `plotType` is live, branched-on, verified production data elsewhere in this repo
 // (graph-sonification-utils.ts's isUnivariateDotPlot/isUnsplitScatterPlot, graph-sonification-
@@ -155,9 +152,9 @@ export const resolveAttribute = (
 // x-attribute set, which axis-presence alone would misread as a dot plot — so plotType, when
 // present, is authoritative over axis-presence for both the shape word AND the rung-3 filter
 // bucket. `plotType` is `types.maybe(types.string)` on the model (codap-graph-model.ts) and is
-// legitimately absent sometimes; axis-presence is used ONLY as the fallback for that case, exactly
-// as before this fix, matching how create-adornment.ts's own hasAxis/hasBothAxes read shape when
-// no more authoritative signal exists.
+// legitimately absent sometimes; axis-presence is used ONLY as the fallback for that case,
+// matching how create-adornment.ts's own hasAxis/hasBothAxes read shape when no more authoritative
+// signal exists.
 const hasX = (g: any): boolean => typeof g?.xAttributeName === "string" && g.xAttributeName.length > 0;
 const hasY = (g: any): boolean => typeof g?.yAttributeName === "string" && g.yAttributeName.length > 0;
 
@@ -174,8 +171,8 @@ const graphBucket = (g: any): GraphBucket => {
   // plot to the user, so it must be matched by the "dot plot" rung-3 filter and labeled as one.
   if (plotType === "dotPlot" || plotType === "binnedDotPlot") return "univariate";
   if (typeof plotType === "string") return "other"; // e.g. "barChart"
-  // plotType undefined: legitimate absence (types.maybe) — fall back to the pre-existing
-  // axis-presence heuristic, unchanged from before this fix.
+  // plotType undefined: legitimate absence (types.maybe) — fall back to the axis-presence
+  // heuristic.
   if (hasX(g) && hasY(g)) return "bivariate";
   if (hasX(g) || hasY(g)) return "univariate";
   return "other";
@@ -184,10 +181,10 @@ const graphBucket = (g: any): GraphBucket => {
 // Bare title/name label — empty string ("" is a real value CODAP sends for an untitled graph, see
 // module doc below) is normalized away to undefined so every caller treats "no title" and "" the
 // same way, rather than one caller's `??` chain accidentally accepting an empty string as if it
-// were meaningful text (evidence: `Graphs: "" (dot plot of Height)` in the live traces). Used only
-// where a SHORT bare label is wanted inside a larger construction (quoted in describeGraphOption,
-// hashed for the true-duplicate tiebreak's identity key) — NOT the public, always-non-empty,
-// always-resolvable `graphLabel` below, which these two are intentionally kept distinct from.
+// were meaningful text. Used only where a SHORT bare label is wanted inside a larger construction
+// (quoted in describeGraphOption, hashed for the true-duplicate tiebreak's identity key) — NOT the
+// public, always-non-empty, always-resolvable `graphLabel` below, which these two are
+// intentionally kept distinct from.
 const nonEmpty = (s: unknown): string | undefined => (typeof s === "string" && s.length > 0 ? s : undefined);
 const rawGraphLabel = (g: any): string => nonEmpty(g?.title) ?? nonEmpty(g?.name) ?? "";
 
@@ -204,15 +201,12 @@ const shapeWordFor = (g: any, bucket: GraphBucket): string => {
   return "graph";
 };
 
-// DAVAI-126 matrix round 3 item E1: uses the shared, public graphLabel (defined further below in
-// this file — a function BODY reference, evaluated only when describeGraphOption is actually
-// called, by which point module init has long finished, so this is not a temporal-dead-zone
-// issue) rather than the bare rawGraphLabel — evidence: the live trace `Graphs: "" (dot plot of
-// Height)`, i.e. THIS function quoting an empty string for an untitled/unnamed graph. graphLabel's
-// descriptive fallback tier means the quoted label itself is never blank, even though the
-// parenthetical shape clause already restates similar information (a little redundant for an
-// already-titled graph, e.g. `"Height" (dot plot of Height)`, but that redundancy already existed
-// before this fix for any titled graph and is not new).
+// Uses the shared, public graphLabel (defined further below in this file — a function BODY
+// reference, evaluated only when describeGraphOption is actually called, by which point module
+// init has long finished, so this is not a temporal-dead-zone issue) rather than the bare
+// rawGraphLabel: graphLabel's descriptive fallback tier means the quoted label itself is never
+// blank, even though the parenthetical shape clause already restates similar information (a little
+// redundant for an already-titled graph, e.g. `"Height" (dot plot of Height)`).
 export const describeGraphOption = (g: any): string => {
   const label = graphLabel(g);
   const bucket = graphBucket(g);
@@ -249,12 +243,12 @@ const exampleGraphPhrase = (g: any): string => {
   return `the ${axisWord} ${shapeWord}`;
 };
 
-// DAVAI-126 matrix round 3 item E1: the SHARED, PUBLIC graph label — every surface that prints a
-// graph reference (buildGraphSeed's header, describeGraphOption's corrective, create_adornment's
-// compatible-graphs lists, and every mutating tool's result string) must use this, so a model
-// echoing the label back always resolves via resolveGraph (rung 3 for a descriptive fallback,
-// rung 1 for a title/name). Fallback chain, each tier gated on non-emptiness (an empty string is
-// treated as ABSENT everywhere, never as a real "blank" label — the bug this fixes):
+// The SHARED, PUBLIC graph label — every surface that prints a graph reference (buildGraphSeed's
+// header, describeGraphOption's corrective, create_adornment's compatible-graphs lists, and every
+// mutating tool's result string) must use this, so a model echoing the label back always resolves
+// via resolveGraph (rung 3 for a descriptive fallback, rung 1 for a title/name). Fallback chain,
+// each tier gated on non-emptiness (an empty string is treated as ABSENT everywhere, never as a
+// real "blank" label):
 //   1. non-empty title
 //   2. non-empty name
 //   3. a descriptive phrase reusing exampleGraphPhrase's rung-3-round-tripping shape logic — but
@@ -262,7 +256,7 @@ const exampleGraphPhrase = (g: any): string => {
 //      fallback is rawGraphLabel, which would otherwise contribute an already-ruled-out empty
 //      string here and produce a broken "the  graph" phrase)
 //   4. a bare id reference ("graph 885090985993956") for a graph with no title, no name, and no
-//      axes at all — still ACCEPTED back via rung 0 (E2), even though it is never the preferred
+//      axes at all — still accepted back via rung 0, even though it is never the preferred
 //      display form.
 export const graphLabel = (g: any): string => {
   const title = nonEmpty(g?.title);
@@ -273,9 +267,9 @@ export const graphLabel = (g: any): string => {
   return `graph ${g?.id}`;
 };
 
-// Rung 4: replaces both prior failure messages (no-match "Unknown graph" and ambiguous "matches
-// more than one") with a listing that actually helps the user pick, plus a worked example that
-// is guaranteed (by construction, see exampleGraphPhrase) to round-trip through rung 3.
+// Rung 4: a listing that actually helps the user pick (covering both the no-match "Unknown
+// graph" and ambiguous "matches more than one" cases), plus a worked example that is guaranteed
+// (by construction, see exampleGraphPhrase) to round-trip through rung 3.
 const describeCorrective = (requested: string | undefined, candidates: any[]): string => {
   const options = listGraphOptions(candidates);
   const example = candidates.length > 0 ? exampleGraphPhrase(candidates[0]) : undefined;
@@ -353,17 +347,16 @@ const resolveByAxes = (requested: string, graphs: any[]): Rung3Result => {
   const deduped = pickTrueDuplicate(winners);
   if (deduped) return { kind: "hit", value: deduped };
 
-  // DAVAI-126 matrix round 3 item E3: word-order tiebreak. Fires only when the true-duplicate
-  // tiebreak above did NOT resolve it (these are genuinely different graphs, e.g. axis-swapped
-  // mirror images) — evidence (4B/think): "Height vs Mass" tied between the x=Height,y=Mass graph
-  // and the x=Mass,y=Height graph, forcing an unnecessary rung-4 ask even though the request's OWN
-  // word order already disambiguates which one the user meant. A "<A> vs/versus <B>" phrase names
-  // A before the vs-word and B after it — check each tied graph's OWN x/y pair appears in that
-  // left-to-right order (A found before the vs-word position, B found after it), not a fixed
-  // parse of "the text before/after vs is exactly the x/y name" — so wrapping words ("the mass vs
-  // height graph") don't break the match. Fires only when EXACTLY ONE tied graph satisfies this;
-  // ties with no vs/versus phrasing, or where zero or more-than-one candidate matches the stated
-  // order, fall through to rung 4 exactly as before this fix.
+  // Word-order tiebreak. Fires only when the true-duplicate tiebreak above did NOT resolve it
+  // (these are genuinely different graphs, e.g. axis-swapped mirror images) — e.g. "Height vs
+  // Mass" tied between the x=Height,y=Mass graph and the x=Mass,y=Height graph, even though the
+  // request's OWN word order already disambiguates which one the user meant. A "<A> vs/versus <B>"
+  // phrase names A before the vs-word and B after it — check each tied graph's OWN x/y pair
+  // appears in that left-to-right order (A found before the vs-word position, B found after it),
+  // not a fixed parse of "the text before/after vs is exactly the x/y name" — so wrapping words
+  // ("the mass vs height graph") don't break the match. Fires only when EXACTLY ONE tied graph
+  // satisfies this; ties with no vs/versus phrasing, or where zero or more-than-one candidate
+  // matches the stated order, fall through to rung 4.
   const vsMatch = wanted.match(/\bvs\b|\bversus\b/);
   if (vsMatch && typeof vsMatch.index === "number") {
     const before = wanted.slice(0, vsMatch.index);
@@ -384,40 +377,36 @@ export const resolveGraph = (
   graphs: any[],
   selectedGraphId: string | null
 ): ResolveResult<any> => {
-  // Codex hardening F5/F6: checked BEFORE the boundary coercion below, so a JSON null or a
-  // whitespace-only string is judged on its own — coercing null to the literal string "null"
-  // FIRST (as this boundary used to, unconditionally on "defined") would defeat this very check,
-  // since "null" is neither undefined nor "".
+  // Checked BEFORE the boundary coercion below, so a JSON null or a whitespace-only string is
+  // judged on its own — coercing null to the literal string "null" first (unconditionally on
+  // "defined") would defeat this very check, since "null" is neither undefined nor "".
   if (isOmitted(requested)) {
     const selected = graphs.find((g) => String(g?.id) === String(selectedGraphId));
     if (selected) return { ok: true, value: selected, repaired: false };
     if (graphs.length === 0) {
       return { ok: false, error: "There are no graphs in this document yet — create one with create_graph." };
     }
-    // Rung 4's descriptive listing replaces the old deduped-titles display: two graphs sharing a
-    // title are real, distinguishable candidates (different shape/axes), and hiding that behind
-    // dedupe is exactly the bug this design fixes.
+    // Rung 4's descriptive listing: two graphs sharing a title are real, distinguishable
+    // candidates (different shape/axes), so listing them separately (never deduped) surfaces
+    // that difference to the user.
     return { ok: false, error: describeCorrective(undefined, graphs) };
   }
 
-  // Gate 2 boundary coercion (PR #114 review #2 — the exact crash site): callers pass
-  // `args.graph as string`, a compile-time-only cast, so a model echoing a printed numeric id
-  // back as an unquoted JSON number reaches `requested.trim()` below as a runtime `number`,
-  // throwing `TypeError: requested.trim is not a function`. `requested` is now known non-omitted
-  // (defined, non-null, non-blank) from the check above, so this only ever normalizes a number.
+  // Boundary coercion: callers pass `args.graph as string`, a compile-time-only cast, so a model
+  // echoing a printed numeric id back as an unquoted JSON number reaches `requested.trim()` below
+  // as a runtime `number`, throwing `TypeError: requested.trim is not a function`. `requested` is
+  // now known non-omitted (defined, non-null, non-blank) from the check above, so this only ever
+  // normalizes a number.
   requested = String(requested);
 
-  // DAVAI-126 matrix round 3 item E2: rung 0, before rung 1 (title/name). A model can only echo
-  // back a numeric id if WE printed one to it in the first place (a seed header before E1, or any
-  // surface that still falls back to graphLabel's own last-ditch "graph <id>" tier) — evidence:
-  // the model faithfully copied the seed's `885090985993956` into get_graph_info/sonify calls and
-  // the pre-E2 resolver rejected it outright (5-call flail). An exact id match is unambiguous BY
-  // CONSTRUCTION (CODAP ids are unique), so it is never "repaired" — it IS the exact reference,
-  // the same way rung 1's exact-title match isn't repaired either. This only ever ACCEPTS ids;
-  // E1 makes sure printing one is now a last resort, not the norm. Accepts both the bare id
-  // ("885090985993956") and graphLabel's own "graph 885090985993956" phrasing — the CLOSURE
-  // requirement (E1) is that whatever graphLabel prints must resolve, and that fallback tier's
-  // literal text carries a "graph " prefix.
+  // Rung 0, before rung 1 (title/name). A model can only echo back a numeric id if WE printed one
+  // to it in the first place (a seed header, or any surface that still falls back to graphLabel's
+  // own last-ditch "graph <id>" tier). An exact id match is unambiguous BY CONSTRUCTION (CODAP ids
+  // are unique), so it is never "repaired" — it IS the exact reference, the same way rung 1's
+  // exact-title match isn't repaired either. This only ever ACCEPTS ids; printing one is meant to
+  // be a last resort, not the norm. Accepts both the bare id ("885090985993956") and graphLabel's
+  // own "graph 885090985993956" phrasing — whatever graphLabel prints must resolve, and that
+  // fallback tier's literal text carries a "graph " prefix.
   const trimmedRequest = requested.trim();
   const idPart = trimmedRequest.replace(/^graph\s+/i, "");
   const exactId = graphs.find((g) => String(g?.id) === trimmedRequest || String(g?.id) === idPart);

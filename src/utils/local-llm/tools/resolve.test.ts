@@ -18,9 +18,9 @@ describe("normalizeName", () => {
     expect(normalizeName("Sleep  Hours")).toBe("sleep hours");
   });
 
-  // PR #114 review item 11: `.trim()` runs BEFORE the separator-collapse replace, so a LEADING
-  // (or trailing) underscore/hyphen — not whitespace, so .trim() doesn't touch it — collapses
-  // into a leading/trailing SPACE that survives uncollapsed, breaking the normalized-match repair
+  // `.trim()` runs BEFORE the separator-collapse replace, so a LEADING (or trailing)
+  // underscore/hyphen — not whitespace, so .trim() doesn't touch it — collapses into a
+  // leading/trailing SPACE that survives uncollapsed, breaking the normalized-match repair
   // against a differently-formatted name with no such leading space.
   it("re-trims after collapsing separators, so a leading/trailing underscore doesn't survive as " +
     "a leading/trailing space (PR #114 review item 11)", () => {
@@ -75,9 +75,9 @@ describe("domain resolvers", () => {
     if (r.ok) throw new Error("should fail");
     expect(r.error).toMatch(/A, B/);
   });
-  // PR #114 review item 8: resolveDataContext had no sole-context default, unlike
-  // resolveCollection above — an omitted dataContext in a single-dataset document bounced with
-  // "Unknown data context \"\"" instead of resolving silently, forcing an avoidable round trip.
+  // resolveDataContext defaults to the sole context in a single-dataset document, the same way
+  // resolveCollection does above — an omitted dataContext must resolve silently rather than
+  // bouncing with an "Unknown data context" error and forcing an avoidable round trip.
   describe("resolveDataContext sole-context default (PR #114 review item 8)", () => {
     it("an omitted (undefined) dataContext resolves to the only one, not repaired", () => {
       const r = resolveDataContext(undefined, dcs);
@@ -109,10 +109,10 @@ describe("domain resolvers", () => {
       expect(r.repaired).toBe(true);
     });
   });
-  // DAVAI-126 Task D fix pass: leaf-collection default (opt-in variant used by find_cases).
-  // Collections are stored parent-first (see resolve.ts's helper comment for the evidence chain),
-  // so "leaf/childmost" = LAST element — the collection that still holds the lookup attributes
-  // after a group_by moves one attribute into a new parent collection.
+  // Leaf-collection default (opt-in variant used by find_cases). Collections are stored
+  // parent-first (see resolve.ts's helper comment for the evidence chain), so "leaf/childmost" =
+  // LAST element — the collection that still holds the lookup attributes after a group_by moves
+  // one attribute into a new parent collection.
   it("resolveCollectionDefaultLeaf: unspecified defaults to the LAST (childmost/leaf) collection " +
     "in multi-collection contexts; single-collection and explicit-name behavior delegate unchanged", () => {
     const multi = { name: "M", collections: [{ name: "Diet", attrs: [] }, { name: "Cases", attrs: [] }] };
@@ -212,11 +212,11 @@ describe("domain resolvers", () => {
   });
 });
 
-// DAVAI-126 matrix round 3 item E2: rung 0 — an exact numeric-id reference (e.g. echoed back from
-// a seed header that historically printed a bare id) must resolve, even though we never PRINT
-// bare ids as the primary label anymore (E1). Evidence: the model faithfully copied
-// `885090985993956` from the seed into get_graph_info/sonify calls and the resolver rejected it,
-// causing a 5-call flail. Rung 0 runs BEFORE rung 1 (title/name matching).
+// Rung 0: an exact numeric-id reference (e.g. echoed back from a seed header that historically
+// printed a bare id) must resolve, even though bare ids are never printed as the primary label
+// anymore — a model that copies an id like `885090985993956` from the seed into
+// get_graph_info/sonify calls needs it to resolve directly rather than falling through to
+// title/name matching. Rung 0 runs BEFORE rung 1 (title/name matching).
 describe("resolveGraph rung 0: exact numeric id (DAVAI-126 matrix round 3 E2)", () => {
   it("an exact string-equal-to-id request resolves, not repaired (it IS an exact reference)", () => {
     const graphs = [{ id: 885090985993956, title: "Heights" }];
@@ -270,9 +270,8 @@ describe("resolveGraph rung 3: axis + plot-type matching (DAVAI-126)", () => {
 
   it("axis single: \"the height graph\" matches only the dot plot uniquely (no title match at all)", () => {
     // A dedicated fixture (not the shared heightVsMass, which also uses Height as an axis and
-    // would tie the score) — this isolates the case the brief names: exactly one graph has
-    // "Height" as an axis at all, so scoring alone (no plot-type keyword in the request) is
-    // already unique.
+    // would tie the score) — this isolates the case where exactly one graph has "Height" as an
+    // axis at all, so scoring alone (no plot-type keyword in the request) is already unique.
     const sleepVsMass = { id: 25, title: "Sleep vs Mass", name: "graph25", xAttributeName: "Sleep", yAttributeName: "Mass" };
     const graphs = [heightDotPlot, sleepVsMass];
     const r = resolveGraph("the height graph", graphs, null);
@@ -348,14 +347,13 @@ describe("resolveGraph rung 3: axis + plot-type matching (DAVAI-126)", () => {
   });
 });
 
-// DAVAI-126 matrix round 3 item E3: a genuine rung-3 scoring tie between two graphs that are
-// axis-swapped mirror images of each other (x=Height,y=Mass vs x=Mass,y=Height) — both score
-// identically against "height vs mass" since scoring is substring containment, order-agnostic.
-// Evidence (4B/think): request "Height vs Mass" tied and forced an unnecessary rung-4 ask, even
-// though the request's OWN word order ("A vs B") unambiguously picks the x=A,y=B graph over the
-// x=B,y=A one. This tiebreak runs AFTER the true-duplicate tiebreak (which only fires for
-// content-identical graphs — these two are NOT identical, their axes are swapped) and BEFORE
-// falling to rung 4.
+// A genuine rung-3 scoring tie between two graphs that are axis-swapped mirror images of each
+// other (x=Height,y=Mass vs x=Mass,y=Height) — both score identically against "height vs mass"
+// since scoring is substring containment, order-agnostic. The request's OWN word order ("A vs
+// B") unambiguously picks the x=A,y=B graph over the x=B,y=A one, so this tiebreak applies before
+// falling back to an unnecessary rung-4 ask. It runs AFTER the true-duplicate tiebreak (which only
+// fires for content-identical graphs — these two are NOT identical, their axes are swapped) and
+// BEFORE falling to rung 4.
 describe("resolveGraph rung 3 word-order tiebreak (DAVAI-126 matrix round 3 E3)", () => {
   const heightVsMass = { id: 1, title: "", xAttributeName: "Height", yAttributeName: "Mass" };
   const massVsHeight = { id: 2, title: "", xAttributeName: "Mass", yAttributeName: "Height" };
@@ -654,14 +652,13 @@ describe("resolveGraph rung 3/4: plotType-driven shape words (DAVAI-126 review f
   });
 });
 
-// PR #114 review Gate 2: `resolveGraph` (and its sibling resolvers) called `.trim()` on
-// `requested` unconditionally. Callers type it `args.graph as string`, a compile-time-only cast —
-// when the model echoes a printed numeric id back as an unquoted JSON number, `args.graph` is a
-// runtime `number`, and `.trim()` throws `TypeError: requested.trim is not a function`, which
-// dispatchTool then surfaced as a misleading, non-corrective internal-error string. Root-cause fix
-// per the reviewer: coerce `String(requested)` at the boundary (only when defined, so the
-// undefined/"" defaulting semantics every resolver relies on are unchanged) rather than trusting
-// every caller to coerce first.
+// `resolveGraph` (and its sibling resolvers) call `.trim()` on `requested` unconditionally.
+// Callers type it `args.graph as string`, a compile-time-only cast — when the model echoes a
+// printed numeric id back as an unquoted JSON number, `args.graph` is a runtime `number`, and
+// `.trim()` would throw `TypeError: requested.trim is not a function`, which dispatchTool would
+// then surface as a misleading, non-corrective internal-error string. Coercing `String(requested)`
+// at the boundary (only when defined, so the undefined/"" defaulting semantics every resolver
+// relies on are unchanged) avoids trusting every caller to coerce first.
 describe("boundary coercion: a runtime number for `requested` never throws (PR #114 Gate 2)", () => {
   it("resolveGraph: a number-typed graph id resolves via rung 0 (exact id match), not a TypeError", () => {
     const graphs = [{ id: 885090985993956, title: "Heights" }];
@@ -700,16 +697,13 @@ describe("boundary coercion: a runtime number for `requested` never throws (PR #
   });
 });
 
-// Codex second-pass hardening F5/F6: every "was this argument omitted" check in resolve.ts
-// compared `requested` against `undefined`/`""` only, AFTER a boundary coercion that ran
-// `String(requested)` whenever `requested !== undefined` — so a JSON `null` (a model literally
-// writing `"graph": null`) became the non-blank string "null" BEFORE the omitted-check ever saw
-// it, defeating every sole-default/leaf-default below (a corrective like `No graph matches
-// "null"` instead of the intended default). Separately, a whitespace-only string ("   ") was
-// never recognized as omitted either, for the same "compares to undefined/'' only" reason. Fix:
-// every omitted-check now uses `value == null || String(value).trim() === ""`, checked BEFORE
-// any coercion — null and blank now behave EXACTLY like undefined at every one of these
-// boundaries, while an explicit non-blank value's behavior is completely unchanged.
+// Every "was this argument omitted" check in resolve.ts uses `value == null ||
+// String(value).trim() === ""`, checked BEFORE any `String(requested)` coercion — a JSON `null`
+// (a model literally writing `"graph": null`) and a whitespace-only string ("   ") both behave
+// EXACTLY like `undefined` at every sole-default/leaf-default boundary below, rather than
+// coercing to the non-blank string "null" (or surviving as literal whitespace) and defeating the
+// default with a corrective like `No graph matches "null"`. An explicit non-blank value's
+// behavior is completely unchanged.
 describe("Codex hardening F5/F6: null and whitespace-only are treated as omitted, exactly like " +
   "undefined, at every resolver default boundary", () => {
   describe("F5: JSON null does not defeat the omitted default", () => {
@@ -824,12 +818,12 @@ describe("helpers", () => {
   });
 });
 
-// DAVAI-126 matrix round 3 item E1: a shared, RESOLVABLE graph label — every surface that prints
-// a graph reference (seed header, tool results, correctives) uses this so a model echoing the
-// label back always resolves. Fallback chain: non-empty title -> non-empty name -> descriptive
-// phrase (reusing the rung-3 shape logic, e.g. "the Height dot plot") -> "graph <id>" when there
-// are no axes to describe at all. Empty string is treated as absent at every tier (evidence:
-// `Graphs: "" (dot plot of Height)` and `Added Mean adornment to "undefined"` in the live traces).
+// A shared, RESOLVABLE graph label — every surface that prints a graph reference (seed header,
+// tool results, correctives) uses this so a model echoing the label back always resolves.
+// Fallback chain: non-empty title -> non-empty name -> descriptive phrase (reusing the rung-3
+// shape logic, e.g. "the Height dot plot") -> "graph <id>" when there are no axes to describe at
+// all. Empty string is treated as absent at every tier — never a literal blank label like
+// `Graphs: "" (dot plot of Height)` or `Added Mean adornment to "undefined"`.
 describe("graphLabel (DAVAI-126 matrix round 3 E1)", () => {
   it("non-empty title wins", () => {
     expect(graphLabel({ id: 1, title: "Heights", name: "graph1" })).toBe("Heights");

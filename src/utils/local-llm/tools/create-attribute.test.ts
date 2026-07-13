@@ -50,10 +50,9 @@ it("rejects a name that already exists", () => {
   expect((v as any).error).toMatch(/already exists/i);
 });
 
-// Override 2 (Task-5 review): the brief validated backticked refs but stored the RAW formula —
-// the same defect fixed in select-cases.ts. Canonicalize each distinct ref once and rewrite
-// every span so the sent formula uses the schema's actual attribute name (ladder rung 2 repair
-// must be reflected in what CODAP receives; CODAP's formula engine is name-exact).
+// Canonicalize each distinct ref once and rewrite every span so the sent formula uses the
+// schema's actual attribute name (ladder rung 2 repair must be reflected in what CODAP receives;
+// CODAP's formula engine is name-exact).
 it("canonicalizes a repaired ref in the sent formula (ladder rung 2)", async () => {
   const v = createAttributeTool.validate(
     { dataContext: "Mammals", name: "mean_speed", formula: "mean(`speed`)" }, ctx);

@@ -9,13 +9,13 @@ export interface ILocalTurnArgs {
   turns: IChatMsg[];
   userMessage: string;
   maxRounds?: number;
-  // C1: polled between generations (and before the first one). When it returns true the turn
+  // Polled between generations (and before the first one). When it returns true the turn
   // has been cancelled/superseded, so the loop stops early and returns the fallback WITHOUT
   // running another generation. The caller is responsible for discarding this stale result.
   isCancelled?: () => boolean;
   // Optional instrumentation hook: invoked with the tool's name immediately before executeTool
-  // runs for that round. Used by the eval harness (DAVAI-126) to record the tool-call sequence
-  // for a turn without changing the loop's own control flow.
+  // runs for that round. Used by the eval harness to record the tool-call sequence for a turn
+  // without changing the loop's own control flow.
   onToolCall?: (name: string) => void;
 }
 
@@ -40,7 +40,7 @@ const callKey = (name: string, args: Record<string, unknown>): string => `${name
 const FORCED_FINAL_PROMPT =
   "You have used all of your tool requests. You must answer now: respond with {\"tool\": \"final\", \"response\": \"...\"} using what you already know.";
 
-// Codex second-pass hardening F1: a forced-final reply wrapped in a markdown code fence (e.g.
+// A forced-final reply wrapped in a markdown code fence (e.g.
 // "```json\n{\"tool\": \"get_stats\"...", closed or not) still ATTEMPTS JSON — the leading
 // backtick just hides that from the plain `startsWith("{")` check below. Strips a leading/
 // wrapping fence so the speakability test judges the actual content, not its markdown wrapper.
@@ -57,18 +57,18 @@ const stripWrappingCodeFence = (text: string): string =>
 // JSON, never a real prose answer to the nudge.
 const UNSPEAKABLE_JSON_SHAPE = /^\{|"tool"\s*:/;
 
-// PR #114 review item 5: shared tail for both forced-final generations (the round-cap path and
-// the 2nd-consecutive-identical-repeat path) — the "answer now" nudge only ASKS for
-// {"tool":"final",...}; nothing stops the model from answering with another tool call, or with
-// still-malformed text. A well-formed final always wins outright (including parseEnvelope's own
-// G1 tolerant recovery of a malformed-but-recognizable "final" attempt — that already arrives
-// here as kind: "final", so it is unaffected by anything below). A well-formed TOOL CALL must
-// never be spoken raw (the user would hear "{tool: get_stats, ...}" read aloud) — degrade
-// straight to FALLBACK_RESPONSE. Anything else (kind: "invalid") gets ONE more chance, judged
-// AFTER stripping a wrapping code fence (Codex hardening F1): if what's left plainly looks like
-// ANOTHER JSON attempt (starts with "{", or still contains a `"tool":` field), that is still
-// unspeakable syntax, so fall back too; otherwise it is ordinary prose — a real, if informal,
-// answer to the nudge — and is safe to speak as-is, fence stripped.
+// Shared tail for both forced-final generations (the round-cap path and the 2nd-consecutive-
+// identical-repeat path) — the "answer now" nudge only ASKS for {"tool":"final",...}; nothing
+// stops the model from answering with another tool call, or with still-malformed text. A
+// well-formed final always wins outright (including parseEnvelope's own tolerant recovery of a
+// malformed-but-recognizable "final" attempt — that already arrives here as kind: "final", so it
+// is unaffected by anything below). A well-formed TOOL CALL must never be spoken raw (the user
+// would hear "{tool: get_stats, ...}" read aloud) — degrade straight to FALLBACK_RESPONSE.
+// Anything else (kind: "invalid") gets ONE more chance, judged AFTER stripping a wrapping code
+// fence: if what's left plainly looks like ANOTHER JSON attempt (starts with "{", or still
+// contains a `"tool":` field), that is still unspeakable syntax, so fall back too; otherwise it is
+// ordinary prose — a real, if informal, answer to the nudge — and is safe to speak as-is, fence
+// stripped.
 const resolveForcedFinal = (raw: string, envelope: ParsedEnvelope): string => {
   if (envelope.kind === "final") return envelope.response;
   if (envelope.kind === "tool_call") return FALLBACK_RESPONSE;
@@ -106,17 +106,12 @@ export const runLocalTurn = async (args: ILocalTurnArgs): Promise<string> => {
     if (envelope.kind === "final") return envelope.response;
 
     if (envelope.kind === "invalid") {
-      // DAVAI-126 matrix round 3 item E7: `text` is empty whenever the raw generation was PURELY
-      // an unclosed <think> dump (stripThink now strips a trailing unclosed block too — see its
-      // own comment) — evidence: both think runs' selection-percentile finals were raw <think>
-      // dumps truncated mid-sentence at maxTokens. Previously `!text` short-circuited straight
-      // past the one-retry mechanism on the VERY FIRST invalid envelope, returning
-      // FALLBACK_RESPONSE without ever giving the model a chance to answer properly — worse than
-      // a normal invalid envelope's handling, not better. The only thing that should skip the
-      // retry is having ALREADY retried once (`invalidRetried`); an empty `text` now goes through
-      // the exact same retry-once path any other invalid envelope gets. If the retry ALSO ends up
-      // empty/invalid, `text || FALLBACK_RESPONSE` below still degrades to the safe fallback —
-      // never raw reasoning as the final.
+      // `text` is empty whenever the raw generation was PURELY an unclosed <think> dump
+      // (stripThink strips a trailing unclosed block too — see its own comment). The only thing
+      // that should skip the retry is having ALREADY retried once (`invalidRetried`); an empty
+      // `text` goes through the exact same retry-once path any other invalid envelope gets. If
+      // the retry ALSO ends up empty/invalid, `text || FALLBACK_RESPONSE` below still degrades to
+      // the safe fallback — never raw reasoning as the final.
       const text = stripThink(raw);
       if (invalidRetried) {
         return text || FALLBACK_RESPONSE;

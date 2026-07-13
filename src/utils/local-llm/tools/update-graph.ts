@@ -19,9 +19,7 @@ export const updateGraphTool: ILocalTool = {
   validate(args, ctx) {
     const graph = resolveGraph(args.graph as string | undefined, ctx.graphs(), ctx.selectedGraphId());
     if (!graph.ok) return { ok: false, error: graph.error };
-    // DAVAI-126 matrix round 3 item E1: was `graph.value.title ?? graph.value.name ??
-    // String(graph.value.id)` — graphLabel is empty-string-safe and prefers a descriptive,
-    // resolvable phrase over a bare id.
+    // graphLabel is empty-string-safe and prefers a descriptive, resolvable phrase over a bare id.
     const graphTitle = graphLabel(graph.value);
 
     const xAttributeRaw = typeof args.xAttribute === "string" && args.xAttribute ? args.xAttribute : undefined;
@@ -34,7 +32,7 @@ export const updateGraphTool: ILocalTool = {
     // legendAttributeName on a graph component — the only "remove" semantics documented anywhere
     // in that file are for Movable Value adornments, unrelated to axis/legend attributes. Rather
     // than invent an undocumented request shape, a "none"/"remove"/"clear" request is rejected
-    // with a corrective explaining the limitation, per the brief's explicit fallback instruction.
+    // with a corrective explaining the limitation.
     const REMOVAL_WORDS = new Set(["none", "remove", "clear", "null"]);
     if (legendAttributeRaw !== undefined && REMOVAL_WORDS.has(legendAttributeRaw.toLowerCase().trim())) {
       return {
@@ -51,8 +49,8 @@ export const updateGraphTool: ILocalTool = {
       };
     }
 
-    // Attributes resolve against the graph's OWN dataContext (brief requirement), not any
-    // data context the caller happens to pass — a graph update never takes a dataContext arg.
+    // Attributes resolve against the graph's OWN dataContext, not any data context the caller
+    // happens to pass — a graph update never takes a dataContext arg.
     const needsAttributeResolution = xAttributeRaw !== undefined || yAttributeRaw !== undefined || legendAttributeRaw !== undefined;
     let dataContext: any;
     if (needsAttributeResolution) {

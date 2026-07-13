@@ -28,10 +28,10 @@ const validateThrowTool: ILocalTool = {
 
 beforeEach(() => registerTools([okTool, throwTool, validateThrowTool]));
 
-// PR #114 review item 11 (dev-time guard): a copy-pasted tool file that forgets to rename its
-// `name` field would silently shadow an earlier tool with no error at all — buildToolDocs would
-// document one, dispatchTool would only ever reach the LAST one registered under that name, and
-// the earlier tool becomes permanently unreachable. Catch this at registration time instead.
+// Dev-time guard: a copy-pasted tool file that forgets to rename its `name` field would silently
+// shadow an earlier tool with no error at all — buildToolDocs would document one, dispatchTool
+// would only ever reach the LAST one registered under that name, and the earlier tool becomes
+// permanently unreachable. Catch this at registration time instead.
 it("registerTools throws on a duplicate tool name (PR #114 review item 11)", () => {
   const duplicate: ILocalTool = { ...throwTool, name: "demo_ok" };
   expect(() => registerTools([okTool, duplicate])).toThrow(/duplicate/i);
@@ -46,12 +46,9 @@ it("returns the corrective validation error as the tool result", async () => {
   await expect(dispatchTool("demo_ok", { x: "bad" }, ctx)).resolves.toContain("Bad x");
 });
 
-// DAVAI-126 matrix round 4 Task F1: live traces showed the model treating a corrective
-// validation-failure string as if IT were the final answer (describe-graph) or repeating the
-// identical failing call verbatim (create-adornment) instead of retrying with a fix. A uniform,
-// explicit "call again / don't repeat / don't answer with this" instruction appended to every
-// validation failure (regardless of which tool) removes the ambiguity at the dispatch layer, so
-// no per-tool error string has to remember to say it.
+// A uniform, explicit "call again / don't repeat / don't answer with this" instruction appended
+// to every validation failure (regardless of which tool) removes the ambiguity at the dispatch
+// layer, so no per-tool error string has to remember to say it.
 it("appends a uniform retry instruction naming the tool to every validation failure", async () => {
   const out = await dispatchTool("demo_ok", { x: "bad" }, ctx);
   expect(out).toBe(
@@ -91,7 +88,6 @@ it("buildToolDocs includes every registered tool's name, description, and args e
 import { initializeLocalTools } from "./index";
 
 it("initializeLocalTools registers all 12 tools with docs for each", () => {
-  // DAVAI-126 Task D: added update_graph and group_by, bringing the total from 10 to 12.
   initializeLocalTools();
   const names = getRegisteredTools().map((t) => t.name).sort();
   expect(names).toEqual([
@@ -101,14 +97,9 @@ it("initializeLocalTools registers all 12 tools with docs for each", () => {
   ]);
 });
 
-// DAVAI-126 matrix round 3 item E6: find_cases's registration order is prompt order, which is
-// salience — evidence: 3 of 4 live matrix runs answered "which mammal is heaviest?" via
-// get_case_values/get_stats instead of find_cases (one run zipped two lists and misaligned the
-// answer; one flatly stated the wrong unit as an animal); only the run where find_cases happened
-// to be more prominent used it, with a perfect one-call answer. Registration order IS prompt
-// order (buildToolDocs, registry.ts, maps registered tools in array order) — moving find_cases
-// above get_case_values raises its salience without touching the (alphabetically-asserted, so
-// order-independent) full-registry test above.
+// Registration order IS prompt order (buildToolDocs, registry.ts, maps registered tools in array
+// order) — find_cases is registered above get_case_values to raise its salience, without
+// touching the (alphabetically-asserted, so order-independent) full-registry test above.
 it("registers find_cases ABOVE get_case_values (prompt order = salience, DAVAI-126 matrix round 3 E6)", () => {
   initializeLocalTools();
   const names = getRegisteredTools().map((t) => t.name);

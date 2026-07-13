@@ -5,11 +5,8 @@ import { extractBacktickRefs, resolveAttribute, resolveDataContext } from "./res
 export const selectCasesTool: ILocalTool = {
   name: "select_cases",
   description: "Select cases matching a CODAP formula expression (wrap attribute names in backticks; percentile takes 0–1). mode \"replace\" starts a new selection, \"extend\" adds to it.",
-  // DAVAI-126 matrix round 3 item E5: both think runs spiraled trying to hand-compute the 75th
-  // percentile instead of calling the tool ("get_stats doesn't provide that… but how?" x8), and a
-  // none-think run's own expression picked the wrong threshold shape (selected 20/27 — wrong
-  // shape). argsExample is the model's most-imitated part of a tool doc, so a worked percentile
-  // example steers toward the correct CODAP form directly.
+  // argsExample is the model's most-imitated part of a tool doc, so a worked percentile example
+  // steers toward the correct CODAP form directly.
   argsExample: '{"tool": "select_cases", "dataContext": "Mammals", "expression": "`Height` > percentile(`Height`, 0.75)", "mode": "replace"}',
   validate(args, ctx) {
     const dc = resolveDataContext(String(args.dataContext ?? ""), ctx.dataContexts());
@@ -46,10 +43,10 @@ export const selectCasesTool: ILocalTool = {
       return `Selection failed: ${reason}. Check the expression syntax (attribute names in backticks).`;
     }
     const selection = await getSelectionList(String(resolved.dataContextName));
-    // DAVAI-126 eval round 2 item E: a zero-match selection is silent otherwise — the most
-    // common cause the models hit is treating percentile's second argument as 0-100 instead of
-    // the 0-1 fraction CODAP's formula language actually expects, so nudge toward that fix
-    // directly rather than leaving "0 cases" for the model to puzzle out on its own.
+    // A zero-match selection is silent otherwise — the most common cause the models hit is
+    // treating percentile's second argument as 0-100 instead of the 0-1 fraction CODAP's formula
+    // language actually expects, so nudge toward that fix directly rather than leaving "0 cases"
+    // for the model to puzzle out on its own.
     if (selection.length === 0) {
       return `Selected 0 cases in "${resolved.dataContextName}" — no cases matched. Check the expression ` +
         "(percentile takes a fraction 0–1, e.g. percentile(`Height`, 0.75)).";

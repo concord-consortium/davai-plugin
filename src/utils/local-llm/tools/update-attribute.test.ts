@@ -163,8 +163,8 @@ describe("execute: multi-field (attribute fields + position)", () => {
       resource: "dataContext[Mammals].collection[Cases].attribute[Height]",
       values: { name: "HeightM", unit: "m", description: "body height" },
     });
-    // Clause order follows the brief's own field enumeration order (newName, formula,
-    // description, unit, position), consistent across every result sentence.
+    // Clause order follows a fixed field enumeration order (newName, formula, description, unit,
+    // position), consistent across every result sentence.
     expect(out).toBe(
       'Updated attribute "HeightM" in "Mammals": renamed to "HeightM"; description set to "body height"; unit set to "m".'
     );

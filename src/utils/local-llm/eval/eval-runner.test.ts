@@ -30,12 +30,9 @@ it("a runTurn rejection fails that case without aborting the run", async () => {
   expect(results).toHaveLength(2);
 });
 
-// DAVAI-126 matrix round 3 item E8: per-case incremental observability (user-requested) —
-// evidence: MST axis-death spam and insertBefore errors interleave with the battery, and the
-// user cannot attribute them to a specific case without a BEFORE/AFTER marker per case. The pure
-// runner itself stays console-free (per the brief: "NOT the pure runner, which stays
-// console-free") — it only invokes optional onCaseStart/onCaseResult callbacks; assistant-model.ts
-// supplies the actual console.log implementations.
+// Per-case incremental observability: the pure runner itself stays console-free — it only
+// invokes optional onCaseStart/onCaseResult callbacks; assistant-model.ts supplies the actual
+// console.log implementations.
 describe("onCaseStart/onCaseResult callbacks (DAVAI-126 matrix round 3 E8)", () => {
   it("onCaseStart fires before each case, in order, with the case's 1-based index/total/id/prompt", async () => {
     const runTurn = jest.fn().mockResolvedValue({ toolCalls: [], final: "ok" });
@@ -87,19 +84,12 @@ describe("onCaseStart/onCaseResult callbacks (DAVAI-126 matrix round 3 E8)", () 
 
   it("both callbacks are optional — omitting them changes nothing about the returned results", async () => {
     const runTurn = jest.fn().mockResolvedValue({ toolCalls: [], final: "ok" });
-    const results = await runLocalEval(cases, runTurn); // no callbacks at all
+    const results = await runLocalEval(cases, runTurn);
     expect(results).toHaveLength(3);
   });
 });
 
 it("ships the 18 spec cases with unique ids", () => {
-  // DAVAI-126 Task A: added "describe-by-axes" to exercise resolveGraph's rung 3.
-  // DAVAI-126 Task C: added "set-attribute-unit" (update_attribute) and "find-heaviest"
-  // (find_cases), bringing the total from 12 to 14.
-  // DAVAI-126 Task D: added "update-graph-yaxis" (update_graph) and "group-by-diet" (group_by),
-  // bringing the total from 14 to 16.
-  // DAVAI-126 Task H: added "create-categorical-graph" and "describe-categorical" (the live
-  // hallucination-report regression test), bringing the total from 16 to 18.
   expect(evalCases).toHaveLength(18);
   expect(new Set(evalCases.map((c) => c.id)).size).toBe(18);
   const miscap = evalCases.find((c) => c.id === "miscapitalized-attribute");
@@ -118,8 +108,8 @@ it("describe-by-axes runs after create-graph and before create-adornment, with f
   const c = evalCases.find((e) => e.id === "describe-by-axes")!;
   expect(c.prompt).toBe("Describe the Mass vs Height graph.");
   expect(c.expectTools).toEqual({ contains: ["get_graph_info"] });
-  // DAVAI-126 Task B: strengthened with /\d/ — the graph sketch now computed and reported by
-  // get_graph_info means a correct answer must ground in an actual number, not just name both axes.
+  // get_graph_info reports a computed graph sketch, so a correct answer must ground in an
+  // actual number, not just name both axes.
   expect(c.expectFinal).toEqual({ matches: [/mass/i, /height/i, /\d/], notMatches: [/error|sorry/i] });
 });
 
@@ -159,9 +149,8 @@ it("group-by-diet runs directly after update-graph-yaxis (DAVAI-126 Task D)", ()
   expect(c.expectFinal).toEqual({ matches: [/diet/i, /group/i, /\d/] });
 });
 
-// DAVAI-126 Task H appended two cases after find-heaviest, so find-heaviest is no longer last —
-// this coupling (find-heaviest directly after miscapitalized-attribute) is preserved deliberately;
-// only its position relative to the END of the battery has changed.
+// This coupling (find-heaviest directly after miscapitalized-attribute) is preserved
+// deliberately — its position relative to the end of the battery is not pinned.
 it("find-heaviest runs directly after miscapitalized-attribute (DAVAI-126 Task C coupling, " +
   "preserved by Task H's append)", () => {
   const ids = evalCases.map((e) => e.id);
@@ -175,9 +164,9 @@ it("find-heaviest runs directly after miscapitalized-attribute (DAVAI-126 Task C
   expect(c.expectFinal).toEqual({ matches: [/elephant/i, /6400|6,400/] });
 });
 
-// DAVAI-126 Task H: the two new cases are now the tail of the battery, in this exact order —
-// create-categorical-graph must run before describe-categorical (you can't describe a graph
-// that doesn't exist yet), and both must run after find-heaviest.
+// These two cases are the tail of the battery, in this exact order — create-categorical-graph
+// must run before describe-categorical (you can't describe a graph that doesn't exist yet), and
+// both must run after find-heaviest.
 it("create-categorical-graph and describe-categorical are the last two cases, in that order, " +
   "after find-heaviest (DAVAI-126 Task H)", () => {
   const ids = evalCases.map((e) => e.id);
@@ -199,8 +188,8 @@ it("create-categorical-graph and describe-categorical are the last two cases, in
   });
 });
 
-// DAVAI-126 Task H: this is the pinned regression test for the live hallucination report — the
-// exact invented category names from the user's report must appear in the notMatches list.
+// Pinned regression test for the live hallucination report — the exact invented category names
+// from the user's report must appear in the notMatches list.
 it("describe-categorical's notMatches is exactly the live hallucination report's invented terms", () => {
   const c = evalCases.find((e) => e.id === "describe-categorical")!;
   const notMatches = c.expectFinal.notMatches!;
@@ -220,13 +209,12 @@ describe("eval case corrections (DAVAI-126 eval round 2 item A)", () => {
     expect(c.expectFinal.matches).toHaveLength(2);
     expect(c.expectFinal.matches![0]).toEqual(/height/i);
     expect(c.expectFinal.matches![1]).toEqual(/27|0\.1|6\.5/);
-    expect(c.expectFinal.notMatches).toEqual([/error|sorry/i]); // unchanged
+    expect(c.expectFinal.notMatches).toEqual([/error|sorry/i]);
   });
 
   it("selection-percentile's prompt now asks for a count (matching its own count assertion)", () => {
     const c = evalCases.find((e) => e.id === "selection-percentile")!;
     expect(c.prompt).toBe("Select the mammals above the 75th percentile of Height, and tell me how many you selected.");
-    // Regexes unchanged.
     expect(c.expectTools).toEqual({ contains: ["select_cases"] });
     expect(c.expectFinal.matches).toEqual([/select/i, /\d+\s*(cases?|mammals?)/i]);
   });
@@ -386,6 +374,6 @@ it("selection-percentile's final-answer check uses a single widened count regex 
   expect(isMatch("Selected 3 mammals.")).toBe(true);
   expect(isMatch("Selected 1 case.")).toBe(true); // singular "case"
   expect(isMatch("Selected 1 mammal.")).toBe(true); // singular "mammal"
-  expect(isMatch("Selected 12mammals.")).toBe(true); // no space — the old two-space-locked form missed this
+  expect(isMatch("Selected 12mammals.")).toBe(true); // no space before the noun
   expect(isMatch("No matching rows found.")).toBe(false);
 });

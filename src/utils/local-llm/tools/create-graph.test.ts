@@ -59,10 +59,8 @@ it("falls back to values.error when the top-level error is absent (tolerance)", 
   expect(out).toContain("nested bad component spec");
 });
 
-// DAVAI-126 matrix round 3 item E4: when args.title is absent/empty, default to a real title
-// (bivariate: "X vs Y"; univariate: "X") and SEND it to CODAP — evidence: an omitted title meant
-// the document graph itself was created untitled (`Created graph "" (Height vs Mass)`), which
-// then poisoned a LATER case's resolveGraph corrective (an untitled graph showing up as "").
+// When args.title is absent/empty, default to a real title (bivariate: "X vs Y"; univariate:
+// "X") and SEND it to CODAP.
 describe("default title (DAVAI-126 matrix round 3 E4)", () => {
   it("omitted title on a bivariate graph defaults to \"X vs Y\" and SENDS it to CODAP", async () => {
     send.mockResolvedValue({ success: true, values: { id: 55, title: "Height vs Age" } });
@@ -134,8 +132,8 @@ describe("legendAttribute (DAVAI-126 Task C)", () => {
       { dataContext: "Mammals", xAttribute: "Height", legendAttribute: "Habitat" }, ctx);
     expect(v.ok).toBe(true);
     await createGraphTool.execute((v as any).resolved, ctx);
-    // DAVAI-126 matrix round 3 item E4: an omitted title now defaults to "Height" (univariate)
-    // and IS sent to CODAP — see the "default title" describe block below for full coverage.
+    // An omitted title defaults to "Height" (univariate) and IS sent to CODAP — see the "default
+    // title" describe block below for full coverage.
     expect(send).toHaveBeenCalledWith({
       action: "create",
       resource: "component",

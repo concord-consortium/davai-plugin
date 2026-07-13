@@ -1,8 +1,8 @@
 import { roundSig } from "./number-format";
 
-// PR #114 review item 11: roundSig(NaN|±Infinity) rendered a bare "NaN"/"-NaN" — a screen reader
-// would speak that as if it were a real number. A non-finite value can never be a meaningful
-// magnitude, so it degrades to a plain "unavailable" instead.
+// A non-finite value can never be a meaningful magnitude; roundSig degrades it to a plain
+// "unavailable" rather than a bare "NaN"/"-NaN" a screen reader would speak as if it were a real
+// number.
 describe("roundSig NaN/Infinity guard (PR #114 review item 11)", () => {
   it("renders NaN as 'unavailable', never the literal string 'NaN'", () => {
     expect(roundSig(NaN)).toBe("unavailable");
@@ -23,14 +23,14 @@ describe("roundSig NaN/Infinity guard (PR #114 review item 11)", () => {
   });
 });
 
-// Codex second-pass hardening F4: two distinct crashes/bad-output modes at the extreme edges of
-// the double range. (1) `toFixed(decimals)` throws a RangeError once `decimals` exceeds 100 —
-// reachable for denormal-range values (e.g. ~1e-307), where expressing 3 significant figures in
-// plain decimal needs hundreds of fractional digits, AND this module's own scale-multiply/divide
-// arithmetic (10^roundingExponent) overflows to Infinity at that same magnitude, producing NaN
-// before toFixed is even reached. (2) `toFixed` ALWAYS renders |value| >= 1e21 in exponential
-// notation, regardless of the requested decimals — unspeakable/unreadable prose, and the literal
-// opposite of this module's whole "never emit e-notation" purpose.
+// Two distinct crashes/bad-output modes at the extreme edges of the double range. (1)
+// `toFixed(decimals)` throws a RangeError once `decimals` exceeds 100 — reachable for
+// denormal-range values (e.g. ~1e-307), where expressing 3 significant figures in plain decimal
+// needs hundreds of fractional digits, AND this module's own scale-multiply/divide arithmetic
+// (10^roundingExponent) overflows to Infinity at that same magnitude, producing NaN before
+// toFixed is even reached. (2) `toFixed` ALWAYS renders |value| >= 1e21 in exponential notation,
+// regardless of the requested decimals — unspeakable/unreadable prose, and the literal opposite
+// of this module's whole "never emit e-notation" purpose.
 describe("roundSig extreme-magnitude hardening (Codex hardening F4)", () => {
   it("denormal-range values never throw a RangeError and never render exponential notation", () => {
     expect(() => roundSig(1e-307)).not.toThrow();

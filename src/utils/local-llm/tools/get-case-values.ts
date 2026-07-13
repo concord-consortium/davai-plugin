@@ -2,8 +2,8 @@ import { getCollectionItemsForAttribute, getCollectionItemsForAttributePair } fr
 import { ILocalTool } from "./registry";
 import { resolveAttribute, resolveDataContext } from "./resolve";
 
-// PR #114 review item 11: bare `String(value)` renders the literal text "null"/"undefined" for a
-// blank cell — a screen-reader user would hear those words as if they were real data values.
+// A bare `String(value)` would render the literal text "null"/"undefined" for a blank cell — a
+// screen-reader user would hear those words as if they were real data values.
 const displayValue = (v: unknown): string => (v === null || v === undefined || v === "" ? "(blank)" : String(v));
 
 export const getCaseValuesTool: ILocalTool = {
@@ -32,9 +32,10 @@ export const getCaseValuesTool: ILocalTool = {
     const items = attribute2
       ? await getCollectionItemsForAttributePair(dc, attribute, attribute2)
       : await getCollectionItemsForAttribute(dc, attribute);
-    // No sampling (DAVAI-126 user directive: "don't sample attribute values above 100. You need
-    // to process them all.") — every case value is included; the loop's capToolResult (8,000-char
-    // tool-result cap) is the intentional safety net for outsized results, not this tool.
+    // No sampling — every case value is included, per an explicit user directive: "don't sample
+    // attribute values above 100. You need to process them all." The loop's capToolResult
+    // (8,000-char tool-result cap) is the intentional safety net for outsized results, not this
+    // tool.
     const rows = items.map((it: any) =>
       attribute2
         ? `${displayValue(it.values[attribute])}, ${displayValue(it.values[attribute2])}`

@@ -615,25 +615,25 @@ export const AssistantModel = types
           // setGraphs({ selectNewest: true }) is the sonification store's registered flow that
           // makes the newly created graph auto-selected — the same auto-select the server path
           // gets from the processToolCall guard above. Without this second call the local path's
-          // graph creation succeeds but the Sonification menu never picks up the new graph
-          // (DAVAI-126 regression). setGraphs is a registered flow on another node, so — like
-          // setSelectedGraphID above — it's safely callable from this async continuation.
+          // graph creation would succeed but the Sonification menu would never pick up the new
+          // graph. setGraphs is a registered flow on another node, so — like setSelectedGraphID
+          // above — it's safely callable from this async continuation.
           refreshGraphs: async () => {
             await (self as any).updateGraphs();
             await root.sonificationStore.setGraphs({ selectNewest: true });
           },
-          // DAVAI-126 Task D: update_graph mutates an EXISTING graph, so there is no "newest"
-          // graph to select — refreshGraphs's setGraphs({ selectNewest: true }) call above would
-          // be a no-op in that case (setGraphs only reassigns selection when it finds a graph id
-          // NOT already in its snapshot), but relying on that being a no-op is fragile. This bare
-          // refill (no selectNewest follow-up at all) is the honest "just refresh the list"
-          // primitive for tools that must never disturb the current sonification selection.
+          // update_graph mutates an EXISTING graph, so there is no "newest" graph to select —
+          // refreshGraphs's setGraphs({ selectNewest: true }) call above would be a no-op in that
+          // case (setGraphs only reassigns selection when it finds a graph id NOT already in its
+          // snapshot), but relying on that being a no-op is fragile. This bare refill (no
+          // selectNewest follow-up at all) is the honest "just refresh the list" primitive for
+          // tools that must never disturb the current sonification selection.
           refreshGraphList: async () => { await (self as any).updateGraphs(); },
         };
-        // Reuses the DAVAI-125 effort machinery as the thinking toggle: effort "think" turns
+        // Reuses the existing effort machinery as the thinking toggle: effort "think" turns
         // Qwen3 thinking on (via the /think prompt switch) and doubles the completion-token
         // budget below (thinking consumes completion tokens; the default 1024 would truncate
-        // mid-think). Any other effort value (including "" / "none") keeps today's /no_think
+        // mid-think). Any other effort value (including "" / "none") keeps the /no_think
         // behavior and the 1024 budget.
         const thinking = self.effort === "think";
         const selectedId = toolCtx.selectedGraphId();
@@ -692,17 +692,16 @@ export const AssistantModel = types
       }
     });
 
-    // Scripted eval harness (DAVAI-126 Task 11): runs a fixed battery of prompts against the
-    // SAME local-model building blocks as handleMessageSubmitLocalLlm (engine ensure, tool ctx,
-    // graph seed, system prompt, runLocalTurn) but as independent single-shot turns — no shared
-    // conversation, and no per-case transcript chatter. Only a start announcement and the final
-    // pass/fail summary are added to the transcript; the full per-case detail goes to the
-    // console (see summarizeEval's "details in the browser console"). Reuses the same turnEpoch
-    // guard as a normal local turn, so Cancel aborts an in-progress eval run the same way. Also
-    // mirrors handleMessageSubmitLocalLlm's overlap/busy-flag/try-catch discipline (review round
-    // 1, task 11): isLoadingResponse/showLoadingIndicator gate the run against a concurrent chat
-    // turn or a second eval, and the whole body is wrapped so a failure announces and resolves
-    // instead of leaving an unhandled rejection or a stuck busy chat input.
+    // Scripted eval harness: runs a fixed battery of prompts against the SAME local-model building
+    // blocks as handleMessageSubmitLocalLlm (engine ensure, tool ctx, graph seed, system prompt,
+    // runLocalTurn) but as independent single-shot turns — no shared conversation, and no per-case
+    // transcript chatter. Only a start announcement and the final pass/fail summary are added to
+    // the transcript; the full per-case detail goes to the console (see summarizeEval's "details
+    // in the browser console"). Reuses the same turnEpoch guard as a normal local turn, so Cancel
+    // aborts an in-progress eval run the same way. Also mirrors handleMessageSubmitLocalLlm's
+    // overlap/busy-flag/try-catch discipline: isLoadingResponse/showLoadingIndicator gate the run
+    // against a concurrent chat turn or a second eval, and the whole body is wrapped so a failure
+    // announces and resolves instead of leaving an unhandled rejection or a stuck busy chat input.
     const runLocalEvalTurns = flow(function* (cases: IEvalCase[]) {
       if (self.isLoadingResponse) {
         self.addDavaiAnnouncement(
@@ -710,13 +709,12 @@ export const AssistantModel = types
         );
         return;
       }
-      // Fixture guard (DAVAI-126 eval round 1 F3): the battery's fixed prompts (e.g.
-      // describe-graph's zero-tool expectation) are only meaningful against the documented
-      // fixture — the Mammals sample with a Height dot plot selected. Running the battery
-      // without a resolvable current graph produces failures that are really "wrong fixture,"
-      // not "the model got it wrong," so bail out before doing any work (no engine load, no
-      // flags set). Uses the same deriveCurrentGraphId fallback as the rest of the local path
-      // (DAVAI-126 current-graph fix): a document with exactly one graph passes even with no
+      // Fixture guard: the battery's fixed prompts (e.g. describe-graph's zero-tool expectation)
+      // are only meaningful against the documented fixture — the Mammals sample with a Height dot
+      // plot selected. Running the battery without a resolvable current graph produces failures
+      // that are really "wrong fixture," not "the model got it wrong," so bail out before doing
+      // any work (no engine load, no flags set). Uses the same deriveCurrentGraphId fallback as
+      // the rest of the local path: a document with exactly one graph passes even with no
       // explicit sonification-store selection, since clicking a graph in CODAP never sets that
       // selection.
       const root = getRoot(self) as any;
@@ -771,12 +769,11 @@ export const AssistantModel = types
 
         const runTurn = async (prompt: string): Promise<IEvalTurnResult> => {
           const toolCalls: string[] = [];
-          // DAVAI-126 eval round 2 item B: wrap executeTool (the eval's OWN wiring) to record
-          // each result string as it returns, in call order. Deliberately not a change to
-          // runLocalTurn's onToolCall contract (that hook only ever reported the name) — a
-          // rejected/errored tool call never resolves, so a truly failing call is simply absent
-          // here rather than recorded with a placeholder, and whatever succeeded before the
-          // turn later throws stays recorded.
+          // Wrap executeTool (the eval's OWN wiring) to record each result string as it returns,
+          // in call order. Deliberately not a change to runLocalTurn's onToolCall contract (that
+          // hook only ever reported the name) — a rejected/errored tool call never resolves, so a
+          // truly failing call is simply absent here rather than recorded with a placeholder, and
+          // whatever succeeded before the turn later throws stays recorded.
           const toolResults: string[] = [];
           try {
             const final = await runLocalTurn({
@@ -802,11 +799,10 @@ export const AssistantModel = types
           }
         };
 
-        // DAVAI-126 matrix round 3 item E8: per-case incremental console output (user-requested
-        // observability) — evidence: MST axis-death spam and insertBefore errors interleave with
-        // the battery, and the user cannot attribute them to a case without a BEFORE/AFTER marker
-        // per case. The pure runner (eval-runner.ts) stays console-free; these callbacks are the
-        // ONLY place the actual console.log calls live.
+        // Per-case incremental console output: MST axis-death spam and insertBefore errors
+        // interleave with the battery, and the user cannot attribute them to a case without a
+        // BEFORE/AFTER marker per case. The pure runner (eval-runner.ts) stays console-free;
+        // these callbacks are the ONLY place the actual console.log calls live.
         const results = yield runLocalEval(
           cases, runTurn, undefined,
           // eslint-disable-next-line no-console
@@ -893,13 +889,12 @@ export const AssistantModel = types
         }
         // Invalidate any in-flight LOCAL turn too (which has no currentMessageId to gate the
         // branch above): a reset thread must not receive a prior turn's late reply. Also drop
-        // any queued local message (PR #114 review item 7, mirrors handleCancel's local branch
-        // and setLlmId): handleMessageSubmitLocalLlm drains messageQueue itself in its own
-        // `finally` block so a queued local message is never routed through the shared
-        // afterCreate/onSnapshot reactor below (hardcoded to the server's handleMessageSubmit) —
-        // but createThread bypasses that `finally` entirely, so an uncleared queue would
-        // otherwise fall through to that reactor the moment isLoadingResponse flips to false and
-        // leak the message to the SERVER path.
+        // any queued local message (mirrors handleCancel's local branch and setLlmId):
+        // handleMessageSubmitLocalLlm drains messageQueue itself in its own `finally` block so a
+        // queued local message is never routed through the shared afterCreate/onSnapshot reactor
+        // below (hardcoded to the server's handleMessageSubmit) — but createThread bypasses that
+        // `finally` entirely, so an uncleared queue would otherwise fall through to that reactor
+        // the moment isLoadingResponse flips to false and leak the message to the SERVER path.
         self.bumpTurnEpoch();
         self.isLoadingResponse = false;
         self.isCancelling = false;

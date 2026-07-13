@@ -4,13 +4,12 @@ import { resolveAttribute, resolveDataContext } from "./resolve";
 
 // Above this many distinct values, a numeric grouping attribute produces a group per (near-)
 // unique value rather than a meaningful category split — still allowed (CODAP permits it), but
-// the result nudges toward a categorical attribute instead (brief's locked design decision).
+// the result nudges toward a categorical attribute instead.
 const MANY_GROUPS_THRESHOLD = 12;
 const MAX_LISTED_GROUPS = 8;
 
 // One group's label + case count, in FIRST-SEEN order (stable, so results are deterministic for
-// a given fetch) — sorted by descending count for the result sentence (brief's own worked
-// example lists "land (18 cases), water (5), both (4)": largest group first).
+// a given fetch) — sorted by descending count for the result sentence (largest group first).
 const countGroups = (values: unknown[]): { label: string; count: number }[] => {
   const counts = new Map<string, number>();
   for (const v of values) {
@@ -112,9 +111,9 @@ export const groupByTool: ILocalTool = {
     });
     if (moveRes?.success === false) {
       const reason = moveRes?.error ?? moveRes?.values?.error ?? "unknown reason";
-      // Never leave a half-state silently (brief requirement): the new collection now exists but
-      // is empty (the attribute never made it in) — try to remove it so a retry doesn't collide
-      // with "already grouped that way".
+      // Never leave a half-state silently: the new collection now exists but is empty (the
+      // attribute never made it in) — try to remove it so a retry doesn't collide with "already
+      // grouped that way".
       const deleteRes = await ctx.sendCODAPRequest({
         action: "delete",
         resource: `dataContext[${dataContextName}].collection[${newCollectionName}]`,
@@ -134,8 +133,8 @@ export const groupByTool: ILocalTool = {
     const remaining = groups.length - shown.length;
     const listText = shown.map((g, i) => (i === 0 ? `${g.label} (${g.count} cases)` : `${g.label} (${g.count})`)).join(", ");
     const tail = remaining > 0 ? `, … and ${remaining} more` : "";
-    // Brief's exact wording: "this made N groups — grouping by a categorical attribute usually
-    // works better" (still succeeds; this is a nudge, not a failure).
+    // "This made N groups — grouping by a categorical attribute usually works better" (still
+    // succeeds; this is a nudge, not a failure).
     const nudge = groups.length > MANY_GROUPS_THRESHOLD
       ? ` This made ${groups.length} groups — grouping by a categorical attribute usually works better.`
       : "";

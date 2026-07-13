@@ -6,12 +6,9 @@ export type ParsedEnvelope =
 // Qwen3 emits <think>…</think> when thinking mode leaks through; json_object grammar
 // should prevent it, but strip defensively so a leak degrades instead of failing.
 //
-// DAVAI-126 matrix round 3 item E7: also strips a trailing UNCLOSED <think> block — evidence:
-// both think-mode matrix runs' selection-percentile finals were raw <think> dumps truncated
-// mid-sentence at maxTokens (generation truncation always cuts at the END of the raw output, so
-// an unclosed block is always the trailing one). The first pass removes every CLOSED pair; any
-// "<think>" surviving that pass is therefore unclosed, and the second pass strips it to end of
-// string — leaving whatever valid text preceded it (e.g. a JSON envelope) intact.
+// Also strips a trailing unclosed <think> block: generation truncation always cuts at the end of
+// raw output, so any "<think>" surviving the closed-pair pass is unclosed; strip it to end of
+// string, leaving preceding valid text intact (e.g. a JSON envelope).
 export const stripThink = (raw: string): string =>
   raw.replace(/<think>[\s\S]*?<\/think>/g, "").replace(/<think>[\s\S]*$/, "").trim();
 
@@ -28,13 +25,13 @@ const extractJson = (raw: string): any => {
   }
 };
 
-// DAVAI-126 matrix round 5 Task G1: a live 1.7B final arrived as pretty-printed JSON missing its
-// closing brace, and the old strict-then-brace-slice extractJson threw (no "}" at all), falling
-// back to kind: "invalid" — whose `raw` text was then surfaced as if it were the spoken response.
-// A screen reader would speak "open brace, tool, final, comma..." — actively harmful for the
-// blind-user audience this whole app serves. Any text that plainly ATTEMPTS a "final" envelope
-// (has a "tool" field naming "final") must never leak its raw JSON syntax; recover the "response"
-// string tolerantly instead, up to whatever point it was actually generated.
+// A JSON object that's missing its closing brace (e.g. a pretty-printed final cut short) fails
+// both strict JSON.parse and the brace-slice fallback, landing on kind: "invalid" — whose `raw`
+// text would then be surfaced as if it were the spoken response. A screen reader would speak
+// "open brace, tool, final, comma..." — actively harmful for the blind-user audience this whole
+// app serves. Any text that plainly ATTEMPTS a "final" envelope (has a "tool" field naming
+// "final") must never leak its raw JSON syntax; recover the "response" string tolerantly instead,
+// up to whatever point it was actually generated.
 const FINAL_TOOL_ATTEMPT = /"tool"\s*:\s*"final"/;
 
 // Appends closing braces one at a time, re-parsing after each, up to a small bound — recovers the
@@ -78,10 +75,10 @@ const unescapeJsonString = (s: string): string => {
       // alternative) is a real \uXXXX escape — parseInt on it can never be NaN. A malformed or
       // truncated \u (generation cut off right after "\u", or followed by non-hex characters)
       // falls through to the regex's SECOND alternative instead, which captures just the bare
-      // "u" character (length 1) — treating THAT as a unicode escape (the old bug) fed
-      // parseInt("", 16) = NaN, and String.fromCharCode(NaN) silently inserted a NUL character
-      // into the "recovered" text (PR #114 review item 11). Fall through to the same literal-
-      // passthrough the switch's default case already gives any other unrecognized escape.
+      // "u" character (length 1) — treating that as a unicode escape would feed
+      // parseInt("", 16) = NaN, and String.fromCharCode(NaN) would silently insert a NUL
+      // character into the "recovered" text. Fall through to the same literal-passthrough the
+      // switch's default case already gives any other unrecognized escape.
       if (esc.length === 5 && esc[0] === "u") return String.fromCharCode(parseInt(esc.slice(1), 16));
       switch (esc) {
         case "n": return "\n";

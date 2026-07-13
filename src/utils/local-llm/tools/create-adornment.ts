@@ -23,31 +23,24 @@ const formatData = (type: string, d: Record<string, number> | undefined): string
   return `slope ${d.slope}, intercept ${d.intercept}, R² ${d.rSquared}`;
 };
 
-// DAVAI-126 eval round 2 item F: on a wrong-plot-type rejection, list the retry options the
-// model can actually pick from — the "rung-3 corrective-with-options" pattern the models
-// demonstrably follow elsewhere (resolve.ts's own corrective errors). Reads the same
-// xAttributeName/yAttributeName fields codap-graph-model.ts stores (and get-graph-info.ts
-// already reads), not invented ones.
+// On a wrong-plot-type rejection, list the retry options the model can actually pick from — the
+// "rung-3 corrective-with-options" pattern the models demonstrably follow elsewhere (resolve.ts's
+// own corrective errors). Reads the same xAttributeName/yAttributeName fields
+// codap-graph-model.ts stores (and get-graph-info.ts already reads), not invented ones.
 const hasAxis = (g: any): boolean => typeof g?.xAttributeName === "string" || typeof g?.yAttributeName === "string";
 const hasBothAxes = (g: any): boolean => typeof g?.xAttributeName === "string" && typeof g?.yAttributeName === "string";
 const isUnivariate = (g: any): boolean => hasAxis(g) && !hasBothAxes(g);
 
-// DAVAI-126 matrix round 3 item E1: this file's own local `graphLabel` was `g?.title ?? g?.name`
-// with NO empty-string guard and no descriptive fallback — evidence: the live trace
-// `Univariate graphs: .` (a single blank entry) when the only candidate had title: "". Now uses
-// the shared, RESOLVABLE graphLabel from resolve.ts, which never produces an empty string.
+// Uses the shared, RESOLVABLE graphLabel from resolve.ts, which never produces an empty string.
 const compatibleGraphsMessage = (type: string, graphs: any[]): string => {
   const wantScatterplot = type === "LSRL";
   const candidates = graphs.filter(wantScatterplot ? hasBothAxes : isUnivariate);
   if (candidates.length === 0) return "No compatible graph exists — create one with create_graph.";
   const titles = candidates.map(graphLabel).join(", ");
   const listing = wantScatterplot ? `Scatterplots: ${titles}.` : `Univariate graphs: ${titles}.`;
-  // DAVAI-126 matrix round 4 Task F1: live trace evidence — prompt said "the Height graph" but
-  // the model called with no graph arg, defaulted to the selected scatterplot, got back
-  // `Univariate graphs: Height.`, and REPEATED the identical failing call instead of retrying
-  // with "graph": "Height". When exactly one graph qualifies, name it directly as a
-  // copy-pasteable retry argument — not just listed information. Omitted when zero (nothing to
-  // name) or multiple (naming one would be a guess) compatible graphs exist.
+  // When exactly one graph qualifies, name it directly as a copy-pasteable retry argument — not
+  // just listed information. Omitted when zero (nothing to name) or multiple (naming one would
+  // be a guess) compatible graphs exist.
   if (candidates.length === 1) {
     return `${listing} Call create_adornment again now with "graph": "${graphLabel(candidates[0])}".`;
   }
@@ -65,8 +58,6 @@ export const createAdornmentTool: ILocalTool = {
     if (!type) {
       return { ok: false, error: `Unknown adornment type "${args.type}". Available: mean, median, standard deviation, lsrl.` };
     }
-    // DAVAI-126 matrix round 3 item E1: was `graph.value.title ?? graph.value.name` — evidence:
-    // `Added Mean adornment to "undefined"` (an unset field coerced through a template literal).
     // graphLabel is empty-string-safe and prefers a descriptive, resolvable phrase over a raw id.
     return { ok: true, resolved: { graphId: graph.value.id, graphTitle: graphLabel(graph.value), type } };
   },

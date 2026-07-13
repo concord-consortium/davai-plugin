@@ -18,7 +18,7 @@ const DIGEST_HEADER = "### Datasets (schema):";
 const DIGEST_TRUNCATED_LABEL = "\n[schema digest truncated]";
 // Sized from the actual marker strings trimToBudget's step 3 appends after the kept content (the
 // label, plus whichever think-switch token gets re-appended) — rather than a hand-counted magic
-// number that would silently under-reserve room if either string grows (PR #114 review nitpick).
+// number that would silently under-reserve room if either string grows.
 const TRIM_MARKER_RESERVE_CHARS =
   DIGEST_TRUNCATED_LABEL.length + Math.max(...THINK_SWITCHES.map((s) => `\n${s}`.length));
 
@@ -51,7 +51,7 @@ export const buildTranscriptTurns = (
       content: m.messageContent.content,
     }));
 
-// Trim priority v2: (1) drop the seed VALUES line (structure/adornments stay), (2) drop
+// Trim priority: (1) drop the seed VALUES line (structure/adornments stay), (2) drop
 // oldest transcript turns, (3) truncate the schema digest. Instructions and tool docs are
 // never trimmed — they are the capability surface. Whichever think-switch (/no_think or
 // /think) the prompt ends with always survives (re-appended).
@@ -75,12 +75,11 @@ export const trimToBudget = (messages: IChatMsg[], maxChars = DEFAULT_PROMPT_BUD
   // 2. Drop oldest transcript turns (out[0] system, last = current user message).
   while (total(out) > maxChars && out.length > 2) out.splice(1, 1);
   // 3. Truncate the schema digest section tail — anchored to the digest header's own offset so
-  //    the cut can never precede it (PR #114 review Gate 1). The old `content.slice(0, room)` cut
-  //    the WHOLE system prompt from the front; `room` shrinks with the size of the CURRENT USER
-  //    MESSAGE (via `others`, below), so a large enough user turn could drive `room` below
-  //    len(instructions + tool docs) and slice straight through the tool documentation — the
-  //    model's capability surface — while still labeling the result "[schema digest truncated]"
-  //    regardless of what was actually removed.
+  //    the cut can never precede it. Without this anchor, `room` shrinks with the size of the
+  //    CURRENT USER MESSAGE (via `others`, below), so a large enough user turn could drive `room`
+  //    below len(instructions + tool docs) and slice straight through the tool documentation —
+  //    the model's capability surface — while still labeling the result "[schema digest
+  //    truncated]" regardless of what was actually removed.
   if (total(out) > maxChars) {
     const others = total(out.slice(1));
     const content = sys().content;
@@ -97,8 +96,8 @@ export const trimToBudget = (messages: IChatMsg[], maxChars = DEFAULT_PROMPT_BUD
     const keep = content.slice(0, room);
     const trailingSwitch = THINK_SWITCHES.find((s) => content.endsWith(s));
     const switchSuffix = trailingSwitch ? `\n${trailingSwitch}` : "";
-    // The label is now honest unconditionally: this rung only ever removes digest/seed tail,
-    // never the instructions/tool-docs prefix above.
+    // The label is honest unconditionally: this rung only ever removes digest/seed tail, never
+    // the instructions/tool-docs prefix above.
     out[0] = { ...sys(), content: `${keep}${DIGEST_TRUNCATED_LABEL}${switchSuffix}` };
   }
   return out;

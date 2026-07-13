@@ -55,9 +55,9 @@ it("builds a compact schema digest with names and types", () => {
   expect(digest.length).toBeLessThan(400);
 });
 
-// DAVAI-126 Task B: when the resolved attribute object carries a `unit` field, the digest names
-// it too (fail-soft: an attribute with no `unit` keeps today's plain "(type)" format unchanged —
-// see the pinned "Height (numeric)" assertion above, which must still pass).
+// When the resolved attribute object carries a `unit` field, the digest names it too (fail-soft:
+// an attribute with no `unit` keeps the plain "(type)" format — see the pinned "Height
+// (numeric)" assertion above, which must still pass).
 it("adds the unit to a digest entry when the attribute object carries a `unit` field, leaving " +
   "unit-less attributes formatted exactly as before", () => {
   const dcsWithUnit = {
@@ -74,9 +74,9 @@ it("adds the unit to a digest entry when the attribute object carries a `unit` f
   expect(digest).not.toContain("Habitat (categorical, ");
 });
 
-// PR #114 review item 11: a data context, collection, or attribute object missing its own
-// `name` field rendered the literal text "undefined" into the digest — a screen-reader user (or
-// the model) would read/see "undefined" as if it were a real name.
+// A data context, collection, or attribute object missing its own `name` field rendered the
+// literal text "undefined" into the digest — a screen-reader user (or the model) would read/see
+// "undefined" as if it were a real name.
 it("never renders literal \"undefined\" into the digest when a dataContext/collection/attribute " +
   "is missing its name field (PR #114 review item 11)", () => {
   const malformed = {
@@ -108,10 +108,9 @@ describe("formatAdornment never renders literal \"undefined\" for a malformed/in
   });
 });
 
-// Codex second-pass hardening F3: the `?? "unavailable"` guard is nullish-only (null/undefined),
-// so a NaN/Infinity numeric field — neither null nor undefined — sailed through unguarded,
-// rendering the literal "slope NaN" or "mean Infinity" a screen reader would speak as if it were
-// a real number.
+// The `?? "unavailable"` guard is nullish-only (null/undefined); a NaN/Infinity numeric field —
+// neither null nor undefined — would sail through unguarded, rendering the literal "slope NaN"
+// or "mean Infinity" a screen reader would speak as if it were a real number.
 describe("formatAdornment never renders a non-finite numeric literal (Codex hardening F3)", () => {
   it("a NaN slope renders 'slope unavailable', not 'slope NaN'", () => {
     const out = formatAdornment({ type: "LSRL", slope: NaN, intercept: 1, rSquared: 0.5 } as any);
@@ -218,10 +217,8 @@ describe("buildGraphSeed", () => {
     expect(await buildGraphSeed("42", dcs)).toBe("");
   });
 
-  // DAVAI-126 matrix round 3 item E1: the header used to fall back to the raw numeric id
-  // (`g?.title ?? g?.name ?? graphId`) — evidence: seed handing out `885090985993956` to the
-  // model, which then couldn't get it accepted back by the pre-E2 resolver. Now it uses the
-  // shared, RESOLVABLE graphLabel, which prefers a descriptive phrase over a bare id.
+  // The header uses the shared, RESOLVABLE graphLabel, which prefers a descriptive phrase over
+  // a bare numeric id — a model must be able to resolve whatever label it echoes back.
   it("uses the shared graphLabel (descriptive fallback, not the raw id) in the header when the " +
     "graph has neither a title nor a name", async () => {
     (getGraphByID as jest.Mock).mockResolvedValue({
@@ -232,8 +229,7 @@ describe("buildGraphSeed", () => {
     expect(seed).not.toContain("885090985993956");
   });
 
-  // Evidence: `Graphs: "" (dot plot of Height)` — an empty-string title must be treated as
-  // absent, not printed verbatim as a blank label.
+  // An empty-string title must be treated as absent, not printed verbatim as a blank label.
   it("treats an empty-string title as absent in the header, falling through graphLabel's chain", async () => {
     (getGraphByID as jest.Mock).mockResolvedValue({
       id: 42, title: "", dataContext: "Mammals", xAttributeName: "Height", yAttributeName: null,
@@ -243,10 +239,10 @@ describe("buildGraphSeed", () => {
     expect(seed).not.toContain('Selected graph ""');
   });
 
-  // DAVAI-126 Task B: the sketch (computed cluster/outlier/relationship facts) lives in the
-  // STRUCTURE section — inserted after the axes/adornments line — so it survives the prompt
-  // budget trim that drops only the Values line (see trimToBudget's SEED_VALUES_PREFIX in
-  // local-llm-prompt.ts, which matches a line starting literally with "Values").
+  // The sketch (computed cluster/outlier/relationship facts) lives in the STRUCTURE section —
+  // inserted after the axes/adornments line — so it survives the prompt budget trim that drops
+  // only the Values line (see trimToBudget's SEED_VALUES_PREFIX in local-llm-prompt.ts, which
+  // matches a line starting literally with "Values").
   it("inserts a non-empty sketch between the axes/adornments line and the Values line " +
     "(univariate: reuses the same fetched items, no second fetch)", async () => {
     const seed = await buildGraphSeed("42", dcs);
@@ -317,11 +313,10 @@ describe("buildGraphSeed", () => {
     expect(seed).toContain("Relationship:");
   });
 
-  // DAVAI-126 Task H: this is the seed-path half of the live hallucination report's fix — the
-  // report's own graph description came from get_graph_info, but the SEED (buildGraphSeed) feeds
-  // the exact same computeGraphSketch and must place a categorical sketch in the same STRUCTURE
-  // section slot (between axes/adornments and Values) that survives trimToBudget's trim rung,
-  // exactly like the numeric sketch does — categorical data is not a special case for placement.
+  // The SEED (buildGraphSeed) feeds the exact same computeGraphSketch that get_graph_info uses,
+  // and must place a categorical sketch in the same STRUCTURE section slot (between
+  // axes/adornments and Values) that survives trimToBudget's trim rung, exactly like the numeric
+  // sketch does — categorical data is not a special case for placement.
   it("categorical x categorical: inserts the categorical sketch in the same structure-section " +
     "slot as a numeric sketch (between axes/adornments and Values), with real category names " +
     "and counts — never the invented categories from the live hallucination report", async () => {

@@ -28,11 +28,11 @@ export interface ILocalTool {
 
 let registered: ILocalTool[] = [];
 
-// PR #114 review item 11 (dev-time guard): a copy-pasted tool file that forgets to rename its
-// `name` field would otherwise silently shadow an earlier tool — buildToolDocs would document
-// one, dispatchTool would only ever reach the LAST tool registered under that name, and the
-// earlier tool becomes permanently unreachable with no error at all. Fail loudly at registration
-// time instead, when the mistake is easy to trace to its source.
+// Dev-time guard: a copy-pasted tool file that forgets to rename its `name` field would
+// otherwise silently shadow an earlier tool — buildToolDocs would document one, dispatchTool
+// would only ever reach the LAST tool registered under that name, and the earlier tool becomes
+// permanently unreachable with no error at all. Fail loudly at registration time instead, when
+// the mistake is easy to trace to its source.
 export const registerTools = (tools: ILocalTool[]): void => {
   const seen = new Set<string>();
   for (const t of tools) {
@@ -58,13 +58,11 @@ export const dispatchTool = async (
   }
   try {
     const validation = tool.validate(args, ctx);
-    // DAVAI-126 matrix round 4 Task F1: live traces showed the model treating a validation-
-    // failure string as if it WERE the final answer, or repeating the identical failing call
-    // verbatim, instead of retrying with a fix. A uniform instruction appended here — at the one
-    // place every validate() failure funnels through — removes that ambiguity for every tool at
-    // once, so no per-tool error string has to remember to say it. execute() failures are NOT
-    // touched: they already carry their own tool-specific corrective guidance (e.g.
-    // create-adornment.ts's compatible-graphs listing).
+    // A uniform instruction appended here — at the one place every validate() failure funnels
+    // through — removes any ambiguity about retrying vs. treating the error as the final answer,
+    // for every tool at once, so no per-tool error string has to remember to say it. execute()
+    // failures are NOT touched: they already carry their own tool-specific corrective guidance
+    // (e.g. create-adornment.ts's compatible-graphs listing).
     if (!validation.ok) {
       return `${validation.error} Call ${name} again now with a corrected argument — do not ` +
         "repeat the same arguments, and do not answer with this message's text.";
@@ -75,8 +73,8 @@ export const dispatchTool = async (
   }
 };
 
-// Generated prompt documentation — the registry is the single source of truth, so adding a
-// tool automatically documents it (spec decision 2: docs cannot drift).
+// Generated prompt documentation — the registry is the single source of truth, so adding a tool
+// automatically documents it.
 export const buildToolDocs = (): string =>
   registered
     .map((t) => `- ${t.name}: ${t.description}\n  ${t.argsExample}`)

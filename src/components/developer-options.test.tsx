@@ -12,7 +12,7 @@ import { RootStoreProvider } from "../contexts/root-store-context";
 import { GraphSonificationModelType } from "../models/graph-sonification-model";
 
 // assistant-model.ts (imported above for its type, and transitively via root-store through
-// RootStoreProvider) now statically imports local-llm-service.ts, which imports this factory.
+// RootStoreProvider) statically imports local-llm-service.ts, which imports this factory.
 // It uses import.meta.url, which ts-jest's CJS transform cannot parse — mock it out the same
 // way local-llm-service.test.ts does (this file never exercises local-LLM behavior).
 jest.mock("../utils/local-llm/local-llm-worker-factory", () => ({
@@ -31,8 +31,8 @@ jest.mock("../utils/local-llm/local-llm-service", () => ({
 // `mockAssistantStore.runLocalEvalTurns`.
 const runLocalEvalTurnsSpy = jest.fn();
 // Same rationale as runLocalEvalTurnsSpy above: assert on this reference, not
-// `mockAssistantStore.setEffort`. This is assistantStore.setEffort (DAVAI-126 eval round 2 item
-// H), distinct from appConfig's own setEffortSpy used elsewhere in this file.
+// `mockAssistantStore.setEffort`. This is assistantStore.setEffort, distinct from appConfig's
+// own setEffortSpy used elsewhere in this file.
 const assistantSetEffortSpy = jest.fn();
 
 const MockAssistantModel = types

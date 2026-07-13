@@ -16,9 +16,8 @@ describe("roundSig (3 significant figures, plain decimal, no exponential notatio
   });
 });
 
-// DAVAI-126 Task B: fewer than 2 numeric points must fail soft to "" (never throw), regardless
-// of why the count is low — empty input, one point, or numeric contamination reducing the
-// effective count below 2.
+// Fewer than 2 numeric points must fail soft to "" (never throw), regardless of why the count
+// is low — empty input, one point, or numeric contamination reducing the effective count below 2.
 describe("fail-soft on insufficient data", () => {
   it("returns '' for zero points", () => {
     expect(computeGraphSketch({ xName: "Height", xValues: [] })).toBe("");
@@ -28,15 +27,13 @@ describe("fail-soft on insufficient data", () => {
     expect(computeGraphSketch({ xName: "Height", xValues: [5] })).toBe("");
   });
 
-  // DAVAI-126 Task H interaction (flagged in the report): before Task H, an axis with fewer than
-  // 2 numeric values ALWAYS failed soft to "" — there was no other mode to fall into. Task H adds
-  // a categorical fallback, and H1's own >80%-of-non-empty-values rule is unconditional on sample
-  // size: here there are exactly 2 non-empty values ("5", "n/a"), only 1 coerces (50% <= 80%), so
-  // the axis is now correctly classified CATEGORICAL and describes its (accurate, non-invented)
-  // 2 categories instead of going silent. This is intended per H1's literal threshold — verified
-  // independently that no N<=5 sample can ever land strictly between 80% and 100% (the smallest
-  // fraction exceeding 0.8 needs a denominator of at least 6), so for any axis this small,
-  // "categorical" here specifically means "well under 100% numeric", never a marginal call.
+  // The >80%-of-non-empty-values axis-type rule is unconditional on sample size: here there are
+  // exactly 2 non-empty values ("5", "n/a"), only 1 coerces (50% <= 80%), so the axis is
+  // correctly classified CATEGORICAL and describes its actual 2 categories rather than going
+  // silent. Verified independently that no N<=5 sample can ever land strictly between 80% and
+  // 100% (the smallest fraction exceeding 0.8 needs a denominator of at least 6), so for any axis
+  // this small, "categorical" here specifically means "well under 100% numeric", never a marginal
+  // call.
   it("reclassifies as a 2-category CATEGORICAL sketch (not '') when non-numeric contamination " +
     "leaves an axis with only 1 of 2 non-empty values numeric — 50% is well under the 80% " +
     "threshold, so this is an unambiguous categorical call, not the old numeric fail-soft", () => {
@@ -45,12 +42,12 @@ describe("fail-soft on insufficient data", () => {
     expect(coerceNumericValues).toHaveBeenCalled();
   });
 
-  // DAVAI-126 Task H: yValues uses null (excluded from the axis-type ratio entirely, per H1 —
-  // "empty strings excluded... simplest: exclude and let counts reflect non-empty") rather than
-  // "n/a" (a non-empty value that WOULD count against the ratio) so Mass's one non-empty value
-  // (10) stays 100% numeric — this keeps the test on the intended numeric x numeric scatter path
-  // (both axes classify numeric) with too few valid PAIRS, rather than sliding into the new
-  // categorical x numeric path exercised separately just below.
+  // yValues uses null (excluded from the axis-type ratio entirely — "empty strings excluded...
+  // simplest: exclude and let counts reflect non-empty") rather than "n/a" (a non-empty value that
+  // WOULD count against the ratio) so Mass's one non-empty value (10) stays 100% numeric — this
+  // keeps the test on the intended numeric x numeric scatter path (both axes classify numeric)
+  // with too few valid PAIRS, rather than sliding into the categorical x numeric path exercised
+  // separately just below.
   it("returns '' for a numeric x numeric scatter with fewer than 2 numeric PAIRS (one axis " +
     "short-circuits on missing values, even though both axes independently classify numeric)", () => {
     expect(computeGraphSketch({
@@ -58,11 +55,10 @@ describe("fail-soft on insufficient data", () => {
     })).toBe("");
   });
 
-  // DAVAI-126 Task H interaction (flagged in the report, same class as the univariate case
-  // above): "n/a" is a non-empty, non-coercing value, so it counts against Mass's ratio — with
-  // only 2 non-empty Mass values and 1 coercing (50% <= 80%), Mass is now correctly classified
-  // CATEGORICAL, and there are 2 valid (Height, Mass)-category pairs, so this produces a real
-  // categorical x numeric summary instead of the old numeric fail-soft.
+  // "n/a" is a non-empty, non-coercing value, so it counts against Mass's ratio — with only 2
+  // non-empty Mass values and 1 coercing (50% <= 80%), Mass is correctly classified CATEGORICAL,
+  // and there are 2 valid (Height, Mass)-category pairs, producing a real categorical x numeric
+  // summary.
   it("reclassifies as a categorical x numeric sketch (not '') when the second axis's non-empty " +
     "values are mostly non-numeric junk rather than missing", () => {
     const sketch = computeGraphSketch({
@@ -162,10 +158,9 @@ describe("scatter sketch without an LSRL adornment", () => {
     expect(sketch).toContain("Unusually high Y: (11, 900), (12, 900).");
   });
 
-  // PR #114 review item 4: the "Unusually high/low <axis>" word was taken from outliers[0] ONLY
-  // (the largest |deviation|), then applied to EVERY listed value on that axis — so a low outlier
-  // with a smaller deviation than a high one got mislabeled as "high" (or vice versa). Each axis's
-  // outliers must be grouped and labeled by their OWN side.
+  // Each axis's outliers must be grouped and labeled by their OWN side — the "Unusually high/low
+  // <axis>" word is never taken from just the single largest |deviation| and applied to every
+  // listed value on that axis, which would mislabel a smaller-deviation outlier on the other side.
   it("mixed high+low outliers on ONE axis are split into separate 'Unusually high'/'Unusually " +
     "low' clauses, never mislabeling the smaller-deviation side (PR #114 item 4)", () => {
     // X: tight core 10-12 plus a high outlier (200) and a low outlier (-100); Y: no outliers, so
@@ -250,7 +245,7 @@ describe("scatter sketch with an LSRL adornment (Mammals-like fixture, n=27)", (
 
 describe("relationship strength-word boundaries (r computed from the fixture, not asserted a priori)", () => {
   // xs fixed 1..10; each ys array below was constructed so Pearson r rounds to exactly the
-  // named boundary (verified independently before writing this test — see report for method).
+  // named boundary (verified independently before writing this test).
   const xs = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10];
 
   it("r rounding to 0.29 -> weak", () => {
@@ -277,11 +272,10 @@ describe("relationship strength-word boundaries (r computed from the fixture, no
     expect(sketch).toContain("Relationship: positive, strong (r = 0.7).");
   });
 
-  // DAVAI-126 Task B review fix (coherence-for-audio): the strength word is derived from the
-  // DISPLAYED r (rounded to 2 sig figs), not the true r — a blind listener hears the word and the
-  // number together, and "moderate (r = 0.7)" or "weak (r = 0.3)" is a contradiction to them.
-  // These fixtures sit in the gap where true r and displayed r fall on opposite sides of a
-  // boundary, so they fail under any true-r-based strength decision.
+  // The strength word is derived from the DISPLAYED r (rounded to 2 sig figs), not the true r —
+  // a blind listener hears the word and the number together, and "moderate (r = 0.7)" or "weak
+  // (r = 0.3)" is a contradiction to them. These fixtures sit in the gap where true r and displayed
+  // r fall on opposite sides of a boundary, so they fail under any true-r-based strength decision.
   it("true r just UNDER 0.7 that displays as 0.7 -> strong (word tracks the displayed value, " +
     "never contradicting the number the listener hears)", () => {
     const ys = [4.48, 0.69, 5.61, 0.95, 5.87, 2.08, 8.74, 7.56, 11.18, 7.82]; // true r = 0.699960...
@@ -311,11 +305,10 @@ it("reports a negative direction word for negative r", () => {
   expect(sketch).toContain("Relationship: negative, strong (r = -0.99).");
 });
 
-// PR #114 review item 3: pearsonR's denominator (product of the two axes' standard deviations)
-// is 0 whenever EITHER axis is constant, producing NaN — which pre-fix rendered as the
-// confidently-wrong "positive, strong (r = NaN)" plus a "NaN%" R² line. An undefined correlation
-// is a real fact, not a defect, so state it plainly and skip the entire r-dependent remainder
-// (LSRL/R², per-axis outliers) rather than printing any NaN-derived text.
+// pearsonR's denominator (product of the two axes' standard deviations) is 0 whenever EITHER
+// axis is constant, producing NaN. An undefined correlation is a real fact, not a defect, so
+// state it plainly and skip the entire r-dependent remainder (LSRL/R², per-axis outliers) rather
+// than printing any NaN-derived text.
 describe("zero-variance axis: an undefined correlation is stated plainly, never as NaN (PR #114 item 3)", () => {
   it("constant X axis: names X as the constant axis, with no r/NaN/R² mention anywhere", () => {
     const sketch = computeGraphSketch({
@@ -362,9 +355,9 @@ describe("zero-variance axis: an undefined correlation is stated plainly, never 
   });
 });
 
-// PR #114 review item 3 (directionWord(0)): r === 0 exactly (a real, valid "no linear
-// relationship" result, NOT the zero-variance/NaN case above) read "positive, weak (r = 0)"
-// pre-fix, asserting a direction that does not exist for an exactly-uncorrelated pair.
+// r === 0 exactly is a real, valid "no linear relationship" result (NOT the zero-variance/NaN
+// case above) — "positive"/"negative" would assert a direction that does not exist for an
+// exactly-uncorrelated pair.
 describe("r = 0 exactly: 'no linear relationship' wording, not a false direction (PR #114 item 3)", () => {
   it("reads 'no linear relationship (r = 0)' instead of 'positive, weak (r = 0)'", () => {
     // y = (x-3)^2, symmetric about x=3 -> cov(x,y) sums to exactly 0 (integer arithmetic, no
@@ -377,9 +370,9 @@ describe("r = 0 exactly: 'no linear relationship' wording, not a false direction
   });
 });
 
-// PR #114 review item 3 (R² clamp): a floating-point artifact (or a malformed but present
-// rSquared from CODAP's own adornment data) slightly over 1 must never be spoken as "explains
-// about 101%+ of the variation" — R² cannot exceed 1 by definition.
+// A floating-point artifact (or a malformed but present rSquared from CODAP's own adornment
+// data) slightly over 1 must never be spoken as "explains about 101%+ of the variation" — R²
+// cannot exceed 1 by definition.
 describe("R² clamp: displayed R² never exceeds 100% (PR #114 item 3)", () => {
   it("clamps a >1 rSquared (a floating-point artifact large enough to survive rounding, e.g. " +
     "from CODAP's own adornment data) to 1 / 100%, never a nonsensical >100%", () => {
@@ -393,14 +386,12 @@ describe("R² clamp: displayed R² never exceeds 100% (PR #114 item 3)", () => {
   });
 });
 
-// PR #114 review item 11: findLSRL already type-checks slope/intercept (must be numbers) before
-// accepting an adornment as a usable LSRL, but did not check rSquared's shape — an adornment
-// with a malformed rSquared (e.g. array-shaped, from a hypothetical legend-split multi-line
-// representation) would still be accepted, and the LSRL/R² line would then embed that malformed
-// value directly (e.g. "explains about NaN% of the variation"). Extending the SAME type-check to
-// reject a present-but-non-number rSquared degrades gracefully to the per-axis-outliers branch
-// instead — without changing behavior for the verified shape (a numeric rSquared, or one simply
-// absent and computed from r via the existing `?? r * r` fallback).
+// findLSRL type-checks slope/intercept AND rSquared's shape (all must be numbers) before
+// accepting an adornment as a usable LSRL — a malformed rSquared (e.g. array-shaped, from a
+// hypothetical legend-split multi-line representation) degrades gracefully to the per-axis-
+// outliers branch instead of the LSRL/R² line embedding that malformed value directly (e.g.
+// "explains about NaN% of the variation"). A numeric rSquared, or one simply absent and computed
+// from r via the existing `?? r * r` fallback, is unaffected.
 describe("LSRL graceful degrade: a malformed rSquared shape is treated as no-LSRL, never " +
   "printing undefined/NaN (PR #114 review item 11)", () => {
   const xValues = [1, 2, 3, 4, 5, 6, 7, 8];
@@ -428,17 +419,13 @@ describe("LSRL graceful degrade: a malformed rSquared shape is treated as no-LSR
   });
 });
 
-// Codex second-pass hardening F2: findLSRL's slope/intercept checks used `typeof x === "number"`,
-// which is TRUE for NaN (typeof NaN === "number") — a NaN slope/intercept was therefore ACCEPTED
-// as a usable LSRL adornment. For rSquared specifically, a present-but-NaN value also survives
-// the `?? r * r` fallback below (NaN is not null/undefined, so `??` never substitutes it),
-// reaching the R² sentence and rendering the literal "explains about NaN% of the variation"
-// (Math.round(NaN) is NaN) even though roundSig itself already guards NaN elsewhere. Fix:
-// findLSRL now requires slope AND intercept to be Number.isFinite (rejecting the whole adornment,
-// same graceful degrade the array-shaped-rSquared case above already gets, when either isn't); a
-// present-but-non-finite rSquared no longer rejects the adornment outright (slope/intercept alone
-// decide eligibility) but DOES suppress just the R²-dependent sentence at render time, leaving the
-// equation line intact.
+// `typeof x === "number"` is TRUE for NaN (typeof NaN === "number"), so a plain typeof check
+// alone would accept a NaN slope/intercept as a usable LSRL adornment — findLSRL instead requires
+// slope AND intercept to be Number.isFinite, rejecting the whole adornment when either isn't
+// (same graceful degrade the array-shaped-rSquared case above gets). A present-but-non-finite
+// rSquared does not reject the adornment outright (slope/intercept alone decide eligibility): NaN
+// is not null/undefined, so the `?? r * r` fallback never substitutes it, but it only suppresses
+// the R²-dependent sentence at render time, leaving the equation line intact.
 describe("Codex hardening F2: NaN slope/intercept/rSquared never leak into the LSRL sketch", () => {
   const xValues = [1, 2, 3, 4, 5, 6, 7, 8];
   const yValues = [10, 12, 11, 13, 12, 14, 13, 400];
@@ -497,10 +484,9 @@ describe("selected pairs line", () => {
     expect(sketch).toContain("Selected: 4 cases at (1, 10), (2, 20), (3, 30) … and 1 more.");
   });
 
-  // PR #114 review item 11: a non-numeric coordinate in a pair was silently skipped from the
-  // listed coordinates, but the "N cases" count still used selectedPairs.length (the ORIGINAL,
-  // pre-filter count) — miscounting how many are actually described. Skipping the pair should
-  // adjust the reported count to match what's actually listed.
+  // A non-numeric coordinate in a pair is silently skipped from the listed coordinates, and the
+  // "N cases" count must adjust to match what's actually listed — never selectedPairs.length (the
+  // original, pre-filter count).
   it("skips a non-numeric pair and reports the count of SURVIVING numeric pairs, never a " +
     "miscount (PR #114 review item 11)", () => {
     const sketch = computeGraphSketch({
@@ -509,8 +495,8 @@ describe("selected pairs line", () => {
     expect(sketch).toContain("Selected: 2 cases at (5, 1100), (6, 1200).");
   });
 
-  // PR #114 review item 11: when EVERY selected pair is non-numeric, the coordinate list is
-  // empty but the line still claimed "Selected: N cases at ." — an empty, nonsensical clause.
+  // When EVERY selected pair is non-numeric, the coordinate list is empty, so the Selected line
+  // must be omitted entirely — never "Selected: N cases at .", an empty, nonsensical clause.
   it("omits the Selected line entirely when every pair is non-numeric — never 'Selected: N " +
     "cases at .' (PR #114 review item 11)", () => {
     const sketch = computeGraphSketch({ ...base, selectedPairs: [["junk", "also junk"]] });
@@ -534,12 +520,11 @@ describe("units (fail-soft, only when supplied)", () => {
   });
 });
 
-// DAVAI-126 Task H: live hallucination report — the Mammals "Diet vs. Habitat" graph (both
-// categorical) produced an EMPTY sketch (computeGraphSketch was numeric-only), so get_graph_info
-// returned structure only and the model filled the vacuum with invented categories ("herbivore,
-// carnivore, omnivore", "forest, grassland, aquatic") that don't exist in the data. The fix is
-// structural: detect each axis's type and, when categorical, hand over the REAL category counts
-// and crosstab so describing becomes transcription, exactly like Task B did for numeric axes.
+// A graph with two categorical axes must not produce an empty sketch — computeGraphSketch has to
+// detect each axis's type and, when categorical, hand over the REAL category counts and crosstab
+// so describing the graph becomes transcription, not invention (the same principle already
+// applied for numeric axes). Otherwise get_graph_info hands over structure only, and the model
+// fills the vacuum with invented categories that don't exist in the data.
 describe("axis type detection (>80% of non-empty raw values coerce numeric => NUMERIC axis)", () => {
   // 5 numeric-looking + 1 junk = 5/6 = 83.3% > 80% -> numeric. Uses the exact shared coercion
   // (get_stats's coerceNumericValues) — this is a boundary-behavior test, not a duplicate of it.
@@ -572,23 +557,23 @@ describe("axis type detection (>80% of non-empty raw values coerce numeric => NU
     expect(sketch).toMatch(/Sketch: 6 points\. V 1–6/);
   });
 
-  // Exactly-80% boundary is NOT numeric ("> 80%" per the brief, strictly greater-than).
+  // Exactly-80% boundary is NOT numeric ("> 80%", strictly greater-than).
   it("treats exactly 80% coercing as CATEGORICAL (the threshold is a strict >80%, not >=)", () => {
     // 4 numeric + 1 junk = 4/5 = 80% exactly.
     const sketch = computeGraphSketch({ xName: "V", xValues: ["1", "2", "3", "4", "junk"] });
     expect(sketch).toMatch(/^V: /);
   });
 
-  // DAVAI-126 Task H interaction with M-k (flagged in the brief and the report): the shared
-  // coerceNumericValues treats a whitespace-only string as numeric zero (Number("   ") === 0 is
-  // finite) — a known, separately-tracked quirk (M-k) of the reused coercion, not something this
-  // task modifies. Left untrimmed, that quirk alone could tip an obviously-categorical, mostly-
-  // blank axis (a common data-entry artifact: someone left the cell as spaces instead of truly
-  // empty) over the 80% line into "numeric", producing a nonsense "range 0-0" sketch. This axis
-  // (9 whitespace-only + 2 real category words = 11 non-empty values) is 0/11 = 0% coercing if
-  // whitespace-only values are correctly excluded as empty, or 9/11 = 81.8% (> 80%, wrongly
-  // numeric) if they are not trimmed first. The threshold's own emptiness check trims strings
-  // before comparing to "", so this axis correctly reports as CATEGORICAL either way in practice.
+  // The shared coerceNumericValues treats a whitespace-only string as numeric zero
+  // (Number("   ") === 0 is finite) — a known, separately-tracked quirk of the reused coercion,
+  // not something this test modifies. Left untrimmed, that quirk alone could tip an obviously-
+  // categorical, mostly-blank axis (a common data-entry artifact: someone left the cell as spaces
+  // instead of truly empty) over the 80% line into "numeric", producing a nonsense "range 0-0"
+  // sketch. This axis (9 whitespace-only + 2 real category words = 11 non-empty values) is 0/11 =
+  // 0% coercing if whitespace-only values are correctly excluded as empty, or 9/11 = 81.8% (> 80%,
+  // wrongly numeric) if they are not trimmed first. The threshold's own emptiness check trims
+  // strings before comparing to "", so this axis correctly reports as CATEGORICAL either way in
+  // practice.
   it("is robust to M-k's whitespace quirk: whitespace-only strings are trimmed before the " +
     "emptiness check, so they never masquerade as numeric zeros in the axis-type ratio", () => {
     const nineWhitespacePlusTwoReal = [
@@ -602,11 +587,11 @@ describe("axis type detection (>80% of non-empty raw values coerce numeric => NU
 });
 
 describe("categorical x categorical sketch (Mammals Diet x Habitat fixture, n=27)", () => {
-  // Exact fixture from the live hallucination report: Diet meat/both/plants, Habitat
-  // land/water/both. Crosstab reconciled against the stated marginals (Diet meat=11/both=9/
-  // plants=7; Habitat land=24/water=2/both=1): meat&land=8, both&land=9, plants&land=7,
-  // meat&water=2, meat&both=1 (all other cells 0) — the only cell assignment whose row AND
-  // column sums both match every stated marginal exactly (verified independently; see report).
+  // Fixture: Diet meat/both/plants, Habitat land/water/both. Crosstab reconciled against the
+  // stated marginals (Diet meat=11/both=9/plants=7; Habitat land=24/water=2/both=1):
+  // meat&land=8, both&land=9, plants&land=7, meat&water=2, meat&both=1 (all other cells 0) — the
+  // only cell assignment whose row AND column sums both match every stated marginal exactly
+  // (verified independently).
   const dietValues = [
     ...Array(8).fill("meat"), ...Array(2).fill("meat"), ...Array(1).fill("meat"), // 11 meat
     ...Array(9).fill("both"), // 9 both
@@ -785,8 +770,8 @@ describe("univariate categorical sketch (x only, no y)", () => {
 
 describe("pure-numeric regression guard (byte-identical to Task B, never touched by Task H)", () => {
   // Re-asserts the exact strings from the pre-existing suites above so a regression in the new
-  // axis-type branch (H1) cannot silently change numeric output — this is the literal
-  // "byte-identical" contract from the brief, pinned as its own explicit guard.
+  // axis-type branch cannot silently change numeric output — this is the literal
+  // "byte-identical" contract, pinned as its own explicit guard.
   it("univariate numeric sketch text is unchanged", () => {
     const xValues = [0.7, 0.1, 1.5, 1.1, 6.5, 0.9, 2.2, 1.3];
     expect(computeGraphSketch({ xName: "Height", xValues })).toBe(

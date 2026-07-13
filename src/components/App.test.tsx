@@ -119,8 +119,8 @@ describe("test load app", () => {
     (mockAppConfig as any).isLocalLlm = false;
     // mockAppConfig is a shared module-level object (see the app-config-model mock above,
     // which hands it back as-is rather than constructing a real MST instance) — reset the
-    // llmId/llmList fields the DAVAI-126 engine-lifecycle effect reads so a Local override
-    // in one test can't leak into another.
+    // llmId/llmList fields the engine-lifecycle effect reads so a Local override in one test
+    // can't leak into another.
     mockAppConfig.llmId = "{\"id\":\"mock\",\"provider\":\"Mock\"}";
     mockAppConfig.llmList = [
       { id: "mock", provider: "Mock", effortLevels: [] },

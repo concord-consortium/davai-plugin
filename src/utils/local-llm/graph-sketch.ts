@@ -1,17 +1,17 @@
 import { coerceNumericValues } from "./tools/get-stats";
 // Re-exported (not just imported) so existing consumers of `roundSig` from THIS module (e.g.
-// graph-sketch.test.ts) are unaffected — the implementation moved to number-format.ts so
-// get-stats.ts can reuse it too without a get-stats.ts <-> graph-sketch.ts circular import
-// (graph-sketch.ts already imports coerceNumericValues FROM get-stats.ts).
+// graph-sketch.test.ts) are unaffected. `roundSig` lives in number-format.ts so get-stats.ts can
+// reuse it too without a get-stats.ts <-> graph-sketch.ts circular import (graph-sketch.ts already
+// imports coerceNumericValues FROM get-stats.ts).
 import { roundSig } from "./number-format";
 export { roundSig };
 
-// DAVAI-126 Task B: local models (esp. the 1.7B) cannot reliably derive cluster boundaries,
-// outliers, or R²-meaning from raw case values — a 1.7B run invented "data points clustering
-// around the LSRL" that wasn't true. Rule from this project: anything we want said reliably is
-// computed client-side and handed over as text — describing becomes transcription. This module
-// is pure (no CODAP calls) so it's trivially testable and reusable from both prefetch (the seed)
-// and the get_graph_info tool result.
+// Local models (esp. the 1.7B) cannot reliably derive cluster boundaries, outliers, or
+// R²-meaning from raw case values — a 1.7B run invented "data points clustering around the
+// LSRL" that wasn't true. Rule from this project: anything we want said reliably is computed
+// client-side and handed over as text — describing becomes transcription. This module is pure
+// (no CODAP calls) so it's trivially testable and reusable from both prefetch (the seed) and the
+// get_graph_info tool result.
 
 export interface IGraphAdornmentInput {
   type: string;
@@ -34,13 +34,13 @@ export interface IGraphSketchInput {
   selectedPairs?: [unknown, unknown][];
 }
 
-// DAVAI-126 Task H: live hallucination report — a Mammals "Diet vs. Habitat" graph (both
-// categorical axes) produced an EMPTY sketch under the numeric-only Task B logic (coercion left
-// fewer than 2 numeric values on either axis), so get_graph_info handed the model structure only
-// and it filled the vacuum with invented world-knowledge categories ("herbivore, carnivore,
-// omnivore", "forest, grassland, aquatic") that don't exist anywhere in the data. The fix is
-// structural, matching Task B's own philosophy: detect what KIND of data each axis holds and
-// hand over the real facts for that kind, so describing becomes transcription either way.
+// Live hallucination report: a Mammals "Diet vs. Habitat" graph (both categorical axes) produced
+// an EMPTY sketch under the numeric-only logic above (coercion left fewer than 2 numeric values
+// on either axis), so get_graph_info handed the model structure only and it filled the vacuum
+// with invented world-knowledge categories ("herbivore, carnivore, omnivore", "forest, grassland,
+// aquatic") that don't exist anywhere in the data. The fix is structural, matching the numeric
+// path's own philosophy: detect what KIND of data each axis holds and hand over the real facts
+// for that kind, so describing becomes transcription either way.
 export type AxisKind = "numeric" | "categorical";
 
 // An axis is NUMERIC when MORE than 80% of its non-empty values coerce via the shared
@@ -53,9 +53,9 @@ export type AxisKind = "numeric" | "categorical";
 const isEmpty = (v: unknown): boolean => v === "" || v === null || v === undefined;
 
 // Whitespace-only strings ("   ") are treated as empty for the SAME reason a blank string is:
-// M-k (the tracked follow-up on coerceNumericValues's own quirks) documents that Number("   ")
-// is 0 — a finite number — so an untrimmed whitespace-only value would silently count as numeric
-// evidence. Left untrimmed, a handful of such values (a common data-entry artifact) can tip an
+// Number("   ") is 0 — a finite number — so an untrimmed whitespace-only value would silently
+// count as numeric evidence. Left untrimmed, a handful of such values (a common data-entry
+// artifact) can tip an
 // obviously-categorical, mostly-blank axis over the 80% line into "numeric", producing a nonsense
 // "range 0-0" sketch instead of the correct categorical one. Trimming before the emptiness check
 // makes THIS threshold robust to that quirk without modifying coerceNumericValues itself — the
@@ -122,9 +122,9 @@ const pearsonR = (xs: number[], ys: number[]): number => {
 };
 
 // |r| < 0.3 weak, < 0.7 moderate, else strong — spec-defined boundaries (inclusive on the
-// moderate side at both 0.3 and 0.7). Task B review fix (coherence-for-audio): the caller passes
-// the DISPLAYED r (already rounded to 2 sig figs), not the true r — a blind listener hears the
-// word and the number as one unit, and deciding the word from the true r produces contradictions
+// moderate side at both 0.3 and 0.7). Coherence for audio: the caller passes the DISPLAYED r
+// (already rounded to 2 sig figs), not the true r — a blind listener hears the word and the
+// number as one unit, and deciding the word from the true r produces contradictions
 // like "moderate (r = 0.7)" (true r 0.6999...) or "weak (r = 0.3)" (true r 0.299...) exactly at
 // the boundaries. The word must always agree with the number actually spoken.
 const strengthWord = (displayedR: number): string => {
@@ -136,20 +136,20 @@ const strengthWord = (displayedR: number): string => {
 
 const directionWord = (r: number): string => (r < 0 ? "negative" : "positive");
 
-// PR #114 review item 11 (LSRL graceful degrade): extends the existing slope/intercept type-check
-// to ALSO reject a rSquared that's PRESENT but not a number (e.g. array-shaped, from a
-// hypothetical legend-split multi-line representation) — without changing behavior for the
-// verified, already-working shape, where rSquared is either a real number or simply absent
-// (handled by the `?? r * r` fallback in buildScatterSketch). A malformed rSquared makes the
-// WHOLE adornment ineligible, falling through to the per-axis-outliers branch instead of
-// embedding a broken value into the LSRL/R² line (e.g. "explains about NaN% of the variation").
+// LSRL graceful degrade: extends the slope/intercept type-check to ALSO reject a rSquared that's
+// PRESENT but not a number (e.g. array-shaped, from a hypothetical legend-split multi-line
+// representation) — without changing behavior for the verified, already-working shape, where
+// rSquared is either a real number or simply absent (handled by the `?? r * r` fallback in
+// buildScatterSketch). A malformed rSquared makes the WHOLE adornment ineligible, falling through
+// to the per-axis-outliers branch instead of embedding a broken value into the LSRL/R² line (e.g.
+// "explains about NaN% of the variation").
 //
-// Codex second-pass hardening F2: `typeof x === "number"` is TRUE for NaN, so a NaN slope or
-// intercept used to slip through this check — Number.isFinite rejects it too, the same graceful
-// degrade a malformed-TYPE rSquared already gets. rSquared keeps its ORIGINAL (typeof, not
-// finiteness) check here: a present-but-NaN rSquared alone must not reject an otherwise-good
-// slope/intercept fit — the finiteness check at render time (below) is what suppresses just the
-// R²-dependent sentence for that specific case, leaving the equation line intact.
+// `typeof x === "number"` is TRUE for NaN, so a NaN slope or intercept could otherwise slip
+// through this check — Number.isFinite rejects it too, the same graceful degrade a
+// malformed-TYPE rSquared already gets. rSquared keeps its ORIGINAL (typeof, not finiteness)
+// check here: a present-but-NaN rSquared alone must not reject an otherwise-good slope/intercept
+// fit — the finiteness check at render time (below) is what suppresses just the R²-dependent
+// sentence for that specific case, leaving the equation line intact.
 const findLSRL = (adornments: IGraphAdornmentInput[] | undefined): IGraphAdornmentInput | undefined =>
   adornments?.find((a) =>
     a.type === "LSRL" &&
@@ -184,11 +184,11 @@ const axisRangeClause = (name: string, unit: string | undefined, min: number, ma
 
 const formatCoord = (x: number, y: number): string => `(${roundSig(x)}, ${roundSig(y)})`;
 
-// DAVAI-126 Task H: reports which sketch MODE computeGraphSketch would produce (or will produce)
-// for this input, without duplicating the axis-type decision anywhere else — get_graph_info uses
-// this to pick the matching checklist trailer (a numeric-flavored "outliers above" checklist
-// makes no sense appended to a categorical sketch). Exported so callers never have to re-derive
-// axis kind from the sketch's own prose.
+// Reports which sketch MODE computeGraphSketch would produce (or will produce) for this input,
+// without duplicating the axis-type decision anywhere else — get_graph_info uses this to pick
+// the matching checklist trailer (a numeric-flavored "outliers above" checklist makes no sense
+// appended to a categorical sketch). Exported so callers never have to re-derive axis kind from
+// the sketch's own prose.
 export type SketchMode = "numeric-univariate" | "numeric-scatter" | "categorical" | "categorical-numeric" | "none";
 
 export const getSketchMode = (input: IGraphSketchInput): SketchMode => {
@@ -205,7 +205,7 @@ export const computeGraphSketch = (input: IGraphSketchInput): string => {
   const hasY = input.yName !== undefined && input.yValues !== undefined;
 
   if (!hasY) {
-    // Axis-type detection (H1) decides which builder runs; each builder owns its own
+    // Axis-type detection decides which builder runs; each builder owns its own
     // fewer-than-2-points fail-soft check so "" is returned uniformly either way.
     if (isNumericAxis(input.xValues)) {
       const xNumbers = coerceNumericValues(input.xValues);
@@ -221,7 +221,6 @@ export const computeGraphSketch = (input: IGraphSketchInput): string => {
 
   if (xNumeric && yNumeric) {
     // Scatter: only cases numeric on BOTH axes form a valid pair (index-aligned with xValues).
-    // Byte-identical to pre-Task-H behavior — this branch is untouched from the original code.
     const pairs: { x: number; y: number }[] = [];
     input.xValues.forEach((rawX, i) => {
       const [x] = coerceNumericValues([rawX]);
@@ -259,12 +258,11 @@ const buildUnivariateSketch = (name: string, unit: string | undefined, values: n
   return lines.join("\n");
 };
 
-// PR #114 review item 4: splits one axis's IQR outliers (already sorted largest-|deviation|-first
-// by findAxisOutliers) into "high"/"low" clauses. Pre-fix, the word came from outliers[0] ONLY
-// (the single largest-deviation entry) and was then applied to every OTHER listed value on that
-// axis too — so a low outlier with a smaller deviation than a same-axis high one was read out
-// under "Unusually high", contradicting the coordinate actually spoken. Each side keeps
-// findAxisOutliers' own largest-deviation-first order (filter preserves relative order).
+// Splits one axis's IQR outliers (already sorted largest-|deviation|-first by findAxisOutliers)
+// into "high"/"low" clauses, so a low outlier with a smaller deviation than a same-axis high one
+// is never read out under "Unusually high" — the direction word must always match the coordinate
+// actually spoken. Each side keeps findAxisOutliers' own largest-deviation-first order (filter
+// preserves relative order).
 const formatSideOutliers = (
   axisName: string, outliers: IAxisOutlier[], coordFor: (o: IAxisOutlier) => string
 ): string[] => {
@@ -276,12 +274,11 @@ const formatSideOutliers = (
   return clauses;
 };
 
-// PR #114 review item 11 (selectedPairs formatting hardening): a non-numeric coordinate already
-// dropped its whole pair from `coords` via the length-2 filter, but the reported count used
-// selectedPairs.length (the ORIGINAL, pre-filter count) — miscounting how many are actually
-// listed. Using coords.length instead keeps the stated count honest, AND naturally covers the
-// all-non-numeric case: `undefined` is returned when nothing survives, so the caller omits the
-// line entirely instead of the old "Selected: N cases at ." (an empty, nonsensical clause).
+// A non-numeric coordinate is dropped from `coords` via the length-2 filter — using coords.length
+// (rather than selectedPairs.length) for the reported count keeps the stated count honest, and
+// naturally covers the all-non-numeric case: `undefined` is returned when nothing survives, so
+// the caller omits the line entirely rather than producing an empty, nonsensical
+// "Selected: N cases at ." clause.
 const buildSelectedLine = (selectedPairs: [unknown, unknown][]): string | undefined => {
   const coords = selectedPairs
     .map(([x, y]) => coerceNumericValues([x, y]))
@@ -308,9 +305,9 @@ const buildScatterSketch = (input: IGraphSketchInput, pairs: { x: number; y: num
       `${axisRangeClause(input.yName as string, input.yUnit, Math.min(...ys), Math.max(...ys), q1y, q3y)}.`,
   ];
 
-  // PR #114 review item 3: pearsonR's denominator (sdx * sdy) is 0 whenever EITHER axis is
-  // constant, producing NaN — which read as the confidently-wrong "positive, strong (r = NaN)"
-  // plus a "NaN%" R² line. An undefined correlation is a real fact, not a defect: state it
+  // pearsonR's denominator (sdx * sdy) is 0 whenever EITHER axis is constant, producing NaN —
+  // which would read as the confidently-wrong "positive, strong (r = NaN)" plus a "NaN%" R²
+  // line. An undefined correlation is a real fact, not a defect: state it
   // plainly and skip the entire r-dependent remainder (LSRL/R², per-axis outliers) — none of
   // those numbers are meaningful either when one axis never varies (its own IQR fences collapse
   // to a single point, so "outliers" on that axis are vacuous, and an LSRL slope/R² fit to a
@@ -330,7 +327,7 @@ const buildScatterSketch = (input: IGraphSketchInput, pairs: { x: number; y: num
 
   const r = pearsonR(xs, ys);
   if (r === 0) {
-    // directionWord(0) reads "positive" today, asserting a direction that doesn't exist for an
+    // directionWord(0) reads "positive", asserting a direction that doesn't exist for an
     // exactly-uncorrelated (but otherwise valid, non-degenerate) pair — state the fact plainly.
     lines.push("Relationship: no linear relationship (r = 0).");
   } else {
@@ -349,14 +346,13 @@ const buildScatterSketch = (input: IGraphSketchInput, pairs: { x: number; y: num
     const equation = `LSRL: ${input.yName} = ${roundSig(slope)} × ${input.xName} ${interceptClause}`;
     // Clamp to 1: R² cannot exceed 1 by definition — a slightly-over-1 value (CODAP's own
     // adornment data, or in principle our r*r fallback) is a floating-point artifact, never a
-    // real >100%-of-the-variation result (PR #114 review item 3).
+    // real >100%-of-the-variation result.
     const rSquared = Math.min(1, lsrl.rSquared ?? r * r);
-    // Codex second-pass hardening F2: rSquared can be PRESENT but non-finite (e.g. NaN) even
-    // though slope/intercept are both finite — findLSRL only checks rSquared's TYPE (so the
-    // `?? r * r` fallback above still fires when it's simply absent), not its finiteness.
-    // Rendering the R² sentence anyway would embed a literal "NaN%" (Math.round(NaN) is NaN).
-    // Omit ONLY that sentence; the equation line (independently finite-guarded via findLSRL)
-    // still stands on its own.
+    // rSquared can be PRESENT but non-finite (e.g. NaN) even though slope/intercept are both
+    // finite — findLSRL only checks rSquared's TYPE (so the `?? r * r` fallback above still fires
+    // when it's simply absent), not its finiteness. Rendering the R² sentence anyway would embed
+    // a literal "NaN%" (Math.round(NaN) is NaN). Omit ONLY that sentence; the equation line
+    // (independently finite-guarded via findLSRL) still stands on its own.
     lines.push(
       Number.isFinite(rSquared)
         ? `${equation}; R² = ${roundSig(rSquared)} — ` +
@@ -410,12 +406,12 @@ const formatResidualOutliers = (outliers: IResidualOutlier[]): string => {
 };
 
 // ---------------------------------------------------------------------------------------------
-// DAVAI-126 Task H: categorical sketch modes (univariate categorical, categorical x categorical,
-// categorical x numeric). All three reuse the RAW string values directly — never coerced,
-// because coercion is precisely what erased the category names in the live hallucination report
-// (a categorical axis's values ARE its facts; there is nothing to compute from them beyond
-// counting). Empty/blank values are trimmed and excluded from categories (and from the count)
-// per the brief: "exclude and let counts reflect non-empty".
+// Categorical sketch modes (univariate categorical, categorical x categorical, categorical x
+// numeric). All three reuse the RAW string values directly — never coerced, because coercion is
+// precisely what would erase the category names (a categorical axis's values ARE its facts;
+// there is nothing to compute from them beyond counting). Empty/blank values are trimmed and
+// excluded from categories (and from the count) per the brief: "exclude and let counts reflect
+// non-empty".
 // ---------------------------------------------------------------------------------------------
 
 const MAX_AXIS_CATEGORIES = 8;

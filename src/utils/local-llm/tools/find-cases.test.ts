@@ -34,11 +34,9 @@ beforeEach(() => {
   (getAllCollectionCases as jest.Mock).mockResolvedValue([]);
 });
 
-// DAVAI-126 matrix round 3 item E6: 3 of 4 live matrix runs answered "which mammal is heaviest?"
-// via get_case_values/get_stats instead of find_cases (misaligned/wrong-unit answers); only the
-// run where find_cases happened to be salient used it, with a perfect one-call answer. The
-// description gains the canonical phrasing naming that exact question, so models pattern-match
-// the natural-language superlative to this tool.
+// The description names the canonical "which mammal is the heaviest?" question verbatim, so
+// models pattern-match the natural-language superlative to this tool instead of reaching for
+// get_case_values/get_stats.
 it("description gains the canonical phrasing naming the heaviest-mammal question (DAVAI-126 matrix round 3 E6)", () => {
   expect(findCasesTool.description).toContain(
     "Find the top/bottom cases by an attribute or cases matching a condition — use for questions " +
@@ -52,7 +50,7 @@ describe("validate", () => {
     expect(v.ok).toBe(false);
     expect((v as any).error).toMatch(/where/i);
     expect((v as any).error).toMatch(/orderBy/i);
-    // A worked example of each form, per brief.
+    // A worked example of each form.
     expect((v as any).error).toMatch(/`Sleep`|`Mass`/);
   });
 
@@ -236,9 +234,9 @@ describe("execute: orderBy-form (client-side sort/slice)", () => {
     expect(out).toBe("No cases found in \"Mammals\" to order by Mass.");
   });
 
-  // PR #114 review item 11: Number(" ") is a finite 0, so a whitespace-only value was counted
-  // as a real numeric zero — sorting it among genuine zeros instead of last with the other
-  // non-numeric/blank values, and displaying a fake "0" instead of omitting the parenthetical.
+  // Number(" ") is a finite 0, so a whitespace-only value would be counted as a real numeric
+  // zero — sorting it among genuine zeros instead of last with the other non-numeric/blank
+  // values, and displaying a fake "0" instead of omitting the parenthetical.
   it("treats a whitespace-only value as blank, not a numeric zero: sorts last and omits the " +
     "parenthetical (PR #114 review item 11)", async () => {
     (getAllCollectionCases as jest.Mock).mockResolvedValue([
@@ -255,13 +253,11 @@ describe("execute: orderBy-form (client-side sort/slice)", () => {
 });
 
 describe("hierarchy contexts after group_by (leaf-collection default; DAVAI-126 Task D fix pass)", () => {
-  // Shaped exactly like the Mammals dataContext AFTER the battery's group-by-diet case runs:
-  // group_by moved Diet into a new parent collection named "Diet" (collections are stored
-  // parent-first; leaf/childmost is LAST), everything else stays in the childmost "Cases"
-  // collection. Before this fix, find_cases hard-errored on ANY multi-collection context
-  // ('"Mammals" has more than one collection — specify "collection"'), silently breaking the
-  // existing find-heaviest eval case (last in the battery, after group-by-diet) and any real
-  // user who groups then asks a lookup question.
+  // Shaped exactly like the Mammals dataContext after group_by has run: group_by moves Diet into
+  // a new parent collection named "Diet" (collections are stored parent-first; leaf/childmost is
+  // LAST), everything else stays in the childmost "Cases" collection. find_cases must default to
+  // the leaf collection in a multi-collection context rather than hard-erroring — real users who
+  // group then ask a lookup question depend on this.
   const hierDc = {
     name: "Mammals",
     collections: [
@@ -365,11 +361,11 @@ describe("execute: both-form (where narrows, then orderBy sorts/slices the match
   });
 });
 
-// PR #114 review item 6: the where/orderBy stat attribute's value display ran numeric-only
-// formatValue on EVERY stat value, so a categorical attribute (e.g. Diet) printed the
-// numeric-formatted "n/a" for a value that IS present — "n/a" reads as MISSING to a listener,
-// not "not a number". Fixed to print the raw string for a non-numeric-but-present value, and to
-// omit the parenthetical entirely (not "n/a") for a genuinely blank/missing one.
+// The where/orderBy stat attribute's value display must not run numeric-only formatValue on
+// EVERY stat value — a categorical attribute (e.g. Diet) would print the numeric-formatted "n/a"
+// for a value that IS present, and "n/a" reads as MISSING to a listener, not "not a number".
+// Prints the raw string for a non-numeric-but-present value, and omits the parenthetical
+// entirely (not "n/a") for a genuinely blank/missing one.
 describe("categorical stat values (PR #114 review item 6)", () => {
   const catDc = {
     name: "Mammals",
@@ -425,10 +421,9 @@ describe("categorical stat values (PR #114 review item 6)", () => {
   });
 });
 
-// PR #114 review item 6 (consistency note): findLabelAttribute trusted schema `attr.type ===
-// "categorical"` alone, even though get-stats.ts documents that `type` is unreliable in real
-// documents and value-sniffs instead. Aligns the label-attribute stance with that same
-// value-sniffing rather than trusting attr.type.
+// findLabelAttribute must not trust schema `attr.type === "categorical"` alone — get-stats.ts
+// documents that `type` is unreliable in real documents and value-sniffs instead. Aligns the
+// label-attribute stance with that same value-sniffing rather than trusting attr.type.
 describe("label attribute selection value-sniffs case data instead of trusting attr.type alone " +
   "(PR #114 review item 6 consistency note)", () => {
   it("picks a schema-categorical-typed attribute whose ACTUAL values are non-numeric, same as " +

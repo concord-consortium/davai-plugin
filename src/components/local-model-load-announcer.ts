@@ -6,10 +6,9 @@ export type AddTranscriptMessage = (speaker: string, messageContent: MessageCont
 
 // Announces coarse local-model load milestones (25% steps) and readiness through the transcript,
 // so the aria-live path reads them — per-percent updates would spam the screen reader. Extracted
-// from App.tsx's own onLoadStateChange effect (PR #114 review item 10, reviewer's optional
-// suggestion) into a plain, stateful factory so this logic is unit-testable without rendering the
-// whole App component; App.tsx's effect just calls `localLlmService.onLoadStateChange(
-// createLoadAnnouncer(transcriptStore.addMessage))`. Behavior is unchanged from the inline version.
+// from App.tsx's own onLoadStateChange effect into a plain, stateful factory so this logic is
+// unit-testable without rendering the whole App component; App.tsx's effect just calls
+// `localLlmService.onLoadStateChange(createLoadAnnouncer(transcriptStore.addMessage))`.
 export const createLoadAnnouncer = (addMessage: AddTranscriptMessage): ((s: ILocalLlmLoadState) => void) => {
   let lastMilestone = 0;
   // Track which model the milestone counter belongs to. Switching models restarts progress at 0

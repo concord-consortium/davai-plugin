@@ -14,9 +14,7 @@ export const sonifyGraphTool: ILocalTool = {
   },
   async execute(resolved, ctx) {
     const graph = await getGraphByID(String(resolved.graphId));
-    // DAVAI-126 matrix round 3 item E1: both messages fell back to a raw id (`graph?.name ??
-    // resolved.graphId` / `graph?.name ?? graph.id`) — graphLabel is empty-string-safe and
-    // prefers a descriptive, resolvable phrase over a bare id.
+    // graphLabel is empty-string-safe and prefers a descriptive, resolvable phrase over a bare id.
     if (!isGraphSonifiable(graph)) {
       return `The graph "${graphLabel(graph)}" is not a numeric scatter plot or univariate dot plot, so it cannot be sonified. Tell the user which plot types work.`;
     }

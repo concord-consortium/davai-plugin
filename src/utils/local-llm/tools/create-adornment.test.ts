@@ -107,10 +107,7 @@ describe("corrective retry options on failure (DAVAI-126 eval round 2 item F)", 
     expect(out).toContain("Univariate graphs: graph50.");
   });
 
-  // DAVAI-126 matrix round 3 item E1: the corrective's own local graphLabel was `g?.title ??
-  // g?.name` with NO empty-string guard and no descriptive fallback — evidence: the live trace
-  // `Univariate graphs: .` (a single empty entry) when the only candidate had title: "". Now uses
-  // the shared, RESOLVABLE graphLabel from resolve.ts, which never produces an empty string.
+  // Uses the shared, RESOLVABLE graphLabel from resolve.ts, which never produces an empty string.
   it("treats an empty-string title as absent (not a blank list entry) and falls through to the " +
     "descriptive fallback when name is also absent", async () => {
     send.mockResolvedValue({ success: false, error: "not applicable" });
@@ -133,11 +130,8 @@ describe("corrective retry options on failure (DAVAI-126 eval round 2 item F)", 
     expect(out).toContain("Scatterplots: the Height vs Mass scatterplot.");
   });
 
-  // DAVAI-126 matrix round 4 Task F1: live trace evidence — prompt said "the Height graph" but
-  // the model called with no graph arg, defaulted to the selected scatterplot, got back
-  // `Univariate graphs: Height.`, and then REPEATED the identical failing call instead of retrying
-  // with "graph": "Height". When exactly one compatible graph exists, name it directly as the
-  // retry argument (not just listed) so the model has a copy-pasteable fix, not just information.
+  // When exactly one compatible graph exists, name it directly as the retry argument (not just
+  // listed) so the model has a copy-pasteable fix, not just information.
   it("names the single compatible graph as the retry argument when exactly one exists", async () => {
     send.mockResolvedValue({ success: false, error: "not applicable" });
     const v = createAdornmentTool.validate({ type: "mean", graph: "Heights" }, mixedCtx);
@@ -171,10 +165,8 @@ describe("corrective retry options on failure (DAVAI-126 eval round 2 item F)", 
   });
 });
 
-// DAVAI-126 matrix round 3 item E1: resolved.graphTitle itself (used in BOTH the success and
-// failure result sentences) fell back to `graph.value.title ?? graph.value.name` with no
-// empty-string guard — evidence: `Added Mean adornment to "undefined"` in the live trace (an
-// empty-string title coerced through a template literal). Now uses the shared graphLabel.
+// resolved.graphTitle (used in BOTH the success and failure result sentences) uses the shared
+// graphLabel, which is empty-string-safe.
 describe("resolved graphTitle uses the shared graphLabel (DAVAI-126 matrix round 3 E1)", () => {
   it("an empty-string title does not surface as \"undefined\" or a blank quoted label in the " +
     "success message", async () => {

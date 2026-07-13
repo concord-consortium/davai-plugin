@@ -42,9 +42,8 @@ jest.mock("../utils/codap-api-utils", () => ({
   ...jest.requireActual("../utils/codap-api-utils"),
   getTrimmedGraphDetails: jest.fn().mockResolvedValue([]),
   // Backs the sonification store's OWN setGraphs (graph-sonification-model.ts), which the local
-  // create_graph tool's refreshGraphs wiring must trigger (DAVAI-126 sonification auto-select
-  // regression) — separate from getTrimmedGraphDetails above, which only backs the assistant's
-  // own graph list (self.graphs, for name resolution).
+  // create_graph tool's refreshGraphs wiring must trigger — separate from getTrimmedGraphDetails
+  // above, which only backs the assistant's own graph list (self.graphs, for name resolution).
   getGraphDetails: jest.fn().mockResolvedValue([]),
 }));
 
@@ -348,9 +347,9 @@ describe("handleMessageSubmitLocalLlm (DAVAI-126)", () => {
     "server (PR #114 review item 7)", async () => {
     // createThread already bumps turnEpoch (invalidating the in-flight local turn — it has no
     // currentMessageId to gate the handleCancel branch above, since only the SERVER path sets
-    // that), but did not clear messageQueue the way handleCancel and setLlmId both do. A queued
-    // local message would survive the reset and then fall through to the shared afterCreate/
-    // onSnapshot reactor (hardcoded to the server's handleMessageSubmit) the moment
+    // that). It must also clear messageQueue, the way handleCancel and setLlmId both do: a queued
+    // local message would otherwise survive the reset and fall through to the shared
+    // afterCreate/onSnapshot reactor (hardcoded to the server's handleMessageSubmit) the moment
     // isLoadingResponse flips to false, leaking a local-turn message to the server path.
     const store = createLocalStore();
     let release: (v: string) => void = () => undefined;
@@ -495,7 +494,7 @@ describe("handleMessageSubmitLocalLlm (DAVAI-126)", () => {
     // Reproduce the transcript state at the moment a queued turn is drained: the queued user
     // message was added by App at submit time, and the PRIOR turn's DAVAI reply is now the last
     // row (not the queued user row) — trailing-only removal leaves the queued row in place, so
-    // it stays in `turns` AND repeats as `userMessage`. The fix must instead remove the LAST
+    // it stays in `turns` AND repeats as `userMessage`. Removal must instead find the LAST
     // occurrence of a USER_SPEAKER row matching messageText, wherever it sits.
     const store = createLocalStore();
     store.transcriptStore.addMessage(USER_SPEAKER, { content: "first question" });
@@ -649,7 +648,7 @@ describe("handleMessageSubmitLocalLlm (DAVAI-126)", () => {
     expect(store.messageQueue.length).toBe(0);
 
     // The stale turn resuming afterward must not re-set the flags or post anything (existing
-    // epoch semantics, unchanged by this fix).
+    // epoch semantics).
     release("stale reply from the old model");
     await first;
     await queued;
@@ -665,7 +664,7 @@ describe("handleMessageSubmitLocalLlm (DAVAI-126)", () => {
     "(DAVAI-126 review round 2 F2 no-regression)", async () => {
     // setLlmId's flag-clearing addition must only affect an ACTUAL switch (a real epoch bump);
     // an ordinary completed turn (no switch involved) must clear the flags via its own finally,
-    // exactly as before.
+    // independent of setLlmId.
     const store = createLocalStore();
     await store.handleMessageSubmitLocalLlm("describe the graph");
 
@@ -677,8 +676,8 @@ describe("handleMessageSubmitLocalLlm (DAVAI-126)", () => {
 
   it("setting the SAME llmId does not clear busy flags or the queue (no-op switch, DAVAI-126 " +
     "review round 2 F2 no-regression)", async () => {
-    // setLlmId only bumps the epoch (and, per this fix, clears the flags/queue) on a REAL
-    // change. Calling it with the value it already has must not interrupt an in-flight turn.
+    // setLlmId only bumps the epoch (and clears the flags/queue) on a REAL change. Calling it
+    // with the value it already has must not interrupt an in-flight turn.
     const store = createLocalStore();
     let release: (v: string) => void = () => undefined;
     (runLocalTurn as jest.Mock).mockImplementationOnce(
@@ -763,9 +762,9 @@ describe("handleMessageSubmitLocalLlm (DAVAI-126)", () => {
 
   describe("response-time debug entries (DAVAI-126 Task 12: local-turn parity with the server path)", () => {
     // timingDebug posts an ELAPSED duration from responseStartTime, so a Begin posted at submit
-    // would always read 0 (the reported DAVAI-126 bug). The local turn is non-streamed (no
-    // "first chunk" moment), so — like finalizeStream's non-streamed branch on the server path —
-    // the Begin/Completed pair posts together at completion, begin == completed.
+    // would always read 0. The local turn is non-streamed (no "first chunk" moment), so — like
+    // finalizeStream's non-streamed branch on the server path — the Begin/Completed pair posts
+    // together at completion, begin == completed.
     const timingRows = (store: { transcriptStore: { messages: { messageContent: { description?: string } }[] } }) =>
       store.transcriptStore.messages.filter(
         (m) => m.messageContent.description === "Begin response time" ||
@@ -872,7 +871,7 @@ describe("handleMessageSubmitLocalLlm (DAVAI-126)", () => {
       "the same isCurrent() guard, so a stale resumption posts nothing)", async () => {
       // The epoch guard must prevent the STALE resumption (after cancel bumps the epoch) from
       // posting a late Begin/Completed pair once the abandoned runLocalTurn promise settles —
-      // and since nothing posts at submit anymore, the cancelled turn leaves NO timing rows.
+      // and since nothing posts at submit, the cancelled turn leaves NO timing rows.
       const store = createLocalStore();
       let release: (v: string) => void = () => undefined;
       (runLocalTurn as jest.Mock).mockImplementationOnce(
@@ -908,18 +907,17 @@ describe("runLocalEvalTurns (DAVAI-126 Task 11)", () => {
     sonificationStore: GraphSonificationModel,
   });
 
-  // DAVAI-126 eval round 1 F3: runLocalEvalTurns' fixture-guard checks root.sonificationStore's
-  // selectedGraphID before running the battery, so the store needs a real parent for that guard
-  // to see a selection. `selectedGraphID` defaults to 1 (a graph selected) so the many existing
-  // tests below — whose whole point is exercising the battery — clear the guard by default; pass
-  // `null` for the guard's own dedicated "nothing selected" tests (NOT `undefined`: this is a
-  // default PARAMETER, so an explicit `undefined` argument would substitute the default itself
-  // rather than opting out of it — `null` is translated to "omit the key" for the MST snapshot,
-  // whose own selectedGraphID field is `types.maybe(types.number)`, i.e. unset is `undefined`).
-  // `graphs` seeds self.graphs (used by the DAVAI-126 current-graph-derivation fix's
-  // single-graph fallback) via the real updateGraphs action, mirroring how the app populates it
-  // — rather than poking the volatile field directly, which MST's strict mode forbids outside
-  // an action.
+  // runLocalEvalTurns' fixture-guard checks root.sonificationStore's selectedGraphID before
+  // running the battery, so the store needs a real parent for that guard to see a selection.
+  // `selectedGraphID` defaults to 1 (a graph selected) so the many existing tests below — whose
+  // whole point is exercising the battery — clear the guard by default; pass `null` for the
+  // guard's own dedicated "nothing selected" tests (NOT `undefined`: this is a default PARAMETER,
+  // so an explicit `undefined` argument would substitute the default itself rather than opting
+  // out of it — `null` is translated to "omit the key" for the MST snapshot, whose own
+  // selectedGraphID field is `types.maybe(types.number)`, i.e. unset is `undefined`). `graphs`
+  // seeds self.graphs (used by the current-graph-derivation's single-graph fallback) via the
+  // real updateGraphs action, mirroring how the app populates it — rather than poking the
+  // volatile field directly, which MST's strict mode forbids outside an action.
   const createLocalStore = async (selectedGraphID: number | null = 1, graphs: any[] = []) => {
     const transcriptStore = ChatTranscriptModel.create({ messages: [] });
     const root = TestRootStore.create({
@@ -980,9 +978,9 @@ describe("runLocalEvalTurns (DAVAI-126 Task 11)", () => {
     consoleLogSpy.mockRestore();
   });
 
-  // DAVAI-126 matrix round 3 item E8: per-case incremental console output (user-requested
-  // observability) — evidence: MST axis-death spam and insertBefore errors interleave with the
-  // battery, and the user cannot attribute them to a specific case without a BEFORE/AFTER marker.
+  // Per-case incremental console output: MST axis-death spam and insertBefore errors interleave
+  // with the battery, and the user cannot attribute them to a specific case without a
+  // BEFORE/AFTER marker.
   it("logs a BEFORE marker before each case and an AFTER marker with its result, interleaved in " +
     "case order, alongside the existing unchanged final full-array log", async () => {
     const store = await createLocalStore();
@@ -1011,7 +1009,7 @@ describe("runLocalEvalTurns (DAVAI-126 Task 11)", () => {
     expect(afterAIdx).toBeGreaterThan(beforeAIdx);
     expect(beforeBIdx).toBeGreaterThan(afterAIdx);
 
-    // The existing final full-array log is unchanged (still fires once, after the per-case logs).
+    // The existing final full-array log still fires once, after the per-case logs.
     expect(consoleLogSpy).toHaveBeenCalledWith("DAVAI local eval results", expect.stringContaining("case-a"));
 
     consoleLogSpy.mockRestore();
@@ -1166,9 +1164,9 @@ describe("runLocalEvalTurns (DAVAI-126 Task 11)", () => {
 
   it("clears the busy flags when the model is switched mid-eval-run, posting no summary " +
     "(DAVAI-126 review round 2 F2)", async () => {
-    // Same fix as the chat-turn case: a model switch during an eval run is not superseded by any
-    // newer turn, so nothing else will ever clear isLoadingResponse/showLoadingIndicator unless
-    // setLlmId does it itself.
+    // Same reasoning as the chat-turn case: a model switch during an eval run is not superseded
+    // by any newer turn, so nothing else will ever clear isLoadingResponse/showLoadingIndicator
+    // unless setLlmId does it itself.
     const store = await createLocalStore();
     const consoleLogSpy = jest.spyOn(console, "log").mockImplementation(() => undefined);
     let release: (v: string) => void = () => undefined;
@@ -1178,7 +1176,7 @@ describe("runLocalEvalTurns (DAVAI-126 Task 11)", () => {
 
     const evalRun = store.runLocalEvalTurns(twoCases as any);
     // Two ticks: runLocalEvalTurns is now one MST node deeper (a child of the eval's
-    // TestRootStore, for the F3 fixture-guard's getRoot(self).sonificationStore read) than a
+    // TestRootStore, for the fixture-guard's getRoot(self).sonificationStore read) than a
     // bare AssistantModel, which costs one extra microtask hop before the flow's first `yield`
     // (loadEngine) resumes into the mocked runLocalTurn call below — a single tick would resolve
     // before that mock's promise executor assigns `release`.
@@ -1511,9 +1509,9 @@ describe("sonification auto-select on local create_graph (DAVAI-126)", () => {
   it("selects the newly created graph in the sonification store after a local create_graph " +
     "tool call (eval wiring, runLocalEvalTurns)", async () => {
     const { root, store } = createRootedStore();
-    // The eval fixture guard requires a resolvable current graph before it will run at all
-    // (DAVAI-126 eval round 1 F3) — seed one pre-existing graph via the real updateGraphs action
-    // rather than poking store.graphs directly (MST strict mode).
+    // The eval fixture guard requires a resolvable current graph before it will run at all —
+    // seed one pre-existing graph via the real updateGraphs action rather than poking
+    // store.graphs directly (MST strict mode).
     (getTrimmedGraphDetails as jest.Mock).mockResolvedValueOnce([{ id: 1, name: "Existing" }]);
     await store.updateGraphs();
     root.sonificationStore.setSelectedGraphID(1);

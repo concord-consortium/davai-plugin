@@ -6,12 +6,12 @@ import { ILocalToolContext } from "./registry";
 const dc = { name: "Mammals", collections: [{ name: "Cases", attrs: [{ name: "Height" }, { name: "Habitat" }] }] };
 const ctx = { dataContexts: () => ({ Mammals: dc }) } as unknown as ILocalToolContext;
 
-// DAVAI-126 Task B: graph-sketch.ts reuses this exact coercion (imported, not duplicated) — this
-// test locks its contract (numbers pass through, numeric strings coerce, "", null, whitespace-
-// only strings, and non-numeric strings are dropped) so both call sites can rely on identical
-// behavior. Booleans deliberately STAY coerced to 1/0 (Number(true)=1, Number(false)=0) — a mean
-// over a boolean attribute is a real "proportion true" statistic, not a coercion bug; this is
-// INTENTIONAL, not an oversight (PR #114 review item 11).
+// graph-sketch.ts reuses this exact coercion (imported, not duplicated) — this test locks its
+// contract (numbers pass through, numeric strings coerce, "", null, whitespace-only strings, and
+// non-numeric strings are dropped) so both call sites can rely on identical behavior. Booleans
+// deliberately STAY coerced to 1/0 (Number(true)=1, Number(false)=0) — a mean over a boolean
+// attribute is a real "proportion true" statistic, not a coercion bug; this is INTENTIONAL, not
+// an oversight.
 it("coerceNumericValues: numbers pass through, numeric strings coerce, booleans become 1/0 " +
   "(intentional), whitespace-only strings and other junk are dropped", () => {
   expect(coerceNumericValues([10, "12", "", null, "n/a", undefined, "3.5", "   ", true, false]))
@@ -47,11 +47,10 @@ it("computes stats from fetched values, ignoring non-numeric entries", async () 
   expect(out).toContain("min 10");
 });
 
-// PR #114 review item 11: the old `n.toPrecision(6)` formatter switches to exponential notation
-// once a non-integer value's integer part has more digits than the requested precision (e.g.
-// "1.23457e+6"), which reads badly spoken aloud. Reusing graph-sketch.ts's roundSig (via the
-// shared number-format.ts) at 6 significant figures keeps the same precision level but never
-// emits e-notation.
+// A bare `n.toPrecision(6)` formatter switches to exponential notation once a non-integer
+// value's integer part has more digits than the requested precision (e.g. "1.23457e+6"), which
+// reads badly spoken aloud. Reusing graph-sketch.ts's roundSig (via the shared number-format.ts)
+// at 6 significant figures keeps the same precision level but never emits e-notation.
 it("never emits exponential notation for a large non-integer mean (PR #114 review item 11)", async () => {
   (getCollectionItemsForAttribute as jest.Mock).mockResolvedValue([
     { id: "1", values: { Height: 1234567 } },
@@ -63,9 +62,9 @@ it("never emits exponential notation for a large non-integer mean (PR #114 revie
   expect(out).toContain("mean 1234570");
 });
 
-// Codex second-pass hardening F4: an extreme-magnitude value (e.g. a malformed/adversarial
-// dataset entry) must never crash get_stats' own formatter (roundSig at sig=6) with a
-// RangeError, and must never render in exponential notation (unspeakable prose).
+// An extreme-magnitude value (e.g. a malformed/adversarial dataset entry) must never crash
+// get_stats' own formatter (roundSig at sig=6) with a RangeError, and must never render in
+// exponential notation (unspeakable prose).
 it("does not throw and never emits exponential notation for extreme-magnitude values " +
   "(Codex hardening F4)", async () => {
   (getCollectionItemsForAttribute as jest.Mock).mockResolvedValue([

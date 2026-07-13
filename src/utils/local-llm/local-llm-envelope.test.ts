@@ -5,10 +5,9 @@ it("strips <think> blocks defensively", () => {
     .toBe("{\"tool\":\"final\",\"response\":\"hi\"}");
 });
 
-// DAVAI-126 matrix round 3 item E7: both think runs' selection-percentile finals were RAW
-// <think> dumps truncated mid-sentence at maxTokens — the old stripThink only stripped CLOSED
-// <think>...</think> pairs, leaving an unclosed trailing block (maxTokens truncation always cuts
-// at the END of the raw generation) completely untouched.
+// Also strips a trailing unclosed <think> block: maxTokens truncation always cuts at the end of
+// raw generation, so any trailing "<think>" that never closes is a truncation artifact, not
+// valid content — strip it to the end of the string, leaving preceding valid text intact.
 describe("stripThink strips a trailing unclosed <think> block (DAVAI-126 matrix round 3 E7)", () => {
   it("strips a closed pair (existing behavior, unchanged)", () => {
     expect(stripThink("<think>reasoning...</think>{\"tool\":\"final\",\"response\":\"hi\"}"))
@@ -53,11 +52,9 @@ it("still strips <think> and recovers embedded JSON", () => {
   });
 });
 
-// DAVAI-126 matrix round 5 Task G1: a live 1.7B final arrived as pretty-printed JSON missing its
-// closing brace, and the OLD fallback (extractJson throws when no "}" exists at all → parseEnvelope
-// returns kind: "invalid") surfaced the raw envelope text as if it were speakable prose — a screen
-// reader would speak "open brace, tool, final, comma...". A malformed "final" attempt must never
-// leak raw JSON syntax as the spoken response; recover the response string tolerantly instead.
+// A malformed "final" attempt (e.g. pretty-printed JSON missing its closing brace) must never
+// leak raw JSON syntax as the spoken response — a screen reader would speak "open brace, tool,
+// final, comma...". Recover the response string tolerantly instead.
 describe("recovers a malformed \"final\" envelope instead of surfacing raw JSON (DAVAI-126 matrix round 5 Task G1)", () => {
   it("recovers the exact live sample: pretty-printed final envelope missing its closing brace", () => {
     const raw = '{\n  "tool": "final",\n  "response": "The graph displays the \'Height\' attribute of ' +
@@ -113,11 +110,10 @@ describe("recovers a malformed \"final\" envelope instead of surfacing raw JSON 
     });
   });
 
-  // PR #114 review item 11: the fallback's `esc[0] === "u"` check doesn't verify the captured
-  // group actually has 4 hex digits — the tolerant regex's SECOND alternative (a bare `.`) can
-  // capture just "u" (1 char) when the \u is truncated or followed by non-hex, and the old code
-  // still tried to parseInt("", 16) = NaN, then String.fromCharCode(NaN) = a NUL character
-  // silently inserted into the "recovered" text.
+  // The tolerant regex's SECOND alternative (a bare `.`) can capture just "u" (1 char) when the
+  // \u is truncated or followed by non-hex — parseInt of an empty/invalid hex string is NaN, and
+  // String.fromCharCode(NaN) is a NUL character, which must never leak silently into the
+  // "recovered" text.
   describe("a malformed \\u escape falls through to literal text, never a NUL character (PR #114 review item 11)", () => {
     const NUL = String.fromCharCode(0);
 

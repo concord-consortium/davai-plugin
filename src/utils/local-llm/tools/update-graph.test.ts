@@ -96,8 +96,7 @@ describe("validate", () => {
     expect((v as any).error).toMatch(/title/i);
   });
 
-  // DAVAI-126 matrix round 3 item E1: graphTitle fell back to `graph.value.title ?? graph.value.name
-  // ?? String(graph.value.id)` — a raw id in the corrective/result text. Now uses graphLabel.
+  // graphTitle uses graphLabel, never a raw id, in the corrective/result text.
   it("uses graphLabel's descriptive fallback (not the raw id) in the no-dataContext corrective " +
     "when the graph has neither title nor name", () => {
     const noDcGraphs = [{ id: 99, xAttributeName: "Height" }];

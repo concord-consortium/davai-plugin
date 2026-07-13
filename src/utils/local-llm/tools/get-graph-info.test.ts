@@ -58,10 +58,10 @@ it("errors correctively when no graph is selected and none named", () => {
   expect(!v.ok && v.error).toMatch(/no graph is selected/i);
 });
 
-// Codex second-pass hardening F5: validate() passes `args.graph as string | undefined` straight
-// to resolveGraph with no `?? ""` guard — a model emitting `{"tool": "get_graph_info", "graph":
-// null}` (JSON null, not an omitted key) reaches resolveGraph as a real runtime `null`, which
-// pre-fix defeated the selected-graph default (`String(null)` is the non-blank string "null").
+// validate() passes `args.graph as string | undefined` straight to resolveGraph with no `?? ""`
+// guard — a model emitting `{"tool": "get_graph_info", "graph": null}` (JSON null, not an
+// omitted key) reaches resolveGraph as a real runtime `null`, which would defeat the
+// selected-graph default (`String(null)` is the non-blank string "null") if mishandled.
 it("graph:null (an explicit JSON null, not an omitted key) still resolves the selected graph, " +
   "same as omitting \"graph\" entirely", () => {
   const v = getGraphInfoTool.validate({ graph: null }, ctx);
@@ -69,10 +69,7 @@ it("graph:null (an explicit JSON null, not an omitted key) still resolves the se
   expect(v.ok && v.resolved.graphId).toBe(42);
 });
 
-// DAVAI-126 matrix round 3 item E1: result string used `graph?.title ?? graph?.name ??
-// resolved.graphId` — evidence: `Added Mean adornment to "undefined"` style bugs elsewhere from
-// the same raw-fallback pattern. Now uses the shared graphLabel (empty-string-safe, descriptive
-// fallback over a raw id).
+// Uses the shared graphLabel (empty-string-safe, descriptive fallback over a raw id).
 it("uses the shared graphLabel (descriptive fallback) when the graph has neither title nor name", async () => {
   (getGraphByID as jest.Mock).mockResolvedValue({
     id: 42, xAttributeName: "Height", yAttributeName: "Age", dataContext: "Mammals",
@@ -98,11 +95,9 @@ it("steers the model away from a redundant call when the data is already in the 
   expect(getGraphInfoTool.description).toMatch(/call this only for a different graph or after making a change/i);
 });
 
-// DAVAI-126 matrix round 4 Task F2: live trace evidence — a small (1.7B/none) model copied the
-// argsExample's concrete fake graph name "Height vs Age" verbatim into a real call on a document
-// that had no such graph. The no-arg form must be the ONLY form in argsExample (nothing left to
-// copy); the optional "graph" usage still needs to be documented, but in description prose with
-// no concrete fake name to imitate.
+// The no-arg form must be the ONLY form in argsExample (nothing left to copy); the optional
+// "graph" usage still needs to be documented, but in description prose with no concrete fake
+// name to imitate.
 it("argsExample shows ONLY the no-arg form — no fake graph name for a small model to copy verbatim", () => {
   expect(getGraphInfoTool.argsExample).toBe('{"tool": "get_graph_info"}');
   expect(getGraphInfoTool.argsExample).not.toMatch(/height/i);
@@ -113,10 +108,10 @@ it("documents the optional graph argument in description prose without a concret
   expect(getGraphInfoTool.description).not.toMatch(/height/i);
 });
 
-// DAVAI-126 Task B: get_graph_info fetches axis values (via the same fetchers buildGraphSeed
-// uses) and appends the same computed sketch a describe request gets from the seed — so a
-// redundant-but-harmless call (e.g. after describing a DIFFERENT graph than the seeded one)
-// still gets client-computed cluster/outlier/relationship facts, not a bare structure dump.
+// get_graph_info fetches axis values (via the same fetchers buildGraphSeed uses) and appends the
+// same computed sketch a describe request gets from the seed — so a redundant-but-harmless call
+// (e.g. after describing a DIFFERENT graph than the seeded one) still gets client-computed
+// cluster/outlier/relationship facts, not a bare structure dump.
 describe("graph sketch appended to the tool result", () => {
   it("appends a non-empty sketch and the final checklist line when there is enough numeric data", async () => {
     (getCollectionItemsForAttributePair as jest.Mock).mockResolvedValue([
@@ -132,12 +127,9 @@ describe("graph sketch appended to the tool result", () => {
     );
   });
 
-  // DAVAI-126 matrix round 5 Task G3: the one round-5 failure — after create_graph succeeded, the
-  // model fetched get_graph_info and followed the describe-checklist so literally that its final
-  // never mentioned a graph was created at all (failed /graph|plot/i; the answer began "Axes:
-  // x-axis is..."). The checklist steered a post-create fetch into pure description, silently
-  // dropping the action the user actually cares about hearing confirmed. One added clause fixes
-  // it: acknowledge the just-completed action before falling into the description checklist.
+  // A post-create fetch must acknowledge the just-completed action before falling into the
+  // description checklist — otherwise the checklist can steer the model into pure description,
+  // silently dropping the action confirmation the user actually cares about hearing.
   it("extends the checklist with an action-first clause so a post-create/change fetch " +
     "acknowledges the action before describing (DAVAI-126 matrix round 5 Task G3)", async () => {
     (getCollectionItemsForAttributePair as jest.Mock).mockResolvedValue([
@@ -177,9 +169,9 @@ describe("graph sketch appended to the tool result", () => {
   });
 });
 
-// DAVAI-126 Task H: the checklist trailer must match the sketch's mode — a numeric-flavored
-// checklist ("the outliers above", "relationship numbers") makes no sense appended to a
-// categorical sketch (there is no "outliers above" or "relationship numbers" in category counts).
+// The checklist trailer must match the sketch's mode — a numeric-flavored checklist ("the
+// outliers above", "relationship numbers") makes no sense appended to a categorical sketch
+// (there is no "outliers above" or "relationship numbers" in category counts).
 describe("checklist trailer adapts to the sketch mode (DAVAI-126 Task H)", () => {
   const dcWithDietHabitat = {
     name: "Mammals",

@@ -52,30 +52,6 @@ describe("thinking toggle (DAVAI-126)", () => {
 });
 
 it("REAL assembled base prompt (all 12 tools, representative digest+seed) fits with ≥25% margin", () => {
-  // DAVAI-126 no-sampling: the seed's case count now matches the actual number of value pairs
-  // shipped (no more sampling, so no "(evenly sampled N of M)" note) — this fixture uses a
-  // 100-pair graph as a representative document, honestly labeled "100 cases".
-  // DAVAI-126 Task C: registry grew from 8 to 10 tools (find_cases, update_attribute added;
-  // create_graph's description also grew slightly for the new legendAttribute arg). Measured:
-  // buildToolDocs() grew from ~2031 to 2870 chars, and this fixture's assembled prompt from
-  // ~6068 to 6907 chars — margin against the 0.75x threshold (16128 of a 21504-char budget)
-  // narrowed from ~71.8% to 67.9%, comfortably still over the ≥25% this test requires. No
-  // threshold change needed.
-  // DAVAI-126 Task D: registry grew from 10 to 12 tools (update_graph, group_by added).
-  // Measured: buildToolDocs() grew from 2870 to 3479 chars, and this fixture's assembled prompt
-  // from 6907 to 7516 chars — margin against the 0.75x threshold narrowed from ~67.9% to ~53.4%,
-  // still comfortably over the ≥25% this test requires. No threshold change needed.
-  // DAVAI-126 Task D fix pass: find_cases's argsExample gained '(optional: "collection")'.
-  // Re-measured: 3479 → 3504 docs chars, 7516 → 7541 prompt chars, margin ~53.2%.
-  // DAVAI-126 matrix round 3 items E5/E6: select_cases's argsExample became a worked percentile
-  // example, and find_cases's description gained the canonical "which mammal is the heaviest?"
-  // phrasing (registration order also changed, which doesn't affect total doc length). Re-
-  // measured: 3504 → 3605 docs chars, 7541 → 7642 prompt chars, margin ~53.2% → ~52.6%, still
-  // comfortably over the ≥25% this test requires. No threshold change needed.
-  // DAVAI-126 matrix round 5 Task G2: added one Grounding rule line ("never guess units") to
-  // localLlmInstructions — docs chars unchanged (this lives in instructions, not tool docs); this
-  // fixture's assembled prompt grew by that line's length, margin ~52.6% → ~52.0%. No threshold
-  // change needed.
   initializeLocalTools();
   const digest = buildSchemaDigest({
     Mammals: { name: "Mammals", collections: [{ name: "Cases", attrs: Array.from({ length: 12 }, (_, i) => ({ name: `Attr_${i}`, type: "numeric" })) }] },
@@ -133,11 +109,11 @@ it("trim drops seed values first, then turns, then truncates digest — /no_thin
   expect(tighter.find((m) => m.content.startsWith("A"))).toBeUndefined();
 });
 
-// DAVAI-126 Task B: the graph sketch (computed cluster/outlier/relationship facts) lives in the
-// seed's STRUCTURE section, BEFORE the Values line — trimToBudget's first trim rung locates the
-// Values line by SEED_VALUES_PREFIX ("Values") and blanks only that one line, so anything placed
-// earlier in the same seed (the sketch) is untouched by this rung. This is the load-bearing
-// reason the sketch survives the exact budget pressure that most aggressively strips the seed.
+// The graph sketch (computed cluster/outlier/relationship facts) lives in the seed's STRUCTURE
+// section, BEFORE the Values line — trimToBudget's first trim rung locates the Values line by
+// SEED_VALUES_PREFIX ("Values") and blanks only that one line, so anything placed earlier in the
+// same seed (the sketch) is untouched by this rung. This is the load-bearing reason the sketch
+// survives the exact budget pressure that most aggressively strips the seed.
 it("trim's first rung (drop seed values) leaves the Sketch line intact — only the Values line " +
   "is blanked", () => {
   const sketchLine = "Sketch: 3 points. A 1–9 (most between 2 and 8).";
@@ -155,11 +131,10 @@ it("trim's first rung (drop seed values) leaves the Sketch line intact — only 
   expect(out[0].content).not.toMatch(/^Values \(A\)/m);
 });
 
-// PR #114 review Gate 1: the old step-3 truncation did a blind `content.slice(0, room)` over the
-// WHOLE system prompt, and `room` shrinks with the size of the CURRENT USER MESSAGE (`others`
-// includes it) — a large enough user turn could drive `room` below len(instructions + tool docs)
-// and slice straight through the tool documentation, silently disabling every tool call. The fix
-// anchors the cut to the schema-digest header's own offset so it can never precede it.
+// Without anchoring, `room` shrinks with the size of the CURRENT USER MESSAGE (`others` includes
+// it) — a large enough user turn could drive `room` below len(instructions + tool docs) and
+// slice straight through the tool documentation, silently disabling every tool call. Anchoring
+// the cut to the schema-digest header's own offset ensures it can never precede it.
 describe("trim never severs instructions/tool docs, regardless of what's oversized (PR #114 Gate 1)", () => {
   const toolDocs = "- t: d\n  {\"tool\": \"t\"}\n- t2: d2\n  {\"tool\": \"t2\"}";
 

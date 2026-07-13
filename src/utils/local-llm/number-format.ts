@@ -24,9 +24,9 @@ const expandExponential = (expStr: string): string => {
 // Round to N significant figures, formatted as a plain (non-exponential) decimal string, with
 // trailing zeros after the decimal point trimmed. `toPrecision`/`toExponential` alone would
 // render values like 6277.8 as "6.28e+3", which reads badly in prose — this never does that.
-// NaN/±Infinity guard (PR #114 review item 11): a non-finite value can never be rendered as a
-// meaningful magnitude — return "unavailable" rather than the literal string "NaN"/"-NaN" a
-// screen reader would otherwise speak as if it were a real number.
+// NaN/±Infinity guard: a non-finite value can never be rendered as a meaningful magnitude —
+// return "unavailable" rather than the literal string "NaN"/"-NaN" a screen reader would
+// otherwise speak as if it were a real number.
 export const roundSig = (n: number, sig = 3): string => {
   if (!Number.isFinite(n)) return "unavailable";
   if (n === 0) return "0";
@@ -39,11 +39,11 @@ export const roundSig = (n: number, sig = 3): string => {
   // toFixed call (which needs a non-negative digit count to format the result as plain decimal).
   const roundingExponent = sig - 1 - magnitude;
   let s: string;
-  // Codex second-pass hardening F4: at denormal-range magnitudes (e.g. ~1e-307), expressing `sig`
-  // significant figures needs more than 100 fractional digits — toFixed rejects any digit count
-  // over 100 outright (RangeError), and 10^roundingExponent itself overflows to Infinity at this
-  // magnitude, poisoning the scale/round arithmetic below into NaN before toFixed is even
-  // reached. toPrecision has no such overflow at any finite magnitude, so use it instead here.
+  // At denormal-range magnitudes (e.g. ~1e-307), expressing `sig` significant figures needs more
+  // than 100 fractional digits — toFixed rejects any digit count over 100 outright (RangeError),
+  // and 10^roundingExponent itself overflows to Infinity at this magnitude, poisoning the
+  // scale/round arithmetic below into NaN before toFixed is even reached. toPrecision has no such
+  // overflow at any finite magnitude, so use it instead here.
   if (roundingExponent > 100) {
     s = expandExponential(abs.toPrecision(sig));
   } else {

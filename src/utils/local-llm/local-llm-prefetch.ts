@@ -9,14 +9,14 @@ import { graphLabel } from "./tools/resolve";
 // mean/min/max, so it needs its own branch (the fallback would render "mean undefined, min
 // undefined, max undefined"); the format matches create-adornment.ts's formatData so the model
 // sees one consistent LSRL phrasing. Exported so get-graph-info.ts (the tool's own adornments
-// line) reuses this exact formatting instead of duplicating it. Every field is guarded (PR #114
-// review item 11) so a malformed/incomplete adornment (e.g. a legend-split multi-line LSRL
-// missing one of these fields) never renders the literal text "undefined".
+// line) reuses this exact formatting instead of duplicating it. Every field is guarded so a
+// malformed/incomplete adornment (e.g. a legend-split multi-line LSRL missing one of these
+// fields) never renders the literal text "undefined".
 //
-// Codex second-pass hardening F3: that `?? "unavailable"` guard is nullish-only — a NaN/Infinity
-// field is neither null nor undefined, so it sailed straight through as a literal "slope NaN"/
-// "mean Infinity". This tiny helper additionally rejects any non-finite number; the branch-
-// selection logic below (LSRL vs value vs mean/min/max fallback) is unchanged.
+// The `?? "unavailable"` guard is nullish-only — a NaN/Infinity field is neither null nor
+// undefined, so it would sail straight through as a literal "slope NaN"/"mean Infinity". This
+// tiny helper additionally rejects any non-finite number; the branch-selection logic below (LSRL
+// vs value vs mean/min/max fallback) is unchanged.
 const formatNum = (n: number | undefined): string => (Number.isFinite(n) ? String(n) : "unavailable");
 
 export const formatAdornment = (a: IAdornmentData): string =>
@@ -38,12 +38,12 @@ export const deriveCurrentGraphId = (
 };
 
 // "Mammals — Cases: Height (numeric), Habitat (categorical), Mass" normally, or
-// "Height (numeric, meters)" when the attribute object carries a `unit` field (DAVAI-126 Task B
-// — fail-soft, only shown when present; an attribute with no `unit` keeps the plain "(type)"
-// format, and one with no `type` at all stays a bare name, same as before this addition).
-// Replaces the raw trimmed-JSON context dump (smaller, and no IDs for the model to fixate on).
-// Every name field is guarded with `?? ""` (PR #114 review item 11) so a dataContext, collection,
-// or attribute missing its own `name` never renders the literal text "undefined" into the digest.
+// "Height (numeric, meters)" when the attribute object carries a `unit` field — fail-soft, only
+// shown when present; an attribute with no `unit` keeps the plain "(type)" format, and one with
+// no `type` at all stays a bare name. Replaces the raw trimmed-JSON context dump (smaller, and no
+// IDs for the model to fixate on). Every name field is guarded with `?? ""` so a dataContext,
+// collection, or attribute missing its own `name` never renders the literal text "undefined"
+// into the digest.
 export const buildSchemaDigest = (dataContexts: Record<string, any>): string =>
   Object.values(dataContexts ?? {})
     .map((dc: any) => {
@@ -79,15 +79,15 @@ export const findAttributeUnit = (dataContext: any, attributeName: string | null
 };
 
 // Deterministic pre-seed for the selected graph: structure + visible adornments + ALL case
-// values (DAVAI-126 user directive: no sampling — every value ships). Fails soft (empty
-// string) — a missing seed degrades to tool calls, never to a broken turn. The prompt's own
-// trim rung (trimToBudget in local-llm-prompt.ts) is the intentional overflow behavior for huge
-// datasets: it drops this whole values line under budget pressure rather than sampling it.
+// values — no sampling, every value ships. Fails soft (empty string) — a missing seed degrades
+// to tool calls, never to a broken turn. The prompt's own trim rung (trimToBudget in
+// local-llm-prompt.ts) is the intentional overflow behavior for huge datasets: it drops this
+// whole values line under budget pressure rather than sampling it.
 //
-// DAVAI-126 Task B: the sketch (computeGraphSketch — computed cluster/outlier/relationship facts
-// a small local model cannot reliably derive itself) is inserted here in the STRUCTURE section,
-// between the axes/adornments line and the Values line — NOT appended to the Values line — so it
-// survives trimToBudget's trim rung, which blanks only the line starting literally with "Values"
+// The sketch (computeGraphSketch — computed cluster/outlier/relationship facts a small local
+// model cannot reliably derive itself) is inserted here in the STRUCTURE section, between the
+// axes/adornments line and the Values line — NOT appended to the Values line — so it survives
+// trimToBudget's trim rung, which blanks only the line starting literally with "Values"
 // (SEED_VALUES_PREFIX in local-llm-prompt.ts). It reuses the very same `items` already fetched
 // for the Values line below (no second CODAP round trip).
 export const buildGraphSeed = async (
@@ -127,10 +127,9 @@ export const buildGraphSeed = async (
           xUnit: findAttributeUnit(dc, x ?? y),
         });
 
-    // DAVAI-126 matrix round 3 item E1: was `graph?.title ?? graph?.name ?? graphId` — a raw id
-    // fallback the model would then have to echo back verbatim (evidence: seed handing out
-    // `885090985993956`). graphLabel is empty-string-safe and prefers a descriptive, resolvable
-    // phrase over a bare id.
+    // graphLabel is empty-string-safe and prefers a descriptive, resolvable phrase over a bare
+    // id — a raw numeric id (e.g. `885090985993956`) would otherwise be something the model has
+    // to echo back verbatim, which it can't reliably do.
     const lines = [
       `Selected graph "${graphLabel(graph)}" (data context: ${graph?.dataContext}).`,
       `x-axis: ${x ?? "(none)"}; y-axis: ${y ?? "(none)"}. Adornments: ${adornmentText}.`,

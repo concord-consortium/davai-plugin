@@ -27,11 +27,11 @@ const canonicalizeExpression = (
   return { ok: true, value };
 };
 
-// First attribute of the collection whose ACTUAL case values value-sniff as non-numeric (PR #114
-// review item 6 consistency note: schema `attr.type === "categorical"` is unreliable in real
-// documents — get-stats.ts's own coercion doc says so and value-sniffs instead — so this tool
-// shouldn't trust attr.type alone either; reuses graph-sketch.ts's isNumericAxis, the exact same
-// >80%-numeric threshold get_graph_info's own axis-type detection uses). `undefined` when every
+// First attribute of the collection whose ACTUAL case values value-sniff as non-numeric (schema
+// `attr.type === "categorical"` is unreliable in real documents — get-stats.ts's own coercion
+// doc says so and value-sniffs instead — so this tool shouldn't trust attr.type alone either;
+// reuses graph-sketch.ts's isNumericAxis, the exact same >80%-numeric threshold get_graph_info's
+// own axis-type detection uses). `undefined` when every
 // attribute value-sniffs numeric (or the collection has no attrs), in which case the caller falls
 // back to a 1-based case index label ("Case 1", "Case 2", ...).
 const findLabelAttribute = (collection: any, rows: Record<string, unknown>[]): string | undefined =>
@@ -41,9 +41,9 @@ const findLabelAttribute = (collection: any, rows: Record<string, unknown>[]): s
 
 // Numeric coercion consistent with get-stats.ts's coerceNumericValues, but returning NaN (not
 // filtering it out) — find_cases needs to keep every row for the "of N cases" count while still
-// sorting non-numeric values last. Whitespace-only strings are blank data, not zero (PR #114
-// review item 11, same fix as get-stats.ts's coerceNumericValues) — Number(" ") is a finite 0,
-// which would otherwise sort/display a blank cell as a real numeric zero.
+// sorting non-numeric values last. Whitespace-only strings are blank data, not zero (same fix as
+// get-stats.ts's coerceNumericValues) — Number(" ") is a finite 0, which would otherwise
+// sort/display a blank cell as a real numeric zero.
 const toNumberOrNaN = (v: unknown): number => {
   if (typeof v === "number") return v;
   const trimmed = typeof v === "string" ? v.trim() : v;
@@ -51,10 +51,10 @@ const toNumberOrNaN = (v: unknown): number => {
 };
 
 // Renders one row's parenthetical value: the coerced number when numeric, the RAW STRING when
-// non-numeric-but-present (PR #114 review item 6 — e.g. a categorical stat attribute like Diet
-// previously printed the numeric-formatted "n/a", which reads as MISSING to a listener about a
-// value that IS there), or `undefined` when the value is genuinely blank/missing — the caller
-// omits the parenthetical entirely for that case rather than showing a fake "n/a" value. A
+// non-numeric-but-present (e.g. a categorical stat attribute like Diet must show its actual
+// value, not a numeric-formatted "n/a" that reads as MISSING to a listener about a value that IS
+// there), or `undefined` when the value is genuinely blank/missing — the caller omits the
+// parenthetical entirely for that case rather than showing a fake "n/a" value. A
 // whitespace-only string is blank too (same reasoning as toNumberOrNaN above), so it's trimmed
 // before the blank check rather than being displayed as literal whitespace.
 const formatValue = (value: unknown): string | undefined => {
@@ -65,14 +65,14 @@ const formatValue = (value: unknown): string | undefined => {
 };
 
 // Strips backticks for the human-facing sentence — CODAP needs `Sleep` (name-exact formula
-// syntax), but a screen-reader user hears a condition, not formula punctuation (brief's own
-// worked example: "Found 4 cases where Sleep > 12", no backticks). The canonicalized (backticked)
-// form is still what's sent to CODAP; only display strips them.
+// syntax), but a screen-reader user hears a condition, not formula punctuation (e.g. "Found 4
+// cases where Sleep > 12", no backticks). The canonicalized (backticked) form is still what's
+// sent to CODAP; only display strips them.
 const forDisplay = (expression: string): string => expression.replace(/`/g, "");
 
-// Sort by orderBy, numeric compare, non-numeric last (brief requirement), stable on ties (Array
-// sort in V8/Node is stable, and this codebase already relies on that elsewhere — e.g.
-// resolve.ts's true-duplicate tiebreak assumes stable insertion order for "most recent" ties).
+// Sort by orderBy, numeric compare, non-numeric last, stable on ties (Array sort in V8/Node is
+// stable, and this codebase already relies on that elsewhere — e.g. resolve.ts's true-duplicate
+// tiebreak assumes stable insertion order for "most recent" ties).
 const sortByOrderBy = (rows: { label: string; value: unknown }[], direction: "asc" | "desc"): { label: string; value: unknown }[] => {
   const withRank = rows.map((r) => ({ ...r, n: toNumberOrNaN(r.value) }));
   const numeric = withRank.filter((r) => Number.isFinite(r.n));
@@ -83,11 +83,10 @@ const sortByOrderBy = (rows: { label: string; value: unknown }[], direction: "as
 
 export const findCasesTool: ILocalTool = {
   name: "find_cases",
-  // DAVAI-126 matrix round 3 item E6: the canonical phrasing leads with the exact question shape
-  // models need to pattern-match to this tool — evidence: 3 of 4 live matrix runs answered
-  // "which mammal is the heaviest?" via get_case_values/get_stats instead of find_cases
-  // (misaligned/wrong-unit answers); only the run where find_cases was more salient used it, with
-  // a perfect one-call answer.
+  // The canonical phrasing leads with the exact question shape models need to pattern-match to
+  // this tool — without it, a natural-language superlative question like "which mammal is the
+  // heaviest?" is easily misrouted to get_case_values/get_stats instead, producing
+  // misaligned/wrong-unit answers.
   description: "Find the top/bottom cases by an attribute or cases matching a condition — use for questions " +
     "like \"which mammal is the heaviest?\". \"where\" is a CODAP formula with attribute names in backticks; " +
     "\"orderBy\" ranks by an attribute, highest first by default. Reports matching cases by name.",
@@ -96,8 +95,8 @@ export const findCasesTool: ILocalTool = {
   validate(args, ctx) {
     const dc = resolveDataContext(String(args.dataContext ?? ""), ctx.dataContexts());
     if (!dc.ok) return { ok: false, error: dc.error };
-    // Leaf default (DAVAI-126 Task D fix pass): unspecified collection resolves to the childmost
-    // collection instead of hard-erroring on multi-collection contexts — a group_by earlier in
+    // Leaf default: unspecified collection resolves to the childmost collection instead of
+    // hard-erroring on multi-collection contexts — a group_by earlier in
     // the session (or battery) permanently adds a parent collection to the shared dataContext,
     // and a lookup must keep working against the case-level leaf afterward. Parent-attribute
     // refs in `where` still work from the leaf: CODAP formula contexts resolve them up the
@@ -165,7 +164,7 @@ export const findCasesTool: ILocalTool = {
       // caseFormulaSearch's confirmed response shape: a FLAT array of {id, parent, collection,
       // values} — NOT allCases's {case: {values}} wrapper (verified against the CODAP API
       // documentation's caseFormulaSearch example; sam-server/src/text/codap-api-documentation.ts
-      // does not itself carry this selector — flagged in the task report as a doc gap).
+      // does not itself carry this selector — a doc gap).
       const matches: any[] = Array.isArray(res?.values) ? res.values : [];
       if (matches.length === 0) {
         const allCases = await getAllCollectionCases(dataContextName, collectionName);
@@ -188,11 +187,11 @@ export const findCasesTool: ILocalTool = {
     const totalCount = rows.length;
 
     if (!orderBy) {
-      // where-only: stat by the condition's own attribute (brief's example uses Sleep — the
-      // attribute the where expression itself references). Multi-ref expressions stat by the
-      // first backticked ref. Brief's worked example names the attribute only on the FIRST row
-      // ("Big Brown Bat (Sleep 19.9), Little Brown Bat (19.9), ...") — a natural-language economy
-      // once the reader knows which stat is being shown.
+      // where-only: stat by the condition's own attribute (e.g. Sleep — the attribute the where
+      // expression itself references). Multi-ref expressions stat by the first backticked ref.
+      // The worked example names the attribute only on the FIRST row ("Big Brown Bat (Sleep
+      // 19.9), Little Brown Bat (19.9), ...") — a natural-language economy once the reader knows
+      // which stat is being shown.
       const refs = extractBacktickRefs(where as string);
       const statAttr = refs[0];
       const whereRows = rows.map((r, i) => {

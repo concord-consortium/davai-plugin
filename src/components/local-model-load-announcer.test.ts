@@ -1,9 +1,9 @@
 import { createLoadAnnouncer } from "./local-model-load-announcer";
 import { DAVAI_SPEAKER } from "../constants";
 
-// PR #114 review item 10: focused unit coverage for the load-announcement logic extracted out of
-// App.tsx's own effect — exercises the exact milestone/first-progress/cache-load/per-model-reset
-// behavior App.test.tsx already covers end-to-end, but without rendering the whole App component.
+// Focused unit coverage for the load-announcement logic extracted out of App.tsx's own effect —
+// exercises the exact milestone/first-progress/cache-load/per-model-reset behavior App.test.tsx
+// already covers end-to-end, but without rendering the whole App component.
 describe("createLoadAnnouncer (PR #114 review item 10)", () => {
   it("announces once immediately on the very first download-progress tick, before any 25% milestone", () => {
     const addMessage = jest.fn();
@@ -93,7 +93,7 @@ describe("createLoadAnnouncer (PR #114 review item 10)", () => {
   it("ignores a loading event with no numeric progress and any status other than loading/ready", () => {
     const addMessage = jest.fn();
     const announce = createLoadAnnouncer(addMessage);
-    announce({ status: "loading" }); // no `progress` field at all
+    announce({ status: "loading" });
     announce({ status: "idle" });
     announce({ status: "error", error: "boom" });
     expect(addMessage).not.toHaveBeenCalled();

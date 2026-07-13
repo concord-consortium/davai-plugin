@@ -5,14 +5,14 @@ it("exports the focused-tools instruction content", () => {
   expect(localLlmInstructions).toContain('"tool": "final"');
   expect(localLlmInstructions).toContain("exact names");
   // The tool list is generated from the registry — the instructions must not hand-list tools
-  // or reference the removed raw-API surface.
+  // or reference the raw-API surface (create_request/resource).
   expect(localLlmInstructions).not.toContain("create_request");
   expect(localLlmInstructions).not.toContain("resource");
 });
 
 it("steers the model to get_stats for statistics not already shown", () => {
-  // Regression: the old wording implied the seed always has statistics, which encourages a
-  // small local model to eyeball-average raw values instead of calling get_stats.
+  // Wording matters here: implying the seed always has statistics would encourage a small local
+  // model to eyeball-average raw values instead of calling get_stats.
   expect(localLlmInstructions).toContain("get_stats");
   expect(localLlmInstructions).toContain(
     "The Selected graph section shows that graph's structure, its values, and any statistics " +
@@ -52,10 +52,8 @@ it("instructs the model to answer the request, not to summarize whatever the las
   );
 });
 
-// DAVAI-126 matrix round 5 Task G2: two models across two eval rounds invented units absent from
-// the data — a 4B said "kilograms" for Mass, and this round's 1.7B said "units: cm" for Height
-// (wrong — meters) in the create-graph case. Invented units are actively harmful misinformation
-// for a blind user who cannot see the data to catch the error themselves.
+// Invented units are actively harmful misinformation for a blind user who cannot see the data to
+// catch the error themselves.
 it("instructs the model never to guess units (DAVAI-126 matrix round 5 Task G2 — 4B invented " +
   "\"kilograms\" for Mass, 1.7B invented \"units: cm\" for Height when the true unit was meters)", () => {
   expect(localLlmInstructions).toContain(

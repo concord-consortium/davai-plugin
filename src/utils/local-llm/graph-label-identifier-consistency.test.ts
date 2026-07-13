@@ -1,14 +1,14 @@
-// DAVAI-126 matrix round 3 — umbrella closure test (central theme: IDENTIFIER SELF-CONSISTENCY).
+// Umbrella closure test (central theme: IDENTIFIER SELF-CONSISTENCY).
 //
 // Every surface that prints a graph reference (the seed header, tool results, correctives) must
-// resolve if a model echoes it back verbatim. E1 (graphLabel) ensures the printed label always
-// resolves via rung 3 (a descriptive fallback) or rung 1 (an actual title/name); E2 (resolveGraph
-// rung 0) covers bare numeric ids we printed historically. This file exercises EVERY surface named
-// in the E1 brief against ONE shared fixture — an untitled dot plot (no title, no name, forcing
-// the descriptive fallback tier) and a titled scatterplot (exercising the plain title tier) — and
-// proves the label each surface actually prints round-trips through resolveGraph back to the same
-// graph. This is deliberately an INTEGRATION test across tool modules (not a unit test of any one
-// of them — those already exist per-file); its only job is proving the cross-surface property.
+// resolve if a model echoes it back verbatim. graphLabel ensures the printed label always
+// resolves via rung 3 (a descriptive fallback) or rung 1 (an actual title/name); resolveGraph's
+// rung 0 covers bare numeric ids. This file exercises every such surface against ONE shared
+// fixture — an untitled dot plot (no title, no name, forcing the descriptive fallback tier) and a
+// titled scatterplot (exercising the plain title tier) — and proves the label each surface
+// actually prints round-trips through resolveGraph back to the same graph. This is deliberately
+// an INTEGRATION test across tool modules (not a unit test of any one of them — those already
+// exist per-file); its only job is proving the cross-surface property.
 
 jest.mock("../codap-api-utils", () => ({
   getGraphByID: jest.fn(),

@@ -17,10 +17,10 @@ export const computeStats = (values: number[]) => {
   return { count, mean, median, stdDev: Math.sqrt(variance), min: sorted[0], max: sorted[count - 1] };
 };
 
-// PR #114 review item 11: bare `n.toPrecision(6)` switches to exponential notation once a
-// non-integer value's integer part has more digits than the requested precision (e.g.
-// "1.23457e+6" for a large mean) — reads badly spoken aloud. roundSig (shared with graph-sketch.ts
-// via number-format.ts) never emits e-notation; sig=6 keeps this tool's existing precision level.
+// A bare `n.toPrecision(6)` switches to exponential notation once a non-integer value's integer
+// part has more digits than the requested precision (e.g. "1.23457e+6" for a large mean) — reads
+// badly spoken aloud. roundSig (shared with graph-sketch.ts via number-format.ts) never emits
+// e-notation; sig=6 keeps this tool's existing precision level.
 const round = (n: number) => roundSig(n, 6);
 
 // Numeric detection by value-sniffing (schema `type` is unreliable in real documents). Exported
@@ -30,11 +30,11 @@ export const coerceNumericValues = (values: unknown[]): number[] =>
   values
     .map((v) => {
       if (typeof v === "number") return v;
-      // Whitespace-only strings are blank data, not zero (PR #114 review item 11) — Number(" ")
-      // is a finite 0, which would otherwise count a blank cell as a real numeric zero. Booleans
-      // deliberately are NOT guarded here: Number(true)/Number(false) staying 1/0 is intentional
-      // (a mean over a boolean attribute is a real "proportion true" statistic), so only strings
-      // are trimmed before the blank check.
+      // Whitespace-only strings are blank data, not zero — Number(" ") is a finite 0, which
+      // would otherwise count a blank cell as a real numeric zero. Booleans deliberately are NOT
+      // guarded here: Number(true)/Number(false) staying 1/0 is intentional (a mean over a
+      // boolean attribute is a real "proportion true" statistic), so only strings are trimmed
+      // before the blank check.
       const trimmed = typeof v === "string" ? v.trim() : v;
       return trimmed !== "" && trimmed !== null && trimmed !== undefined ? Number(trimmed) : NaN;
     })
