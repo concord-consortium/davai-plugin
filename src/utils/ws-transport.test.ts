@@ -9,7 +9,7 @@ class MockWebSocket {
   static CLOSED = 3;
   static instances: MockWebSocket[] = [];
   static sent: any[] = [];
-  static onSend: (frame: any, ws: MockWebSocket) => void = () => {};
+  static onSend: (frame: any, ws: MockWebSocket) => void = jest.fn();
 
   readyState = 0;
   url: string;
@@ -43,7 +43,7 @@ class MockWebSocket {
 const reset = () => {
   MockWebSocket.instances = [];
   MockWebSocket.sent = [];
-  MockWebSocket.onSend = () => {};
+  MockWebSocket.onSend = jest.fn();
 };
 
 const opts = (extra: any = {}) => ({
