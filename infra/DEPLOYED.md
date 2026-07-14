@@ -12,8 +12,15 @@ Nothing else in the account was touched.**
 | AgentCore runtime | `davai_agentcore-0c9quSDd49` — ARN `arn:aws:bedrock-agentcore:us-east-1:816253370536:runtime/davai_agentcore-0c9quSDd49` |
 | CloudWatch logs | `/aws/bedrock-agentcore/...` (auto) |
 
-Network: `PUBLIC`. Protocol: `HTTP`. OpenAI key: **runtime env var** (no Secrets Manager resource).
+Network: `PUBLIC`. Protocol: `HTTP`. Provider keys: **runtime env vars** (no Secrets Manager resource).
 Image built locally (Docker ARM64) — **no CodeBuild** project created.
+
+## Runtime version 3 (2026-07-14): all three provider keys
+`update-agent-runtime` added `ANTHROPIC_API_KEY` and `GOOGLE_API_KEY` alongside the existing
+`OPENAI_API_KEY` (same image, `sse-20260714`). Verified live: gpt-4o-mini, claude-haiku-4-5,
+and gemini-3.5-flash each answer through `invoke-agent-runtime`. Note env vars are readable
+by anyone in the QA account with `get-agent-runtime` — rotate the keys when this experiment
+is torn down.
 
 ## Runtime version 2 (2026-07-14): SSE streaming
 `update-agent-runtime` moved the runtime to image tag `sse-20260714` (also pushed as `latest`;

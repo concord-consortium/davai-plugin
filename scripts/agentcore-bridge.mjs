@@ -94,8 +94,14 @@ wss.on("connection", (ws) => {
     }
 
     if (frame?.type === "cancel") {
-      inflight?.abort();
-      inflight = null;
+      // Mirror the real backend (runner.ts returns {status:"cancelled"} on abort, ws.ts
+      // sends it as a result frame): the client's suspended turn must RESOLVE, not hang.
+      // The deployed microVM still runs its turn to completion; the result is discarded.
+      if (inflight) {
+        inflight.abort();
+        inflight = null;
+        send({ type: "result", output: { status: "cancelled" } });
+      }
       return;
     }
 
