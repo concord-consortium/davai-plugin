@@ -1,15 +1,27 @@
 import { types, flow, Instance, getRoot, onSnapshot } from "mobx-state-tree";
 import { nanoid } from "nanoid";
 import { codapInterface } from "@concord-consortium/codap-plugin-api";
-import { DAVAI_SPEAKER, DEBUG_SPEAKER, STREAMING_STATUS } from "../constants";
+import { DAVAI_SPEAKER, DEBUG_SPEAKER, STREAMING_STATUS, USER_SPEAKER, WEBGPU_UNAVAILABLE_MESSAGE } from "../constants";
 import { appendedText } from "../utils/stream-utils";
 import { formatJsonMessage, formatElapsedTime } from "../utils/utils";
-import { getDataContexts, getGraphAttrData, getGraphByID, getTrimmedGraphDetails } from "../utils/codap-api-utils";
+import { getDataContexts, getGraphAttrData, getGraphByID, getTrimmedGraphDetails, sendCODAPRequest } from "../utils/codap-api-utils";
 import { isGraphSonifiable } from "../utils/graph-sonification-utils";
 import { ChatTranscriptModel } from "./chat-transcript-model";
 import { IToolCallData, IToolRequestError, IMessageResponse, ToolOutput } from "../types";
 import { postMessage } from "../utils/llm-utils";
 import { WsTransport, SeedMessage } from "../utils/ws-transport";
+import { localLlmService } from "../utils/local-llm/local-llm-service";
+import { runLocalTurn } from "../utils/local-llm/local-llm-loop";
+import { buildLocalSystemPrompt, buildTranscriptTurns } from "../utils/local-llm/local-llm-prompt";
+import { initializeLocalTools, dispatchTool, buildToolDocs, ILocalToolContext } from "../utils/local-llm/tools";
+import { buildGraphSeed, buildSchemaDigest, deriveCurrentGraphId } from "../utils/local-llm/local-llm-prefetch";
+import { runLocalEval, summarizeEval, IEvalTurnResult } from "../utils/local-llm/eval/eval-runner";
+import { IEvalCase } from "../utils/local-llm/eval/eval-cases";
+
+// Registers the curated local-tool set once per module load. Idempotent (registerTools does a
+// wholesale array reassignment), so re-import / hot-reload / multiple AssistantModel instances
+// never double-register or leak stale tool objects.
+initializeLocalTools();
 
 // A tool call the server could not prepare comes back as an error payload rather
 // than a normal CODAP request. This guard narrows the union so the normal path can
@@ -75,11 +87,23 @@ export const AssistantModel = types
     useWebSocket: !!process.env.WS_SERVER_URL as boolean,
     wsTransport: null as WsTransport | null,
     wsTransportThreadId: null as string | null,
+    // Monotonic counter guarding in-flight LOCAL turns. A local turn captures this at start;
+    // cancel, a model switch (setLlmId), and createThread all bump it. When the suspended
+    // `yield runLocalTurn(...)` resumes, a mismatch means the turn was cancelled/superseded, so
+    // its reply, error message, and flag/queue writes are all skipped (no zombie turn).
+    turnEpoch: 0 as number,
   }))
   .views((self) => ({
     get isAssistantMocked() {
       const llmData = JSON.parse(self.llmId || "");
       return llmData.id === "mock";
+    },
+    get isLocalLlm() {
+      try {
+        return JSON.parse(self.llmId || "").provider === "Local";
+      } catch {
+        return false;
+      }
     },
     // True whenever a response is being produced and the chat input should stay busy
     // (disabled, showing Cancel). isLoadingResponse spans the whole real-LLM turn
@@ -93,6 +117,12 @@ export const AssistantModel = types
     addDavaiMsg(msg: string) {
       self.transcriptStore.addMessage(DAVAI_SPEAKER, { content: msg });
     },
+    // Status chatter (WebGPU notice, cancel confirmation, local-model error) that should be
+    // shown/announced but kept out of the model conversation history (buildTranscriptTurns
+    // filters kind === "announcement").
+    addDavaiAnnouncement(msg: string) {
+      self.transcriptStore.addMessage(DAVAI_SPEAKER, { content: msg, kind: "announcement" });
+    },
     addDbgMsg (description: string, content: any) {
       self.transcriptStore.addMessage(DEBUG_SPEAKER, { description, content });
     },
@@ -100,7 +130,27 @@ export const AssistantModel = types
       self.showLoadingIndicator = show;
     },
     setLlmId(llmId: string) {
+      // A model switch invalidates any in-flight local turn: bump the epoch so a turn started
+      // under the previous model can't post its reply into the new model's conversation. Unlike
+      // a stale turn superseded by a NEWER turn (whose own finally will eventually clear the
+      // flags), a switch has no newer turn coming — so nothing else will ever clear
+      // isLoadingResponse/showLoadingIndicator, permanently disabling the chat input. Clear them
+      // here too, and drop any queued messages (their context is the transcript this switch just
+      // reset), mirroring handleCancel's local-turn branch. Written as direct property/array
+      // writes rather than via setShowLoadingIndicator/clearUserMessageQueue: those wrapper
+      // actions are defined in LATER `.actions()` blocks, which MST's type inference doesn't
+      // expose on `self` within this (earlier) block, even though same-block sibling calls
+      // would work fine at runtime.
+      if (llmId !== self.llmId) {
+        self.turnEpoch++;
+        self.isLoadingResponse = false;
+        self.showLoadingIndicator = false;
+        self.messageQueue.clear();
+      }
       self.llmId = llmId;
+    },
+    bumpTurnEpoch() {
+      self.turnEpoch++;
     },
     setThreadId(threadId: string) {
       self.threadId = threadId;
@@ -232,8 +282,11 @@ export const AssistantModel = types
           }
 
           // When the request is to create a graph component, we need to update the sonification
-          // store after the run.
-          if (action === "create" && resource === "component" && values.type === "graph") {
+          // store after the run. This guard only serves the server path (processToolCall's
+          // create_request branch); the local path achieves the same auto-select via its own
+          // refreshGraphs wiring below (see the toolCtx blocks in handleMessageSubmitLocalLlm and
+          // runLocalEvalTurns) rather than routing through here.
+          if (action === "create" && resource === "component" && values?.type === "graph") {
             const root = getRoot(self) as any;
             root.sonificationStore.setGraphs({ selectNewest: true });
           }
@@ -547,8 +600,329 @@ export const AssistantModel = types
       }
     });
 
+    // Local-model counterpart to handleMessageSubmit: runs the whole turn (including any
+    // tool rounds) in-browser via runLocalTurn, with no server round-trip. handleMessageSubmit
+    // delegates its own queue draining to the afterCreate/onSnapshot reactor below, but that
+    // reactor is hardcoded to call handleMessageSubmit — routing a queued local message through
+    // it would send it to the server. So this flow drains its own queue (one message at a time,
+    // recursing into itself) instead of relying on the shared reactor; the empirical MST timing
+    // (self.isLoadingResponse = false does not synchronously trigger the onSnapshot reaction
+    // before this finally block finishes) means the shared reactor never sees a non-empty queue
+    // to double-drain.
+    const handleMessageSubmitLocalLlm = flow(function* (messageText: string) {
+      // Same in-flight discipline as handleMessageSubmit: queue instead of overlapping.
+      if (self.isLoadingResponse) {
+        self.addDbgMsg("Processing", `User message added to queue: ${messageText}`);
+        self.messageQueue.push(messageText);
+        return;
+      }
+      // Capture the turn epoch. Cancel / model switch / createThread bump self.turnEpoch; if it
+      // changes while this flow is suspended at a `yield`, the turn has been superseded and must
+      // become a no-op on resume (no reply, no error, no flag/queue writes). `self.turnEpoch` is
+      // always re-read live here because MST flows resume against the current model state.
+      const myEpoch = self.turnEpoch;
+      const isCurrent = () => self.turnEpoch === myEpoch;
+      try {
+        self.setShowLoadingIndicator(true);
+        self.isLoadingResponse = true;
+        // The timer starts here, but the Begin/Completed pair is posted together at COMPLETION
+        // (see below): timingDebug reports the ELAPSED time from responseStartTime, so a Begin
+        // posted at this same instant would always read 0. The local turn is single-shot (no
+        // streaming "first chunk" moment), so begin == completed — the same convention as
+        // finalizeStream's non-streamed branch on the server path.
+        self.responseStartTime = performance.now();
+
+        if (!localLlmService.isWebGPUAvailable()) {
+          self.addDavaiAnnouncement(WEBGPU_UNAVAILABLE_MESSAGE);
+          return;
+        }
+
+        const { id } = JSON.parse(self.llmId);
+        // Idempotent: resolves immediately if the engine for this model is already loaded.
+        yield localLlmService.loadEngine(id);
+        if (!isCurrent()) return; // cancelled/superseded during the (possibly long) load
+
+        // Transcript turns are the history BEFORE this message. On a direct submit, App added
+        // the user row immediately before dispatch, so that row IS this message and must be
+        // excluded. On a finally-drained queue turn, the queued user row was likewise added by
+        // App at submit time, but it sits BEFORE the prior turn's DAVAI reply (which is now the
+        // trailing row) — so a trailing-only check misses it, leaving it in `turns` AND
+        // duplicated as `userMessage` below. Remove the LAST occurrence (scanning from the end)
+        // of a USER_SPEAKER row whose content matches messageText, wherever it sits, keeping
+        // everything else — including any earlier legitimate identical question — in order.
+        const msgs = self.transcriptStore.messages;
+        const lastMatchIndex = (() => {
+          for (let i = msgs.length - 1; i >= 0; i--) {
+            const m = msgs[i];
+            if (m.speaker === USER_SPEAKER && m.messageContent.content === messageText) return i;
+          }
+          return -1;
+        })();
+        const priorMessages =
+          lastMatchIndex === -1
+            ? msgs.slice()
+            : [...msgs.slice(0, lastMatchIndex), ...msgs.slice(lastMatchIndex + 1)];
+
+        // ILocalToolContext carries only plain utilities and REGISTERED actions
+        // (updateDataContexts/updateGraphs/setSelectedGraphID), never a bare flow closure: tool
+        // executors run from runLocalTurn's async continuation, outside any MST action context,
+        // and a bare flow() call there throws "a mst flow must always have a parent context".
+        // Routing through registered actions (via self / root store) self-roots a new context.
+        const root = getRoot(self) as any;
+        const toolCtx: ILocalToolContext = {
+          sendCODAPRequest,
+          dataContexts: () => self.dataContexts ?? {},
+          graphs: () => self.graphs ?? [],
+          // The store's explicit selection wins; a single-graph document falls back to that
+          // graph, since clicking a graph in CODAP never sets the store's selection (only
+          // auto-select-on-create/titleChange and the Sonification panel's menu do) — see
+          // deriveCurrentGraphId.
+          selectedGraphId: () => deriveCurrentGraphId(root.sonificationStore?.selectedGraphID, self.graphs ?? []),
+          setSelectedGraphID: (graphId) => root.sonificationStore.setSelectedGraphID(graphId),
+          // Cast to `any`: same-block sibling-action reference (see the `processToolCall`
+          // executeTool comment above) — TS doesn't see updateDataContexts/updateGraphs on
+          // `self` until this same `.actions()` block's `return` adds them to the live instance.
+          refreshDataContexts: async () => { await (self as any).updateDataContexts(); },
+          // Two separate stores, both needing a refresh after create_graph: updateGraphs refills
+          // the assistant's own graph list (self.graphs, used above for name resolution), while
+          // setGraphs({ selectNewest: true }) is the sonification store's registered flow that
+          // makes the newly created graph auto-selected — the same auto-select the server path
+          // gets from the processToolCall guard above. Without this second call the local path's
+          // graph creation would succeed but the Sonification menu would never pick up the new
+          // graph. setGraphs is a registered flow on another node, so — like setSelectedGraphID
+          // above — it's safely callable from this async continuation.
+          refreshGraphs: async () => {
+            await (self as any).updateGraphs();
+            await root.sonificationStore.setGraphs({ selectNewest: true });
+          },
+          // update_graph mutates an EXISTING graph, so there is no "newest" graph to select —
+          // refreshGraphs's setGraphs({ selectNewest: true }) call above would be a no-op in that
+          // case (setGraphs only reassigns selection when it finds a graph id NOT already in its
+          // snapshot), but relying on that being a no-op is fragile. This bare refill (no
+          // selectNewest follow-up at all) is the honest "just refresh the list" primitive for
+          // tools that must never disturb the current sonification selection.
+          refreshGraphList: async () => { await (self as any).updateGraphs(); },
+        };
+        // Reuses the existing effort machinery as the thinking toggle: effort "think" turns
+        // Qwen3 thinking on (via the /think prompt switch) and doubles the completion-token
+        // budget below (thinking consumes completion tokens; the default 1024 would truncate
+        // mid-think). Any other effort value (including "" / "none") keeps the /no_think
+        // behavior and the 1024 budget.
+        const thinking = self.effort === "think";
+        const selectedId = toolCtx.selectedGraphId();
+        const graphSeed: string = selectedId ? yield buildGraphSeed(String(selectedId), self.dataContexts ?? {}) : "";
+        const systemPrompt = buildLocalSystemPrompt({
+          toolDocs: buildToolDocs(),
+          schemaDigest: buildSchemaDigest(self.dataContexts ?? {}),
+          graphSeed,
+          thinking,
+        });
+        const response: string = yield runLocalTurn({
+          generate: (messages) => localLlmService.generate(messages, { maxTokens: thinking ? 2048 : 1024 }),
+          executeTool: (name, args) => dispatchTool(name, args, toolCtx),
+          systemPrompt,
+          turns: buildTranscriptTurns(priorMessages),
+          userMessage: messageText,
+          // Stops the loop between generations once this turn is no longer current, so a
+          // cancelled turn can't keep issuing generations or tool calls.
+          isCancelled: () => !isCurrent(),
+        });
+        // The turn may have been cancelled/superseded while runLocalTurn was running; if so,
+        // discard its (abandoned) result rather than posting a zombie reply.
+        if (!isCurrent()) return;
+        // The Begin/Completed pair posts together here (begin == completed for a non-streamed
+        // turn — see the responseStartTime comment above), BEFORE the reply, mirroring
+        // finalizeStream's non-streamed ordering on the server path: the debug rows must not
+        // trail the DAVAI message, or it would break App's announce/speak effect, which keys
+        // off "last message is a DAVAI message".
+        timingDebug(self.transcriptStore, "Begin response time", self.responseStartTime);
+        timingDebug(self.transcriptStore, "Completed response time", self.responseStartTime);
+        self.addDavaiMsg(response);
+      } catch (err) {
+        // A cancelled turn's rejection is expected fallout of interrupt(); don't surface an
+        // error zombie for it (and don't log a stale turn's elapsed time either).
+        if (!isCurrent()) return;
+        // The elapsed-to-failure is still the answer to "how long did it take". Posted as the
+        // same Begin/Completed pair as the success path (begin == completed), before the
+        // announcement for the same last-message-stays-DAVAI reason.
+        timingDebug(self.transcriptStore, "Begin response time", self.responseStartTime);
+        timingDebug(self.transcriptStore, "Completed response time", self.responseStartTime);
+        console.error("Local model turn failed:", err);
+        self.addDbgMsg("Local model turn failed", formatJsonMessage(err));
+        self.addDavaiAnnouncement("Sorry, I ran into an error running the local model on that request.");
+      } finally {
+        // Only tear down / drain if this is still the current turn. A stale turn resuming after
+        // cancel must NOT clear a fresh turn's isLoadingResponse or drain the queue (cancel
+        // already cleared the flags and the queue).
+        if (isCurrent()) {
+          self.isLoadingResponse = false;
+          self.setShowLoadingIndicator(false);
+          if (self.messageQueue.length > 0) {
+            const nextMessage = self.messageQueue.shift();
+            if (nextMessage) handleMessageSubmitLocalLlm(nextMessage);
+          }
+        }
+      }
+    });
+
+    // Scripted eval harness: runs a fixed battery of prompts against the SAME local-model building
+    // blocks as handleMessageSubmitLocalLlm (engine ensure, tool ctx, graph seed, system prompt,
+    // runLocalTurn) but as independent single-shot turns — no shared conversation, and no per-case
+    // transcript chatter. Only a start announcement and the final pass/fail summary are added to
+    // the transcript; the full per-case detail goes to the console (see summarizeEval's "details
+    // in the browser console"). Reuses the same turnEpoch guard as a normal local turn, so Cancel
+    // aborts an in-progress eval run the same way. Also mirrors handleMessageSubmitLocalLlm's
+    // overlap/busy-flag/try-catch discipline: isLoadingResponse/showLoadingIndicator gate the run
+    // against a concurrent chat turn or a second eval, and the whole body is wrapped so a failure
+    // announces and resolves instead of leaving an unhandled rejection or a stuck busy chat input.
+    const runLocalEvalTurns = flow(function* (cases: IEvalCase[]) {
+      if (self.isLoadingResponse) {
+        self.addDavaiAnnouncement(
+          "A response or eval run is already in progress — wait for it to finish (or press Cancel) before starting the eval."
+        );
+        return;
+      }
+      // Fixture guard: the battery's fixed prompts (e.g. describe-graph's zero-tool expectation)
+      // are only meaningful against the documented fixture — the Mammals sample with a Height dot
+      // plot selected. Running the battery without a resolvable current graph produces failures
+      // that are really "wrong fixture," not "the model got it wrong," so bail out before doing
+      // any work (no engine load, no flags set). Uses the same deriveCurrentGraphId fallback as
+      // the rest of the local path: a document with exactly one graph passes even with no
+      // explicit sonification-store selection, since clicking a graph in CODAP never sets that
+      // selection.
+      const root = getRoot(self) as any;
+      if (deriveCurrentGraphId(root.sonificationStore?.selectedGraphID, self.graphs ?? []) == null) {
+        self.addDavaiAnnouncement(
+          "Select a graph before running the eval — pick it in the Sonification section's graph menu " +
+          "(fixture: Mammals sample with a Height dot plot selected)."
+        );
+        return;
+      }
+      const myEpoch = self.turnEpoch;
+      const isCurrent = () => self.turnEpoch === myEpoch;
+      try {
+        self.isLoadingResponse = true;
+        self.setShowLoadingIndicator(true);
+
+        yield localLlmService.loadEngine(JSON.parse(self.llmId).id);
+        if (!isCurrent()) return;
+
+        self.addDavaiAnnouncement(`Running ${cases.length} local eval case${cases.length === 1 ? "" : "s"}…`);
+
+        const toolCtx: ILocalToolContext = {
+          sendCODAPRequest,
+          dataContexts: () => self.dataContexts ?? {},
+          graphs: () => self.graphs ?? [],
+          selectedGraphId: () => deriveCurrentGraphId(root.sonificationStore?.selectedGraphID, self.graphs ?? []),
+          setSelectedGraphID: (graphId) => root.sonificationStore.setSelectedGraphID(graphId),
+          refreshDataContexts: async () => { await (self as any).updateDataContexts(); },
+          // Same dual-store refresh as handleMessageSubmitLocalLlm's toolCtx (see its comment):
+          // updateGraphs refills self.graphs, and setGraphs({ selectNewest: true }) is what makes
+          // the Sonification menu auto-select a graph created via create_graph during an eval run.
+          refreshGraphs: async () => {
+            await (self as any).updateGraphs();
+            await root.sonificationStore.setGraphs({ selectNewest: true });
+          },
+          // Same no-selectNewest refill as handleMessageSubmitLocalLlm's toolCtx (see its comment)
+          // — used by update_graph so an eval run mutating an existing graph never disturbs
+          // selection the way create_graph's auto-select intentionally does.
+          refreshGraphList: async () => { await (self as any).updateGraphs(); },
+        };
+        // Same thinking wiring as handleMessageSubmitLocalLlm (see its comment): effort "think"
+        // enables the /think prompt switch and doubles the completion-token budget.
+        const thinking = self.effort === "think";
+        const selectedId = toolCtx.selectedGraphId();
+        const graphSeed: string = selectedId ? yield buildGraphSeed(String(selectedId), self.dataContexts ?? {}) : "";
+        const systemPrompt = buildLocalSystemPrompt({
+          toolDocs: buildToolDocs(),
+          schemaDigest: buildSchemaDigest(self.dataContexts ?? {}),
+          graphSeed,
+          thinking,
+        });
+
+        const runTurn = async (prompt: string): Promise<IEvalTurnResult> => {
+          const toolCalls: string[] = [];
+          // Wrap executeTool (the eval's OWN wiring) to record each result string as it returns,
+          // in call order. Deliberately not a change to runLocalTurn's onToolCall contract (that
+          // hook only ever reported the name) — a rejected/errored tool call never resolves, so a
+          // truly failing call is simply absent here rather than recorded with a placeholder, and
+          // whatever succeeded before the turn later throws stays recorded.
+          const toolResults: string[] = [];
+          try {
+            const final = await runLocalTurn({
+              generate: (messages) => localLlmService.generate(messages, { maxTokens: thinking ? 2048 : 1024 }),
+              executeTool: async (name, args) => {
+                const result = await dispatchTool(name, args, toolCtx);
+                toolResults.push(result);
+                return result;
+              },
+              systemPrompt,
+              turns: [], // eval cases are independent single-shot prompts, not a growing conversation
+              userMessage: prompt,
+              onToolCall: (name) => toolCalls.push(name),
+              isCancelled: () => !isCurrent(),
+            });
+            return { toolCalls, toolResults, final };
+          } catch (err) {
+            // runLocalEval's own catch (eval-runner.ts) only sees this rejection's message —
+            // attach what was recorded so far so the case's toolResults trace isn't silently
+            // dropped just because the turn errored partway through.
+            if (err instanceof Error) (err as Error & { toolResults?: string[] }).toolResults = toolResults;
+            throw err;
+          }
+        };
+
+        // Per-case incremental console output: MST axis-death spam and insertBefore errors
+        // interleave with the battery, and the user cannot attribute them to a case without a
+        // BEFORE/AFTER marker per case. The pure runner (eval-runner.ts) stays console-free;
+        // these callbacks are the ONLY place the actual console.log calls live.
+        const results = yield runLocalEval(
+          cases, runTurn, undefined,
+          // eslint-disable-next-line no-console
+          (start) => console.log(`DAVAI eval case ${start.index}/${start.total}: ${start.id} — ${start.prompt}`),
+          // eslint-disable-next-line no-console
+          (result) => console.log("DAVAI eval result", JSON.stringify(result))
+        );
+        if (!isCurrent()) return; // cancelled/superseded partway through the battery
+
+        // eslint-disable-next-line no-console
+        console.log("DAVAI local eval results", JSON.stringify(results, null, 2));
+        self.addDavaiAnnouncement(summarizeEval(results));
+      } catch (err) {
+        if (!isCurrent()) return;
+        console.error("Local eval failed:", err);
+        self.addDavaiAnnouncement(`Local eval failed: ${err instanceof Error ? err.message : String(err)}`);
+      } finally {
+        if (isCurrent()) {
+          self.isLoadingResponse = false;
+          self.setShowLoadingIndicator(false);
+          if (self.messageQueue.length > 0) {
+            const nextMessage = self.messageQueue.shift();
+            if (nextMessage) handleMessageSubmitLocalLlm(nextMessage);
+          }
+        }
+      }
+    });
+
     const handleCancel = flow(function* () {
       try {
+        if (self.isLocalLlm) {
+          localLlmService.interrupt();
+          // Invalidate the in-flight turn: its suspended flow will see the epoch change on
+          // resume and skip posting a reply / clearing the (soon-to-be-fresh) loading flag.
+          self.bumpTurnEpoch();
+          self.isLoadingResponse = false;
+          self.setShowLoadingIndicator(false);
+          // Drop any queued follow-ups too: handleMessageSubmitLocalLlm drains its own queue
+          // in its finally block (so it never routes a queued local message through the
+          // shared afterCreate/onSnapshot reactor below, which is hardcoded to the server's
+          // handleMessageSubmit). But cancelling here bypasses that finally entirely, so a
+          // non-empty queue would otherwise fall through to that shared reactor and leak
+          // onto the server path the moment isLoadingResponse flips to false.
+          self.clearUserMessageQueue();
+          self.addDavaiAnnouncement("I've cancelled processing your message.");
+          return;
+        }
         if (self.currentMessageId && self.threadId) {
           self.isCancelling = true;
           self.setShowLoadingIndicator(false);
@@ -586,15 +960,29 @@ export const AssistantModel = types
           self.isCancelling = true;
           yield handleCancel();
         }
+        // Invalidate any in-flight LOCAL turn too (which has no currentMessageId to gate the
+        // branch above): a reset thread must not receive a prior turn's late reply. Also drop
+        // any queued local message (mirrors handleCancel's local branch and setLlmId):
+        // handleMessageSubmitLocalLlm drains messageQueue itself in its own `finally` block so a
+        // queued local message is never routed through the shared afterCreate/onSnapshot reactor
+        // below (hardcoded to the server's handleMessageSubmit) — but createThread bypasses that
+        // `finally` entirely, so an uncleared queue would otherwise fall through to that reactor
+        // the moment isLoadingResponse flips to false and leak the message to the SERVER path.
+        self.bumpTurnEpoch();
         self.isLoadingResponse = false;
         self.isCancelling = false;
+        self.clearUserMessageQueue();
         self.threadId = nanoid();
       } catch (err) {
         console.error("Error creating thread:", err);
       }
     });
 
-    return { createThread, initializeAssistant, handleMessageSubmit, handleCancel, updateDataContexts, updateGraphs, setUseWebSocket };
+    return {
+      createThread, initializeAssistant, handleMessageSubmit, handleMessageSubmitLocalLlm,
+      handleCancel, updateDataContexts, updateGraphs, processToolCall, runLocalEvalTurns,
+      setUseWebSocket
+    };
   })
   .actions((self) => ({
     afterCreate() {

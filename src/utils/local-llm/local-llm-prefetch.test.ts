@@ -1,0 +1,341 @@
+jest.mock("../codap-api-utils", () => ({
+  getGraphByID: jest.fn(),
+  getGraphAdornments: jest.fn(),
+  getCollectionItemsForAttribute: jest.fn(),
+  getCollectionItemsForAttributePair: jest.fn(),
+}));
+import {
+  getGraphByID, getGraphAdornments, getCollectionItemsForAttribute, getCollectionItemsForAttributePair
+} from "../codap-api-utils";
+import { buildSchemaDigest, buildGraphSeed, deriveCurrentGraphId, formatAdornment } from "./local-llm-prefetch";
+
+describe("deriveCurrentGraphId", () => {
+  it("explicit selection wins over any graph list, including when it's a number", () => {
+    expect(deriveCurrentGraphId(42, [{ id: 1 }, { id: 2 }])).toBe("42");
+    expect(deriveCurrentGraphId("42", [{ id: 1 }, { id: 2 }])).toBe("42");
+  });
+
+  it("falls back to the sole graph's id when nothing is explicitly selected", () => {
+    expect(deriveCurrentGraphId(null, [{ id: 7 }])).toBe("7");
+    expect(deriveCurrentGraphId(undefined, [{ id: 7 }])).toBe("7");
+  });
+
+  it("returns null when there are zero graphs and nothing is selected", () => {
+    expect(deriveCurrentGraphId(null, [])).toBeNull();
+  });
+
+  it("returns null when there are multiple graphs and nothing is explicitly selected " +
+    "(ambiguous — cannot guess which one is current)", () => {
+    expect(deriveCurrentGraphId(null, [{ id: 1 }, { id: 2 }])).toBeNull();
+  });
+
+  it("treats an empty-string selection as unset, still falling back to a single graph", () => {
+    expect(deriveCurrentGraphId("", [{ id: 7 }])).toBe("7");
+    expect(deriveCurrentGraphId("", [{ id: 1 }, { id: 2 }])).toBeNull();
+  });
+});
+
+const dcs = {
+  Mammals: {
+    name: "Mammals",
+    collections: [{ name: "Cases", attrs: [
+      { name: "Height", type: "numeric" }, { name: "Habitat", type: "categorical" }, { name: "Mass" },
+    ]}],
+  },
+};
+
+it("builds a compact schema digest with names and types", () => {
+  const digest = buildSchemaDigest(dcs);
+  expect(digest).toContain("Mammals");
+  expect(digest).toContain("Cases");
+  expect(digest).toContain("Height (numeric)");
+  expect(digest).toContain("Habitat (categorical)");
+  expect(digest).toContain("Mass");
+  expect(digest).not.toContain("_categoryMap");
+  expect(digest.length).toBeLessThan(400);
+});
+
+// When the resolved attribute object carries a `unit` field, the digest names it too (fail-soft:
+// an attribute with no `unit` keeps the plain "(type)" format — see the pinned "Height
+// (numeric)" assertion above, which must still pass).
+it("adds the unit to a digest entry when the attribute object carries a `unit` field, leaving " +
+  "unit-less attributes formatted exactly as before", () => {
+  const dcsWithUnit = {
+    Mammals: {
+      name: "Mammals",
+      collections: [{ name: "Cases", attrs: [
+        { name: "Height", type: "numeric", unit: "meters" }, { name: "Habitat", type: "categorical" }, { name: "Mass" },
+      ]}],
+    },
+  };
+  const digest = buildSchemaDigest(dcsWithUnit);
+  expect(digest).toContain("Height (numeric, meters)");
+  expect(digest).toContain("Habitat (categorical)");
+  expect(digest).not.toContain("Habitat (categorical, ");
+});
+
+// A data context, collection, or attribute object missing its own `name` field rendered the
+// literal text "undefined" into the digest — a screen-reader user (or the model) would read/see
+// "undefined" as if it were a real name.
+it("never renders literal \"undefined\" into the digest when a dataContext/collection/attribute " +
+  "is missing its name field", () => {
+  const malformed = {
+    NoName: {
+      // dataContext itself has no `name`
+      collections: [
+        {
+          // collection has no `name`
+          attrs: [
+            { type: "numeric" }, // attribute has no `name`, but does have a type
+            { name: "Mass" },
+          ],
+        },
+      ],
+    },
+  };
+  const digest = buildSchemaDigest(malformed);
+  expect(digest).not.toMatch(/undefined/);
+});
+
+describe("formatAdornment never renders literal \"undefined\" for a malformed/incomplete " +
+  "adornment", () => {
+  it("an LSRL adornment missing rSquared", () => {
+    expect(formatAdornment({ type: "LSRL", slope: 2, intercept: 1 } as any)).not.toMatch(/undefined/);
+  });
+
+  it("a non-LSRL adornment missing value AND mean/min/max", () => {
+    expect(formatAdornment({ type: "Median" } as any)).not.toMatch(/undefined/);
+  });
+});
+
+// The `?? "unavailable"` guard is nullish-only (null/undefined); a NaN/Infinity numeric field —
+// neither null nor undefined — would sail through unguarded, rendering the literal "slope NaN"
+// or "mean Infinity" a screen reader would speak as if it were a real number.
+describe("formatAdornment never renders a non-finite numeric literal", () => {
+  it("a NaN slope renders 'slope unavailable', not 'slope NaN'", () => {
+    const out = formatAdornment({ type: "LSRL", slope: NaN, intercept: 1, rSquared: 0.5 } as any);
+    expect(out).toContain("slope unavailable");
+    expect(out).not.toMatch(/NaN/);
+  });
+
+  it("an Infinity mean renders 'mean unavailable', not 'mean Infinity'", () => {
+    const out = formatAdornment({ type: "Mean", mean: Infinity, min: 1, max: 2 } as any);
+    expect(out).toContain("mean unavailable");
+    expect(out).not.toMatch(/Infinity/);
+  });
+
+  it("a -Infinity value (the non-LSRL value field) renders '<Type>: unavailable', not '-Infinity'", () => {
+    const out = formatAdornment({ type: "Mean", value: -Infinity } as any);
+    expect(out).toBe("Mean: unavailable");
+  });
+
+  it("normal finite values render byte-identical to today's output (no regression)", () => {
+    expect(formatAdornment({ type: "LSRL", slope: 2.5, intercept: 1.2, rSquared: 0.87 } as any))
+      .toBe("LSRL: slope 2.5, intercept 1.2, R² 0.87");
+    expect(formatAdornment({ type: "Mean", value: 11 } as any)).toBe("Mean: 11");
+  });
+});
+
+describe("buildGraphSeed", () => {
+  beforeEach(() => {
+    jest.clearAllMocks();
+    (getGraphByID as jest.Mock).mockResolvedValue({
+      id: 42, title: "Heights", dataContext: "Mammals", xAttributeName: "Height", yAttributeName: null,
+    });
+    (getGraphAdornments as jest.Mock).mockResolvedValue([{ type: "Mean", isVisible: true, value: 11 }]);
+    (getCollectionItemsForAttribute as jest.Mock).mockResolvedValue([
+      { id: "1", values: { Height: 10 } }, { id: "2", values: { Height: 12 } },
+    ]);
+  });
+
+  it("includes structure, adornments, and all values for a univariate graph", async () => {
+    const seed = await buildGraphSeed("42", dcs);
+    expect(seed).toContain("Heights");
+    expect(seed).toContain("x-axis: Height");
+    expect(seed).toContain("Mean: 11");
+    expect(seed).toContain("10; 12");
+    expect(seed).toContain("2 cases");
+  });
+
+  it("uses the pair fetcher when both axes have attributes", async () => {
+    (getGraphByID as jest.Mock).mockResolvedValue({
+      id: 42, title: "H vs M", dataContext: "Mammals", xAttributeName: "Height", yAttributeName: "Mass",
+    });
+    (getCollectionItemsForAttributePair as jest.Mock).mockResolvedValue([
+      { id: "1", values: { Height: 10, Mass: 3 } },
+    ]);
+    const seed = await buildGraphSeed("42", dcs);
+    expect(getCollectionItemsForAttributePair).toHaveBeenCalled();
+    expect(seed).toContain("10, 3");
+  });
+
+  // An LSRL adornment carries slope/intercept/rSquared — not value or mean/min/max — so the
+  // adornments line needs its own branch (without one it renders "LSRL: mean undefined, min
+  // undefined, max undefined"). Format matches create-adornment.ts's formatData.
+  it("renders an LSRL adornment as slope/intercept/R² on the adornments line", async () => {
+    (getGraphByID as jest.Mock).mockResolvedValue({
+      id: 42, title: "H vs M", dataContext: "Mammals", xAttributeName: "Height", yAttributeName: "Mass",
+    });
+    (getGraphAdornments as jest.Mock).mockResolvedValue([
+      { type: "LSRL", isVisible: true, slope: 2.5, intercept: 1.2, rSquared: 0.87 },
+    ]);
+    (getCollectionItemsForAttributePair as jest.Mock).mockResolvedValue([
+      { id: "1", values: { Height: 10, Mass: 3 } },
+    ]);
+    const seed = await buildGraphSeed("42", dcs);
+    expect(seed).toContain("Adornments: LSRL: slope 2.5, intercept 1.2, R² 0.87.");
+    expect(seed).not.toContain("undefined");
+  });
+
+  it("includes ALL values with no sampling note when the graph has over 100 cases", async () => {
+    const items = Array.from({ length: 150 }, (_, i) => ({ id: String(i), values: { Height: i } }));
+    (getCollectionItemsForAttribute as jest.Mock).mockResolvedValue(items);
+
+    const seed = await buildGraphSeed("42", dcs);
+
+    expect(seed).toContain("150 cases");
+    expect(seed).not.toMatch(/sampled/i);
+    const valuesLine = seed.split("\n").find((l) => l.startsWith("Values"))!;
+    const rows = valuesLine.split(": ").slice(1).join(": ").split("; ");
+    expect(rows).toHaveLength(150);
+    expect(rows[0]).toBe("0");
+    expect(rows[149]).toBe("149");
+  });
+
+  it("returns empty string when the graph has no plotted attributes or fetch fails", async () => {
+    (getGraphByID as jest.Mock).mockResolvedValue({ id: 42, title: "Empty", dataContext: "Mammals" });
+    expect(await buildGraphSeed("42", dcs)).toBe("");
+    (getGraphByID as jest.Mock).mockRejectedValue(new Error("gone"));
+    expect(await buildGraphSeed("42", dcs)).toBe("");
+  });
+
+  it("returns empty string when the graph's data context is not in the store", async () => {
+    (getGraphByID as jest.Mock).mockResolvedValue({
+      id: 42, title: "Orphan", dataContext: "NotARealContext", xAttributeName: "Height", yAttributeName: null,
+    });
+    expect(await buildGraphSeed("42", dcs)).toBe("");
+  });
+
+  // The header uses the shared, RESOLVABLE graphLabel, which prefers a descriptive phrase over
+  // a bare numeric id — a model must be able to resolve whatever label it echoes back.
+  it("uses the shared graphLabel (descriptive fallback, not the raw id) in the header when the " +
+    "graph has neither a title nor a name", async () => {
+    (getGraphByID as jest.Mock).mockResolvedValue({
+      id: 885090985993956, dataContext: "Mammals", xAttributeName: "Height", yAttributeName: null,
+    });
+    const seed = await buildGraphSeed("885090985993956", dcs);
+    expect(seed).toContain('Selected graph "the Height dot plot"');
+    expect(seed).not.toContain("885090985993956");
+  });
+
+  // An empty-string title must be treated as absent, not printed verbatim as a blank label.
+  it("treats an empty-string title as absent in the header, falling through graphLabel's chain", async () => {
+    (getGraphByID as jest.Mock).mockResolvedValue({
+      id: 42, title: "", dataContext: "Mammals", xAttributeName: "Height", yAttributeName: null,
+    });
+    const seed = await buildGraphSeed("42", dcs);
+    expect(seed).toContain('Selected graph "the Height dot plot"');
+    expect(seed).not.toContain('Selected graph ""');
+  });
+
+  // The sketch (computed cluster/outlier/relationship facts) lives in the STRUCTURE section —
+  // inserted after the axes/adornments line — so it survives the prompt budget trim that drops
+  // only the Values line (see trimToBudget's SEED_VALUES_PREFIX in local-llm-prompt.ts, which
+  // matches a line starting literally with "Values").
+  it("inserts a non-empty sketch between the axes/adornments line and the Values line " +
+    "(univariate: reuses the same fetched items, no second fetch)", async () => {
+    const seed = await buildGraphSeed("42", dcs);
+    const lines = seed.split("\n");
+    const adornmentsIdx = lines.findIndex((l) => l.startsWith("x-axis:"));
+    const valuesIdx = lines.findIndex((l) => l.startsWith("Values"));
+    const sketchIdx = lines.findIndex((l) => l.startsWith("Sketch:"));
+    expect(adornmentsIdx).toBeGreaterThanOrEqual(0);
+    expect(valuesIdx).toBeGreaterThan(adornmentsIdx);
+    expect(sketchIdx).toBeGreaterThan(adornmentsIdx);
+    expect(sketchIdx).toBeLessThan(valuesIdx);
+    expect(seed).toContain("Sketch: 2 points. Height 10–12 (most between 10 and 12).");
+  });
+
+  it("omits the Sketch line (fails soft) when the graph has fewer than 2 numeric values, " +
+    "without breaking the rest of the seed", async () => {
+    (getCollectionItemsForAttribute as jest.Mock).mockResolvedValue([{ id: "1", values: { Height: "n/a" } }]);
+    const seed = await buildGraphSeed("42", dcs);
+    expect(seed).not.toMatch(/Sketch:/);
+    expect(seed).toContain("x-axis: Height");
+  });
+
+  it("passes the x/y unit through to the sketch when the resolved attribute object carries " +
+    "a `unit` field", async () => {
+    const dcsWithUnit = {
+      Mammals: {
+        name: "Mammals",
+        collections: [{ name: "Cases", attrs: [
+          { name: "Height", type: "numeric", unit: "meters" }, { name: "Habitat", type: "categorical" }, { name: "Mass" },
+        ]}],
+      },
+    };
+    const seed = await buildGraphSeed("42", dcsWithUnit);
+    expect(seed).toContain("Sketch: 2 points. Height (meters) 10–12 (most between 10 and 12).");
+  });
+
+  // End-to-end: an LSRL adornment returned by getGraphAdornments flows into computeGraphSketch,
+  // so the seed's Sketch section carries the regression line (transcribed from the adornment's
+  // own slope/intercept/R², never re-derived by the model).
+  it("scatter: the sketch's LSRL line uses the adornment's slope/intercept/R²", async () => {
+    (getGraphByID as jest.Mock).mockResolvedValue({
+      id: 42, title: "H vs M", dataContext: "Mammals", xAttributeName: "Height", yAttributeName: "Mass",
+    });
+    (getGraphAdornments as jest.Mock).mockResolvedValue([
+      { type: "LSRL", isVisible: true, slope: 2.5, intercept: 1.2, rSquared: 0.87 },
+    ]);
+    (getCollectionItemsForAttributePair as jest.Mock).mockResolvedValue([
+      { id: "1", values: { Height: 1, Mass: 4 } },
+      { id: "2", values: { Height: 2, Mass: 6 } },
+      { id: "3", values: { Height: 3, Mass: 9 } },
+    ]);
+    const seed = await buildGraphSeed("42", dcs);
+    expect(seed).toContain("LSRL: Mass = 2.5 × Height + 1.2; R² = 0.87");
+  });
+
+  it("scatter: inserts a sketch reflecting both axes, using the same pair-fetched items " +
+    "buildGraphSeed already fetched for the Values line", async () => {
+    (getGraphByID as jest.Mock).mockResolvedValue({
+      id: 42, title: "H vs M", dataContext: "Mammals", xAttributeName: "Height", yAttributeName: "Mass",
+    });
+    (getCollectionItemsForAttributePair as jest.Mock).mockResolvedValue([
+      { id: "1", values: { Height: 1, Mass: 10 } },
+      { id: "2", values: { Height: 2, Mass: 20 } },
+      { id: "3", values: { Height: 3, Mass: 30 } },
+    ]);
+    const seed = await buildGraphSeed("42", dcs);
+    expect(seed).toContain("Sketch: 3 points.");
+    expect(seed).toContain("Relationship:");
+  });
+
+  // The SEED (buildGraphSeed) feeds the exact same computeGraphSketch that get_graph_info uses,
+  // and must place a categorical sketch in the same STRUCTURE section slot (between
+  // axes/adornments and Values) that survives trimToBudget's trim rung, exactly like the numeric
+  // sketch does — categorical data is not a special case for placement.
+  it("categorical x categorical: inserts the categorical sketch in the same structure-section " +
+    "slot as a numeric sketch (between axes/adornments and Values), with real category names " +
+    "and counts — never the invented categories from the live hallucination report", async () => {
+    (getGraphByID as jest.Mock).mockResolvedValue({
+      id: 42, title: "Diet vs Habitat", dataContext: "Mammals", xAttributeName: "Diet", yAttributeName: "Habitat",
+    });
+    (getCollectionItemsForAttributePair as jest.Mock).mockResolvedValue([
+      { id: "1", values: { Diet: "meat", Habitat: "land" } },
+      { id: "2", values: { Diet: "meat", Habitat: "land" } },
+      { id: "3", values: { Diet: "plants", Habitat: "water" } },
+    ]);
+    const seed = await buildGraphSeed("42", dcs);
+    const lines = seed.split("\n");
+    const adornmentsIdx = lines.findIndex((l) => l.startsWith("x-axis:"));
+    const valuesIdx = lines.findIndex((l) => l.startsWith("Values"));
+    const sketchIdx = lines.findIndex((l) => l.startsWith("Sketch:"));
+    expect(sketchIdx).toBeGreaterThan(adornmentsIdx);
+    expect(sketchIdx).toBeLessThan(valuesIdx);
+    expect(seed).toContain("Sketch: 3 points (two categorical attributes).");
+    expect(seed).toContain("Diet (x): meat (2), plants (1). Habitat (y): land (2), water (1).");
+    expect(seed).not.toMatch(/herbivore|carnivore|omnivore|forest|grassland|aquatic/i);
+  });
+});
