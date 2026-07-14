@@ -146,6 +146,31 @@ const server = http.createServer(async (req, res) => {
       const invalid = validateTurn(body);
       if (invalid) return send(res, 400, { error: invalid });
 
+      // SSE streaming (opt-in via Accept, passed through by AgentCore's `accept`
+      // invoke parameter): emit the same frames the WebSocket transport uses —
+      // {type:"token"} at each shouldFlush boundary, then a terminal {type:"result"}.
+      // Callers that don't ask for event-stream get the original synchronous JSON.
+      if ((req.headers.accept || "").includes("text/event-stream")) {
+        res.writeHead(200, {
+          "content-type": "text/event-stream",
+          "cache-control": "no-cache",
+          connection: "keep-alive",
+          ...CORS_HEADERS,
+        });
+        const emit = (obj: unknown) => res.write(`data: ${JSON.stringify(obj)}\n\n`);
+        try {
+          const output = await runTurn(body as TurnInput, {
+            onToken: (text: string) => emit({ type: "token", text }),
+          });
+          emit({ type: "result", output });
+        } catch (e) {
+          const message = e instanceof Error ? e.message : String(e);
+          console.error("Turn failed:", message);
+          emit({ type: "error", error: message });
+        }
+        return res.end();
+      }
+
       try {
         const output = await runTurn(body as TurnInput);
         return send(res, 200, output);

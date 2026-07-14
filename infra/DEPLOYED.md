@@ -15,6 +15,16 @@ Nothing else in the account was touched.**
 Network: `PUBLIC`. Protocol: `HTTP`. OpenAI key: **runtime env var** (no Secrets Manager resource).
 Image built locally (Docker ARM64) — **no CodeBuild** project created.
 
+## Runtime version 2 (2026-07-14): SSE streaming
+`update-agent-runtime` moved the runtime to image tag `sse-20260714` (also pushed as `latest`;
+the prior image is preserved as tag `pre-sse` for rollback). `/invocations` now streams
+**SSE** when invoked with `accept: text/event-stream`: sentence-boundary `{type:"token"}`
+events (same `shouldFlush` cadence as the SAM server and the WS transport) followed by a
+terminal `{type:"result"}`. Callers that don't request event-stream get the original
+synchronous JSON — the repro below is unchanged. Verified live end-to-end: browser client in
+CODAP → `scripts/agentcore-bridge.mjs` (SigV4 + SSE relay) → deployed runtime, with the first
+sentence rendering ~0.5 s before turn completion.
+
 ## Verified live (through AgentCore `invoke-agent-runtime`, real OpenAI gpt-4o-mini)
 - Plain turn → `{"response":"pong"}` (HTTP 200).
 - **Multi-turn memory**: turn 1 "remember 7" → turn 2 (same `runtimeSessionId`) → `{"response":"7"}` —
