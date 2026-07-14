@@ -210,6 +210,7 @@ module.exports = (env, argv) => {
         DAVAI_VERSION,                         // derived from DEPLOY_PATH
         AUTH_TOKEN: undefined,                 // required env davai server token
         LANGCHAIN_SERVER_URL: undefined,       // required env langchain server url
+        WS_SERVER_URL: null,                   // optional AgentCore WebSocket endpoint; enables the WS transport
         REACT_APP_OPENAI_BASE_URL: null,       // optional openai url
         REACT_APP_OPENAI_API_KEY: null,        // optional openai api
       }),

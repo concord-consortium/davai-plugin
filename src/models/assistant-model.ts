@@ -72,7 +72,7 @@ export const AssistantModel = types
     responseStartTime: null as number | null,
     effort: "" as string,
     // WebSocket transport (P3). Off by default: the poll path is unchanged unless enabled.
-    useWebSocket: false as boolean,
+    useWebSocket: !!process.env.WS_SERVER_URL as boolean,
     wsTransport: null as WsTransport | null,
     wsTransportThreadId: null as string | null,
   }))
