@@ -145,3 +145,28 @@ describe("WsTransport.runTurn", () => {
     expect(MockWebSocket.sent.find((f) => f.type === "seed")).toBeUndefined();
   });
 });
+
+describe("WsTransport.cancel", () => {
+  beforeEach(reset);
+
+  it("sends a cancel frame on the open socket while a turn is in flight", async () => {
+    const t = new WsTransport(opts());
+    // Script the server: when the turn frame arrives, the client cancels mid-turn and
+    // the server acknowledges the abort with a cancelled result (mirrors backend ws.ts).
+    MockWebSocket.onSend = (frame, ws) => {
+      if (frame.message === "hi") {
+        t.cancel();
+        ws.emit({ type: "result", output: { status: "cancelled" } });
+      }
+    };
+    const out = await t.runTurn(baseTurn);
+    expect(MockWebSocket.sent).toContainEqual({ type: "cancel" });
+    expect(out).toEqual({ status: "cancelled" });
+  });
+
+  it("is a no-op when no socket is open", () => {
+    const t = new WsTransport(opts());
+    expect(() => t.cancel()).not.toThrow();
+    expect(MockWebSocket.sent).toEqual([]);
+  });
+});

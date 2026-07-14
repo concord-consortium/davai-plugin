@@ -928,6 +928,17 @@ export const AssistantModel = types
           self.setShowLoadingIndicator(false);
 
           self.addDavaiMsg("I've cancelled processing your message.");
+
+          // WebSocket: the AgentCore backend has no HTTP cancel endpoint — cancellation is
+          // a frame on the live socket, which aborts the in-flight turn server-side. The
+          // suspended wsRunTurn then resolves with a cancelled status that the submit flows
+          // already handle. (finally below still clears isCancelling.)
+          if (self.useWebSocket) {
+            self.wsTransport?.cancel();
+            self.addDbgMsg("Cancel request sent over WebSocket", self.currentMessageId);
+            return;
+          }
+
           const reqBody = {
             messageId: self.currentMessageId,
             threadId: self.threadId

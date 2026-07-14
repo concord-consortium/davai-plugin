@@ -8,6 +8,14 @@ import { DAVAI_SPEAKER, USER_SPEAKER } from "../constants";
 jest.mock("../utils/llm-utils", () => ({
   postMessage: jest.fn(),
 }));
+jest.mock("../utils/ws-transport", () => ({
+  WsTransport: jest.fn().mockImplementation(() => ({
+    // Never resolves: a submitted turn stays "in flight" so cancel paths can be exercised.
+    runTurn: jest.fn(() => new Promise(() => { /* never resolves */ })),
+    cancel: jest.fn(),
+    close: jest.fn(),
+  })),
+}));
 jest.mock("../utils/local-llm/local-llm-service", () => ({
   localLlmService: {
     isWebGPUAvailable: jest.fn(() => true),
@@ -48,6 +56,7 @@ jest.mock("../utils/codap-api-utils", () => ({
 }));
 
 import { localLlmService } from "../utils/local-llm/local-llm-service";
+import { WsTransport } from "../utils/ws-transport";
 import { runLocalTurn } from "../utils/local-llm/local-llm-loop";
 import { dispatchTool } from "../utils/local-llm/tools";
 import { buildSchemaDigest, buildGraphSeed } from "../utils/local-llm/local-llm-prefetch";
@@ -1632,5 +1641,31 @@ describe("refreshGraphList: refills graphs WITHOUT the selectNewest side effect"
     expect(root.sonificationStore.selectedGraphID).toBe(42);
 
     consoleLogSpy.mockRestore();
+  });
+});
+
+describe("handleCancel over WebSocket", () => {
+  afterEach(() => {
+    jest.clearAllMocks();
+  });
+
+  it("sends the cancel over the socket instead of POSTing to the legacy cancel endpoint", async () => {
+    const store = createStore();
+    store.setUseWebSocket(true);
+    // If the legacy HTTP path were (wrongly) taken, let it complete instead of hanging the test.
+    mockedPostMessage.mockResolvedValue({ ok: true, json: async () => ({}) } as Response);
+
+    // Park a turn in flight over the WS transport (the mocked runTurn never resolves);
+    // submitting sets currentMessageId, the gate on handleCancel's server branch.
+    store.handleMessageSubmit("hello");
+    await Promise.resolve();
+    expect(store.isLoadingResponse).toBe(true);
+
+    await store.handleCancel();
+
+    const transport = (WsTransport as unknown as jest.Mock).mock.results[0].value;
+    expect(transport.cancel).toHaveBeenCalledTimes(1);
+    expect(mockedPostMessage).not.toHaveBeenCalled();
+    expect(store.isCancelling).toBe(false);
   });
 });
