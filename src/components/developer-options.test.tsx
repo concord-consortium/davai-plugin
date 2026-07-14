@@ -11,6 +11,30 @@ import { IRootStore } from "../models/root-store";
 import { RootStoreProvider } from "../contexts/root-store-context";
 import { GraphSonificationModelType } from "../models/graph-sonification-model";
 
+// assistant-model.ts (imported above for its type, and transitively via root-store through
+// RootStoreProvider) statically imports local-llm-service.ts, which imports this factory.
+// It uses import.meta.url, which ts-jest's CJS transform cannot parse — mock it out the same
+// way local-llm-service.test.ts does (this file never exercises local-LLM behavior).
+jest.mock("../utils/local-llm/local-llm-worker-factory", () => ({
+  createLocalLlmWorker: jest.fn(() => ({} as Worker)),
+}));
+
+const mockIsWebGPUAvailable = jest.fn(() => false);
+jest.mock("../utils/local-llm/local-llm-service", () => ({
+  localLlmService: { isWebGPUAvailable: () => mockIsWebGPUAvailable() },
+}));
+
+// Declared separately (rather than inlined as `runLocalEvalTurns: jest.fn()`) because MST wraps
+// actions: the instance's `runLocalEvalTurns` property is not the same object as the jest.fn()
+// used to define it (no `.mock` inspection API on the wrapped property), even though calls are
+// still recorded on this original reference. Assertions below must use this spy, not
+// `mockAssistantStore.runLocalEvalTurns`.
+const runLocalEvalTurnsSpy = jest.fn();
+// Same rationale as runLocalEvalTurnsSpy above: assert on this reference, not
+// `mockAssistantStore.setEffort`. This is assistantStore.setEffort, distinct from appConfig's
+// own setEffortSpy used elsewhere in this file.
+const assistantSetEffortSpy = jest.fn();
+
 const MockAssistantModel = types
   .model("MockAssistantModel", {
     llmId: types.string,
@@ -20,7 +44,9 @@ const MockAssistantModel = types
   })
   .actions((self) => ({
     createThread: jest.fn(),
-    deleteThread: jest.fn()
+    deleteThread: jest.fn(),
+    runLocalEvalTurns: runLocalEvalTurnsSpy,
+    setEffort: assistantSetEffortSpy
   }));
 
 const mockTranscriptStore = ChatTranscriptModel.create({
@@ -80,9 +106,12 @@ describe("test developer options component", () => {
   beforeEach(() => {
     setEffortSpy.mockClear();
     setLlmIdSpy.mockClear();
+    runLocalEvalTurnsSpy.mockClear();
+    assistantSetEffortSpy.mockClear();
     mockConfig = {
       ...mockAppConfig,
       isDevMode: true,
+      isLocalLlm: false,
       setEffort: setEffortSpy,
       setLlmId: setLlmIdSpy,
     };
@@ -195,5 +224,103 @@ describe("test developer options component", () => {
 
     expect(setLlmIdSpy).toHaveBeenCalledWith(newLlmId);
     expect(setEffortSpy).toHaveBeenCalledWith("");
+  });
+
+  it("shows none/think effort options for a Local entry with effortLevels", () => {
+    // The effort menu logic (findEntryByLlmId/resolveEffort) is already generic — this pins that
+    // a Local llmList entry carrying effortLevels renders the same way any other model's does.
+    // findEntryByLlmId looks the model up by id IN llmList (not off llmId's own JSON), so the
+    // matching llmList entry must be present too — mirroring the Local WebGPU tests below.
+    mockConfig.llmList = [
+      { id: "mock", provider: "Mock", effortLevels: [] },
+      { id: "Qwen3-1.7B-q4f16_1-MLC", provider: "Local", effortLevels: ["none", "think"], defaultEffort: "none" },
+    ];
+    mockConfig.llmId = JSON.stringify({ id: "Qwen3-1.7B-q4f16_1-MLC", provider: "Local" });
+    mockConfig.effort = "none";
+
+    renderDeveloperOptions();
+
+    const select = screen.getByTestId("effort-select");
+    expect(select).toBeEnabled();
+    const opts = within(select).getAllByRole("option").map((o) => o.getAttribute("value"));
+    expect(opts).toEqual(["none", "think"]);
+  });
+
+  it("disables Local model options and annotates them when WebGPU is unavailable", () => {
+    mockIsWebGPUAvailable.mockReturnValue(false);
+    mockConfig.llmList = [
+      { id: "mock", provider: "Mock", effortLevels: [] },
+      { id: "Qwen3-1.7B-q4f16_1-MLC", provider: "Local", effortLevels: [] },
+    ];
+    renderDeveloperOptions();
+    const option = screen.getByRole("option", { name: /Qwen3-1\.7B.*requires WebGPU/ }) as HTMLOptionElement;
+    expect(option.disabled).toBe(true);
+  });
+
+  it("enables Local model options when WebGPU is available", () => {
+    mockIsWebGPUAvailable.mockReturnValue(true);
+    mockConfig.llmList = [
+      { id: "mock", provider: "Mock", effortLevels: [] },
+      { id: "Qwen3-1.7B-q4f16_1-MLC", provider: "Local", effortLevels: [] },
+    ];
+    renderDeveloperOptions();
+    const option = screen.getByRole("option", { name: "Local: Qwen3-1.7B-q4f16_1-MLC" }) as HTMLOptionElement;
+    expect(option.disabled).toBe(false);
+  });
+
+  it("renders the Run Local Eval button", () => {
+    renderDeveloperOptions();
+    const button = screen.getByTestId("run-local-eval-button");
+    expect(button).toBeInTheDocument();
+    expect(button).toHaveTextContent("Run Local Eval");
+  });
+
+  it("aria-disables the Run Local Eval button when the selected LLM is not Local", () => {
+    mockConfig.isLocalLlm = false;
+    renderDeveloperOptions();
+    expect(screen.getByTestId("run-local-eval-button")).toHaveAttribute("aria-disabled", "true");
+  });
+
+  it("enables (not aria-disabled) the Run Local Eval button when the selected LLM is Local", () => {
+    mockConfig.isLocalLlm = true;
+    renderDeveloperOptions();
+    expect(screen.getByTestId("run-local-eval-button")).toHaveAttribute("aria-disabled", "false");
+  });
+
+  it("calls assistantStore.runLocalEvalTurns when clicked with a Local model selected", () => {
+    mockConfig.isLocalLlm = true;
+    renderDeveloperOptions();
+    fireEvent.click(screen.getByTestId("run-local-eval-button"));
+    expect(runLocalEvalTurnsSpy).toHaveBeenCalledTimes(1);
+  });
+
+  it("does not call assistantStore.runLocalEvalTurns when clicked without a Local model selected", () => {
+    mockConfig.isLocalLlm = false;
+    renderDeveloperOptions();
+    fireEvent.click(screen.getByTestId("run-local-eval-button"));
+    expect(runLocalEvalTurnsSpy).not.toHaveBeenCalled();
+  });
+
+  it("syncs the Effort dropdown into the assistant store before running the eval " +
+    "(the eval must run against the effort the user actually selected, not whatever a prior " +
+    "chat submit last set)", () => {
+    mockConfig.isLocalLlm = true;
+    mockConfig.effort = "think";
+    renderDeveloperOptions();
+    fireEvent.click(screen.getByTestId("run-local-eval-button"));
+    expect(assistantSetEffortSpy).toHaveBeenCalledWith("think");
+    // Order matters: effort must be synced before the eval reads self.effort.
+    const effortCallOrder = assistantSetEffortSpy.mock.invocationCallOrder[0];
+    const evalCallOrder = runLocalEvalTurnsSpy.mock.invocationCallOrder[0];
+    expect(effortCallOrder).toBeLessThan(evalCallOrder);
+  });
+
+  it("does not sync effort or run the eval when clicked without a Local model selected", () => {
+    mockConfig.isLocalLlm = false;
+    mockConfig.effort = "think";
+    renderDeveloperOptions();
+    fireEvent.click(screen.getByTestId("run-local-eval-button"));
+    expect(assistantSetEffortSpy).not.toHaveBeenCalled();
+    expect(runLocalEvalTurnsSpy).not.toHaveBeenCalled();
   });
 });

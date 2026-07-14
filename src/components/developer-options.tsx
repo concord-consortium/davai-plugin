@@ -6,6 +6,8 @@ import { DAVAI_SPEAKER, GREETING } from "../constants";
 import { AppConfigToggleOptions } from "../models/app-config-model";
 import { useRootStore } from "../contexts/root-store-context";
 import { findEntryByLlmId, resolveEffort } from "../utils/llm-effort";
+import { localLlmService } from "../utils/local-llm/local-llm-service";
+import { evalCases } from "../utils/local-llm/eval/eval-cases";
 
 interface IProps {
   assistantStore: AssistantModelType;
@@ -53,6 +55,19 @@ export const DeveloperOptionsComponent = observer(({assistantStore, createToggle
     // will automatically re-initialize it via an effect in the App component
   };
 
+  const handleRunLocalEval = () => {
+    // Mirrors the button's own aria-disabled condition: a non-Local model has no local engine
+    // to run the eval battery against, so guard here too rather than relying solely on the
+    // disabled affordance (aria-disabled does not block clicks/keyboard activation like a real
+    // disabled attribute would).
+    if (!appConfig.isLocalLlm) return;
+    // Mirrors App.tsx's handleChatInputSubmit, which syncs self.effort from the Effort dropdown
+    // before every local submit. Without this, the eval reads whatever effort the LAST chat
+    // submit happened to set, silently ignoring the dropdown's current value.
+    assistantStore.setEffort(appConfig.effort);
+    assistantStore.runLocalEvalTurns(evalCases);
+  };
+
   return (
     !isDevMode ? <div/> :
     <div className="control-panel-section" role="group" aria-labelledby="dev-options-heading" data-testid="developer-options">
@@ -74,13 +89,19 @@ export const DeveloperOptionsComponent = observer(({assistantStore, createToggle
               // llmId. (llmList entries also carry effortLevels/defaultEffort, which must
               // not leak into the value or the select would match no option.)
               const value = JSON.stringify({ id: llm.id, provider: llm.provider });
+              // Local models require WebGPU (see local-llm-service.isWebGPUAvailable);
+              // gate the option here rather than at select-time so an unsupported browser
+              // can't silently pick a model that will never load.
+              const localUnavailable = llm.provider === "Local" && !localLlmService.isWebGPUAvailable();
+              const label = llm.id === "mock" ? "Mock LLM" : `${llm.provider}: ${llm.id}`;
               return (
                 <option
                   aria-selected={appConfig.llmId === value}
                   key={llm.id}
                   value={value}
+                  disabled={localUnavailable}
                 >
-                  {llm.id === "mock" ? "Mock LLM" : `${llm.provider}: ${llm.id}`}
+                  {localUnavailable ? `${label} (requires WebGPU)` : label}
                 </option>
               );
             })}
@@ -121,6 +142,15 @@ export const DeveloperOptionsComponent = observer(({assistantStore, createToggle
             onClick={() => sonificationStore.createCODAPSonificationTable()}
           >
             Create Sonification Table
+          </button>
+        </div>
+        <div className="user-option">
+          <button
+            data-testid="run-local-eval-button"
+            aria-disabled={!appConfig.isLocalLlm}
+            onClick={() => handleRunLocalEval()}
+          >
+            Run Local Eval
           </button>
         </div>
       </div>

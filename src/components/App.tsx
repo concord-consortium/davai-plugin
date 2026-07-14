@@ -10,7 +10,7 @@ import { useShortcutsService } from "../contexts/shortcuts-service-context";
 import { useSpeechService } from "../contexts/speech-service-context";
 import { ChatInputComponent } from "./chat-input";
 import { ChatTranscriptComponent } from "./chat-transcript";
-import { DAVAI_SPEAKER, LOADING_NOTE, USER_SPEAKER, notificationsToIgnore } from "../constants";
+import { DAVAI_SPEAKER, LOADING_NOTE, USER_SPEAKER, WEBGPU_UNAVAILABLE_MESSAGE, notificationsToIgnore } from "../constants";
 import { UserOptions } from "./user-options";
 import { GraphSonification } from "./graph-sonification";
 import { playSound } from "../utils/utils";
@@ -21,6 +21,9 @@ import { GraphSonificationScheduler } from "../models/graph-sonification-schedul
 import { SpeakingIndicator } from "./speaking-indicator";
 import { StreamingAnnouncer } from "./streaming-announcer";
 import { forSpeechMultiline } from "../utils/speech-text";
+import { localLlmService } from "../utils/local-llm/local-llm-service";
+import { findEntryByLlmId } from "../utils/llm-effort";
+import { createLoadAnnouncer } from "./local-model-load-announcer";
 
 import "./App.scss";
 
@@ -154,7 +157,64 @@ export const App = observer(() => {
   useEffect(() => {
     // Initialize the assistant on mount and when the LLM ID changes.
     handleInitializeAssistant();
+
+    // Drive the local in-browser engine's lifecycle off the same LLM-selection change:
+    // load it when a Local model is selected, and unload it (freeing GPU/WASM memory)
+    // when switching away to a server-backed model.
+    const entry = findEntryByLlmId(appConfig.llmList, appConfig.llmId);
+    if (entry?.provider === "Local") {
+      if (!localLlmService.isWebGPUAvailable()) {
+        transcriptStore.addMessage(DAVAI_SPEAKER, {
+          content: WEBGPU_UNAVAILABLE_MESSAGE,
+          kind: "announcement",
+        });
+        return;
+      }
+      const sizeNote = entry.id.includes("1.7B") ? "about 1.1 GB" : "about 2.3 GB";
+      transcriptStore.addMessage(DAVAI_SPEAKER, {
+        content: `Loading the local model ${entry.id}. First-time use downloads ${sizeNote}; afterwards it loads from the browser cache in a few seconds.`,
+        kind: "announcement",
+      });
+      localLlmService.loadEngine(entry.id).catch((err) => {
+        transcriptStore.addMessage(DAVAI_SPEAKER, {
+          content: `Sorry, the local model failed to load: ${err instanceof Error ? err.message : String(err)}`,
+          kind: "announcement",
+        });
+      });
+    } else {
+      // Fire-and-forget: surface an unexpected unload rejection instead of an unhandled promise.
+      localLlmService.unload().catch(console.error);
+    }
+  // appConfig.llmList and transcriptStore are intentionally omitted: llmList only changes
+  // in lockstep with llmId in this codebase, and transcriptStore is a stable reference off
+  // the root store — re-running this effect for either would re-trigger engine load/unload.
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [appConfig.llmId, handleInitializeAssistant]);
+
+  useEffect(() => {
+    // Cleanup-on-UNMOUNT only (empty deps — never re-runs while mounted): frees the local
+    // engine's GPU/WASM resources when the whole plugin unmounts (e.g. CODAP closes/reloads it),
+    // regardless of which model was last selected. Deliberately a SEPARATE effect from the
+    // llmId-driven load/unload effect above: that effect's own unload branch already handles
+    // switching AWAY from a Local model while mounted, and folding this into the same effect
+    // would re-fire this cleanup on every llmId change too (React cleans up the previous run
+    // before each re-run, not just on unmount), unloading mid-switch instead of only at the very
+    // end of the component's life.
+    return () => {
+      localLlmService.unload().catch(console.error);
+    };
+  }, []);
+
+  useEffect(() => {
+    // Announce coarse load milestones (25% steps) and readiness through the transcript so the
+    // aria-live path reads them — per-percent updates would spam the screen reader. The stateful
+    // logic itself lives in createLoadAnnouncer (local-model-load-announcer.ts), extracted out of
+    // this effect so it's unit-testable without rendering the whole App component; see its own
+    // focused tests.
+    const off = localLlmService.onLoadStateChange(createLoadAnnouncer(transcriptStore.addMessage));
+    return off;
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   useEffect(() => {
     const { messages } = transcriptStore;
@@ -198,6 +258,9 @@ export const App = observer(() => {
 
     if (appConfig.isAssistantMocked) {
       assistantStore.handleMessageSubmitMockAssistant();
+    } else if (appConfig.isLocalLlm) {
+      assistantStore.setEffort(appConfig.effort);
+      await assistantStore.handleMessageSubmitLocalLlm(messageText);
     } else {
       assistantStore.setStreamEnabled(appConfig.streamResponses);
       assistantStore.setEffort(appConfig.effort);

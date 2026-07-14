@@ -2,14 +2,17 @@ import { codapInterface, IResult, getListOfDataContexts, getDataContext } from "
 import { CodapItem, CodapItemValues, ICODAPComponentListItem, IGraphAttrData } from "../types";
 import { ICODAPGraphModel } from "../models/codap-graph-model";
 
-export const adornmentTypesOfInterest = ["Mean", "Median", "Standard Deviation"] as const;
+export const adornmentTypesOfInterest = ["Mean", "Median", "Standard Deviation", "LSRL"] as const;
 export type AdornmentType = typeof adornmentTypesOfInterest[number];
 
 export interface IAdornmentData {
+  intercept?: number;
   isVisible: boolean;
   max?: number;
   mean?: number;
   min?: number;
+  rSquared?: number;
+  slope?: number;
   type: AdornmentType;
   value?: number;
 }
@@ -357,6 +360,15 @@ export const getGraphAdornments = async (graphId: number): Promise<IAdornmentDat
               min: data.min,
               max: data.max,
               mean: data.mean
+            });
+            break;
+          case "LSRL":
+            results.push({
+              type: "LSRL",
+              isVisible: true,
+              slope: data.slope,
+              intercept: data.intercept,
+              rSquared: data.rSquared
             });
             break;
         }
