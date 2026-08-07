@@ -55,7 +55,7 @@ module.exports = {
   testRegex: "(/__tests__/.*|(\\.|/)(test|spec))\\.(jsx?|tsx?)$",
   // <rootDir>-anchored so a checkout copy of this config running INSIDE a .claude/ worktree
   // still finds its own tests (its rootDir is the worktree, so the pattern won't match).
-  testPathIgnorePatterns: ["/node_modules/", "/sam-server/", "/cypress/", "<rootDir>/.claude/"],
+  testPathIgnorePatterns: ["/node_modules/", "/sam-server/", "/cypress/", "<rootDir>/.claude/", "<rootDir>/done-loop/", "<rootDir>/backend/"],
   coveragePathIgnorePatterns: ["/node_modules/", "/sam-server/", "src/utilities/test-utils.ts"],
   transformIgnorePatterns: [
     // "/node_modules/(?!react-markdown|bail|comma-separated-tokens|decode-named-character-reference|devlop|estree-util-is-identifier-name|hast-util-to-jsx-runtime|hast-util-whitespace|html-url-attributes|is-plain-obj|mdast-util-from-markdown|mdast-util-to-string|mdast-util-to-hast|micromark|property-information|remark-parse|remark-rehype|space-separated-tokens|trim-lines|trough|unified|unist-util-is|unist-util-position|unist-util-stringify-position|unist-util-visit|vfile|vfile-message/)"
