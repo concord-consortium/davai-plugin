@@ -1,0 +1,6 @@
+{
+  "name": "davai-agentcore-done-loop",
+  "private": true,
+  "scripts": { "test": "playwright test" },
+  "devDependencies": { "@playwright/test": "^1.51.0" }
+}

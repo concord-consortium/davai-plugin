@@ -1,0 +1,95 @@
+{
+  "$comment": "DRAFT interaction suite for the done-loop (P1). Review target: ~8-12 interactions across two classes. 'modify' = tool-calling (issues create_request -> CODAP), judged on document-state deltas. 'describe' = non-tool (DAVAI answers from the dataContexts/graphs embedded in its system prompt), judged by LLM-judge semantic equivalence vs the old backend. Fixture is CODAP's built-in Mammals sample (load via `?sample=mammals&dashboard`), a stable known dataset.",
+  "fixture": {
+    "name": "mammals",
+    "load": "codap URL param ?sample=mammals&dashboard",
+    "attributes": ["Mammal", "Order", "LifeSpan", "Height", "Mass", "Sleep", "Speed", "Habitat", "Diet"],
+    "note": "27 cases in the standard sample; the latency/parity runner should snapshot the exact case/attribute counts at run time rather than hard-coding them."
+  },
+  "interactions": [
+    {
+      "id": "modify-scatter-height-mass",
+      "class": "modify",
+      "toolCalling": true,
+      "prompt": "Make a scatterplot of Height versus Mass.",
+      "assert": { "type": "graph-exists", "axes": { "x": ["Height", "Mass"], "y": ["Mass", "Height"] } }
+    },
+    {
+      "id": "modify-dotplot-lifespan",
+      "class": "modify",
+      "toolCalling": true,
+      "prompt": "Show me a dot plot of LifeSpan.",
+      "assert": { "type": "graph-exists", "numericAxis": "LifeSpan" }
+    },
+    {
+      "id": "modify-scatter-colored",
+      "class": "modify",
+      "toolCalling": true,
+      "prompt": "Make a scatterplot of Height versus Mass, colored by Diet.",
+      "assert": { "type": "graph-exists", "axes": { "x": ["Height", "Mass"], "y": ["Mass", "Height"] }, "legend": "Diet" }
+    },
+    {
+      "id": "modify-select-water",
+      "class": "modify",
+      "toolCalling": true,
+      "prompt": "Select all the mammals that live in the water.",
+      "assert": { "type": "selection", "predicate": "Habitat in (water, both)", "nonEmpty": true }
+    },
+    {
+      "id": "modify-new-attribute",
+      "class": "modify",
+      "toolCalling": true,
+      "prompt": "Add a new attribute called SpeedPerMass that is Speed divided by Mass.",
+      "assert": { "type": "attribute-exists", "name": "SpeedPerMass", "hasFormula": true }
+    },
+    {
+      "id": "modify-hide-sleep",
+      "class": "modify",
+      "toolCalling": true,
+      "prompt": "Hide the Sleep attribute.",
+      "assert": { "type": "attribute-hidden", "name": "Sleep" }
+    },
+    {
+      "id": "modify-group-by-order",
+      "class": "modify",
+      "toolCalling": true,
+      "prompt": "Group the mammals by their Order.",
+      "assert": { "type": "collection-grouped-by", "attribute": "Order" }
+    },
+    {
+      "id": "describe-counts",
+      "class": "describe",
+      "toolCalling": false,
+      "prompt": "How many mammals and how many attributes are in this dataset?",
+      "judge": { "mustState": ["case count matches fixture", "attribute count matches fixture"] }
+    },
+    {
+      "id": "describe-attributes",
+      "class": "describe",
+      "toolCalling": false,
+      "prompt": "What attributes does this dataset have, and what type is each one?",
+      "judge": { "mustState": ["lists the attribute names", "identifies numeric vs categorical roughly correctly"] }
+    },
+    {
+      "id": "describe-avg-lifespan",
+      "class": "describe",
+      "toolCalling": false,
+      "prompt": "What is the average lifespan of these mammals?",
+      "judge": { "mustState": ["a mean LifeSpan value within a small tolerance of the true mean"] }
+    },
+    {
+      "id": "describe-mass-distribution",
+      "class": "describe",
+      "toolCalling": false,
+      "prompt": "Describe the distribution of Mass. Is it skewed?",
+      "judge": { "semanticEquivalenceTo": "old-backend answer" }
+    },
+    {
+      "id": "describe-height-mass-relationship",
+      "class": "describe",
+      "toolCalling": false,
+      "prompt": "Is there a relationship between a mammal's Height and its Mass?",
+      "judge": { "semanticEquivalenceTo": "old-backend answer" }
+    }
+  ]
+}
