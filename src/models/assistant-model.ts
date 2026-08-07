@@ -10,6 +10,8 @@ import { ChatTranscriptModel } from "./chat-transcript-model";
 import { IToolCallData, IToolRequestError, IMessageResponse, ToolOutput } from "../types";
 import { postMessage } from "../utils/llm-utils";
 import { WsTransport, SeedMessage } from "../utils/ws-transport";
+import { getAgentCoreConnectUrl } from "../utils/agentcore-auth";
+import { getAgentCoreConfig } from "../utils/agentcore-config";
 import { localLlmService } from "../utils/local-llm/local-llm-service";
 import { runLocalTurn } from "../utils/local-llm/local-llm-loop";
 import { buildLocalSystemPrompt, buildTranscriptTurns } from "../utils/local-llm/local-llm-prompt";
@@ -83,8 +85,11 @@ export const AssistantModel = types
     streamEnabled: true as boolean,
     responseStartTime: null as number | null,
     effort: "" as string,
-    // WebSocket transport (P3). Off by default: the poll path is unchanged unless enabled.
-    useWebSocket: !!process.env.WS_SERVER_URL as boolean,
+    // WebSocket transport. On when a direct endpoint is configured (WS_SERVER_URL:
+    // local container or dev bridge) or when the build targets the deployed AgentCore
+    // stack (TRANSPORT=agentcore — webpack's default; unset under Jest, so tests keep
+    // exercising the poll path). TRANSPORT=poll restores the legacy SAM path.
+    useWebSocket: (!!process.env.WS_SERVER_URL || process.env.TRANSPORT === "agentcore") as boolean,
     wsTransport: null as WsTransport | null,
     wsTransportThreadId: null as string | null,
     // Monotonic counter guarding in-flight LOCAL turns. A local turn captures this at start;
@@ -336,11 +341,21 @@ export const AssistantModel = types
     const ensureTransport = (): WsTransport => {
       if (!self.wsTransport || self.wsTransportThreadId !== self.threadId) {
         self.wsTransport?.close();
-        self.wsTransport = new WsTransport({
-          url: process.env.WS_SERVER_URL || "ws://localhost:8080/ws",
-          authToken: process.env.AUTH_TOKEN || undefined,
-          onReconnect: () => buildReseedMessages(self.transcriptStore),
-        });
+        const wsUrl = process.env.WS_SERVER_URL;
+        self.wsTransport = new WsTransport(wsUrl
+          ? {
+              // Direct endpoint: local backend container or the dev SigV4 bridge.
+              url: wsUrl,
+              authToken: process.env.AUTH_TOKEN || undefined,
+              onReconnect: () => buildReseedMessages(self.transcriptStore),
+            }
+          : {
+              // Deployed AgentCore runtime: Cognito temp credentials -> SigV4
+              // presigned URL per (re)connect. Staging vs production is resolved
+              // from the build's DEPLOY_PATH (see agentcore-config.ts).
+              getConnectUrl: (sessionId) => getAgentCoreConnectUrl(getAgentCoreConfig(), sessionId),
+              onReconnect: () => buildReseedMessages(self.transcriptStore),
+            });
         self.wsTransportThreadId = self.threadId ?? null;
       }
       return self.wsTransport;

@@ -24,14 +24,38 @@ export interface SeedMessage {
 }
 
 export interface WsTransportOptions {
-  url: string;
+  // Static endpoint (local backend container or dev bridge). Session id and auth
+  // token are appended as query params.
+  url?: string;
   authToken?: string;
+  // Dynamic endpoint: called on every (re)connect to produce the URL — used for the
+  // deployed AgentCore runtime, whose presigned URLs expire and embed the session id
+  // in the signature. Exactly one of url/getConnectUrl must be provided.
+  getConnectUrl?: (sessionId: string) => Promise<string>;
   // Injectable for tests; defaults to the global WebSocket.
   WebSocketImpl?: typeof WebSocket;
   // Called when a turn opens a FRESH socket after prior turns (i.e. the microVM
   // likely idled out). Return the transcript to replay so the agent's context is
   // rebuilt server-side before the live turn runs. Return [] / undefined to skip.
   onReconnect?: () => SeedMessage[] | undefined;
+}
+
+// AgentCore's data plane caps WebSocket frames (32 KB per the service docs' stricter
+// figure). Frames whose JSON exceeds CHUNK_CHARS characters are split into
+// { type:"chunk", data, last? } envelopes and reassembled on the far side. 8000 UTF-16
+// chars can encode to at most ~24 KB of UTF-8, comfortably under the cap.
+export const CHUNK_CHARS = 8000;
+
+export function* chunkFrameJson(json: string): Generator<string> {
+  if (json.length <= CHUNK_CHARS) {
+    yield json;
+    return;
+  }
+  for (let i = 0; i < json.length; i += CHUNK_CHARS) {
+    const piece = json.slice(i, i + CHUNK_CHARS);
+    const last = i + CHUNK_CHARS >= json.length;
+    yield JSON.stringify(last ? { type: "chunk", data: piece, last: true } : { type: "chunk", data: piece });
+  }
 }
 
 // AgentCore runtimeSessionId must be >= 33 chars. Derive one from the client's
@@ -53,29 +77,33 @@ export class WsTransport {
   private socket: WebSocket | null = null;
   private pending: Pending | null = null;
   private turnCount = 0;
+  private chunkBuffer = "";
   readonly sessionId: string | null = null;
 
   constructor(opts: WsTransportOptions) {
     this.opts = opts;
     this.WS = opts.WebSocketImpl ?? (globalThis as any).WebSocket;
     if (!this.WS) throw new Error("No WebSocket implementation available");
+    if (!opts.url && !opts.getConnectUrl) throw new Error("WsTransport needs url or getConnectUrl");
   }
 
-  private connectUrl(threadId: string): string {
+  private async connectUrl(threadId: string): Promise<string> {
     const sid = deriveSessionId(threadId);
-    const sep = this.opts.url.includes("?") ? "&" : "?";
+    if (this.opts.getConnectUrl) return this.opts.getConnectUrl(sid);
+    const sep = this.opts.url!.includes("?") ? "&" : "?";
     let u = `${this.opts.url}${sep}session=${encodeURIComponent(sid)}`;
     if (this.opts.authToken) u += `&token=${encodeURIComponent(this.opts.authToken)}`;
     return u;
   }
 
   // Ensure an OPEN socket. Returns true if a NEW socket was opened this call.
-  private ensureOpen(threadId: string): Promise<boolean> {
+  private async ensureOpen(threadId: string): Promise<boolean> {
     if (this.socket && this.socket.readyState === this.WS.OPEN) {
-      return Promise.resolve(false);
+      return false;
     }
+    const url = await this.connectUrl(threadId);
     return new Promise<boolean>((resolve, reject) => {
-      const socket = new this.WS(this.connectUrl(threadId));
+      const socket = new this.WS(url);
       this.socket = socket;
       socket.onopen = () => resolve(true);
       socket.onerror = () => {
@@ -102,6 +130,18 @@ export class WsTransport {
       frame = JSON.parse(typeof ev.data === "string" ? ev.data : String(ev.data));
     } catch {
       return;
+    }
+    // Reassemble chunked frames (turns are serial, so one accumulator suffices).
+    if (frame?.type === "chunk") {
+      this.chunkBuffer += typeof frame.data === "string" ? frame.data : "";
+      if (!frame.last) return;
+      const joined = this.chunkBuffer;
+      this.chunkBuffer = "";
+      try {
+        frame = JSON.parse(joined);
+      } catch {
+        return;
+      }
     }
     const p = this.pending;
     if (!p) return;
@@ -130,7 +170,9 @@ export class WsTransport {
     if (!this.socket || this.socket.readyState !== this.WS.OPEN) {
       throw new Error("socket not open");
     }
-    this.socket.send(JSON.stringify(obj));
+    for (const wire of chunkFrameJson(JSON.stringify(obj))) {
+      this.socket.send(wire);
+    }
   }
 
   private sendSeed(threadId: string, llmId: string, messages: SeedMessage[]): Promise<any> {

@@ -146,6 +146,80 @@ describe("WsTransport.runTurn", () => {
   });
 });
 
+describe("chunked frames", () => {
+  beforeEach(reset);
+
+  it("splits oversized outbound frames into chunk envelopes the server can rejoin", async () => {
+    const big = "x".repeat(20_000);
+    MockWebSocket.onSend = (frame, ws) => {
+      if (frame.type === "chunk" && !frame.last) return; // accumulate silently
+      ws.emit({ type: "result", output: { response: "ok" } });
+    };
+    const t = new WsTransport(opts());
+    await t.runTurn({ ...baseTurn, message: big });
+    const chunks = MockWebSocket.sent.filter((f) => f.type === "chunk");
+    expect(chunks.length).toBeGreaterThan(1);
+    expect(chunks[chunks.length - 1].last).toBe(true);
+    // Rejoining the chunk data yields the original frame JSON
+    const rejoined = JSON.parse(chunks.map((c) => c.data).join(""));
+    expect(rejoined.message).toBe(big);
+    // No oversized frame was ever put on the wire
+    for (const f of MockWebSocket.sent) {
+      expect(JSON.stringify(f).length).toBeLessThan(10_000);
+    }
+  });
+
+  it("does not chunk small frames", async () => {
+    MockWebSocket.onSend = (_f, ws) => ws.emit({ type: "result", output: { response: "ok" } });
+    const t = new WsTransport(opts());
+    await t.runTurn(baseTurn);
+    expect(MockWebSocket.sent.filter((f) => f.type === "chunk")).toEqual([]);
+  });
+
+  it("reassembles inbound chunked frames into a single result", async () => {
+    const bigResponse = "y".repeat(20_000);
+    MockWebSocket.onSend = (_f, ws) => {
+      const json = JSON.stringify({ type: "result", output: { response: bigResponse } });
+      for (let i = 0; i < json.length; i += 8000) {
+        const last = i + 8000 >= json.length;
+        ws.emit(last ? { type: "chunk", data: json.slice(i, i + 8000), last: true }
+                     : { type: "chunk", data: json.slice(i, i + 8000) });
+      }
+    };
+    const t = new WsTransport(opts());
+    const out = await t.runTurn(baseTurn);
+    expect(out).toEqual({ response: bigResponse });
+  });
+});
+
+describe("getConnectUrl mode", () => {
+  beforeEach(reset);
+
+  it("uses the async URL factory with the derived session id on every fresh connect", async () => {
+    const urls: string[] = [];
+    MockWebSocket.onSend = (frame, ws) => {
+      if (frame.type === "seed") return ws.emit({ type: "seeded", count: frame.messages.length });
+      ws.emit({ type: "result", output: { response: "ok" } });
+    };
+    const t = new WsTransport(opts({
+      url: undefined,
+      getConnectUrl: async (sessionId: string) => {
+        urls.push(sessionId);
+        return `wss://signed.example/ws?sid=${sessionId}`;
+      },
+      onReconnect: () => [{ role: "user", content: "earlier" }],
+    }));
+    await t.runTurn(baseTurn);
+    MockWebSocket.instances[0].close(); // simulate idle-out
+    await t.runTurn({ ...baseTurn, message: "again" });
+    expect(urls).toEqual([deriveSessionId("t-abc"), deriveSessionId("t-abc")]);
+    expect(MockWebSocket.instances.map((w) => w.url)).toEqual([
+      `wss://signed.example/ws?sid=${deriveSessionId("t-abc")}`,
+      `wss://signed.example/ws?sid=${deriveSessionId("t-abc")}`,
+    ]);
+  });
+});
+
 describe("WsTransport.cancel", () => {
   beforeEach(reset);
 
