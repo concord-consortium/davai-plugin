@@ -300,6 +300,29 @@ describe("failure and timeout handling", () => {
     await expect(t.runTurn(baseTurn)).rejects.toThrow("WebSocket connect timed out");
   });
 
+  it("rejects the turn and resets the socket when inbound chunks exceed the cap", async () => {
+    MockWebSocket.onSend = (_f, ws) => {
+      // Nonterminal chunks forever: the client must bail out, not buffer unboundedly.
+      const piece = "z".repeat(1_000_000);
+      ws.emit({ type: "chunk", data: piece });
+      ws.emit({ type: "chunk", data: piece });
+      ws.emit({ type: "chunk", data: piece });
+    };
+    const t = new WsTransport(opts());
+    await expect(t.runTurn(baseTurn)).rejects.toThrow("Chunked server message too large");
+  });
+
+  it("rejects a second runTurn while one is already in flight", async () => {
+    MockWebSocket.onSend = () => { /* first turn never completes */ };
+    const t = new WsTransport(opts());
+    const first = t.runTurn(baseTurn);
+    first.catch(() => { /* rejected by close() below */ });
+    await new Promise((r) => setTimeout(r, 0)); // first turn is now pending
+    await expect(t.runTurn({ ...baseTurn, message: "second" }))
+      .rejects.toThrow("A turn is already in flight");
+    t.close();
+  });
+
   it("rejects construction with both url and getConnectUrl, or neither", () => {
     expect(() => new WsTransport(opts({ getConnectUrl: async () => "wss://x" })))
       .toThrow("exactly one");

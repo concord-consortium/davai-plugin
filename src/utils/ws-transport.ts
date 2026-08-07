@@ -52,6 +52,10 @@ export interface WsTransportOptions {
 // chars can encode to at most ~24 KB of UTF-8, comfortably under the cap.
 export const CHUNK_CHARS = 8000;
 
+// Ceiling for a reassembled inbound message (mirrors MAX_REASSEMBLED_CHARS in
+// backend/src/ws.ts): a misbehaving server must not grow the buffer without bound.
+export const MAX_REASSEMBLED_CHARS = 2 * 1024 * 1024;
+
 export function* chunkFrameJson(json: string): Generator<string> {
   if (json.length <= CHUNK_CHARS) {
     yield json;
@@ -192,6 +196,18 @@ export class WsTransport {
     // Reassemble chunked frames (turns are serial, so one accumulator suffices).
     if (frame?.type === "chunk") {
       this.chunkBuffer += typeof frame.data === "string" ? frame.data : "";
+      if (this.chunkBuffer.length > MAX_REASSEMBLED_CHARS) {
+        this.chunkBuffer = "";
+        const socket = this.socket;
+        this.socket = null;
+        this.failPending("Chunked server message too large");
+        try {
+          socket?.close();
+        } catch {
+          /* ignore */
+        }
+        return;
+      }
       if (!frame.last) return;
       const joined = this.chunkBuffer;
       this.chunkBuffer = "";
@@ -251,6 +267,11 @@ export class WsTransport {
    * just a subsequent runTurn({ kind:"tool", ... }) on the same socket.
    */
   async runTurn(input: WsTurnInput, handlers: { onToken?: (text: string) => void } = {}): Promise<any> {
+    // Turns are serial by contract (the assistant model enforces this); reject rather
+    // than silently overwrite `pending`, which would strand the first caller's promise.
+    if (this.pending) {
+      throw new Error("A turn is already in flight on this transport");
+    }
     const fresh = await this.ensureOpen(input.threadId);
 
     // Idle re-seed: a fresh socket after prior turns means the microVM was recycled;
