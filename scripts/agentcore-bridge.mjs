@@ -36,7 +36,7 @@ const ex = promisify(execFile);
 
 const arg = (n, d) => { const i = process.argv.indexOf(`--${n}`); return i >= 0 ? process.argv[i + 1] : d; };
 const PORT = parseInt(arg("port", "8100"), 10);
-const ARN = arg("arn", "arn:aws:bedrock-agentcore:us-east-1:816253370536:runtime/davai_agentcore-0c9quSDd49");
+const ARN = arg("arn", "arn:aws:bedrock-agentcore:us-east-1:816253370536:runtime/davai_agentcore_staging-guJgof856F");
 const REGION = arg("region", "us-east-1");
 const PROFILE = arg("profile", process.env.AWS_PROFILE || "agentcore");
 
