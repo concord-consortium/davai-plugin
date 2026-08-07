@@ -21,8 +21,8 @@ import {
 } from "./agent/utils/stream-utils.js";
 import type { TurnInput } from "./types.js";
 
-// Same as the old buildResponse: a tool call becomes a requires_action payload;
-// otherwise coerce content to a string (Anthropic can return content-block arrays).
+// A tool call becomes a requires_action payload; otherwise coerce content to a
+// string (Anthropic can return content-block arrays).
 const buildResponse = async (message: any) => {
   const toolCalls = extractToolCalls(message);
   if (toolCalls?.[0]) {

@@ -1,4 +1,4 @@
-// WebSocket transport for the AgentCore backend (P3). Replaces the 0.5-1s poll loop.
+// WebSocket transport for the AgentCore backend. Replaces the 0.5-1s poll loop.
 //
 // Framework-free and injectable (pass WebSocketImpl in tests) so it can be unit
 // tested without a browser or a live server. One persistent socket per transport

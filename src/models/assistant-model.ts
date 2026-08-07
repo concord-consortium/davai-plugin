@@ -340,7 +340,7 @@ export const AssistantModel = types
     };
 
     // Lazily create (and re-pin on threadId change) the session-pinned WebSocket
-    // transport. WS_SERVER_URL points at the AgentCore /ws endpoint.
+    // transport.
     const ensureTransport = (): WsTransport => {
       if (!self.wsTransport || self.wsTransportThreadId !== self.threadId) {
         self.wsTransport?.close();

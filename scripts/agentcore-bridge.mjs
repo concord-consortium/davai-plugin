@@ -1,9 +1,8 @@
-// Local SigV4 bridge: lets the browser client talk to the DEPLOYED AgentCore runtime.
-//
-// The client's WebSocket transport (src/utils/ws-transport.ts) can't reach the deployed
-// runtime directly — AgentCore's data plane only accepts SigV4-signed InvokeAgentRuntime
-// calls, which a browser can't produce. This bridge speaks the backend's WS frame
-// protocol (backend/src/ws.ts) on localhost and forwards each turn via the AWS SDK,
+// Local SigV4 bridge: lets the browser client talk to the DEPLOYED AgentCore runtime
+// using the developer's own AWS credentials (`aws login`) instead of the Cognito
+// identity pool the production transport uses — useful for poking the runtime without
+// depending on the pool. This bridge speaks the backend's WS frame protocol
+// (backend/src/ws.ts) on localhost and forwards each turn via the AWS SDK,
 // requesting `text/event-stream` so the container's SSE frames (sentence-boundary
 // {type:"token"} events, then {type:"result"}) are relayed to the client as they arrive.
 // If the container answers with plain JSON (an image without SSE support), the full

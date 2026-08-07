@@ -3,8 +3,8 @@
 // Implements the AgentCore Runtime service contract:
 //   GET  /ping         -> health check (200)
 //   POST /invocations  -> run one turn, return the client-facing output JSON
-// on port 8080. The WebSocket endpoint (/ws) and SSE streaming are added in P3;
-// for P2 this returns the final turn result synchronously (agent parity first).
+// on port 8080. /invocations returns the turn synchronously, or streams SSE when
+// the caller sends Accept: text/event-stream; /ws (ws.ts) is the WebSocket transport.
 
 import "dotenv/config";
 import http from "node:http";
@@ -198,7 +198,7 @@ const server = http.createServer(async (req, res) => {
   }
 });
 
-// WebSocket transport (P3): streams tokens + collapses the client tool round-trip.
+// WebSocket transport: streams tokens + collapses the client tool round-trip.
 // Not attached in OLD_MODE (that server only speaks the legacy poll/queue routes).
 if (!OLD_MODE) attachWebSocket(server);
 
