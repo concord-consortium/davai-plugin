@@ -131,8 +131,9 @@ export class WsTransport {
   private async connectUrl(threadId: string): Promise<string> {
     const sid = deriveSessionId(threadId);
     if (this.opts.getConnectUrl) return this.opts.getConnectUrl(sid);
-    const sep = this.opts.url!.includes("?") ? "&" : "?";
-    let u = `${this.opts.url}${sep}session=${encodeURIComponent(sid)}`;
+    const base = this.opts.url ?? ""; // constructor enforces url when getConnectUrl is absent
+    const sep = base.includes("?") ? "&" : "?";
+    let u = `${base}${sep}session=${encodeURIComponent(sid)}`;
     if (this.opts.authToken) u += `&token=${encodeURIComponent(this.opts.authToken)}`;
     return u;
   }
