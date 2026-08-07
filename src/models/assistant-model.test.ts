@@ -55,6 +55,7 @@ jest.mock("../utils/codap-api-utils", () => ({
   getGraphDetails: jest.fn().mockResolvedValue([]),
 }));
 
+import { codapInterface } from "@concord-consortium/codap-plugin-api";
 import { localLlmService } from "../utils/local-llm/local-llm-service";
 import { WsTransport } from "../utils/ws-transport";
 import { runLocalTurn } from "../utils/local-llm/local-llm-loop";
@@ -379,6 +380,59 @@ describe("handleMessageSubmitLocalLlm", () => {
 
     release("done"); // let the abandoned first turn settle so the test can exit cleanly
     await first.catch(() => undefined);
+  });
+
+  it("discards a WS result that arrives after cancel (cancel frame lost the race)", async () => {
+    // The server's abort is only checked between stream chunks, and the cancel frame
+    // races the result frame across the AgentCore hop. When the REAL result arrives
+    // after handleCancel, the suspended turn must discard it — not render it.
+    const store = createStore();
+    store.setUseWebSocket(true);
+    let release: (v: any) => void = () => undefined;
+    (WsTransport as jest.Mock).mockImplementationOnce(() => ({
+      runTurn: jest.fn(() => new Promise((res) => { release = res; })),
+      cancel: jest.fn(),
+      close: jest.fn(),
+    }));
+
+    const turn = store.handleMessageSubmit("write a long essay");
+    await Promise.resolve();
+    expect(store.isLoadingResponse).toBe(true);
+
+    await store.handleCancel();
+
+    release({ response: "A late zombie response." });
+    await turn;
+
+    const contents = store.transcriptStore.messages.map((m) => m.messageContent.content);
+    expect(contents).toContain("I've cancelled processing your message.");
+    expect(contents).not.toContain("A late zombie response.");
+  });
+
+  it("does not execute a tool call from a WS result that arrives after cancel", async () => {
+    const store = createStore();
+    store.setUseWebSocket(true);
+    let release: (v: any) => void = () => undefined;
+    (WsTransport as jest.Mock).mockImplementationOnce(() => ({
+      runTurn: jest.fn(() => new Promise((res) => { release = res; })),
+      cancel: jest.fn(),
+      close: jest.fn(),
+    }));
+
+    const turn = store.handleMessageSubmit("make a scatterplot");
+    await Promise.resolve();
+    await store.handleCancel();
+
+    // Late requires_action: without the latch this would run the CODAP request
+    // ("the graph appears seconds after cancelling").
+    release({
+      status: "requires_action",
+      tool_call_id: "call-1",
+      request: { action: "create", resource: "component", values: { type: "graph" } },
+    });
+    await turn;
+
+    expect((codapInterface.sendRequest as jest.Mock)).not.toHaveBeenCalled();
   });
 
   it("posts no reply after cancel when the in-flight turn later settles", async () => {

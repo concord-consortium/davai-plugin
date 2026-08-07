@@ -148,7 +148,9 @@ export function attachWebSocket(server: Server): WebSocketServer {
           signal: controller.signal,
           onToken: (text) => send({ type: "token", text }),
         });
-        send({ type: "result", output });
+        // A cancel that landed after the stream finished (runTurn only observes the
+        // signal between chunks) still means cancelled: never ship the real output.
+        send({ type: "result", output: controller.signal.aborted ? { status: "cancelled" } : output });
       } catch (e) {
         send({ type: "error", error: e instanceof Error ? e.message : String(e) });
       } finally {

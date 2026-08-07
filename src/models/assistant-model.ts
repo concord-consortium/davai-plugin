@@ -394,9 +394,11 @@ export const AssistantModel = types
         // WebSocket: return the tool result over the same socket — no second job, no poll.
         if (self.useWebSocket) {
           const wsOut = yield wsRunTurn({ ...reqBody, kind: "tool" });
-          if (wsOut?.status === "cancelled") {
+          // Second disjunct: handleCancel latched the turn dead while this tool round
+          // was in flight (see handleCancel's WS branch) — discard the late result.
+          if (wsOut?.status === "cancelled" || self.currentMessageId === null) {
             self.finishStream();
-            self.addDbgMsg("Tool call job was cancelled on the server", toolCallId);
+            self.addDbgMsg("Tool call job was cancelled", toolCallId);
             return;
           }
           return wsOut;
@@ -511,9 +513,12 @@ export const AssistantModel = types
 
           if (self.useWebSocket) {
             const wsOut = yield wsRunTurn({ ...reqBody, kind: "message" });
-            if (wsOut?.status === "cancelled") {
+            // Discard cancelled turns whether the server converted them (status:
+            // "cancelled") or the cancel lost the race and a real result arrived after
+            // handleCancel latched the turn dead (currentMessageId no longer ours).
+            if (wsOut?.status === "cancelled" || self.currentMessageId !== messageId) {
               self.finishStream();
-              self.addDbgMsg("Job was cancelled on the server", messageId);
+              self.addDbgMsg("Discarding result of cancelled turn", messageId);
               return;
             }
             data = wsOut;
@@ -587,6 +592,12 @@ export const AssistantModel = types
           // place, or adds + announces it when nothing was streamed). With no pre-tool
           // text, just close out any partial stream.
           while (data?.status === "requires_action" && data?.tool_call_id) {
+            // Cancel landed during a tool round: stop before executing the CODAP action.
+            if (self.useWebSocket && self.currentMessageId !== messageId) {
+              self.finishStream();
+              self.addDbgMsg("Discarding tool call of cancelled turn", messageId);
+              return;
+            }
             if (typeof data.response === "string" && data.response.trim()) {
               self.finalizeStream(data.response);
             } else {
@@ -949,11 +960,17 @@ export const AssistantModel = types
 
           // WebSocket: the AgentCore backend has no HTTP cancel endpoint — cancellation is
           // a frame on the live socket, which aborts the in-flight turn server-side. The
-          // suspended wsRunTurn then resolves with a cancelled status that the submit flows
-          // already handle. (finally below still clears isCancelling.)
+          // abort races the result frame though (it is only checked between stream chunks,
+          // and both frames cross the AgentCore hop), so ALSO latch the cancel client-side:
+          // nulling currentMessageId marks the in-flight turn dead, and the submit flows
+          // discard whatever its suspended wsRunTurn later resolves with — a late real
+          // result must not be rendered or have its tool call executed.
+          // (finally below still clears isCancelling.)
           if (self.useWebSocket) {
+            const cancelledId = self.currentMessageId;
             self.wsTransport?.cancel();
-            self.addDbgMsg("Cancel request sent over WebSocket", self.currentMessageId);
+            self.currentMessageId = null;
+            self.addDbgMsg("Cancel request sent over WebSocket", cancelledId);
             return;
           }
 
