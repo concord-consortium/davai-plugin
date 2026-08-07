@@ -28,6 +28,7 @@ import { WebSocketServer } from "ws";
 import { execFile } from "node:child_process";
 import { promisify } from "node:util";
 import { createRequire } from "node:module";
+import { StringDecoder } from "node:string_decoder";
 
 // The SDK client lives in backend/node_modules (a backend devDependency).
 const require = createRequire(new URL("../backend/package.json", import.meta.url));
@@ -79,7 +80,9 @@ function sseParser(onFrame) {
   };
 }
 
-const wss = new WebSocketServer({ port: PORT, path: "/ws" });
+// Loopback only: this process signs requests with the developer's AWS credentials,
+// so it must never be reachable from other machines on the network.
+const wss = new WebSocketServer({ host: "127.0.0.1", port: PORT, path: "/ws" });
 
 wss.on("connection", (ws) => {
   const send = (obj) => { if (ws.readyState === ws.OPEN) ws.send(JSON.stringify(obj)); };
@@ -131,7 +134,11 @@ wss.on("connection", (ws) => {
           if (evt?.type === "token") tokens++;
           send(evt); // token / result / error frames pass through unchanged
         });
-        for await (const chunk of out.response) feed(Buffer.from(chunk).toString("utf8"));
+        // StringDecoder holds partial multi-byte sequences across chunk boundaries;
+        // decoding each chunk independently would corrupt split UTF-8 characters.
+        const decoder = new StringDecoder("utf8");
+        for await (const chunk of out.response) feed(decoder.write(Buffer.from(chunk)));
+        feed(decoder.end());
       } else {
         const parts = [];
         for await (const chunk of out.response) parts.push(Buffer.from(chunk));

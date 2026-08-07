@@ -10,7 +10,7 @@ created; the template is parameterized for it (`EnvironmentName=production`).
 ## Stack resources
 | resource | value |
 |---|---|
-| AgentCore runtime | `davai_agentcore_staging-guJgof856F` (image `davai-agentcore-backend:chunks-20260807`) |
+| AgentCore runtime | `davai_agentcore_staging-guJgof856F` (image `davai-agentcore-backend:hardened-20260807`) |
 | Runtime ARN | `arn:aws:bedrock-agentcore:us-east-1:816253370536:runtime/davai_agentcore_staging-guJgof856F` |
 | Execution role | `davai-agentcore-staging-execution` |
 | Cognito Identity Pool | `us-east-1:f9ef35df-041f-4731-813f-67e998dbc98f` (unauthenticated, **classic flow**) |
@@ -18,7 +18,7 @@ created; the template is parameterized for it (`EnvironmentName=production`).
 | WebSocket endpoint | `wss://bedrock-agentcore.us-east-1.amazonaws.com/runtimes/<url-encoded runtime ARN>/ws` |
 
 ECR repo `davai-agentcore-backend` predates the stack and is referenced via the `ImageUri`
-parameter (images: `chunks-20260807` = current (WS frame chunking), `sse-20260714` = pre-chunking, `pre-sse` = pre-streaming).
+parameter (images: `hardened-20260807` = current, `chunks-20260807`/`sse-20260714`/`pre-sse` = prior).
 Provider keys (OpenAI/Anthropic/Google) are runtime env vars fed from NoEcho stack parameters.
 
 ## Deploy / update
@@ -42,3 +42,11 @@ node scripts/agentcore-cognito-smoke.mjs
 aws cloudformation delete-stack --profile agentcore --region us-east-1 --stack-name davai-agentcore-staging
 # ECR repo (outside the stack): aws ecr delete-repository --repository-name davai-agentcore-backend --force
 ```
+
+## Production-hardening follow-ups (from the 2026-08-07 code review)
+Deliberately deferred to the production-stack work:
+- Per-identity throttling/quotas (WAF or Cognito-keyed) on top of the anonymous access model —
+  note the legacy SAM setup has the same exposure class (its AUTH_TOKEN ships in the public bundle).
+- Move provider keys from stack parameters to Secrets Manager ARNs (backend already resolves ARNs).
+- Turn the release-build staging fallback in src/utils/agentcore-config.ts from a console
+  warning into a build failure once the production stack exists.

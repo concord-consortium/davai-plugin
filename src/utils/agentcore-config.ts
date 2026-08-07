@@ -28,5 +28,13 @@ const PRODUCTION: AgentCoreConfig = STAGING;
 // -> production. Mirrors how the release pipeline distinguishes builds today.
 export function getAgentCoreConfig(): AgentCoreConfig {
   const deployPath = process.env.DEPLOY_PATH || "";
-  return deployPath.startsWith("version/") ? PRODUCTION : STAGING;
+  if (deployPath.startsWith("version/")) {
+    if (PRODUCTION === STAGING) {
+      // Make the fallback loud, not silent. When the production stack exists, fill in
+      // PRODUCTION above and turn this into a build-time failure instead.
+      console.warn("DAVAI: no production AgentCore stack configured — this release build is using the STAGING backend.");
+    }
+    return PRODUCTION;
+  }
+  return STAGING;
 }

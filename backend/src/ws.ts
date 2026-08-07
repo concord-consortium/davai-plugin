@@ -31,6 +31,8 @@ const AUTH_SECRET = process.env.DAVAI_API_SECRET;
 // envelopes; 8000 UTF-16 chars encode to at most ~24 KB UTF-8. Mirrors the client's
 // chunkFrameJson in src/utils/ws-transport.ts.
 const CHUNK_CHARS = 8000;
+// Ceiling for a reassembled inbound message (matches the HTTP body cap's intent).
+const MAX_REASSEMBLED_CHARS = 2 * 1024 * 1024;
 
 function* chunkFrameJson(json: string): Generator<string> {
   if (json.length <= CHUNK_CHARS) {
@@ -100,6 +102,13 @@ export function attachWebSocket(server: Server): WebSocketServer {
 
       if (frame?.type === "chunk") {
         chunkBuffer += typeof frame.data === "string" ? frame.data : "";
+        // The runtime is invocable anonymously: bound reassembly so a stream of
+        // nonterminal chunks can't exhaust memory. 1009 = "message too big".
+        if (chunkBuffer.length > MAX_REASSEMBLED_CHARS) {
+          chunkBuffer = "";
+          ws.close(1009, "chunked message too large");
+          return;
+        }
         if (!frame.last) return;
         const joined = chunkBuffer;
         chunkBuffer = "";

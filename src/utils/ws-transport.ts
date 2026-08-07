@@ -38,6 +38,12 @@ export interface WsTransportOptions {
   // likely idled out). Return the transcript to replay so the agent's context is
   // rebuilt server-side before the live turn runs. Return [] / undefined to skip.
   onReconnect?: () => SeedMessage[] | undefined;
+  // Deadline for the WebSocket handshake (default 15s).
+  connectTimeoutMs?: number;
+  // No-progress budget for an in-flight turn/seed, reset by every server frame
+  // (default 60s — mirrors the poll path's idle budget). On expiry the pending
+  // operation rejects and the socket is reset so the next turn reconnects.
+  turnIdleTimeoutMs?: number;
 }
 
 // AgentCore's data plane caps WebSocket frames (32 KB per the service docs' stricter
@@ -58,13 +64,15 @@ export function* chunkFrameJson(json: string): Generator<string> {
   }
 }
 
-// AgentCore runtimeSessionId must be >= 33 chars. Derive one from the client's
-// threadId that is stable (same thread -> same session, so reconnects re-pin the
-// same VM) and injective (distinct threads never collide). "~" never occurs in a
-// nanoid, so `${threadId}~` is a collision-proof prefix.
+// AgentCore runtimeSessionId must be >= 33 chars and use only [A-Za-z0-9_-]
+// (the data plane currently accepts more, but stay within the documented charset).
+// Derive one from the client's threadId that is stable (same thread -> same
+// session, so reconnects re-pin the same VM). Collisions are not a practical
+// concern: client threadIds are fixed-length nanoids, so equal padded IDs imply
+// equal threadIds.
 export function deriveSessionId(threadId: string): string {
   if (threadId.length >= 33) return threadId;
-  return `${threadId}~`.padEnd(33, "0");
+  return `${threadId}-`.padEnd(33, "0");
 }
 
 type Pending =
@@ -78,13 +86,46 @@ export class WsTransport {
   private pending: Pending | null = null;
   private turnCount = 0;
   private chunkBuffer = "";
-  readonly sessionId: string | null = null;
+  private idleTimer: ReturnType<typeof setTimeout> | null = null;
 
   constructor(opts: WsTransportOptions) {
     this.opts = opts;
     this.WS = opts.WebSocketImpl ?? (globalThis as any).WebSocket;
     if (!this.WS) throw new Error("No WebSocket implementation available");
-    if (!opts.url && !opts.getConnectUrl) throw new Error("WsTransport needs url or getConnectUrl");
+    if (!opts.url === !opts.getConnectUrl) {
+      throw new Error("WsTransport needs exactly one of url or getConnectUrl");
+    }
+  }
+
+  // Reject and clear the in-flight operation (turn or seed), stopping its idle timer.
+  private failPending(message: string): void {
+    this.clearIdle();
+    const p = this.pending;
+    this.pending = null;
+    p?.reject(new Error(message));
+  }
+
+  private clearIdle(): void {
+    if (this.idleTimer) {
+      clearTimeout(this.idleTimer);
+      this.idleTimer = null;
+    }
+  }
+
+  // (Re)arm the no-progress budget for the in-flight operation.
+  private armIdle(): void {
+    this.clearIdle();
+    this.idleTimer = setTimeout(() => {
+      this.idleTimer = null;
+      const socket = this.socket;
+      this.socket = null;
+      this.failPending("Timed out waiting for a server response");
+      try {
+        socket?.close();
+      } catch {
+        /* ignore */
+      }
+    }, this.opts.turnIdleTimeoutMs ?? 60_000);
   }
 
   private async connectUrl(threadId: string): Promise<string> {
@@ -105,20 +146,33 @@ export class WsTransport {
     return new Promise<boolean>((resolve, reject) => {
       const socket = new this.WS(url);
       this.socket = socket;
-      socket.onopen = () => resolve(true);
-      socket.onerror = () => {
-        if (this.pending) {
-          this.pending.reject(new Error("WebSocket error"));
-          this.pending = null;
+      // Settle the handshake exactly once: open resolves; error, pre-open close,
+      // or the connect deadline reject (and the socket is discarded).
+      let settled = false;
+      const settle = (fn: () => void) => {
+        if (settled) return;
+        settled = true;
+        clearTimeout(connectTimer);
+        fn();
+      };
+      const connectTimer = setTimeout(() => {
+        if (this.socket === socket) this.socket = null;
+        settle(() => reject(new Error("WebSocket connect timed out")));
+        try {
+          socket.close();
+        } catch {
+          /* ignore */
         }
-        reject(new Error("WebSocket connection failed"));
+      }, this.opts.connectTimeoutMs ?? 15_000);
+      socket.onopen = () => settle(() => resolve(true));
+      socket.onerror = () => {
+        this.failPending("WebSocket error");
+        settle(() => reject(new Error("WebSocket connection failed")));
       };
       socket.onclose = () => {
         if (this.socket === socket) this.socket = null;
-        if (this.pending) {
-          this.pending.reject(new Error("WebSocket closed mid-turn"));
-          this.pending = null;
-        }
+        this.failPending("WebSocket closed mid-turn");
+        settle(() => reject(new Error("WebSocket closed before opening")));
       };
       socket.onmessage = (ev: MessageEvent) => this.dispatch(ev);
     });
@@ -131,6 +185,9 @@ export class WsTransport {
     } catch {
       return;
     }
+    // Any server frame counts as progress for the idle budget.
+    if (this.pending) this.armIdle();
+
     // Reassemble chunked frames (turns are serial, so one accumulator suffices).
     if (frame?.type === "chunk") {
       this.chunkBuffer += typeof frame.data === "string" ? frame.data : "";
@@ -147,6 +204,7 @@ export class WsTransport {
     if (!p) return;
 
     if (frame.type === "error") {
+      this.clearIdle();
       this.pending = null;
       p.reject(new Error(frame.error || "server error"));
       return;
@@ -155,11 +213,13 @@ export class WsTransport {
       if (frame.type === "token") {
         p.onToken?.(frame.text ?? "");
       } else if (frame.type === "result") {
+        this.clearIdle();
         this.pending = null;
         p.resolve(frame.output);
       }
     } else if (p.kind === "seed") {
       if (frame.type === "seeded") {
+        this.clearIdle();
         this.pending = null;
         p.resolve(frame);
       }
@@ -179,6 +239,7 @@ export class WsTransport {
     return new Promise((resolve, reject) => {
       this.pending = { kind: "seed", resolve, reject };
       this.sendFrame({ type: "seed", threadId, llmId, messages });
+      this.armIdle();
     });
   }
 
@@ -205,6 +266,7 @@ export class WsTransport {
       this.pending = { kind: "turn", onToken: handlers.onToken, resolve, reject };
       try {
         this.sendFrame(input);
+        this.armIdle();
       } catch (e) {
         this.pending = null;
         reject(e as Error);
@@ -223,7 +285,8 @@ export class WsTransport {
   }
 
   close(): void {
-    this.pending = null;
+    // Reject (not abandon) any in-flight operation so awaiting callers resume.
+    this.failPending("WebSocket transport closed");
     if (this.socket) {
       try {
         this.socket.close();

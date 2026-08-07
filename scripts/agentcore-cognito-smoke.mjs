@@ -57,7 +57,7 @@ const Credentials = {
   SecretKey: xmlVal("SecretAccessKey"),
   SessionToken: xmlVal("SessionToken"),
 };
-console.log(`[cognito] identity ${IdentityId}, classic-flow key ${Credentials.AccessKeyId.slice(0, 8)}…, expires ${xmlVal("Expiration")}`);
+console.log(`[cognito] identity ${IdentityId}, classic-flow credentials expire ${xmlVal("Expiration")}`);
 
 // ---- 2. SigV4 presigned WebSocket URL --------------------------------------
 const hmac = (key, data) => createHmac("sha256", key).update(data).digest();

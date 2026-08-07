@@ -58,7 +58,7 @@ Resources:
                 Action:
                   - ecr:GetDownloadUrlForLayer
                   - ecr:BatchGetImage
-                Resource: !Sub arn:aws:ecr:${AWS::Region}:${AWS::AccountId}:repository/*
+                Resource: !Sub arn:aws:ecr:${AWS::Region}:${AWS::AccountId}:repository/davai-agentcore-backend
               - Sid: EcrAuth
                 Effect: Allow
                 Action: ecr:GetAuthorizationToken

@@ -15,7 +15,9 @@ import type { TurnInput } from "./types.js";
 
 const PORT = Number(process.env.PORT || 8080);
 const HOST = "0.0.0.0";
-const MAX_BODY_BYTES = 100 * 1024 * 1024; // AgentCore payload cap is 100 MB
+// AgentCore's own payload cap is 100 MB; DAVAI turn inputs (message + dataContexts +
+// graphs) are far smaller, and the runtime is invocable anonymously — keep the cap tight.
+const MAX_BODY_BYTES = 2 * 1024 * 1024;
 const AUTH_SECRET = process.env.DAVAI_API_SECRET; // optional shared bearer (parity with old server)
 
 // OLD-transport reproduction (DAVAI_OLD_MODE=1): the pre-AgentCore client-visible
@@ -157,9 +159,18 @@ const server = http.createServer(async (req, res) => {
           connection: "keep-alive",
           ...CORS_HEADERS,
         });
-        const emit = (obj: unknown) => res.write(`data: ${JSON.stringify(obj)}\n\n`);
+        // Stop the (paid) turn if the client goes away mid-stream, and never write
+        // to a closed response.
+        const controller = new AbortController();
+        res.on("close", () => controller.abort());
+        const emit = (obj: unknown) => {
+          if (!res.writableEnded && !controller.signal.aborted) {
+            res.write(`data: ${JSON.stringify(obj)}\n\n`);
+          }
+        };
         try {
           const output = await runTurn(body as TurnInput, {
+            signal: controller.signal,
             onToken: (text: string) => emit({ type: "token", text }),
           });
           emit({ type: "result", output });

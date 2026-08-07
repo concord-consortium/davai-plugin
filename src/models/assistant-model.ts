@@ -40,6 +40,9 @@ const buildReseedMessages = (transcriptStore: any): SeedMessage[] => {
     const content = m?.messageContent?.content;
     if (typeof content !== "string" || !content.trim()) continue;
     if (m.speaker === DEBUG_SPEAKER) continue;
+    // Status chatter (WebGPU notices, cancel confirmations, model-load progress) is
+    // kept out of the model conversation everywhere else; keep it out of seeds too.
+    if (m?.messageContent?.kind === "announcement") continue;
     out.push({ role: m.speaker === DAVAI_SPEAKER ? "assistant" : "user", content });
   }
   return out;
