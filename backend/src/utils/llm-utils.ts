@@ -18,7 +18,7 @@ import { getAnthropicKey, getGoogleKey, getOpenAIKey } from "./env-utils.js";
 // In-VM checkpointer: conversation state lives in this microVM's memory for the
 // session's life. AgentCore pins every request carrying the same runtimeSessionId
 // (== thread_id) to this same VM, so no shared/serialized store is needed. This is
-// the change that removes the RDS Postgres round-trip (was PostgresSaver).
+// the change that removes the RDS Postgres + SQS round-trip (was PostgresSaver).
 const checkpointer = new MemorySaver();
 
 let llmInstances: Record<string, any> = {};

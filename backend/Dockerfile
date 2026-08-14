@@ -18,4 +18,4 @@ RUN npm install --omit=dev && npm cache clean --force
 COPY --from=build /app/dist ./dist
 EXPOSE 8080
 # AgentCore health probe hits GET /ping; traffic hits POST /invocations.
-CMD ["node", "dist/agentcore-server.cjs"]
+CMD ["node", "dist/server.cjs"]
