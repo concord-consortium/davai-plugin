@@ -26,6 +26,26 @@ import type { TurnInput } from "./types.js";
 
 const AUTH_SECRET = process.env.DAVAI_API_SECRET;
 
+// AgentCore's data plane caps WebSocket frames (32 KB per the service docs' stricter
+// figure). Both directions split oversized frames into { type:"chunk", data, last? }
+// envelopes; 8000 UTF-16 chars encode to at most ~24 KB UTF-8. Mirrors the client's
+// chunkFrameJson in src/utils/ws-transport.ts.
+const CHUNK_CHARS = 8000;
+// Ceiling for a reassembled inbound message (matches the HTTP body cap's intent).
+const MAX_REASSEMBLED_CHARS = 2 * 1024 * 1024;
+
+function* chunkFrameJson(json: string): Generator<string> {
+  if (json.length <= CHUNK_CHARS) {
+    yield json;
+    return;
+  }
+  for (let i = 0; i < json.length; i += CHUNK_CHARS) {
+    const piece = json.slice(i, i + CHUNK_CHARS);
+    const last = i + CHUNK_CHARS >= json.length;
+    yield JSON.stringify(last ? { type: "chunk", data: piece, last: true } : { type: "chunk", data: piece });
+  }
+}
+
 // Idle re-seed: after a microVM idles out, the client replays its transcript so the
 // agent's context is rebuilt. We inject the messages into the thread's checkpointer
 // via updateState — no model call, so this restores context cheaply (and works
@@ -63,11 +83,14 @@ export function attachWebSocket(server: Server): WebSocketServer {
     }
 
     const send = (obj: unknown) => {
-      if (ws.readyState === ws.OPEN) ws.send(JSON.stringify(obj));
+      if (ws.readyState !== ws.OPEN) return;
+      for (const wire of chunkFrameJson(JSON.stringify(obj))) ws.send(wire);
     };
 
     // One in-flight turn per socket; a new turn or a cancel frame aborts the prior.
     let current: AbortController | null = null;
+    // Chunk reassembly (turns are serial per socket, so one accumulator suffices).
+    let chunkBuffer = "";
 
     ws.on("message", async (raw) => {
       let frame: any;
@@ -75,6 +98,25 @@ export function attachWebSocket(server: Server): WebSocketServer {
         frame = JSON.parse(raw.toString());
       } catch {
         return send({ type: "error", error: "invalid JSON frame" });
+      }
+
+      if (frame?.type === "chunk") {
+        chunkBuffer += typeof frame.data === "string" ? frame.data : "";
+        // The runtime is invocable anonymously: bound reassembly so a stream of
+        // nonterminal chunks can't exhaust memory. 1009 = "message too big".
+        if (chunkBuffer.length > MAX_REASSEMBLED_CHARS) {
+          chunkBuffer = "";
+          ws.close(1009, "chunked message too large");
+          return;
+        }
+        if (!frame.last) return;
+        const joined = chunkBuffer;
+        chunkBuffer = "";
+        try {
+          frame = JSON.parse(joined);
+        } catch {
+          return send({ type: "error", error: "invalid chunked frame" });
+        }
       }
 
       if (frame?.type === "cancel") {
@@ -106,7 +148,9 @@ export function attachWebSocket(server: Server): WebSocketServer {
           signal: controller.signal,
           onToken: (text) => send({ type: "token", text }),
         });
-        send({ type: "result", output });
+        // A cancel that landed after the stream finished (runTurn only observes the
+        // signal between chunks) still means cancelled: never ship the real output.
+        send({ type: "result", output: controller.signal.aborted ? { status: "cancelled" } : output });
       } catch (e) {
         send({ type: "error", error: e instanceof Error ? e.message : String(e) });
       } finally {
