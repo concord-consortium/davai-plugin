@@ -1,4 +1,3 @@
-process.env.POSTGRES_CONNECTION_STRING = "postgres://user:pass@localhost:5432/testdb";
 process.env.OPENAI_API_KEY = "dummy-openai-key";
 process.env.GOOGLE_API_KEY = "dummy-google-key";
 process.env.ANTHROPIC_API_KEY = "dummy-anthropic-key";
@@ -7,25 +6,6 @@ import { TextEncoder } from "util";
 import { ReadableStream } from "node:stream/web";
 global.TextEncoder = TextEncoder as any;
 global.ReadableStream = ReadableStream as any;
-
-jest.mock("@langchain/langgraph-checkpoint-postgres", () => ({
-  PostgresSaver: {
-    fromConnString: jest.fn(() => ({
-      setup: jest.fn().mockResolvedValue(undefined),
-    })),
-  },
-}));
-
-jest.mock("pg", () => ({
-  Pool: jest.fn(() => ({
-    query: jest.fn(),
-    end: jest.fn(),
-    connect: jest.fn(() => ({
-      release: jest.fn(),
-      query: jest.fn(),
-    })),
-  })),
-}));
 
 jest.mock("@langchain/openai", () => ({
   ChatOpenAI: jest.fn(() => ({
