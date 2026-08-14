@@ -5,8 +5,8 @@
 // This works on AgentCore because the runtime pins every request carrying the same
 // runtimeSessionId to the same microVM, so the submit / poll / cancel calls of one
 // turn all land on this process. The functions below preserve the exact write
-// guards the SQL used (see sam-server/database-setup.sql), because those guards are
-// what keep a late completion from clobbering a cancel.
+// guards the SQL used, because those guards are what keep a late completion from
+// clobbering a cancel; each is quoted above the function that replaced it.
 
 import { Job, MessageJobInput, ToolJobInput } from "../types";
 
