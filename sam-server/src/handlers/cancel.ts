@@ -1,10 +1,6 @@
 import { APIGatewayProxyEvent, APIGatewayProxyResult } from "aws-lambda";
-import { Pool } from "pg";
 import { authorizeRequest } from "../utils/auth-utils";
-
-const pool = new Pool({
-  connectionString: process.env.POSTGRES_CONNECTION_STRING
-});
+import { requestCancel } from "../agentcore/job-store";
 
 export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayProxyResult> => {
 
@@ -29,12 +25,9 @@ export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayPr
       };
     }
 
-    await pool.query(
-      `UPDATE jobs
-       SET status = $1, cancelled = $2, updated_at = NOW()
-       WHERE message_id = $3`,
-      ["cancelled", true, messageId]
-    );
+    // Mark cancelled and abort the in-flight turn. Was: an UPDATE whose pg trigger
+    // fired pg_notify('job_cancelled'), which the job-processor picked up via LISTEN.
+    requestCancel(messageId);
 
     return {
       statusCode: 200,

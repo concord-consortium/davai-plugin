@@ -1,9 +1,5 @@
 import { APIGatewayProxyEvent, APIGatewayProxyResult } from "aws-lambda";
-import { Pool } from "pg";
-
-const pool = new Pool({
-  connectionString: process.env.POSTGRES_CONNECTION_STRING
-});
+import { getJob } from "../agentcore/job-store";
 
 export const handler = async (
   event: APIGatewayProxyEvent
@@ -22,13 +18,10 @@ export const handler = async (
       };
     }
 
-    // Query the database for job status
-    const { rows } = await pool.query(
-      `SELECT status, output FROM jobs WHERE message_id = $1`,
-      [messageId]
-    );
+    // Look up the job in this microVM's memory (was: SELECT from the jobs table)
+    const job = getJob(messageId);
 
-    if (rows.length === 0) {
+    if (!job) {
       return {
         statusCode: 404,
         headers: {
@@ -39,7 +32,6 @@ export const handler = async (
       };
     }
 
-    const job = rows[0];
     return {
       statusCode: 200,
       headers: {

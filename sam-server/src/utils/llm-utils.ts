@@ -7,7 +7,7 @@ import { ChatGoogleGenerativeAI } from "@langchain/google-genai";
 import { ChatAnthropic } from "@langchain/anthropic";
 import { BaseMessage, trimMessages } from "@langchain/core/messages";
 import { ChatPromptTemplate } from "@langchain/core/prompts";
-import { PostgresSaver } from "@langchain/langgraph-checkpoint-postgres";
+import { MemorySaver } from "@langchain/langgraph";
 import { instructions } from "../text/instructions.js";
 import { codapApiDoc } from "../text/codap-api-documentation.js";
 import { extractToolCalls, toolCallResponse, tools } from "./tool-utils.js";
@@ -15,14 +15,11 @@ import { tokenCounter, escapeCurlyBraces } from "./utils.js";
 import { MAX_TOKENS } from "../constants.js";
 import { getAnthropicKey, getGoogleKey, getOpenAIKey } from "./env-utils.js";
 
-if (!process.env.POSTGRES_CONNECTION_STRING) {
-  throw new Error("POSTGRES_CONNECTION_STRING environment variable is not set.");
-}
-
-const checkpointer = PostgresSaver.fromConnString(process.env.POSTGRES_CONNECTION_STRING);
-
-// Initialize checkpointer when module loads
-const checkpointPromise = checkpointer.setup();
+// In-VM checkpointer: conversation state lives in this microVM's memory for the
+// session's life. AgentCore pins every request carrying the same runtimeSessionId
+// (== thread_id) to this same VM, so no shared/serialized store is needed. This is
+// the change that removes the RDS Postgres round-trip (was PostgresSaver).
+const checkpointer = new MemorySaver();
 
 let llmInstances: Record<string, any> = {};
 
@@ -191,11 +188,6 @@ if (devMode) {
 }
 
 export const getLangApp = async () => {
-  try {
-    await checkpointPromise;
-  } catch (error) {
-    console.error("Checkpointer setup failed: ", error);
-  }
-
+  // MemorySaver needs no async setup (unlike PostgresSaver.setup()).
   return workflow.compile({ checkpointer });
 };

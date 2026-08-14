@@ -1,15 +1,18 @@
-import { SQSEvent } from "aws-lambda";
-import { Pool } from "pg";
 import { HumanMessage, ToolMessage } from "@langchain/core/messages";
 import { getLangApp } from "../utils/llm-utils";
 import { buildToolRepairMessages, extractToolCalls, toolCallResponse } from "../utils/tool-utils";
 import { messageTextToString, shouldFlush, isAbortError, withAccumulatedResponse } from "../utils/stream-utils";
-import { Job, ToolJob, MessageJob } from "../types";
+import { ToolJob, MessageJob } from "../types";
 import { getLangSmithKey } from "../utils/env-utils";
-
-const pool = new Pool({
-  connectionString: process.env.POSTGRES_CONNECTION_STRING
-});
+import {
+  clearRunning,
+  getJob,
+  registerRunning,
+  writeCancelled,
+  writeCompleted,
+  writeError,
+  writeStreaming,
+} from "../agentcore/job-store";
 
 const buildResponse = async (message: any) => {
   const toolCalls = extractToolCalls(message);
@@ -22,69 +25,43 @@ const buildResponse = async (message: any) => {
   return { response: messageTextToString(message.content) };
 };
 
-// Track currently running jobs
-const runningJobs = new Map<
-  string,
-  { abort: () => void }
->();
-
-async function listenForCancellations() {
-  const client = await pool.connect();
-  await client.query("LISTEN job_cancelled");
-  client.on("notification", (msg) => {
-    if (msg.channel === "job_cancelled" && msg.payload) {
-      try {
-        const payload = JSON.parse(msg.payload);
-        const cancelledId = payload.messageId;
-        console.log(`[CANCEL] Received cancel signal for job ${cancelledId}`);
-
-        const runningJob = runningJobs.get(cancelledId);
-        if (runningJob) {
-          console.log(`[CANCEL] Aborting running job ${cancelledId}`);
-          runningJob.abort();
-          runningJobs.delete(cancelledId);
-        }
-      } catch (err) {
-        console.error("Failed to parse cancellation payload", err);
-      }
-    }
-  });
-}
-
-// listen for job cancellations
-listenForCancellations();
-
-export const handler = async (event: SQSEvent): Promise<void> => {
-  // Set LangSmith API key for LangChain integration if available. When set,
-  // data about DAVAI usage will be sent to the related LangSmith account.
-  try {
-    const langSmithKey = await getLangSmithKey();
-    process.env.LANGSMITH_API_KEY = langSmithKey;
-  } catch (error) {
-    console.warn("Failed to set LangSmith API key:", error);
-  }
-
-  for (const record of event.Records) {
-    let messageId: string | undefined;
+// Set LangSmith API key for LangChain integration if available. When set, data
+// about DAVAI usage will be sent to the related LangSmith account. Was run per
+// SQS batch; in a long-lived container it only needs to happen once.
+let langSmithReady: Promise<void> | undefined;
+const setLangSmithKey = () => {
+  langSmithReady ??= (async () => {
     try {
-      const body = JSON.parse(record.body);
-      messageId = body.messageId;
-      if (!messageId) continue;
+      process.env.LANGSMITH_API_KEY = await getLangSmithKey();
+    } catch (error) {
+      console.warn("Failed to set LangSmith API key:", error);
+    }
+  })();
+  return langSmithReady;
+};
+
+// Runs one turn to completion, writing progress and the result to the job store.
+// Was the body of the SQS handler's per-record loop; the queue is gone, so the
+// submit handler calls this directly (see agentcore/job-store.ts enqueueJob).
+export const processJob = async (messageId: string): Promise<void> => {
+  await setLangSmithKey();
+
+  {
+    try {
+      if (!messageId) return;
 
       const controller = new AbortController();
-      runningJobs.set(messageId, { abort: () => controller.abort() });
+      registerRunning(messageId, () => controller.abort());
 
-      // Get job from database
-      const { rows } = await pool.query(`SELECT * FROM jobs WHERE message_id = $1`, [messageId]);
+      // Get job from the in-process store (was: SELECT from the jobs table)
+      const job = getJob(messageId);
 
-      if (rows.length === 0) {
-        continue;
+      if (!job) {
+        return;
       }
 
-      const job: Job = rows[0];
-
       if (job.cancelled) {
-        continue;
+        return;
       }
 
       // Process the job
@@ -153,11 +130,7 @@ export const handler = async (event: SQSEvent): Promise<void> => {
       const writePartial = async () => {
         const text = messageTextToString(accumulated);
         // Guard on cancelled=false so a cancel landing between flushes is not resurrected.
-        await pool.query(
-          `UPDATE jobs SET status='streaming', output=$1, updated_at=NOW()
-           WHERE message_id=$2 AND cancelled=false`,
-          [{ response: text }, messageId]
-        );
+        writeStreaming(messageId, { response: text });
         lastWrittenLength = accumulated.length;
       };
 
@@ -185,12 +158,8 @@ export const handler = async (event: SQSEvent): Promise<void> => {
       } catch (streamError) {
         if (isAbortError(streamError, controller.signal)) {
           // User/cancel-initiated abort: leave the job cancelled, not errored.
-          await pool.query(
-            `UPDATE jobs SET status='cancelled', updated_at=NOW()
-             WHERE message_id=$1 AND status <> 'completed'`,
-            [messageId]
-          );
-          continue;
+          writeCancelled(messageId);
+          return;
         }
         throw streamError;
       }
@@ -208,11 +177,7 @@ export const handler = async (event: SQSEvent): Promise<void> => {
         // throwing, so mirror the catch-path cancelled write here. Guard on
         // status <> 'completed' (NOT cancelled=false): cancel.ts has already set
         // cancelled=true, so a cancelled=false guard would match zero rows.
-        await pool.query(
-          `UPDATE jobs SET status='cancelled', updated_at=NOW()
-           WHERE message_id=$1 AND status <> 'completed'`,
-          [messageId]
-        );
+        writeCancelled(messageId);
       } else {
         // Prefer the final graph state's message (preserves tool_calls); fall back to
         // the accumulated text if no "values" snapshot arrived.
@@ -225,31 +190,19 @@ export const handler = async (event: SQSEvent): Promise<void> => {
         // are overwritten by this terminal write).
         const output = withAccumulatedResponse(built, messageTextToString(accumulated));
         // Guard the terminal write too, so a late completion can't clobber a cancel.
-        await pool.query(
-          `UPDATE jobs SET status='completed', output=$1, updated_at=NOW()
-           WHERE message_id=$2 AND cancelled=false`,
-          [output, messageId]
-        );
+        writeCompleted(messageId, output);
       }
     } catch (error) {
       console.error(`Error processing job:`, error);
       // Mark the job as failed so the client surfaces a real error immediately
       // instead of polling until it times out. These errors are typically
-      // deterministic (e.g. an unsupported model parameter), so we do not retry
-      // via SQS (no batchItemFailures entry).
+      // deterministic (e.g. an unsupported model parameter), so we do not retry.
       if (messageId) {
         const message = error instanceof Error ? error.message : String(error);
-        try {
-          await pool.query(
-            `UPDATE jobs
-            SET status = $1, output = $2, updated_at = NOW()
-            WHERE message_id = $3`,
-            ["error", { error: message }, messageId]
-          );
-        } catch (dbError) {
-          console.error(`Failed to mark job ${messageId} as errored:`, dbError);
-        }
+        writeError(messageId, message);
       }
+    } finally {
+      clearRunning(messageId);
     }
   }
 };
