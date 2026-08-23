@@ -289,14 +289,17 @@ export const AssistantModel = types
             return JSON.stringify(res);
           }
 
-          // When the request is to create a graph component, we need to update the sonification
-          // store after the run. This guard only serves the server path (processToolCall's
-          // create_request branch); the local path achieves the same auto-select via its own
-          // refreshGraphs wiring below (see the toolCtx blocks in handleMessageSubmitLocalLlm and
-          // runLocalEvalTurns) rather than routing through here.
-          if (action === "create" && resource === "component" && values?.type === "graph") {
+          // When the request is to create a graph component, refresh the graph stores
+          // ourselves: as of CODAP 3.1 component notifications are NOT echoed back to the
+          // plugin that initiated the change, so nothing else will. The resource may be the
+          // bare "component" or the dataContext-scoped "dataContext[...].component" form —
+          // the LLM emits both and CODAP accepts both. Refresh BOTH stores (assistant graph
+          // context + sonification menu), mirroring the local path's refreshGraphs (its
+          // toolCtx blocks in handleMessageSubmitLocalLlm and runLocalEvalTurns).
+          if (action === "create" && /(^|\.)component$/.test(resource) && values?.type === "graph") {
             const root = getRoot(self) as any;
-            root.sonificationStore.setGraphs({ selectNewest: true });
+            yield updateGraphs();
+            yield root.sonificationStore.setGraphs({ selectNewest: true });
           }
 
           // Prepare for uploading of image file after run if the request is to get dataDisplay
