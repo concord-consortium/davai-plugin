@@ -1540,6 +1540,31 @@ describe("sonification auto-select on local create_graph", () => {
     jest.clearAllMocks();
   });
 
+  it("refreshes both graph stores after a server-path graph create with a dataContext-scoped " +
+    "resource (CODAP 3.1 no longer echoes component notifications to the initiating plugin)", async () => {
+    const { root, store } = createRootedStore();
+    store.setLlmId(JSON.stringify({ id: "gpt-5.4-mini", provider: "OpenAI" }));
+    expect(root.sonificationStore.selectedGraphID).toBeUndefined();
+    (codapInterface.sendRequest as jest.Mock).mockResolvedValueOnce({ success: true, values: { id: 42 } });
+    (getGraphDetails as jest.Mock).mockResolvedValueOnce([newSonifiableGraph]);
+
+    // The LLM routinely emits the scoped resource form, which CODAP accepts; the refresh
+    // guard must not require the bare "component" spelling.
+    await store.processToolCall({
+      tool_call_id: "call-1",
+      type: "create_request",
+      request: {
+        action: "create",
+        resource: "dataContext[233176388495090].component",
+        values: { type: "graph", dataContext: "TestData", xAttributeID: 1, yAttributeID: 2 },
+      },
+    } as any);
+
+    expect(root.sonificationStore.selectedGraphID).toBe(42);
+    // The assistant's own graph context must refresh too — it also relied on the echo.
+    expect(getTrimmedGraphDetails).toHaveBeenCalled();
+  });
+
   it("selects the newly created graph in the sonification store after a local create_graph " +
     "tool call (chat wiring, handleMessageSubmitLocalLlm)", async () => {
     const { root, store } = createRootedStore();
