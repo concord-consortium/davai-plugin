@@ -152,7 +152,7 @@ describe("createModelInstance", () => {
   it("treats every family at generation 5+ as adaptive-only (any family name, multi-digit gens)", async () => {
     // The gate is intentionally family-agnostic and open-ended: Mythos/Fable exist today,
     // and future names or generations >= 10 must not silently regress to sampling params.
-    for (const id of ["claude-mythos-5", "claude-fable-5", "claude-haiku-5", "claude-opus-10"]) {
+    for (const id of ["claude-mythos-5", "claude-fable-5", "claude-haiku-5", "claude-opus-10", "claude-new-thing-5"]) {
       (ChatAnthropic as unknown as jest.Mock).mockClear();
       await createModelInstance(JSON.stringify({ id, provider: "Anthropic" }));
       const callArgs = (ChatAnthropic as unknown as jest.Mock).mock.calls[0][0];

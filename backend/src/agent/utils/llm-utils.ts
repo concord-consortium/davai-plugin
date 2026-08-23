@@ -50,11 +50,12 @@ const isOpenAIReasoningModel = (id: string) => /^(gpt-5|o\d)/i.test(id);
 // every family at generation 5 or later (Opus 5, Sonnet 5, Fable 5, Mythos 5, ...);
 // models that still support extended thinking (Opus 4.6, Sonnet 4.6, Haiku 4.5) still
 // accept temperature, so we set it to 0 only for those. The generation test matches ANY
-// family name and multi-digit generations, deliberately broad: omitting temperature from
-// a model that would accept it merely loses determinism, while sending it to one that
-// doesn't fails the whole turn.
+// family name (lowercase segments, hyphenated allowed) and multi-digit generations,
+// deliberately broad: omitting temperature from a model that would accept it merely loses
+// determinism, while sending it to one that doesn't fails the whole turn. Digit-led legacy
+// ids (claude-3-5-sonnet-*) can't match the family segment and keep temperature 0.
 const isAnthropicNoSamplingModel = (id: string) =>
-  /^claude-opus-4-(?:[7-9]|\d\d)/.test(id) || /^claude-[a-z]+-(?:[5-9]|\d{2,})/.test(id);
+  /^claude-opus-4-(?:[7-9]|\d\d)/.test(id) || /^claude-[a-z]+(?:-[a-z]+)*-(?:[5-9]|\d{2,})/.test(id);
 
 // Anthropic models that accept output_config.effort (Opus 4.5+, Sonnet 4.6+, Sonnet 5;
 // NOT Haiku 4.5, which has no effort parameter).
