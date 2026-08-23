@@ -140,6 +140,66 @@ describe("createModelInstance", () => {
     expect(callArgs.invocationKwargs).toBeUndefined();
   });
 
+  it("should not set sampling params for Opus 5 (whole 5 generation is adaptive-only)", async () => {
+    await createModelInstance(JSON.stringify({ id: "claude-opus-5", provider: "Anthropic" }));
+
+    const callArgs = (ChatAnthropic as unknown as jest.Mock).mock.calls[0][0];
+    expect(callArgs.temperature).toBeUndefined();
+    expect(callArgs.topP).toBeUndefined();
+    expect(callArgs.invocationKwargs).toBeUndefined();
+  });
+
+  it("treats every family at generation 5+ as adaptive-only (any family name, multi-digit gens)", async () => {
+    // The gate is intentionally family-agnostic and open-ended: Mythos/Fable exist today,
+    // and future names or generations >= 10 must not silently regress to sampling params.
+    for (const id of ["claude-mythos-5", "claude-fable-5", "claude-haiku-5", "claude-opus-10", "claude-new-thing-5"]) {
+      (ChatAnthropic as unknown as jest.Mock).mockClear();
+      await createModelInstance(JSON.stringify({ id, provider: "Anthropic" }));
+      const callArgs = (ChatAnthropic as unknown as jest.Mock).mock.calls[0][0];
+      expect({ id, temperature: callArgs.temperature }).toEqual({ id, temperature: undefined });
+    }
+  });
+
+  it("still sets temperature 0 for legacy dashed-generation ids (claude-3-5-sonnet-*)", async () => {
+    await createModelInstance(JSON.stringify({ id: "claude-3-5-sonnet-20241022", provider: "Anthropic" }));
+
+    const callArgs = (ChatAnthropic as unknown as jest.Mock).mock.calls[0][0];
+    expect(callArgs.temperature).toBe(0);
+  });
+
+  it("keeps the Anthropic sampling gate identical to the AgentCore backend copy", () => {
+    // The two implementations are duplicated by design (client/server package boundary).
+    // This guard fails when one copy's gate changes without the other.
+    const fs = require("fs");
+    const path = require("path");
+    const extract = (file: string) => {
+      const src = fs.readFileSync(file, "utf8");
+      const match = src.match(/const isAnthropicNoSamplingModel = [^;]+;/);
+      if (!match) throw new Error(`isAnthropicNoSamplingModel not found in ${file}`);
+      return match[0];
+    };
+    const samCopy = extract(path.join(__dirname, "llm-utils.ts"));
+    const backendCopy = extract(path.join(__dirname, "../../../backend/src/agent/utils/llm-utils.ts"));
+    expect(backendCopy).toBe(samCopy);
+  });
+
+  it("routes the gpt-5.6 family through the Responses API", async () => {
+    await createModelInstance(JSON.stringify({ id: "gpt-5.6-sol", provider: "OpenAI" }), "max");
+
+    const args = (ChatOpenAI as unknown as jest.Mock).mock.calls[0][0];
+    expect(args.useResponsesApi).toBe(true);
+    expect(args.temperature).toBeUndefined();
+    expect(args.reasoning).toEqual({ effort: "max" });
+  });
+
+  it("builds gemini-3.7-flash on the standard Google branch with temperature 0", async () => {
+    await createModelInstance(JSON.stringify({ id: "gemini-3.7-flash", provider: "Google" }));
+
+    const args = (ChatGoogleGenerativeAI as unknown as jest.Mock).mock.calls[0][0];
+    expect(args.model).toBe("gemini-3.7-flash");
+    expect(args.temperature).toBe(0);
+  });
+
   it("applies Anthropic effort via outputConfig", async () => {
     await createModelInstance(JSON.stringify({ id: "claude-sonnet-5", provider: "Anthropic" }), "low");
     const args = (ChatAnthropic as unknown as jest.Mock).mock.calls[0][0];

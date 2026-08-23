@@ -32,6 +32,16 @@
       "defaultEffort": "none"
     },
     {
+      "id": "gemini-3.7-flash",
+      "provider": "Google",
+      "effortLevels": []
+    },
+    {
+      "id": "gemini-3.5-flash-lite",
+      "provider": "Google",
+      "effortLevels": []
+    },
+    {
       "id": "gemini-3.5-flash",
       "provider": "Google",
       "effortLevels": []
@@ -45,6 +55,45 @@
       "id": "gemini-3.1-pro-preview",
       "provider": "Google",
       "effortLevels": []
+    },
+    {
+      "id": "gpt-5.6-sol",
+      "provider": "OpenAI",
+      "effortLevels": [
+        "none",
+        "low",
+        "medium",
+        "high",
+        "xhigh",
+        "max"
+      ],
+      "defaultEffort": "medium"
+    },
+    {
+      "id": "gpt-5.6-terra",
+      "provider": "OpenAI",
+      "effortLevels": [
+        "none",
+        "low",
+        "medium",
+        "high",
+        "xhigh",
+        "max"
+      ],
+      "defaultEffort": "medium"
+    },
+    {
+      "id": "gpt-5.6-luna",
+      "provider": "OpenAI",
+      "effortLevels": [
+        "none",
+        "low",
+        "medium",
+        "high",
+        "xhigh",
+        "max"
+      ],
+      "defaultEffort": "none"
     },
     {
       "id": "gpt-5.5",
@@ -63,6 +112,18 @@
       "provider": "OpenAI",
       "effortLevels": ["none", "low", "medium", "high", "xhigh"],
       "defaultEffort": "none"
+    },
+    {
+      "id": "claude-opus-5",
+      "provider": "Anthropic",
+      "effortLevels": [
+        "low",
+        "medium",
+        "high",
+        "xhigh",
+        "max"
+      ],
+      "defaultEffort": "high"
     },
     {
       "id": "claude-haiku-4-5",
