@@ -20,3 +20,10 @@ npm-error.log*
 
 # Environment
 .env
+
+# agentcore migration PoC
+backend/node_modules/
+backend/dist/
+done-loop/harness/node_modules/
+infra/.aws-sam/
+**/results-*.json

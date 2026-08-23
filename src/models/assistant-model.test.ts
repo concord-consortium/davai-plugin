@@ -8,6 +8,14 @@ import { DAVAI_SPEAKER, USER_SPEAKER } from "../constants";
 jest.mock("../utils/llm-utils", () => ({
   postMessage: jest.fn(),
 }));
+jest.mock("../utils/ws-transport", () => ({
+  WsTransport: jest.fn().mockImplementation(() => ({
+    // Never resolves: a submitted turn stays "in flight" so cancel paths can be exercised.
+    runTurn: jest.fn(() => new Promise(() => { /* never resolves */ })),
+    cancel: jest.fn(),
+    close: jest.fn(),
+  })),
+}));
 jest.mock("../utils/local-llm/local-llm-service", () => ({
   localLlmService: {
     isWebGPUAvailable: jest.fn(() => true),
@@ -47,7 +55,9 @@ jest.mock("../utils/codap-api-utils", () => ({
   getGraphDetails: jest.fn().mockResolvedValue([]),
 }));
 
+import { codapInterface } from "@concord-consortium/codap-plugin-api";
 import { localLlmService } from "../utils/local-llm/local-llm-service";
+import { WsTransport } from "../utils/ws-transport";
 import { runLocalTurn } from "../utils/local-llm/local-llm-loop";
 import { dispatchTool } from "../utils/local-llm/tools";
 import { buildSchemaDigest, buildGraphSeed } from "../utils/local-llm/local-llm-prefetch";
@@ -370,6 +380,59 @@ describe("handleMessageSubmitLocalLlm", () => {
 
     release("done"); // let the abandoned first turn settle so the test can exit cleanly
     await first.catch(() => undefined);
+  });
+
+  it("discards a WS result that arrives after cancel (cancel frame lost the race)", async () => {
+    // The server's abort is only checked between stream chunks, and the cancel frame
+    // races the result frame across the AgentCore hop. When the REAL result arrives
+    // after handleCancel, the suspended turn must discard it — not render it.
+    const store = createStore();
+    store.setUseWebSocket(true);
+    let release: (v: any) => void = () => undefined;
+    (WsTransport as jest.Mock).mockImplementationOnce(() => ({
+      runTurn: jest.fn(() => new Promise((res) => { release = res; })),
+      cancel: jest.fn(),
+      close: jest.fn(),
+    }));
+
+    const turn = store.handleMessageSubmit("write a long essay");
+    await Promise.resolve();
+    expect(store.isLoadingResponse).toBe(true);
+
+    await store.handleCancel();
+
+    release({ response: "A late zombie response." });
+    await turn;
+
+    const contents = store.transcriptStore.messages.map((m) => m.messageContent.content);
+    expect(contents).toContain("I've cancelled processing your message.");
+    expect(contents).not.toContain("A late zombie response.");
+  });
+
+  it("does not execute a tool call from a WS result that arrives after cancel", async () => {
+    const store = createStore();
+    store.setUseWebSocket(true);
+    let release: (v: any) => void = () => undefined;
+    (WsTransport as jest.Mock).mockImplementationOnce(() => ({
+      runTurn: jest.fn(() => new Promise((res) => { release = res; })),
+      cancel: jest.fn(),
+      close: jest.fn(),
+    }));
+
+    const turn = store.handleMessageSubmit("make a scatterplot");
+    await Promise.resolve();
+    await store.handleCancel();
+
+    // Late requires_action: without the latch this would run the CODAP request
+    // ("the graph appears seconds after cancelling").
+    release({
+      status: "requires_action",
+      tool_call_id: "call-1",
+      request: { action: "create", resource: "component", values: { type: "graph" } },
+    });
+    await turn;
+
+    expect((codapInterface.sendRequest as jest.Mock)).not.toHaveBeenCalled();
   });
 
   it("posts no reply after cancel when the in-flight turn later settles", async () => {
@@ -1477,6 +1540,31 @@ describe("sonification auto-select on local create_graph", () => {
     jest.clearAllMocks();
   });
 
+  it("refreshes both graph stores after a server-path graph create with a dataContext-scoped " +
+    "resource (CODAP 3.1 no longer echoes component notifications to the initiating plugin)", async () => {
+    const { root, store } = createRootedStore();
+    store.setLlmId(JSON.stringify({ id: "gpt-5.4-mini", provider: "OpenAI" }));
+    expect(root.sonificationStore.selectedGraphID).toBeUndefined();
+    (codapInterface.sendRequest as jest.Mock).mockResolvedValueOnce({ success: true, values: { id: 42 } });
+    (getGraphDetails as jest.Mock).mockResolvedValueOnce([newSonifiableGraph]);
+
+    // The LLM routinely emits the scoped resource form, which CODAP accepts; the refresh
+    // guard must not require the bare "component" spelling.
+    await store.processToolCall({
+      tool_call_id: "call-1",
+      type: "create_request",
+      request: {
+        action: "create",
+        resource: "dataContext[233176388495090].component",
+        values: { type: "graph", dataContext: "TestData", xAttributeID: 1, yAttributeID: 2 },
+      },
+    } as any);
+
+    expect(root.sonificationStore.selectedGraphID).toBe(42);
+    // The assistant's own graph context must refresh too — it also relied on the echo.
+    expect(getTrimmedGraphDetails).toHaveBeenCalled();
+  });
+
   it("selects the newly created graph in the sonification store after a local create_graph " +
     "tool call (chat wiring, handleMessageSubmitLocalLlm)", async () => {
     const { root, store } = createRootedStore();
@@ -1632,5 +1720,31 @@ describe("refreshGraphList: refills graphs WITHOUT the selectNewest side effect"
     expect(root.sonificationStore.selectedGraphID).toBe(42);
 
     consoleLogSpy.mockRestore();
+  });
+});
+
+describe("handleCancel over WebSocket", () => {
+  afterEach(() => {
+    jest.clearAllMocks();
+  });
+
+  it("sends the cancel over the socket instead of POSTing to the legacy cancel endpoint", async () => {
+    const store = createStore();
+    store.setUseWebSocket(true);
+    // If the legacy HTTP path were (wrongly) taken, let it complete instead of hanging the test.
+    mockedPostMessage.mockResolvedValue({ ok: true, json: async () => ({}) } as Response);
+
+    // Park a turn in flight over the WS transport (the mocked runTurn never resolves);
+    // submitting sets currentMessageId, the gate on handleCancel's server branch.
+    store.handleMessageSubmit("hello");
+    await Promise.resolve();
+    expect(store.isLoadingResponse).toBe(true);
+
+    await store.handleCancel();
+
+    const transport = (WsTransport as unknown as jest.Mock).mock.results[0].value;
+    expect(transport.cancel).toHaveBeenCalledTimes(1);
+    expect(mockedPostMessage).not.toHaveBeenCalled();
+    expect(store.isCancelling).toBe(false);
   });
 });

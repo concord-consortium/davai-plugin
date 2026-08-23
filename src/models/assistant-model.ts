@@ -9,6 +9,9 @@ import { isGraphSonifiable } from "../utils/graph-sonification-utils";
 import { ChatTranscriptModel } from "./chat-transcript-model";
 import { IToolCallData, IToolRequestError, IMessageResponse, ToolOutput } from "../types";
 import { postMessage } from "../utils/llm-utils";
+import { WsTransport, SeedMessage } from "../utils/ws-transport";
+import { getAgentCoreConnectUrl } from "../utils/agentcore-auth";
+import { getAgentCoreConfig } from "../utils/agentcore-config";
 import { localLlmService } from "../utils/local-llm/local-llm-service";
 import { runLocalTurn } from "../utils/local-llm/local-llm-loop";
 import { buildLocalSystemPrompt, buildTranscriptTurns } from "../utils/local-llm/local-llm-prompt";
@@ -27,6 +30,23 @@ initializeLocalTools();
 // safely use action/resource/etc.
 const isToolRequestError = (request: IToolCallData["request"]): request is IToolRequestError =>
   "status" in request && request.status === "error";
+
+// Best-effort transcript -> seed messages for WebSocket idle re-seed (after a
+// microVM recycle). Only user/assistant text is replayed; debug entries are skipped.
+const buildReseedMessages = (transcriptStore: any): SeedMessage[] => {
+  const msgs = transcriptStore?.messages ?? [];
+  const out: SeedMessage[] = [];
+  for (const m of msgs) {
+    const content = m?.messageContent?.content;
+    if (typeof content !== "string" || !content.trim()) continue;
+    if (m.speaker === DEBUG_SPEAKER) continue;
+    // Status chatter (WebGPU notices, cancel confirmations, model-load progress) is
+    // kept out of the model conversation everywhere else; keep it out of seeds too.
+    if (m?.messageContent?.kind === "announcement") continue;
+    out.push({ role: m.speaker === DAVAI_SPEAKER ? "assistant" : "user", content });
+  }
+  return out;
+};
 
 // Post a timing debug entry (e.g. "Begin response time"/"Completed response time")
 // measured from the user-submit start. No-op if no start time is recorded.
@@ -68,6 +88,13 @@ export const AssistantModel = types
     streamEnabled: true as boolean,
     responseStartTime: null as number | null,
     effort: "" as string,
+    // WebSocket transport. On when a direct endpoint is configured (WS_SERVER_URL:
+    // local container or dev bridge) or when the build targets the deployed AgentCore
+    // stack (TRANSPORT=agentcore — webpack's default; unset under Jest, so tests keep
+    // exercising the poll path). TRANSPORT=poll restores the legacy SAM path.
+    useWebSocket: (!!process.env.WS_SERVER_URL || process.env.TRANSPORT === "agentcore") as boolean,
+    wsTransport: null as WsTransport | null,
+    wsTransportThreadId: null as string | null,
     // Monotonic counter guarding in-flight LOCAL turns. A local turn captures this at start;
     // cancel, a model switch (setLlmId), and createThread all bump it. When the suspended
     // `yield runLocalTurn(...)` resumes, a mismatch means the turn was cancelled/superseded, so
@@ -262,14 +289,17 @@ export const AssistantModel = types
             return JSON.stringify(res);
           }
 
-          // When the request is to create a graph component, we need to update the sonification
-          // store after the run. This guard only serves the server path (processToolCall's
-          // create_request branch); the local path achieves the same auto-select via its own
-          // refreshGraphs wiring below (see the toolCtx blocks in handleMessageSubmitLocalLlm and
-          // runLocalEvalTurns) rather than routing through here.
-          if (action === "create" && resource === "component" && values?.type === "graph") {
+          // When the request is to create a graph component, refresh the graph stores
+          // ourselves: as of CODAP 3.1 component notifications are NOT echoed back to the
+          // plugin that initiated the change, so nothing else will. The resource may be the
+          // bare "component" or the dataContext-scoped "dataContext[...].component" form —
+          // the LLM emits both and CODAP accepts both. Refresh BOTH stores (assistant graph
+          // context + sonification menu), mirroring the local path's refreshGraphs (its
+          // toolCtx blocks in handleMessageSubmitLocalLlm and runLocalEvalTurns).
+          if (action === "create" && /(^|\.)component$/.test(resource) && values?.type === "graph") {
             const root = getRoot(self) as any;
-            root.sonificationStore.setGraphs({ selectNewest: true });
+            yield updateGraphs();
+            yield root.sonificationStore.setGraphs({ selectNewest: true });
           }
 
           // Prepare for uploading of image file after run if the request is to get dataDisplay
@@ -308,6 +338,48 @@ export const AssistantModel = types
       }
     });
 
+    const setUseWebSocket = (enabled: boolean) => {
+      self.useWebSocket = enabled;
+    };
+
+    // Lazily create (and re-pin on threadId change) the session-pinned WebSocket
+    // transport.
+    const ensureTransport = (): WsTransport => {
+      if (!self.wsTransport || self.wsTransportThreadId !== self.threadId) {
+        self.wsTransport?.close();
+        const wsUrl = process.env.WS_SERVER_URL;
+        self.wsTransport = new WsTransport(wsUrl
+          ? {
+              // Direct endpoint: local backend container or the dev SigV4 bridge.
+              url: wsUrl,
+              authToken: process.env.AUTH_TOKEN || undefined,
+              onReconnect: () => buildReseedMessages(self.transcriptStore),
+            }
+          : {
+              // Deployed AgentCore runtime: Cognito temp credentials -> SigV4
+              // presigned URL per (re)connect. Staging vs production is resolved
+              // from the build's DEPLOY_PATH (see agentcore-config.ts).
+              getConnectUrl: (sessionId) => getAgentCoreConnectUrl(getAgentCoreConfig(), sessionId),
+              onReconnect: () => buildReseedMessages(self.transcriptStore),
+            });
+        self.wsTransportThreadId = self.threadId ?? null;
+      }
+      return self.wsTransport;
+    };
+
+    // Run one turn over the WebSocket, mapping streamed tokens to the same
+    // ingestStreamChunk the poll path uses. Returns the terminal output (identical
+    // shape to the poll path's `data`).
+    const wsRunTurn = flow(function* (input: any) {
+      const transport = ensureTransport();
+      const output = yield transport.runTurn(input, {
+        onToken: (text: string) => {
+          if (self.streamEnabled) self.ingestStreamChunk(text);
+        },
+      });
+      return output;
+    });
+
     const sendToolOutputToLlm = flow(function* (toolCallId: string, content: ToolOutput) {
       if (self.isAssistantMocked) return;
 
@@ -321,6 +393,19 @@ export const AssistantModel = types
             content
           }
         };
+
+        // WebSocket: return the tool result over the same socket — no second job, no poll.
+        if (self.useWebSocket) {
+          const wsOut = yield wsRunTurn({ ...reqBody, kind: "tool" });
+          // Second disjunct: handleCancel latched the turn dead while this tool round
+          // was in flight (see handleCancel's WS branch) — discard the late result.
+          if (wsOut?.status === "cancelled" || self.currentMessageId === null) {
+            self.finishStream();
+            self.addDbgMsg("Tool call job was cancelled", toolCallId);
+            return;
+          }
+          return wsOut;
+        }
 
         // Send tool output to the server
         const submissionResponse = yield postMessage(reqBody, "tool");
@@ -427,6 +512,20 @@ export const AssistantModel = types
             messageId
           };
 
+          let data: IMessageResponse | null = null;
+
+          if (self.useWebSocket) {
+            const wsOut = yield wsRunTurn({ ...reqBody, kind: "message" });
+            // Discard cancelled turns whether the server converted them (status:
+            // "cancelled") or the cancel lost the race and a real result arrived after
+            // handleCancel latched the turn dead (currentMessageId no longer ours).
+            if (wsOut?.status === "cancelled" || self.currentMessageId !== messageId) {
+              self.finishStream();
+              self.addDbgMsg("Discarding result of cancelled turn", messageId);
+              return;
+            }
+            data = wsOut;
+          } else {
           const submissionResponse = yield postMessage(reqBody, "message");
           if (!submissionResponse.ok) {
             throw new Error(`Failed to submit message: ${submissionResponse.statusText}`);
@@ -437,7 +536,6 @@ export const AssistantModel = types
           // 2. Poll server until response is ready. No-progress budget (reset whenever
           // streamed bytes arrive) instead of a fixed attempt count, so long streams
           // aren't dropped mid-flight.
-          let data: IMessageResponse | null = null;
           const idleBudgetMs = 60_000;
           let lastProgressAt = performance.now();
           let lastLen = 0;
@@ -485,6 +583,7 @@ export const AssistantModel = types
             self.addDbgMsg("Polling expired before response received", messageId);
             return;
           }
+          }
 
           self.addDbgMsg("Response from server", formatJsonMessage(data));
 
@@ -496,6 +595,12 @@ export const AssistantModel = types
           // place, or adds + announces it when nothing was streamed). With no pre-tool
           // text, just close out any partial stream.
           while (data?.status === "requires_action" && data?.tool_call_id) {
+            // Cancel landed during a tool round: stop before executing the CODAP action.
+            if (self.useWebSocket && self.currentMessageId !== messageId) {
+              self.finishStream();
+              self.addDbgMsg("Discarding tool call of cancelled turn", messageId);
+              return;
+            }
             if (typeof data.response === "string" && data.response.trim()) {
               self.finalizeStream(data.response);
             } else {
@@ -855,6 +960,23 @@ export const AssistantModel = types
           self.setShowLoadingIndicator(false);
 
           self.addDavaiMsg("I've cancelled processing your message.");
+
+          // WebSocket: the AgentCore backend has no HTTP cancel endpoint — cancellation is
+          // a frame on the live socket, which aborts the in-flight turn server-side. The
+          // abort races the result frame though (it is only checked between stream chunks,
+          // and both frames cross the AgentCore hop), so ALSO latch the cancel client-side:
+          // nulling currentMessageId marks the in-flight turn dead, and the submit flows
+          // discard whatever its suspended wsRunTurn later resolves with — a late real
+          // result must not be rendered or have its tool call executed.
+          // (finally below still clears isCancelling.)
+          if (self.useWebSocket) {
+            const cancelledId = self.currentMessageId;
+            self.wsTransport?.cancel();
+            self.currentMessageId = null;
+            self.addDbgMsg("Cancel request sent over WebSocket", cancelledId);
+            return;
+          }
+
           const reqBody = {
             messageId: self.currentMessageId,
             threadId: self.threadId
@@ -907,7 +1029,8 @@ export const AssistantModel = types
 
     return {
       createThread, initializeAssistant, handleMessageSubmit, handleMessageSubmitLocalLlm,
-      handleCancel, updateDataContexts, updateGraphs, processToolCall, runLocalEvalTurns
+      handleCancel, updateDataContexts, updateGraphs, processToolCall, runLocalEvalTurns,
+      setUseWebSocket
     };
   })
   .actions((self) => ({
