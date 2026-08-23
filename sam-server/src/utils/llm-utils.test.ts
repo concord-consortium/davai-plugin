@@ -140,6 +140,15 @@ describe("createModelInstance", () => {
     expect(callArgs.invocationKwargs).toBeUndefined();
   });
 
+  it("should not set sampling params for Opus 5 (whole 5 generation is adaptive-only)", async () => {
+    await createModelInstance(JSON.stringify({ id: "claude-opus-5", provider: "Anthropic" }));
+
+    const callArgs = (ChatAnthropic as unknown as jest.Mock).mock.calls[0][0];
+    expect(callArgs.temperature).toBeUndefined();
+    expect(callArgs.topP).toBeUndefined();
+    expect(callArgs.invocationKwargs).toBeUndefined();
+  });
+
   it("applies Anthropic effort via outputConfig", async () => {
     await createModelInstance(JSON.stringify({ id: "claude-sonnet-5", provider: "Anthropic" }), "low");
     const args = (ChatAnthropic as unknown as jest.Mock).mock.calls[0][0];

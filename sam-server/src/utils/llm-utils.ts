@@ -49,12 +49,14 @@ const promptTemplate = ChatPromptTemplate.fromMessages([
 const isOpenAIReasoningModel = (id: string) => /^(gpt-5|o\d)/i.test(id);
 
 // Adaptive-thinking-only Anthropic models removed the sampling parameters entirely —
-// sending temperature, top_p, or top_k returns a 400. This is the Opus 4.7+ line and the
-// "5"-generation Sonnet (Sonnet 5); models that still support extended thinking (Opus 4.6,
-// Sonnet 4.6, Haiku 4.5) still accept temperature. The library always sends all three, so
-// for these models we omit them.
+// sending temperature, top_p, or top_k returns a 400. That is the Opus 4.7+ line plus the
+// whole "5" generation and later (Opus 5, Sonnet 5, Fable 5); models that still support
+// extended thinking (Opus 4.6, Sonnet 4.6, Haiku 4.5) still accept temperature. The library
+// always sends all three, so for these models we omit them. The generation test is
+// deliberately broad: omitting temperature from a model that would accept it merely loses
+// determinism, while sending it to one that doesn't fails the whole turn.
 const isAnthropicNoSamplingModel = (id: string) =>
-  /^claude-opus-4-(?:[7-9]|\d\d)/.test(id) || /^claude-sonnet-5/.test(id);
+  /^claude-opus-4-(?:[7-9]|\d\d)/.test(id) || /^claude-(?:opus|sonnet|haiku|fable)-[5-9]/.test(id);
 
 // Anthropic models that accept output_config.effort (Opus 4.5+, Sonnet 4.6+, Sonnet 5;
 // NOT Haiku 4.5, which has no effort parameter).
