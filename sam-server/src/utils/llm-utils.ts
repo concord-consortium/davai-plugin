@@ -5,13 +5,12 @@ import { ChatOpenAI } from "@langchain/openai";
 import { START, END, StateGraph, Annotation } from "@langchain/langgraph";
 import { ChatGoogleGenerativeAI } from "@langchain/google-genai";
 import { ChatAnthropic } from "@langchain/anthropic";
-import { BaseMessage, trimMessages } from "@langchain/core/messages";
-import { ChatPromptTemplate } from "@langchain/core/prompts";
+import { BaseMessage, SystemMessage, trimMessages } from "@langchain/core/messages";
 import { PostgresSaver } from "@langchain/langgraph-checkpoint-postgres";
 import { instructions } from "../text/instructions.js";
 import { codapApiDoc } from "../text/codap-api-documentation.js";
 import { extractToolCalls, toolCallResponse, tools } from "./tool-utils.js";
-import { tokenCounter, escapeCurlyBraces } from "./utils.js";
+import { tokenCounter } from "./utils.js";
 import { MAX_TOKENS } from "../constants.js";
 import { getAnthropicKey, getGoogleKey, getOpenAIKey } from "./env-utils.js";
 
@@ -26,21 +25,41 @@ const checkpointPromise = checkpointer.setup();
 
 let llmInstances: Record<string, any> = {};
 
-const promptTemplate = ChatPromptTemplate.fromMessages([
-    [ "system",
-      `${instructions}
+// The system prompt is split at a cache boundary: the stable prefix (instructions +
+// API doc — identical for every request) versus the per-request CODAP state. Built as
+// plain strings, not a ChatPromptTemplate, so the API doc's braces need no escaping
+// and Anthropic's cache_control content blocks can be attached directly.
+const STABLE_SYSTEM_PREFIX = `${instructions}
 
       ### CODAP API documentation:
-      ${escapeCurlyBraces(codapApiDoc)}
+      ${codapApiDoc}`;
+
+const volatileSystemSuffix = (dataContexts: any, graphs: any) => `
 
       ### Current CODAP Data Contexts:
-      {dataContexts}
+      ${JSON.stringify(dataContexts || {}, null, 2)}
 
       ### Current CODAP Graphs:
-      {graphs}`
-    ],
-    ["placeholder", "{messages}"],
-]);
+      ${JSON.stringify(graphs || [], null, 2)}`;
+
+// Anthropic prompt caching is opt-in per request: the cache_control breakpoint on the
+// stable block caches everything before it (the static tool definitions render ahead of
+// the system prompt, so they are covered too). Reads bill at ~0.1x input, and the
+// prefix is identical across users and turns, so every turn after the first within the
+// cache TTL hits it. Other providers cache automatically on their side and get the
+// same text as a single plain string — the split must not change prompt bytes.
+export const buildSystemMessage = (provider: string, dataContexts: any, graphs: any) => {
+  const volatile = volatileSystemSuffix(dataContexts, graphs);
+  if (provider === "Anthropic") {
+    return new SystemMessage({
+      content: [
+        { type: "text", text: STABLE_SYSTEM_PREFIX, cache_control: { type: "ephemeral" } },
+        { type: "text", text: volatile },
+      ] as any,
+    });
+  }
+  return new SystemMessage({ content: STABLE_SYSTEM_PREFIX + volatile });
+};
 
 // OpenAI reasoning models (the gpt-5 family and the o-series). These are routed through
 // the Responses API and built without a temperature — they only accept the default, and
@@ -150,13 +169,10 @@ const callModel = async (state: any, modelConfig: any) => {
   });
   const trimmedMessages = await trimmer.invoke(state.messages);
 
-  const prompt = await promptTemplate.invoke({
-    messages: trimmedMessages,
-    dataContexts: JSON.stringify(state.dataContexts || {}, null, 2),
-    graphs: JSON.stringify(state.graphs || [], null, 2),
-  });
+  const { provider } = JSON.parse(llmId);
+  const systemMessage = buildSystemMessage(provider, state.dataContexts, state.graphs);
 
-  const response = await llm.invoke(prompt);
+  const response = await llm.invoke([systemMessage, ...trimmedMessages]);
   return { messages: response };
 };
 
