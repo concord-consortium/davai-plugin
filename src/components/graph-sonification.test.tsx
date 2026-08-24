@@ -107,6 +107,39 @@ describe("GraphSonification Component", () => {
     );
   };
 
+  it("refreshes the graph list when the sonify menu receives focus (CODAP v3 sends no " +
+    "attributeChange notifications — see CODAP-1496)", async () => {
+    // A graph that became sonifiable after creation never reaches the plugin via
+    // notifications, so the menu re-fetches on focus: by the time a mouse or
+    // screen-reader user opens it, the options are current.
+    const staleStore = mockSonificationModel.create({
+      allGraphs: [], // plugin missed every post-create notification
+      selectedGraphID: undefined
+    }) as unknown as GraphSonificationModelType;
+    render(
+      <AppConfigProvider>
+        <RootStoreProvider rootStore={{
+          sonificationStore: staleStore,
+          transportManager: mockTransportManager
+        } as unknown as IRootStore}>
+          <ShortcutsServiceProvider>
+            <GraphSonification />
+          </ShortcutsServiceProvider>
+        </RootStoreProvider>
+      </AppConfigProvider>
+    );
+
+    const select = screen.getByLabelText("Graph to sonify:");
+    expect(screen.queryByRole("option", { name: "Graph 1" })).not.toBeInTheDocument();
+
+    fireEvent.focus(select);
+
+    await waitFor(() => {
+      expect(screen.getByRole("option", { name: "Graph 1" })).toBeInTheDocument();
+      expect(screen.getByRole("option", { name: "Graph 2" })).toBeInTheDocument();
+    });
+  });
+
   it("renders the component with default state", () => {
     renderGraphSonification();
 

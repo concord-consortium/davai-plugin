@@ -164,7 +164,17 @@ export const GraphSonification = observer(() => {
       <h2 id="control-panel-heading">Sonification</h2>
       <div className="graph-selection">
         <label htmlFor="graph-select">Graph to sonify:</label>
-        <select id="graph-select" value={selectedGraphID || ""} onChange={(e) => handleSelectGraph(e.target.value)}>
+        <select
+          id="graph-select"
+          value={selectedGraphID || ""}
+          // CODAP v3 sends no component attributeChange/titleChange notifications
+          // (CODAP-1496), so a graph that became sonifiable after creation would never
+          // appear via the notification path. Re-fetch on focus: it fires for mouse
+          // (mousedown focuses before the popup opens) and for keyboard/screen-reader
+          // navigation alike, so the options are current by the time the menu is used.
+          onFocus={() => sonificationStore.setGraphs()}
+          onChange={(e) => handleSelectGraph(e.target.value)}
+        >
           <option value={""} disabled>Select a graph</option>
           {renderGraphOptions()}
         </select>
