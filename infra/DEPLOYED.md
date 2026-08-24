@@ -10,7 +10,7 @@ created; the template is parameterized for it (`EnvironmentName=production`).
 ## Stack resources
 | resource | value |
 |---|---|
-| AgentCore runtime | `davai_agentcore_staging-guJgof856F` (image `davai-agentcore-backend:models3-20260823`) |
+| AgentCore runtime | `davai_agentcore_staging-guJgof856F` (image `davai-agentcore-backend:cache-20260824`) |
 | Runtime ARN | `arn:aws:bedrock-agentcore:us-east-1:816253370536:runtime/davai_agentcore_staging-guJgof856F` |
 | Execution role | `davai-agentcore-staging-execution` |
 | Cognito Identity Pool | `us-east-1:f9ef35df-041f-4731-813f-67e998dbc98f` (unauthenticated, **classic flow**) |
@@ -18,7 +18,7 @@ created; the template is parameterized for it (`EnvironmentName=production`).
 | WebSocket endpoint | `wss://bedrock-agentcore.us-east-1.amazonaws.com/runtimes/<url-encoded runtime ARN>/ws` |
 
 ECR repo `davai-agentcore-backend` predates the stack and is referenced via the `ImageUri`
-parameter (images: `models3-20260823` = current, earlier tags = prior).
+parameter (images: `cache-20260824` = current, earlier tags = prior).
 Provider keys (OpenAI/Anthropic/Google) are runtime env vars fed from NoEcho stack parameters.
 
 ## Deploy / update
