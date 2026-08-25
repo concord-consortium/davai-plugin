@@ -19,6 +19,7 @@ import { initializeLocalTools, dispatchTool, buildToolDocs, ILocalToolContext } 
 import { buildGraphSeed, buildSchemaDigest, deriveCurrentGraphId } from "../utils/local-llm/local-llm-prefetch";
 import { runLocalEval, summarizeEval, IEvalTurnResult } from "../utils/local-llm/eval/eval-runner";
 import { IEvalCase } from "../utils/local-llm/eval/eval-cases";
+import { IUsage, costForUsage, PRICES_AS_OF } from "../utils/model-pricing";
 
 // Registers the curated local-tool set once per module load. Idempotent (registerTools does a
 // wholesale array reassignment), so re-import / hot-reload / multiple AssistantModel instances
@@ -100,6 +101,9 @@ export const AssistantModel = types
     // `yield runLocalTurn(...)` resumes, a mismatch means the turn was cancelled/superseded, so
     // its reply, error message, and flag/queue writes are all skipped (no zombie turn).
     turnEpoch: 0 as number,
+    // Per-model token/cost accumulation for the whole plugin session (survives
+    // New Thread; the display is a session meter, not a thread meter).
+    sessionUsage: {} as Record<string, { input: number; output: number; cacheRead: number; cacheWrite: number; turns: number }>,
   }))
   .views((self) => ({
     get isAssistantMocked() {
@@ -119,6 +123,21 @@ export const AssistantModel = types
     // showLoadingIndicator covers the mock assistant, which never sets isLoadingResponse.
     get isResponding() {
       return self.isLoadingResponse || self.showLoadingIndicator;
+    },
+    get sessionCostSummary() {
+      const models = Object.entries(self.sessionUsage).map(([model, agg]) => {
+        const cost = costForUsage(model, {
+          input_tokens: agg.input, output_tokens: agg.output,
+          input_token_details: { cache_read: agg.cacheRead, cache_creation: agg.cacheWrite },
+        });
+        return { model, ...agg, inputCost: cost?.inputCost, outputCost: cost?.outputCost, totalCost: cost?.totalCost };
+      });
+      const totals = models.reduce((t, m) => ({
+        input: t.input + m.input,
+        output: t.output + m.output,
+        totalCost: m.totalCost === undefined ? t.totalCost : (t.totalCost ?? 0) + m.totalCost,
+      }), { input: 0, output: 0, totalCost: undefined as number | undefined });
+      return { asOf: PRICES_AS_OF, models, totals };
     }
   }))
   .actions((self) => ({
@@ -133,6 +152,25 @@ export const AssistantModel = types
     },
     addDbgMsg (description: string, content: any) {
       self.transcriptStore.addMessage(DEBUG_SPEAKER, { description, content });
+    },
+    // Record one server round-trip's provider-reported usage under the CURRENT
+    // model. Undefined = provider/path reports no usage (Mock, errors) — no-op.
+    recordUsage(usage?: IUsage) {
+      if (!usage || typeof usage.input_tokens !== "number") return;
+      let id = "unknown";
+      try { id = JSON.parse(self.llmId).id; } catch { /* keep "unknown" */ }
+      const agg = self.sessionUsage[id] ?? { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, turns: 0 };
+      agg.input += usage.input_tokens;
+      agg.output += usage.output_tokens ?? 0;
+      agg.cacheRead += usage.input_token_details?.cache_read ?? 0;
+      agg.cacheWrite += usage.input_token_details?.cache_creation ?? 0;
+      agg.turns += 1;
+      self.sessionUsage = { ...self.sessionUsage, [id]: agg };
+      const cost = costForUsage(id, usage);
+      self.transcriptStore.addMessage(DEBUG_SPEAKER, {
+        description: "Token usage",
+        content: formatJsonMessage({ model: id, ...usage, ...(cost ? { estCost: cost.totalCost } : {}) }),
+      });
     },
     setShowLoadingIndicator(show: boolean) {
       self.showLoadingIndicator = show;
@@ -585,6 +623,7 @@ export const AssistantModel = types
           }
           }
 
+          (self as any).recordUsage((data as any)?.usage);
           self.addDbgMsg("Response from server", formatJsonMessage(data));
 
           // Tool calls: any user-facing text the model emitted before this tool call is
@@ -612,6 +651,7 @@ export const AssistantModel = types
             const toolResponseResult: any = yield sendToolOutputToLlm(data.tool_call_id, toolOutput);
             self.addDbgMsg("Response to tool output from server", formatJsonMessage(toolResponseResult));
             data = toolResponseResult;
+            (self as any).recordUsage((data as any)?.usage);
           }
 
           if (data?.response) {
