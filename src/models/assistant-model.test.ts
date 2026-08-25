@@ -1780,6 +1780,18 @@ describe("session usage accumulation", () => {
       .toEqual(["claude-haiku-4-5", "gpt-5.6-luna"]);
   });
 
+  it("attributes usage to the request's llmId, not the currently selected model", () => {
+    // Regression: a model switch while a turn is in flight must not book the old
+    // model's tokens under the new one — call sites pass the llmId the request
+    // was sent with, and recordUsage must prefer it over self.llmId.
+    const store = createStore();
+    store.setLlmId(JSON.stringify({ id: "gpt-5.6-luna", provider: "OpenAI" }));
+    store.recordUsage({ input_tokens: 100, output_tokens: 10 },
+      JSON.stringify({ id: "claude-haiku-4-5", provider: "Anthropic" }));
+    expect(store.sessionCostSummary.models.map((m: any) => m.model))
+      .toEqual(["claude-haiku-4-5"]);
+  });
+
   it("ignores undefined usage and adds a debug entry when recording", () => {
     const store = createStore();
     store.setLlmId(JSON.stringify({ id: "claude-haiku-4-5", provider: "Anthropic" }));

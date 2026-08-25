@@ -153,12 +153,14 @@ export const AssistantModel = types
     addDbgMsg (description: string, content: any) {
       self.transcriptStore.addMessage(DEBUG_SPEAKER, { description, content });
     },
-    // Record one server round-trip's provider-reported usage under the CURRENT
-    // model. Undefined = provider/path reports no usage (Mock, errors) — no-op.
-    recordUsage(usage?: IUsage) {
+    // Record one server round-trip's provider-reported usage. llmIdJson is the
+    // llmId the REQUEST was sent with — attribution must not re-read self.llmId,
+    // or a model switch while a turn is in flight books the old model's tokens
+    // under the new one. Undefined usage = provider/path reports none — no-op.
+    recordUsage(usage?: IUsage, llmIdJson?: string) {
       if (!usage || typeof usage.input_tokens !== "number") return;
       let id = "unknown";
-      try { id = JSON.parse(self.llmId).id; } catch { /* keep "unknown" */ }
+      try { id = JSON.parse(llmIdJson ?? self.llmId).id; } catch { /* keep "unknown" */ }
       const agg = self.sessionUsage[id] ?? { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, turns: 0 };
       agg.input += usage.input_tokens;
       agg.output += usage.output_tokens ?? 0;
@@ -446,6 +448,9 @@ export const AssistantModel = types
             self.addDbgMsg("Tool call job was cancelled", toolCallId);
             return;
           }
+          // Record here (not in the caller) so the tokens are attributed to the
+          // llmId THIS tool round was sent with, even across a mid-turn model switch.
+          (self as any).recordUsage(wsOut?.usage, reqBody.llmId);
           return wsOut;
         }
 
@@ -510,6 +515,8 @@ export const AssistantModel = types
           return;
         }
 
+        // Same attribution rule as the WS branch above.
+        (self as any).recordUsage(data?.usage, reqBody.llmId);
         return data;
       } catch (err) {
         console.error("Failed to send tool output:", err);
@@ -627,7 +634,7 @@ export const AssistantModel = types
           }
           }
 
-          (self as any).recordUsage(data?.usage);
+          (self as any).recordUsage(data?.usage, reqBody.llmId);
           self.addDbgMsg("Response from server", formatJsonMessage(data));
 
           // Tool calls: any user-facing text the model emitted before this tool call is
@@ -655,7 +662,6 @@ export const AssistantModel = types
             const toolResponseResult: any = yield sendToolOutputToLlm(data.tool_call_id, toolOutput);
             self.addDbgMsg("Response to tool output from server", formatJsonMessage(toolResponseResult));
             data = toolResponseResult;
-            (self as any).recordUsage(data?.usage);
           }
 
           if (data?.response) {

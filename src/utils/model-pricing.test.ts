@@ -29,7 +29,34 @@ describe("costForUsage", () => {
 
   it("handles absent cache details (all input at base rate)", () => {
     const cost = costForUsage("gemini-3.7-flash", { input_tokens: 1_000_000, output_tokens: 0 })!;
-    expect(cost.inputCost).toBeCloseTo(0.75, 6);
+    expect(cost.inputCost).toBeCloseTo(1.50, 6);
+  });
+
+  it("uses standard (non-promotional) rates for models with active promos", () => {
+    // Policy: no promotional/introductory rates in the table — they expire and
+    // would silently understate cost. These pins fail if a promo rate sneaks in.
+    // gemini-3.7-flash: standard 1.50/7.50 (intro 0.75/3.75 runs through 2026-12-31).
+    const flash = costForUsage("gemini-3.7-flash", { input_tokens: 1_000_000, output_tokens: 1_000_000 })!;
+    expect(flash.inputCost).toBeCloseTo(1.50, 6);
+    expect(flash.outputCost).toBeCloseTo(7.50, 6);
+    // gpt-5.6-sol: prior-generation list rate 5/30 (promo 4/20 through 2026-11-21).
+    const sol = costForUsage("gpt-5.6-sol", { input_tokens: 1_000_000, output_tokens: 1_000_000 })!;
+    expect(sol.inputCost).toBeCloseTo(5, 6);
+    expect(sol.outputCost).toBeCloseTo(30, 6);
+    // gemini-3.5-flash-lite: STANDARD 0.30/2.50, not the 0.15/1.25 batch rate.
+    const lite = costForUsage("gemini-3.5-flash-lite", { input_tokens: 1_000_000, output_tokens: 1_000_000 })!;
+    expect(lite.inputCost).toBeCloseTo(0.30, 6);
+    expect(lite.outputCost).toBeCloseTo(2.50, 6);
+  });
+
+  it("bills gpt-5.6-family cache writes at 1.25x input", () => {
+    // Latent today (LangChain's OpenAI converter never reports cache_creation),
+    // but the rate must be right for when that field appears.
+    const cost = costForUsage("gpt-5.6-terra", {
+      input_tokens: 1_000_000, output_tokens: 0,
+      input_token_details: { cache_read: 0, cache_creation: 1_000_000 },
+    })!;
+    expect(cost.inputCost).toBeCloseTo(2.50, 6);
   });
 
   it("returns undefined for unknown models", () => {
