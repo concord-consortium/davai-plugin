@@ -21,8 +21,6 @@ export const SessionCost = observer(() => {
     .map((m: any) => `${m.model}: ${fmtCost(m.totalCost)} (${fmtTokens(m.input)} in / ${fmtTokens(m.output)} out)`)
     .join("; ");
 
-  // Deliberately focusable plain text (not aria-live) so a screen-reader user can tab
-  // to the per-model cost breakdown on demand, without any per-turn announcement.
   // role="note" makes the aria-label valid (bare divs are name-from-author-prohibited
   // under ARIA 1.2), and the label leads with the session total because aria-label
   // REPLACES the visible text in the accessible name; title is kept for sighted hover.
