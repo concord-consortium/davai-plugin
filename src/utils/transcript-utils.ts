@@ -23,16 +23,7 @@ export interface TranscriptCapture {
   images: CapturedImage[];
 }
 
-export interface ITranscriptCostSummary {
-  asOf: string;
-  models: Array<{ model: string; input: number; output: number;
-    cacheRead: number; cacheWrite: number; totalCost?: number }>;
-  totals: { input: number; output: number; totalCost?: number };
-}
-
-export function buildTranscriptCsv(
-  messages: ChatMessage[], costSummary?: ITranscriptCostSummary
-): TranscriptCapture {
+export function buildTranscriptCsv(messages: ChatMessage[]): TranscriptCapture {
   const images: CapturedImage[] = [];
   const refByDataUri = new Map<string, string>();
 
@@ -56,22 +47,7 @@ export function buildTranscriptCsv(
     return [message.timestamp, message.speaker, debugEvent, replaceImages(rawBody ?? "")];
   });
 
-  let csv = [CSV_HEADER, ...rows].map(toCsvRow).join("\r\n") + "\r\n";
-
-  if (costSummary && costSummary.models.length > 0) {
-    const fmt = (c?: number) => (c === undefined ? "n/a" : c.toFixed(4));
-    // Route every appended line through toCsvRow (same as the transcript rows above) so
-    // the section header's comma, or any odd model id, can't split across cells.
-    const summaryRows: string[][] = [
-      [],
-      [`Session usage (estimated, prices as of ${costSummary.asOf})`],
-      ["model", "input tokens", "output tokens", "cache read", "cache write", "est cost"],
-      ...costSummary.models.map((m) =>
-        [m.model, String(m.input), String(m.output), String(m.cacheRead), String(m.cacheWrite), fmt(m.totalCost)]),
-      ["TOTAL", String(costSummary.totals.input), String(costSummary.totals.output), "", "", fmt(costSummary.totals.totalCost)],
-    ];
-    csv += summaryRows.map(toCsvRow).join("\r\n") + "\r\n";
-  }
+  const csv = [CSV_HEADER, ...rows].map(toCsvRow).join("\r\n") + "\r\n";
 
   return { csv, images };
 }

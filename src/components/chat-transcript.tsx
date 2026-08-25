@@ -4,7 +4,6 @@ import { ChatTranscriptMessage } from "./chat-transcript-message";
 import { ChatTranscript, ChatMessage } from "../types";
 import { LoadingMessage } from "./loading-message";
 import { SessionCost } from "./session-cost";
-import { useRootStore } from "../contexts/root-store-context";
 import { useAppConfigContext } from "../contexts/app-config-context";
 import { useShortcutsService } from "../contexts/shortcuts-service-context";
 import { useAriaLive } from "../contexts/aria-live-context";
@@ -27,7 +26,6 @@ interface IProps {
 
 export const ChatTranscriptComponent = observer(({chatTranscript, isLoading}: IProps) => {
   const appConfig = useAppConfigContext();
-  const { assistantStore } = useRootStore();
   const { showDebugLog } = appConfig;
   const shortcutsService = useShortcutsService();
   const chatTranscriptRef = useRef<HTMLDivElement>(null);
@@ -52,7 +50,7 @@ export const ChatTranscriptComponent = observer(({chatTranscript, isLoading}: IP
   }, [chatTranscript.messages.length, isLoading, streamingLen]);
 
   const handleCaptureTranscript = useCallback(async () => {
-    const { csv, images } = buildTranscriptCsv(chatTranscript.messages, assistantStore.sessionCostSummary);
+    const { csv, images } = buildTranscriptCsv(chatTranscript.messages);
 
     // The clipboard always gets the readable CSV (with images/ references).
     const copied = await copyTextToClipboard(csv).then(() => true, () => false);
@@ -74,7 +72,7 @@ export const ChatTranscriptComponent = observer(({chatTranscript, isLoading}: IP
     setAriaLiveText(copied
       ? "Transcript copied to clipboard and downloaded."
       : "Transcript downloaded. Could not copy to clipboard.");
-  }, [chatTranscript, appConfig, assistantStore, setAriaLiveText]);
+  }, [chatTranscript, appConfig, setAriaLiveText]);
 
   useEffect(() => {
     return shortcutsService.registerShortcutHandler("captureTranscript", (event) => {

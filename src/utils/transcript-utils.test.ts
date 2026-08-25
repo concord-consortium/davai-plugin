@@ -166,30 +166,6 @@ describe("getTranscriptFilename", () => {
   });
 });
 
-describe("buildTranscriptCsv usage summary", () => {
-  const summary = {
-    asOf: "2026-08-24",
-    models: [{ model: "claude-haiku-4-5", input: 21476, output: 13,
-      cacheRead: 10586, cacheWrite: 10586, totalCost: 0.01461 }],
-    totals: { input: 21476, output: 13, totalCost: 0.01461 },
-  } as any;
-
-  it("appends per-model and totals rows when a summary is provided", () => {
-    const { csv } = buildTranscriptCsv([], summary);
-    // Every appended line is routed through toCsvRow (RFC 4180 quoting), so the header's
-    // comma stays inside one quoted field instead of splitting across cells.
-    expect(csv).toContain('"Session usage (estimated, prices as of 2026-08-24)"');
-    expect(csv).toContain('"claude-haiku-4-5","21476","13","10586","10586","0.0146"');
-    expect(csv).toContain('"TOTAL","21476","13"');
-  });
-
-  it("emits no summary section without a summary or with an empty one", () => {
-    expect(buildTranscriptCsv([]).csv).not.toContain("Session usage");
-    expect(buildTranscriptCsv([], { asOf: "x", models: [], totals: { input: 0, output: 0 } } as any).csv)
-      .not.toContain("Session usage");
-  });
-});
-
 describe("downloadBlob", () => {
   it("creates an object URL, clicks a download anchor, and revokes the URL", () => {
     const createObjectURL = jest.fn((_blob: Blob) => "blob:url");
