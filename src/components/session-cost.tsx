@@ -23,13 +23,15 @@ export const SessionCost = observer(() => {
 
   // Deliberately focusable plain text (not aria-live) so a screen-reader user can tab
   // to the per-model cost breakdown on demand, without any per-turn announcement.
-  // aria-label carries the same breakdown as title (kept for sighted hover) so the
-  // breakdown is reachable via the accessible name, not just a mouse-only tooltip.
+  // role="note" makes the aria-label valid (bare divs are name-from-author-prohibited
+  // under ARIA 1.2), and the label leads with the session total because aria-label
+  // REPLACES the visible text in the accessible name; title is kept for sighted hover.
   const breakdown = `Estimated from list prices as of ${summary.asOf}. ${perModel}`;
+  const label = `Estimated session cost ${fmtCost(summary.totals.totalCost)}. ${breakdown}`;
   return (
     // eslint-disable-next-line jsx-a11y/no-noninteractive-tabindex
-    <div className="session-cost" data-testid="session-cost" tabIndex={0}
-      title={breakdown} aria-label={breakdown}>
+    <div className="session-cost" data-testid="session-cost" tabIndex={0} role="note"
+      title={breakdown} aria-label={label}>
       Est. session cost: {fmtCost(summary.totals.totalCost)}{" "}
       ({fmtTokens(summary.totals.input)} in / {fmtTokens(summary.totals.output)} out)
     </div>

@@ -38,12 +38,15 @@ it("renders totals and per-model tokens in dev mode", () => {
   expect(el.getAttribute("aria-live")).toBeNull();
 });
 
-it("exposes the per-model breakdown via aria-label (screen-reader reachable), mirroring title", () => {
+it("exposes total + per-model breakdown via aria-label on a role=note (screen-reader reachable)", () => {
   renderWithSummary(true, summary);
   const el = screen.getByTestId("session-cost");
   const title = el.getAttribute("title");
   expect(title).toContain("claude-haiku-4-5");
-  expect(el.getAttribute("aria-label")).toBe(title);
+  expect(el.getAttribute("role")).toBe("note");
+  // aria-label replaces the visible text in the accessible name, so it must lead
+  // with the session total before repeating the title's breakdown.
+  expect(el.getAttribute("aria-label")).toBe(`Estimated session cost $0.0146. ${title}`);
 });
 
 it("renders nothing outside dev mode", () => {
