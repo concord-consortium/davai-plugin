@@ -23,7 +23,16 @@ export interface TranscriptCapture {
   images: CapturedImage[];
 }
 
-export function buildTranscriptCsv(messages: ChatMessage[]): TranscriptCapture {
+export interface ITranscriptCostSummary {
+  asOf: string;
+  models: Array<{ model: string; input: number; output: number;
+    cacheRead: number; cacheWrite: number; totalCost?: number }>;
+  totals: { input: number; output: number; totalCost?: number };
+}
+
+export function buildTranscriptCsv(
+  messages: ChatMessage[], costSummary?: ITranscriptCostSummary
+): TranscriptCapture {
   const images: CapturedImage[] = [];
   const refByDataUri = new Map<string, string>();
 
@@ -47,7 +56,21 @@ export function buildTranscriptCsv(messages: ChatMessage[]): TranscriptCapture {
     return [message.timestamp, message.speaker, debugEvent, replaceImages(rawBody ?? "")];
   });
 
-  const csv = [CSV_HEADER, ...rows].map(toCsvRow).join("\r\n") + "\r\n";
+  let csv = [CSV_HEADER, ...rows].map(toCsvRow).join("\r\n") + "\r\n";
+
+  if (costSummary && costSummary.models.length > 0) {
+    const fmt = (c?: number) => (c === undefined ? "n/a" : c.toFixed(4));
+    const summaryLines = [
+      "",
+      `Session usage (estimated, prices as of ${costSummary.asOf})`,
+      "model,input tokens,output tokens,cache read,cache write,est cost",
+      ...costSummary.models.map((m) =>
+        `${m.model},${m.input},${m.output},${m.cacheRead},${m.cacheWrite},${fmt(m.totalCost)}`),
+      `TOTAL,${costSummary.totals.input},${costSummary.totals.output},,,${fmt(costSummary.totals.totalCost)}`,
+    ];
+    csv += summaryLines.join("\r\n") + "\r\n";
+  }
+
   return { csv, images };
 }
 
