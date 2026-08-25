@@ -1748,3 +1748,69 @@ describe("handleCancel over WebSocket", () => {
     expect(store.isCancelling).toBe(false);
   });
 });
+
+describe("session usage accumulation", () => {
+  it("accumulates usage per model and prices the session (caching-aware)", () => {
+    const store = createStore();
+    store.setLlmId(JSON.stringify({ id: "claude-haiku-4-5", provider: "Anthropic" }));
+    store.recordUsage({ input_tokens: 10732, output_tokens: 5,
+      input_token_details: { cache_read: 0, cache_creation: 10586 } });
+    store.recordUsage({ input_tokens: 10744, output_tokens: 8,
+      input_token_details: { cache_read: 10586, cache_creation: 0 } });
+
+    const summary = store.sessionCostSummary;
+    expect(summary.models).toHaveLength(1);
+    expect(summary.models[0].model).toBe("claude-haiku-4-5");
+    expect(summary.models[0].input).toBe(21476);
+    expect(summary.models[0].output).toBe(13);
+    expect(summary.models[0].cacheRead).toBe(10586);
+    expect(summary.models[0].cacheWrite).toBe(10586);
+    expect(summary.totals.totalCost).toBeGreaterThan(0);
+    // Caching-aware: far below the naive 21476 tokens x $1/M
+    expect(summary.totals.totalCost!).toBeLessThan(0.0215);
+  });
+
+  it("keys usage by model when the model changes mid-session", () => {
+    const store = createStore();
+    store.setLlmId(JSON.stringify({ id: "claude-haiku-4-5", provider: "Anthropic" }));
+    store.recordUsage({ input_tokens: 100, output_tokens: 10 });
+    store.setLlmId(JSON.stringify({ id: "gpt-5.6-luna", provider: "OpenAI" }));
+    store.recordUsage({ input_tokens: 200, output_tokens: 20 });
+    expect(store.sessionCostSummary.models.map((m: any) => m.model).sort())
+      .toEqual(["claude-haiku-4-5", "gpt-5.6-luna"]);
+  });
+
+  it("attributes usage to the request's llmId, not the currently selected model", () => {
+    // Regression: a model switch while a turn is in flight must not book the old
+    // model's tokens under the new one — call sites pass the llmId the request
+    // was sent with, and recordUsage must prefer it over self.llmId.
+    const store = createStore();
+    store.setLlmId(JSON.stringify({ id: "gpt-5.6-luna", provider: "OpenAI" }));
+    store.recordUsage({ input_tokens: 100, output_tokens: 10 },
+      JSON.stringify({ id: "claude-haiku-4-5", provider: "Anthropic" }));
+    expect(store.sessionCostSummary.models.map((m: any) => m.model))
+      .toEqual(["claude-haiku-4-5"]);
+  });
+
+  it("reports an n/a session total when any model is unpriced, instead of a partial sum", () => {
+    const store = createStore();
+    store.setLlmId(JSON.stringify({ id: "claude-haiku-4-5", provider: "Anthropic" }));
+    store.recordUsage({ input_tokens: 100, output_tokens: 10 });
+    expect(store.sessionCostSummary.totals.totalCost).toBeGreaterThan(0);
+    // Malformed llmId → usage lands under the unpriced "unknown" key.
+    store.recordUsage({ input_tokens: 500, output_tokens: 50 }, "not-json");
+    expect(store.sessionCostSummary.models).toHaveLength(2);
+    expect(store.sessionCostSummary.totals.totalCost).toBeUndefined();
+  });
+
+  it("ignores undefined usage and adds a debug entry when recording", () => {
+    const store = createStore();
+    store.setLlmId(JSON.stringify({ id: "claude-haiku-4-5", provider: "Anthropic" }));
+    store.recordUsage(undefined);
+    expect(store.sessionCostSummary.models).toHaveLength(0);
+    store.recordUsage({ input_tokens: 50, output_tokens: 5 });
+    const dbg = store.transcriptStore.messages.filter(
+      (m: any) => m.messageContent.description === "Token usage");
+    expect(dbg).toHaveLength(1);
+  });
+});

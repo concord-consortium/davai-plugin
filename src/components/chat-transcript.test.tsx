@@ -8,6 +8,18 @@ import { AriaLiveProvider, useAriaLive } from "../contexts/aria-live-context";
 import { SpeechServiceProvider } from "../contexts/speech-service-context";
 import { setupMockSpeechSynthesis, cleanupMockSpeechSynthesis } from "../test-utils/mock-speech-synthesis";
 
+// ChatTranscriptComponent renders SessionCost, which reads useRootStore(). Stub it out
+// (as App.test.tsx does) rather than composing the real AssistantModel/TransportManager —
+// this suite is never in dev mode, so SessionCost returns null via the dev-mode gate either
+// way, and this avoids pulling in Tone.js / local-llm's import.meta, which ts-jest can't parse.
+jest.mock("../contexts/root-store-context", () => ({
+  useRootStore: jest.fn(() => ({
+    assistantStore: {
+      sessionCostSummary: { asOf: "", models: [], totals: { input: 0, output: 0 } },
+    },
+  })),
+}));
+
 const TestProviders = ({ children }: { children: React.ReactNode }) => (
   <AppConfigProvider>
     <AriaLiveProvider>

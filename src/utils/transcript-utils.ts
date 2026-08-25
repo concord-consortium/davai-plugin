@@ -48,6 +48,7 @@ export function buildTranscriptCsv(messages: ChatMessage[]): TranscriptCapture {
   });
 
   const csv = [CSV_HEADER, ...rows].map(toCsvRow).join("\r\n") + "\r\n";
+
   return { csv, images };
 }
 
