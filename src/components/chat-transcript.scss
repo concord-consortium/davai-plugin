@@ -2,8 +2,18 @@
 
 .chat-transcript__toolbar {
   display: flex;
+  align-items: center;
+  // flex-end keeps the Capture Transcript button right-aligned when SessionCost
+  // renders nothing (outside dev mode / before any usage). When SessionCost does
+  // render, its own margin-right: auto pushes the button back to the end, so the
+  // cost line lands left-aligned without needing space-between here.
   justify-content: flex-end;
   margin: 0 0 5px;
+
+  .session-cost {
+    font-size: .75rem;
+    margin-right: auto;
+  }
 
   button.capture-transcript {
     font-size: .75rem;
