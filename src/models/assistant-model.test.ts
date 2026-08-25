@@ -1792,6 +1792,17 @@ describe("session usage accumulation", () => {
       .toEqual(["claude-haiku-4-5"]);
   });
 
+  it("reports an n/a session total when any model is unpriced, instead of a partial sum", () => {
+    const store = createStore();
+    store.setLlmId(JSON.stringify({ id: "claude-haiku-4-5", provider: "Anthropic" }));
+    store.recordUsage({ input_tokens: 100, output_tokens: 10 });
+    expect(store.sessionCostSummary.totals.totalCost).toBeGreaterThan(0);
+    // Malformed llmId → usage lands under the unpriced "unknown" key.
+    store.recordUsage({ input_tokens: 500, output_tokens: 50 }, "not-json");
+    expect(store.sessionCostSummary.models).toHaveLength(2);
+    expect(store.sessionCostSummary.totals.totalCost).toBeUndefined();
+  });
+
   it("ignores undefined usage and adds a debug entry when recording", () => {
     const store = createStore();
     store.setLlmId(JSON.stringify({ id: "claude-haiku-4-5", provider: "Anthropic" }));

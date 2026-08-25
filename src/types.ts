@@ -1,4 +1,4 @@
-import { IUsage } from "./utils/model-pricing";
+import type { IUsage } from "./utils/model-pricing";
 
 export const AppModeValues = ["development", "production", "test"] as const;
 export type AppMode = typeof AppModeValues[number];

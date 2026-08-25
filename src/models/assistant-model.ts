@@ -132,10 +132,15 @@ export const AssistantModel = types
         });
         return { model, ...agg, inputCost: cost?.inputCost, outputCost: cost?.outputCost, totalCost: cost?.totalCost };
       });
+      // Any unpriced model (e.g. usage recorded under the "unknown" fallback when an
+      // llmId failed to parse) poisons the session total to undefined ("n/a") rather
+      // than silently summing only the priced models and understating the cost.
+      const allPriced = models.every((m) => m.totalCost !== undefined);
       const totals = models.reduce((t, m) => ({
         input: t.input + m.input,
         output: t.output + m.output,
-        totalCost: m.totalCost === undefined ? t.totalCost : (t.totalCost ?? 0) + m.totalCost,
+        totalCost: allPriced && models.length > 0
+          ? (t.totalCost ?? 0) + (m.totalCost ?? 0) : undefined,
       }), { input: 0, output: 0, totalCost: undefined as number | undefined });
       return { asOf: PRICES_AS_OF, models, totals };
     }
