@@ -38,6 +38,14 @@ it("renders totals and per-model tokens in dev mode", () => {
   expect(el.getAttribute("aria-live")).toBeNull();
 });
 
+it("exposes the per-model breakdown via aria-label (screen-reader reachable), mirroring title", () => {
+  renderWithSummary(true, summary);
+  const el = screen.getByTestId("session-cost");
+  const title = el.getAttribute("title");
+  expect(title).toContain("claude-haiku-4-5");
+  expect(el.getAttribute("aria-label")).toBe(title);
+});
+
 it("renders nothing outside dev mode", () => {
   renderWithSummary(false, summary);
   expect(screen.queryByTestId("session-cost")).not.toBeInTheDocument();

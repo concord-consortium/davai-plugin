@@ -1,3 +1,5 @@
+import { IUsage } from "./utils/model-pricing";
+
 export const AppModeValues = ["development", "production", "test"] as const;
 export type AppMode = typeof AppModeValues[number];
 export const isAppMode = (value: unknown): value is AppMode => {
@@ -177,6 +179,7 @@ export interface IMessageResponse {
   response?: string;
   status?: string;
   tool_call_id?: string;
+  usage?: IUsage;
 }
 
 export type ToolOutput = string | Record<string, any>[];

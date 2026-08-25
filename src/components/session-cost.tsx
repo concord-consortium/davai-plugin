@@ -22,12 +22,14 @@ export const SessionCost = observer(() => {
     .join("; ");
 
   // Deliberately focusable plain text (not aria-live) so a screen-reader user can tab
-  // to the per-model cost breakdown in the title on demand, without any per-turn
-  // announcement.
+  // to the per-model cost breakdown on demand, without any per-turn announcement.
+  // aria-label carries the same breakdown as title (kept for sighted hover) so the
+  // breakdown is reachable via the accessible name, not just a mouse-only tooltip.
+  const breakdown = `Estimated from list prices as of ${summary.asOf}. ${perModel}`;
   return (
     // eslint-disable-next-line jsx-a11y/no-noninteractive-tabindex
     <div className="session-cost" data-testid="session-cost" tabIndex={0}
-      title={`Estimated from list prices as of ${summary.asOf}. ${perModel}`}>
+      title={breakdown} aria-label={breakdown}>
       Est. session cost: {fmtCost(summary.totals.totalCost)}{" "}
       ({fmtTokens(summary.totals.input)} in / {fmtTokens(summary.totals.output)} out)
     </div>

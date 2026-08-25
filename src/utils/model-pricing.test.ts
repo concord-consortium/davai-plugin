@@ -1,4 +1,5 @@
 import { costForUsage, PRICES_AS_OF } from "./model-pricing";
+import appConfig from "../app-config.json";
 
 describe("costForUsage", () => {
   it("prices uncached input, cached reads/writes, and output at their own rates", () => {
@@ -36,10 +37,13 @@ describe("costForUsage", () => {
   });
 
   it("covers every server-backed llmList model", () => {
-    const serverModels = ["gpt-5.6-sol", "gpt-5.6-terra", "gpt-5.6-luna", "gpt-5.5",
-      "gpt-5.4-mini", "gpt-5.4-nano", "claude-opus-5", "claude-haiku-4-5",
-      "claude-sonnet-5", "claude-opus-4-8", "gemini-3.7-flash", "gemini-3.5-flash-lite",
-      "gemini-3.5-flash", "gemini-3.1-flash-lite", "gemini-3.1-pro-preview"];
+    // Derived from app-config.json (not hardcoded) so adding a server-backed model
+    // without a matching RATES entry fails this suite instead of silently pricing
+    // as "n/a" in production.
+    const serverModels = (appConfig.llmList as Array<{ id: string; provider: string }>)
+      .filter((m) => m.provider !== "Mock" && m.provider !== "Local")
+      .map((m) => m.id);
+    expect(serverModels.length).toBeGreaterThan(0);
     for (const id of serverModels) {
       expect(costForUsage(id, { input_tokens: 1000, output_tokens: 100 })).toBeDefined();
     }

@@ -166,7 +166,11 @@ export const AssistantModel = types
       agg.cacheWrite += usage.input_token_details?.cache_creation ?? 0;
       agg.turns += 1;
       self.sessionUsage = { ...self.sessionUsage, [id]: agg };
-      const cost = costForUsage(id, usage);
+      const cost = costForUsage(id, {
+        ...usage,
+        input_tokens: usage.input_tokens ?? 0,
+        output_tokens: usage.output_tokens ?? 0,
+      });
       self.transcriptStore.addMessage(DEBUG_SPEAKER, {
         description: "Token usage",
         content: formatJsonMessage({ model: id, ...usage, ...(cost ? { estCost: cost.totalCost } : {}) }),
@@ -623,7 +627,7 @@ export const AssistantModel = types
           }
           }
 
-          (self as any).recordUsage((data as any)?.usage);
+          (self as any).recordUsage(data?.usage);
           self.addDbgMsg("Response from server", formatJsonMessage(data));
 
           // Tool calls: any user-facing text the model emitted before this tool call is
@@ -651,7 +655,7 @@ export const AssistantModel = types
             const toolResponseResult: any = yield sendToolOutputToLlm(data.tool_call_id, toolOutput);
             self.addDbgMsg("Response to tool output from server", formatJsonMessage(toolResponseResult));
             data = toolResponseResult;
-            (self as any).recordUsage((data as any)?.usage);
+            (self as any).recordUsage(data?.usage);
           }
 
           if (data?.response) {

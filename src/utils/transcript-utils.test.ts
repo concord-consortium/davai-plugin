@@ -176,9 +176,11 @@ describe("buildTranscriptCsv usage summary", () => {
 
   it("appends per-model and totals rows when a summary is provided", () => {
     const { csv } = buildTranscriptCsv([], summary);
-    expect(csv).toContain("Session usage (estimated, prices as of 2026-08-24)");
-    expect(csv).toContain("claude-haiku-4-5,21476,13,10586,10586,0.0146");
-    expect(csv).toContain("TOTAL,21476,13");
+    // Every appended line is routed through toCsvRow (RFC 4180 quoting), so the header's
+    // comma stays inside one quoted field instead of splitting across cells.
+    expect(csv).toContain('"Session usage (estimated, prices as of 2026-08-24)"');
+    expect(csv).toContain('"claude-haiku-4-5","21476","13","10586","10586","0.0146"');
+    expect(csv).toContain('"TOTAL","21476","13"');
   });
 
   it("emits no summary section without a summary or with an empty one", () => {

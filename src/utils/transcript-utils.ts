@@ -60,15 +60,17 @@ export function buildTranscriptCsv(
 
   if (costSummary && costSummary.models.length > 0) {
     const fmt = (c?: number) => (c === undefined ? "n/a" : c.toFixed(4));
-    const summaryLines = [
-      "",
-      `Session usage (estimated, prices as of ${costSummary.asOf})`,
-      "model,input tokens,output tokens,cache read,cache write,est cost",
+    // Route every appended line through toCsvRow (same as the transcript rows above) so
+    // the section header's comma, or any odd model id, can't split across cells.
+    const summaryRows: string[][] = [
+      [],
+      [`Session usage (estimated, prices as of ${costSummary.asOf})`],
+      ["model", "input tokens", "output tokens", "cache read", "cache write", "est cost"],
       ...costSummary.models.map((m) =>
-        `${m.model},${m.input},${m.output},${m.cacheRead},${m.cacheWrite},${fmt(m.totalCost)}`),
-      `TOTAL,${costSummary.totals.input},${costSummary.totals.output},,,${fmt(costSummary.totals.totalCost)}`,
+        [m.model, String(m.input), String(m.output), String(m.cacheRead), String(m.cacheWrite), fmt(m.totalCost)]),
+      ["TOTAL", String(costSummary.totals.input), String(costSummary.totals.output), "", "", fmt(costSummary.totals.totalCost)],
     ];
-    csv += summaryLines.join("\r\n") + "\r\n";
+    csv += summaryRows.map(toCsvRow).join("\r\n") + "\r\n";
   }
 
   return { csv, images };
