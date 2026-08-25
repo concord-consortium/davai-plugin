@@ -178,13 +178,14 @@ const callModel = async (state: any, modelConfig: any) => {
 
 export const buildResponse = async (message: BaseMessage) => {
   const toolCalls = extractToolCalls(message);
-
-  // If there are tool calls, we need to handle them first.
-  if (toolCalls?.[0]) {
-    return await toolCallResponse(toolCalls[0]);
-  } else {
-    return { response: message.content };
-  }
+  // Provider-reported token usage (LangChain-normalized) rides along on every
+  // turn output so the client can price the session; absent for providers or
+  // paths that do not report it.
+  const usage = (message as any).usage_metadata;
+  const base = toolCalls?.[0]
+    ? await toolCallResponse(toolCalls[0])
+    : { response: message.content };
+  return usage ? { ...base, usage } : base;
 };
 
 // define custom state annotation that includes CODAP data

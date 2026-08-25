@@ -25,10 +25,13 @@ import type { TurnInput } from "./types.js";
 // string (Anthropic can return content-block arrays).
 const buildResponse = async (message: any) => {
   const toolCalls = extractToolCalls(message);
-  if (toolCalls?.[0]) {
-    return await toolCallResponse(toolCalls[0]);
-  }
-  return { response: messageTextToString(message.content) };
+  // Provider-reported token usage (LangChain-normalized) rides along on every
+  // turn output so the client can price the session.
+  const usage = message.usage_metadata;
+  const base = toolCalls?.[0]
+    ? await toolCallResponse(toolCalls[0])
+    : { response: messageTextToString(message.content) };
+  return usage ? { ...base, usage } : base;
 };
 
 export interface RunTurnOpts {
