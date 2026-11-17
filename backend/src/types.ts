@@ -1,5 +1,5 @@
 // Turn inputs for the AgentCore container. These mirror the old server's
-// MessageJobInput / ToolJobInput (reference/sam-server/src/types.ts) minus the
+// MessageJobInput / ToolJobInput (sam-server/src/types.ts) minus the
 // job/queue envelope — the client posts one of these to /invocations (or sends it
 // over /ws), and `threadId` doubles as the AgentCore runtimeSessionId.
 

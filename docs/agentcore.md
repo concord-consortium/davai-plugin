@@ -1,7 +1,9 @@
-# AWS Bedrock AgentCore — technical brief (for this migration)
+# AWS Bedrock AgentCore — technical brief
 
-_Captured during P0 scoping. Primary source: AWS docs (`docs.aws.amazon.com/bedrock-agentcore`).
-Status: AgentCore GA since **Oct 13, 2025**._
+The AgentCore facts the DAVAI backend (`backend/`) is built around: session pinning, lifetimes, size
+limits, pricing and permissions. Gathered in mid-2026 from the AWS docs
+(`docs.aws.amazon.com/bedrock-agentcore`); limits and prices change, so check the docs before relying on
+a number. AgentCore has been GA since **Oct 13, 2025**.
 
 ### 1. Runtime & isolation
 AgentCore Runtime hosts a containerized agent app; AWS manages scaling, sessions, and isolation.
@@ -22,20 +24,21 @@ ID after termination spins up a fresh environment; omitting/varying it forces ne
 - **SSE / HTTP response streaming** over `POST /invocations`.
 - **WebSocket** via `InvokeAgentRuntimeWithWebSocketStream` (mount `/ws`) — replaces client polling.
 - Constraints: synchronous request timeout **15 min**; streaming/WebSocket max **60 min**; streaming
-  chunk ≤10 MB; **WebSocket frame ≤64 KB**, ≤250 frames/sec. Longer work → async jobs (≤8 h, status via `/ping`).
+  chunk ≤10 MB; **WebSocket frame ≤64 KB**, ≤250 frames/sec. (`backend/src/ws.ts` chunks frames to
+  stay under 32 KB, a stricter figure elsewhere in the service docs; confirm which one applies.) Longer work → async jobs (≤8 h, status via `/ping`).
 
 ### 4. Framework support
 **LangChain/LangGraph explicitly supported** (also CrewAI, Strands). Two deploy contracts:
 - **AgentCore Python SDK** (`bedrock-agentcore`): `BedrockAgentCoreApp` + `@app.entrypoint` (Python only).
 - **Container (bring-your-own):** expose **`POST /invocations`** + **`GET /ping`** on **port 8080**,
-  **ARM64** image ≤2 GB. **← this is our path (agent is LangGraph-JS/Node).**
+  **ARM64** image ≤2 GB. **← DAVAI's path (the agent is LangGraph-JS/Node).**
 - **Starter Toolkit / `agentcore` CLI:** `agentcore configure` / `launch`; builds via CodeBuild
   (no local Docker needed). `direct_code_deploy` mode also exists (zip, ≤250 MB compressed).
 
 ### 5. Components
 Runtime, **Memory**, **Gateway**, **Identity**, **Browser** tool, **Code Interpreter**, **Observability**.
 For us: **Memory** = managed alternative to the Postgres context store (deferred); **Gateway** = turns
-APIs/Lambdas/MCP into agent tools for server-side tool calling (deferred). All optional for this goal.
+APIs/Lambdas/MCP into agent tools for server-side tool calling (deferred). DAVAI uses neither yet.
 
 ### 6. Local dev / testing
 `agentcore launch --local` / the SDK's `app.run()` runs the **same app on port 8080 locally** that
@@ -57,7 +60,7 @@ free tier. Memory/Gateway/etc. billed separately. Initially 9 regions (incl. us-
 
 ### 9. Gotchas for a chat backend
 - **Session-ID discipline is load-bearing** (≥33 chars; lose/rotate it → new cold microVM + lost in-memory context).
-- **Ephemeral state:** 8-h max + 15-min idle cap ⇒ the microVM is NOT a durable store. Our answer:
+- **Ephemeral state:** 8-h max + 15-min idle cap ⇒ the microVM is NOT a durable store. DAVAI's answer:
   **client re-seeds from its transcript on reconnect** (no server store). Revisit only if insufficient.
 - **Cold-start** on first invoke / after idle-out — has a dedicated latency-minimization guide.
 - **ARM64-only** images ≤2 GB; 1 GB session disk; 100 MB payload cap.
