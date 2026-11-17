@@ -38,12 +38,17 @@ docker run --rm -p 8080:8080 --env-file .env davai-backend
 ### Tests
 
 ```bash
-npm run test:ws        # WebSocket transport smoke test (no provider key needed)
+npm test               # jest unit tests for the agent (src/agent/utils/*.test.ts)
+npm run test:ws        # WebSocket transport smoke test (no provider key needed; run `npm run build` first)
 npm run test:ws:live   # the same checks against a real OpenAI model (needs OPENAI_API_KEY)
 ```
 
 `test:ws` runs the server with `DAVAI_FAKE_AGENT=1` (see `src/fake-agent.ts`), a scripted agent that
-exercises the streaming and tool round-trip protocol without an API key.
+exercises the streaming and tool round-trip protocol without an API key. CI runs the typecheck, the unit
+tests and `test:ws`.
+
+The unit tests are copies of the ones in `sam-server/src/utils/`, minus the Postgres mocks. While both
+servers exist, a test added to one copy isn't run against the other.
 
 ## Service contract
 
