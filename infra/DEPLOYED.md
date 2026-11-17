@@ -23,10 +23,11 @@ Provider keys (OpenAI/Anthropic/Google) are runtime env vars fed from NoEcho sta
 
 ## Deploy / update
 ```bash
-./infra/deploy-staging.sh [image-uri]     # reads provider keys from backend/.env
+./infra/deploy.sh staging <image-uri>
 ```
-(or `aws cloudformation deploy|update-stack` with the same parameters; use
-`UsePreviousValue=true` to update without re-supplying keys).
+See [README.md](README.md). The live stack still takes the provider keys as parameters; the next
+deploy switches it to Secrets Manager, so create the three `davai-agentcore/*` secrets in this
+account first.
 
 ## Public browser access path (verified live 2026-08-07)
 Anonymous client → Cognito `GetId` + `GetOpenIdToken` → `sts:AssumeRoleWithWebIdentity`
@@ -47,6 +48,5 @@ aws cloudformation delete-stack --profile agentcore --region us-east-1 --stack-n
 Deliberately deferred to the production-stack work:
 - Per-identity throttling/quotas (WAF or Cognito-keyed) on top of the anonymous access model —
   note the legacy SAM setup has the same exposure class (its AUTH_TOKEN ships in the public bundle).
-- Move provider keys from stack parameters to Secrets Manager ARNs (backend already resolves ARNs).
 - Turn the release-build staging fallback in src/utils/agentcore-config.ts from a console
   warning into a build failure once the production stack exists.
