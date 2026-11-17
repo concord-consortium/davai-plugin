@@ -1,13 +1,17 @@
-# Deployed — AgentCore staging stack (QA account)
+# Deployed — AgentCore stacks
+
+The staging stack (QA account) comes first; the production stack (main account) is
+[further down](#production-stack-main-account).
+
+## Staging stack (QA account)
 
 **Source of truth: the `davai-agentcore-staging` CloudFormation stack** (template:
 [cloudformation.yml](cloudformation.yml)), account 816253370536, us-east-1, managed with the
 AWS CLI (profile `agentcore`). The earlier hand-rolled resources (runtime
 `davai_agentcore-0c9quSDd49`, role `davai-agentcore-runtime-execution`) were **deleted
-2026-08-07** and replaced by this stack. The production stack (separate account) is not yet
-created; the template is parameterized for it (`EnvironmentName=production`).
+2026-08-07** and replaced by this stack.
 
-## Stack resources
+### Stack resources
 | resource | value |
 |---|---|
 | AgentCore runtime | `davai_agentcore_staging-guJgof856F` (image `davai-agentcore-backend:cancelfix-20260807`) |
@@ -21,7 +25,7 @@ ECR repo `davai-agentcore-backend` predates the stack and is referenced via the 
 parameter (images: `cancelfix-20260807` = current, earlier tags = prior).
 Provider keys (OpenAI/Anthropic/Google) are runtime env vars fed from NoEcho stack parameters.
 
-## Deploy / update
+### Deploy / update
 ```bash
 ./infra/deploy.sh staging <image-uri>
 ```
@@ -29,7 +33,7 @@ See [README.md](README.md). The live stack still takes the provider keys as para
 deploy switches it to Secrets Manager, so create the three `davai-agentcore/*` secrets in this
 account first.
 
-## Public browser access path (verified live 2026-08-07)
+### Public browser access path (verified live 2026-08-07)
 Anonymous client → Cognito `GetId` + `GetOpenIdToken` → `sts:AssumeRoleWithWebIdentity`
 (classic flow — the enhanced flow's service allowlist excludes bedrock-agentcore) → SigV4
 presigned URL (canonical path double-encoded, empty-string payload hash) → WebSocket → runtime
@@ -38,10 +42,45 @@ presigned URL (canonical path double-encoded, empty-string payload hash) → Web
 node scripts/agentcore-cognito-smoke.mjs
 ```
 
-## Teardown
+### Teardown
 ```bash
 aws cloudformation delete-stack --profile agentcore --region us-east-1 --stack-name davai-agentcore-staging
 # ECR repo (outside the stack): aws ecr delete-repository --repository-name davai-agentcore-backend --force
+```
+
+## Production stack (main account)
+
+**Source of truth: the `davai-agentcore-production` CloudFormation stack**, account 612297603577,
+us-east-1, managed with the AWS CLI (default profile). Created 2026-11-17. No client uses it yet:
+`src/utils/agentcore-config.ts` still sends release builds to staging.
+
+| resource | value |
+|---|---|
+| AgentCore runtime | `davai_agentcore_production-TFK1Yl3Aea` |
+| Runtime ARN | `arn:aws:bedrock-agentcore:us-east-1:612297603577:runtime/davai_agentcore_production-TFK1Yl3Aea` |
+| `DEFAULT` endpoint (release candidates) | version 2, image `davai-agentcore-backend:20261117-a1d684d-v2check` |
+| `production` endpoint (releases) | version 1, image `davai-agentcore-backend:20261117-a1d684d` |
+| Execution role | `davai-agentcore-production-execution` |
+| Cognito Identity Pool | `us-east-1:a5e4cbee-dfc7-4a29-b3d6-c8f52fa07b7e` (unauthenticated, classic flow) |
+| Unauth role | `arn:aws:iam::612297603577:role/davai-agentcore-production-unauth` |
+
+Versions 1 and 2 are the same image (same digest) under two tags; version 2 was deployed to check
+that a deploy leaves the `production` endpoint where it is.
+
+ECR repo `davai-agentcore-backend` (immutable tags) and the secrets
+`davai-agentcore/{openai,anthropic,google}-api-key` are outside the stack. The secrets were copied
+from the SAM server's `prod-*-api-key` secrets, so both backends use the same keys.
+
+Deploy with `./infra/deploy.sh production <image-uri>`, promote with `./infra/promote.sh <version>`
+(see [README.md](README.md)). Check both endpoints with:
+```bash
+node scripts/agentcore-cognito-smoke.mjs --stack davai-agentcore-production
+node scripts/agentcore-cognito-smoke.mjs --stack davai-agentcore-production --qualifier production
+```
+
+Teardown (the ECR repo and secrets are separate):
+```bash
+aws cloudformation delete-stack --region us-east-1 --stack-name davai-agentcore-production
 ```
 
 ## Production-hardening follow-ups (from the 2026-08-07 code review)
