@@ -1,0 +1,206 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: >-
+  DAVAI AgentCore backend stack: AgentCore Runtime (container from ECR), its
+  execution role, and a Cognito Identity Pool whose unauthenticated role may
+  invoke ONLY this stack's runtime (HTTP and WebSocket). The staging stack (QA
+  account) is for testing branches. The production stack (main account) serves
+  release candidates on the runtime's DEFAULT endpoint and releases on its
+  `production` endpoint, which stays on a chosen runtime version until it is
+  promoted. Deploy/update with infra/deploy.sh and infra/promote.sh (see infra/README.md).
+
+Parameters:
+  EnvironmentName:
+    Type: String
+    Default: staging
+    AllowedValues: [staging, production]
+    Description: Environment this stack serves (staging = QA account, production = main account).
+  ImageUri:
+    Type: String
+    Description: >-
+      Full ECR image URI for the backend container (ARM64), in this account's
+      davai-agentcore-backend repo. The image must exist before the runtime is
+      created/updated.
+  OpenAIApiKeySecretArn:
+    Type: String
+    AllowedPattern: '^arn:aws:secretsmanager:.*:secret:davai-agentcore/.*$'
+    Description: ARN of the Secrets Manager secret holding the OpenAI API key.
+  AnthropicApiKeySecretArn:
+    Type: String
+    AllowedPattern: '^arn:aws:secretsmanager:.*:secret:davai-agentcore/.*$'
+    Description: ARN of the Secrets Manager secret holding the Anthropic API key.
+  GoogleApiKeySecretArn:
+    Type: String
+    AllowedPattern: '^arn:aws:secretsmanager:.*:secret:davai-agentcore/.*$'
+    Description: ARN of the Secrets Manager secret holding the Google API key.
+  ProductionVersion:
+    Type: String
+    Default: ""
+    AllowedPattern: '^[0-9]*$'
+    Description: >-
+      Runtime version the `production` endpoint serves. Empty means no
+      `production` endpoint (the staging stack leaves it empty). Changed by
+      infra/promote.sh.
+
+Conditions:
+  HasProductionEndpoint: !Not [!Equals [!Ref ProductionVersion, ""]]
+
+Resources:
+  # ---------------------------------------------------------------- execution
+  RuntimeExecutionRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: !Sub davai-agentcore-${EnvironmentName}-execution
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal: { Service: bedrock-agentcore.amazonaws.com }
+            Action: sts:AssumeRole
+            Condition:
+              StringEquals: { aws:SourceAccount: !Ref AWS::AccountId }
+      Policies:
+        - PolicyName: execution
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Sid: EcrPull
+                Effect: Allow
+                Action:
+                  - ecr:GetDownloadUrlForLayer
+                  - ecr:BatchGetImage
+                Resource: !Sub arn:aws:ecr:${AWS::Region}:${AWS::AccountId}:repository/davai-agentcore-backend
+              - Sid: EcrAuth
+                Effect: Allow
+                Action: ecr:GetAuthorizationToken
+                Resource: '*'
+              - Sid: Logs
+                Effect: Allow
+                Action:
+                  - logs:CreateLogGroup
+                  - logs:CreateLogStream
+                  - logs:PutLogEvents
+                  - logs:DescribeLogGroups
+                  - logs:DescribeLogStreams
+                Resource: !Sub arn:aws:logs:${AWS::Region}:${AWS::AccountId}:log-group:/aws/bedrock-agentcore/*
+              - Sid: XRay
+                Effect: Allow
+                Action:
+                  - xray:PutTraceSegments
+                  - xray:PutTelemetryRecords
+                  - xray:GetSamplingRules
+                  - xray:GetSamplingTargets
+                Resource: '*'
+              - Sid: Metrics
+                Effect: Allow
+                Action: cloudwatch:PutMetricData
+                Resource: '*'
+                Condition:
+                  StringEquals: { cloudwatch:namespace: bedrock-agentcore }
+              # The provider keys. The backend resolves an env var holding a
+              # secret ARN when the provider is first used (env-utils.ts).
+              - Sid: ProviderKeySecrets
+                Effect: Allow
+                Action: secretsmanager:GetSecretValue
+                Resource: !Sub arn:aws:secretsmanager:${AWS::Region}:${AWS::AccountId}:secret:davai-agentcore/*
+
+  # ------------------------------------------------------------------ runtime
+  AgentRuntime:
+    Type: AWS::BedrockAgentCore::Runtime
+    Properties:
+      # Name pattern forbids hyphens; env is baked into the name.
+      AgentRuntimeName: !Sub davai_agentcore_${EnvironmentName}
+      Description: !Sub DAVAI AgentCore backend (${EnvironmentName})
+      AgentRuntimeArtifact:
+        ContainerConfiguration:
+          ContainerUri: !Ref ImageUri
+      RoleArn: !GetAtt RuntimeExecutionRole.Arn
+      NetworkConfiguration: { NetworkMode: PUBLIC }
+      # WebSocket bidirectional streaming is part of the HTTP protocol contract
+      # (container serves /ws on 8080); no separate protocol value exists.
+      ProtocolConfiguration: HTTP
+      EnvironmentVariables:
+        PORT: '8080'
+        OPENAI_API_KEY: !Ref OpenAIApiKeySecretArn
+        ANTHROPIC_API_KEY: !Ref AnthropicApiKeySecretArn
+        GOOGLE_API_KEY: !Ref GoogleApiKeySecretArn
+      Tags:
+        Project: davai-agentcore
+        Environment: !Ref EnvironmentName
+
+  # Every change to the runtime (image, env vars, role) creates a new runtime
+  # version, and the DEFAULT endpoint moves to it. This endpoint stays on
+  # ProductionVersion, so releases only change when a version is promoted.
+  ProductionEndpoint:
+    Type: AWS::BedrockAgentCore::RuntimeEndpoint
+    Condition: HasProductionEndpoint
+    Properties:
+      AgentRuntimeId: !GetAtt AgentRuntime.AgentRuntimeId
+      Name: production
+      AgentRuntimeVersion: !Ref ProductionVersion
+      Description: !Sub DAVAI release backend (${EnvironmentName})
+
+  # ------------------------------------------------- browser (Cognito) access
+  IdentityPool:
+    Type: AWS::Cognito::IdentityPool
+    Properties:
+      IdentityPoolName: !Sub davai_agentcore_${EnvironmentName}
+      AllowUnauthenticatedIdentities: true
+      # Classic (basic) flow required: the enhanced flow's GetCredentialsForIdentity
+      # scopes credentials to a fixed service allowlist that excludes bedrock-agentcore.
+      # Clients must use GetOpenIdToken + sts:AssumeRoleWithWebIdentity.
+      AllowClassicFlow: true
+
+  UnauthenticatedRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: !Sub davai-agentcore-${EnvironmentName}-unauth
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal: { Federated: cognito-identity.amazonaws.com }
+            Action: sts:AssumeRoleWithWebIdentity
+            Condition:
+              StringEquals: { cognito-identity.amazonaws.com:aud: !Ref IdentityPool }
+              ForAnyValue:StringLike: { cognito-identity.amazonaws.com:amr: unauthenticated }
+      Policies:
+        - PolicyName: invoke-davai-runtime
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Sid: InvokeThisRuntimeOnly
+                Effect: Allow
+                Action:
+                  - bedrock-agentcore:InvokeAgentRuntime
+                  - bedrock-agentcore:InvokeAgentRuntimeWithWebSocketStream
+                Resource:
+                  - !GetAtt AgentRuntime.AgentRuntimeArn
+                  - !Sub '${AgentRuntime.AgentRuntimeArn}/*'
+
+  IdentityPoolRoles:
+    Type: AWS::Cognito::IdentityPoolRoleAttachment
+    Properties:
+      IdentityPoolId: !Ref IdentityPool
+      Roles:
+        unauthenticated: !GetAtt UnauthenticatedRole.Arn
+
+Outputs:
+  AgentRuntimeArn:
+    Value: !GetAtt AgentRuntime.AgentRuntimeArn
+  UnauthenticatedRoleArn:
+    Description: Role the client assumes via the Cognito classic flow (AssumeRoleWithWebIdentity).
+    Value: !GetAtt UnauthenticatedRole.Arn
+  AgentRuntimeId:
+    Value: !GetAtt AgentRuntime.AgentRuntimeId
+  AgentRuntimeVersion:
+    Description: The newest runtime version, which the DEFAULT endpoint serves.
+    Value: !GetAtt AgentRuntime.AgentRuntimeVersion
+  ProductionEndpointVersion:
+    Condition: HasProductionEndpoint
+    Description: The runtime version the `production` endpoint serves.
+    Value: !Ref ProductionVersion
+  IdentityPoolId:
+    Value: !Ref IdentityPool
+  WebSocketEndpoint:
+    Description: Data-plane WebSocket URL (presign with SigV4 query params to connect).
+    Value: !Sub wss://bedrock-agentcore.${AWS::Region}.amazonaws.com/runtimes/${AgentRuntime.AgentRuntimeArn}/ws
