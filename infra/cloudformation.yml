@@ -2,37 +2,47 @@ AWSTemplateFormatVersion: '2010-09-09'
 Description: >-
   DAVAI AgentCore backend stack: AgentCore Runtime (container from ECR), its
   execution role, and a Cognito Identity Pool whose unauthenticated role may
-  invoke ONLY this stack's runtime (HTTP and WebSocket). One stack per
-  environment: staging lives in the QA account, production in the production
-  account. Deploy/update with `aws cloudformation deploy` (see infra/README.md).
+  invoke ONLY this stack's runtime (HTTP and WebSocket). The staging stack (QA
+  account) is for testing branches. The production stack (main account) serves
+  release candidates on the runtime's DEFAULT endpoint and releases on its
+  `production` endpoint, which stays on a chosen runtime version until it is
+  promoted. Deploy/update with infra/deploy.sh and infra/promote.sh (see infra/README.md).
 
 Parameters:
   EnvironmentName:
     Type: String
     Default: staging
     AllowedValues: [staging, production]
-    Description: Environment this stack serves (staging = QA account).
+    Description: Environment this stack serves (staging = QA account, production = main account).
   ImageUri:
     Type: String
     Description: >-
-      Full ECR image URI for the backend container (ARM64), e.g.
-      816253370536.dkr.ecr.us-east-1.amazonaws.com/davai-agentcore-backend:sse-20260714.
-      The image must exist before the runtime is created/updated.
-  OpenAIApiKey:
+      Full ECR image URI for the backend container (ARM64), in this account's
+      davai-agentcore-backend repo. The image must exist before the runtime is
+      created/updated.
+  OpenAIApiKeySecretArn:
     Type: String
-    NoEcho: true
-    Default: ""
-    Description: OpenAI API key set as a runtime env var (empty disables provider).
-  AnthropicApiKey:
+    AllowedPattern: '^arn:aws:secretsmanager:.*:secret:davai-agentcore/.*$'
+    Description: ARN of the Secrets Manager secret holding the OpenAI API key.
+  AnthropicApiKeySecretArn:
     Type: String
-    NoEcho: true
-    Default: ""
-    Description: Anthropic API key set as a runtime env var (empty disables provider).
-  GoogleApiKey:
+    AllowedPattern: '^arn:aws:secretsmanager:.*:secret:davai-agentcore/.*$'
+    Description: ARN of the Secrets Manager secret holding the Anthropic API key.
+  GoogleApiKeySecretArn:
     Type: String
-    NoEcho: true
+    AllowedPattern: '^arn:aws:secretsmanager:.*:secret:davai-agentcore/.*$'
+    Description: ARN of the Secrets Manager secret holding the Google API key.
+  ProductionVersion:
+    Type: String
     Default: ""
-    Description: Google API key set as a runtime env var (empty disables provider).
+    AllowedPattern: '^[0-9]*$'
+    Description: >-
+      Runtime version the `production` endpoint serves. Empty means no
+      `production` endpoint (the staging stack leaves it empty). Changed by
+      infra/promote.sh.
+
+Conditions:
+  HasProductionEndpoint: !Not [!Equals [!Ref ProductionVersion, ""]]
 
 Resources:
   # ---------------------------------------------------------------- execution
@@ -86,6 +96,12 @@ Resources:
                 Resource: '*'
                 Condition:
                   StringEquals: { cloudwatch:namespace: bedrock-agentcore }
+              # The provider keys. The backend resolves an env var holding a
+              # secret ARN when the provider is first used (env-utils.ts).
+              - Sid: ProviderKeySecrets
+                Effect: Allow
+                Action: secretsmanager:GetSecretValue
+                Resource: !Sub arn:aws:secretsmanager:${AWS::Region}:${AWS::AccountId}:secret:davai-agentcore/*
 
   # ------------------------------------------------------------------ runtime
   AgentRuntime:
@@ -104,12 +120,24 @@ Resources:
       ProtocolConfiguration: HTTP
       EnvironmentVariables:
         PORT: '8080'
-        OPENAI_API_KEY: !Ref OpenAIApiKey
-        ANTHROPIC_API_KEY: !Ref AnthropicApiKey
-        GOOGLE_API_KEY: !Ref GoogleApiKey
+        OPENAI_API_KEY: !Ref OpenAIApiKeySecretArn
+        ANTHROPIC_API_KEY: !Ref AnthropicApiKeySecretArn
+        GOOGLE_API_KEY: !Ref GoogleApiKeySecretArn
       Tags:
         Project: davai-agentcore
         Environment: !Ref EnvironmentName
+
+  # Every change to the runtime (image, env vars, role) creates a new runtime
+  # version, and the DEFAULT endpoint moves to it. This endpoint stays on
+  # ProductionVersion, so releases only change when a version is promoted.
+  ProductionEndpoint:
+    Type: AWS::BedrockAgentCore::RuntimeEndpoint
+    Condition: HasProductionEndpoint
+    Properties:
+      AgentRuntimeId: !GetAtt AgentRuntime.AgentRuntimeId
+      Name: production
+      AgentRuntimeVersion: !Ref ProductionVersion
+      Description: !Sub DAVAI release backend (${EnvironmentName})
 
   # ------------------------------------------------- browser (Cognito) access
   IdentityPool:
@@ -164,6 +192,13 @@ Outputs:
     Value: !GetAtt UnauthenticatedRole.Arn
   AgentRuntimeId:
     Value: !GetAtt AgentRuntime.AgentRuntimeId
+  AgentRuntimeVersion:
+    Description: The newest runtime version, which the DEFAULT endpoint serves.
+    Value: !GetAtt AgentRuntime.AgentRuntimeVersion
+  ProductionEndpointVersion:
+    Condition: HasProductionEndpoint
+    Description: The runtime version the `production` endpoint serves.
+    Value: !Ref ProductionVersion
   IdentityPoolId:
     Value: !Ref IdentityPool
   WebSocketEndpoint:
