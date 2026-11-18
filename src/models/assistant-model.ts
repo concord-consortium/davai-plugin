@@ -526,63 +526,63 @@ export const AssistantModel = types
             }
             data = wsOut;
           } else {
-          const submissionResponse = yield postMessage(reqBody, "message");
-          if (!submissionResponse.ok) {
-            throw new Error(`Failed to submit message: ${submissionResponse.statusText}`);
-          }
-          const { messageId: _messageId } = yield submissionResponse.json();
-          self.currentMessageId = _messageId;
-
-          // 2. Poll server until response is ready. No-progress budget (reset whenever
-          // streamed bytes arrive) instead of a fixed attempt count, so long streams
-          // aren't dropped mid-flight.
-          const idleBudgetMs = 60_000;
-          let lastProgressAt = performance.now();
-          let lastLen = 0;
-
-          while (performance.now() - lastProgressAt < idleBudgetMs) {
-            if (self.isCancelling) break;
-
-            const statusResponse = yield postMessage({}, `status?messageId=${_messageId}`, "GET");
-            if (!statusResponse.ok) {
-              throw new Error(`Failed to fetch status: ${statusResponse.statusText}`);
+            const submissionResponse = yield postMessage(reqBody, "message");
+            if (!submissionResponse.ok) {
+              throw new Error(`Failed to submit message: ${submissionResponse.statusText}`);
             }
-            const { status, output } = yield statusResponse.json();
+            const { messageId: _messageId } = yield submissionResponse.json();
+            self.currentMessageId = _messageId;
 
-            if (status === "completed") {
-              data = output;
-              break;
-            } else if (status === "cancelled") {
-              self.finishStream();
-              self.addDbgMsg("Job was cancelled on the server", messageId);
-              return;
-            } else if (status === "error") {
-              self.finishStream();
-              self.addDbgMsg("Server error processing message", output?.error || "Unknown error");
-              self.addDavaiMsg("Sorry, I ran into an error processing that request.");
-              return;
-            } else if (status === STREAMING_STATUS && typeof output?.response === "string") {
-              // Count server streaming as progress regardless of the client's display
-              // preference, so a long response can't hit the idle budget while the server
-              // is steadily generating. Only the on-screen/spoken ingestion is gated on
-              // streamEnabled.
-              if (output.response.length > lastLen) {
-                lastLen = output.response.length;
-                lastProgressAt = performance.now(); // progress → extend the budget
+            // 2. Poll server until response is ready. No-progress budget (reset whenever
+            // streamed bytes arrive) instead of a fixed attempt count, so long streams
+            // aren't dropped mid-flight.
+            const idleBudgetMs = 60_000;
+            let lastProgressAt = performance.now();
+            let lastLen = 0;
+
+            while (performance.now() - lastProgressAt < idleBudgetMs) {
+              if (self.isCancelling) break;
+
+              const statusResponse = yield postMessage({}, `status?messageId=${_messageId}`, "GET");
+              if (!statusResponse.ok) {
+                throw new Error(`Failed to fetch status: ${statusResponse.statusText}`);
               }
-              if (self.streamEnabled) self.ingestStreamChunk(output.response);
-              yield new Promise((res) => setTimeout(res, 500)); // faster cadence while streaming
-              continue;
+              const { status, output } = yield statusResponse.json();
+
+              if (status === "completed") {
+                data = output;
+                break;
+              } else if (status === "cancelled") {
+                self.finishStream();
+                self.addDbgMsg("Job was cancelled on the server", messageId);
+                return;
+              } else if (status === "error") {
+                self.finishStream();
+                self.addDbgMsg("Server error processing message", output?.error || "Unknown error");
+                self.addDavaiMsg("Sorry, I ran into an error processing that request.");
+                return;
+              } else if (status === STREAMING_STATUS && typeof output?.response === "string") {
+                // Count server streaming as progress regardless of the client's display
+                // preference, so a long response can't hit the idle budget while the server
+                // is steadily generating. Only the on-screen/spoken ingestion is gated on
+                // streamEnabled.
+                if (output.response.length > lastLen) {
+                  lastLen = output.response.length;
+                  lastProgressAt = performance.now(); // progress → extend the budget
+                }
+                if (self.streamEnabled) self.ingestStreamChunk(output.response);
+                yield new Promise((res) => setTimeout(res, 500)); // faster cadence while streaming
+                continue;
+              }
+
+              yield new Promise((res) => setTimeout(res, 1000));
             }
 
-            yield new Promise((res) => setTimeout(res, 1000));
-          }
-
-          if (!data) {
-            self.finishStream();
-            self.addDbgMsg("Polling expired before response received", messageId);
-            return;
-          }
+            if (!data) {
+              self.finishStream();
+              self.addDbgMsg("Polling expired before response received", messageId);
+              return;
+            }
           }
 
           self.addDbgMsg("Response from server", formatJsonMessage(data));
