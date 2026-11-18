@@ -12,8 +12,9 @@ There are two stacks:
 | `davai-agentcore-staging` | QA (816253370536) | `agentcore` | testing branches |
 | `davai-agentcore-production` | main (612297603577) | default | release candidates and releases |
 
-[DEPLOYED.md](DEPLOYED.md) records what each stack is running (runtime ARN, identity pool, image)
-and how to tear it down.
+[DEPLOYED.md](DEPLOYED.md) records each stack's fixed details (runtime ARN, identity pool, roles)
+and how to tear it down. `./infra/status.sh <staging|production>` shows what each endpoint is
+running.
 
 ## Versions and endpoints
 
@@ -56,14 +57,17 @@ aws ecr get-login-password --region us-east-1 \
 docker tag "davai-agentcore-backend:$TAG" "$REGISTRY/davai-agentcore-backend:$TAG"
 docker push "$REGISTRY/davai-agentcore-backend:$TAG"
 
-# 3. Point the stack's runtime at the new image. This prints the new AgentRuntimeVersion.
+# 3. Point the stack's runtime at the new image. This ends by printing ./infra/status.sh,
+#    where the DEFAULT endpoint shows the new version.
 ./infra/deploy.sh "$ENVIRONMENT" "$REGISTRY/davai-agentcore-backend:$TAG"
 
 # 4. Run one anonymous turn through Cognito and the WebSocket, on the DEFAULT endpoint
 node scripts/agentcore-cognito-smoke.mjs --stack "davai-agentcore-$ENVIRONMENT"
 ```
 
-Then update the image tag in [DEPLOYED.md](DEPLOYED.md).
+`./infra/status.sh <staging|production>` shows what each endpoint is running at any time: its
+runtime version and that version's image. Image tags carry the commit's short SHA, so this leads
+back to the code. [DEPLOYED.md](DEPLOYED.md) only changes when a stack is created or recreated.
 
 The staging stack is shared: deploying a branch's backend there replaces what everyone else is
 testing against.

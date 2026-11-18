@@ -11,7 +11,8 @@
 # before (see README.md).
 #
 # Each deploy creates a new runtime version, which the runtime's DEFAULT endpoint
-# serves right away. On production, the `production` endpoint stays where it is
+# serves right away. The script ends by printing ./status.sh, which shows the new
+# version number. On production, the `production` endpoint stays where it is
 # until ./promote.sh moves it.
 #
 # The provider keys stay in Secrets Manager: the stack only gets the ARNs of the
@@ -55,5 +56,4 @@ GOOGLE_ARN="$(secret_arn google-api-key)"
     "AnthropicApiKeySecretArn=$ANTHROPIC_ARN" \
     "GoogleApiKeySecretArn=$GOOGLE_ARN"
 
-"${AWS[@]}" cloudformation describe-stacks --stack-name "$STACK" \
-  --query 'Stacks[0].Outputs' --output table
+./status.sh "$ENVIRONMENT"

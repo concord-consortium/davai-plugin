@@ -3,6 +3,13 @@
 The staging stack (QA account) comes first; the production stack (main account) is
 [further down](#production-stack-main-account).
 
+This file records what changes only when a stack is created or recreated. Which runtime version
+and image each endpoint serves changes with every deploy and promotion, so it isn't kept here. To
+see it, run:
+```bash
+./infra/status.sh staging      # or production
+```
+
 ## Staging stack (QA account)
 
 **Source of truth: the `davai-agentcore-staging` CloudFormation stack** (template:
@@ -14,7 +21,7 @@ AWS CLI (profile `agentcore`). The earlier hand-rolled resources (runtime
 ### Stack resources
 | resource | value |
 |---|---|
-| AgentCore runtime | `davai_agentcore_staging-guJgof856F` (image `davai-agentcore-backend:cancelfix-20260807`) |
+| AgentCore runtime | `davai_agentcore_staging-guJgof856F` |
 | Runtime ARN | `arn:aws:bedrock-agentcore:us-east-1:816253370536:runtime/davai_agentcore_staging-guJgof856F` |
 | Execution role | `davai-agentcore-staging-execution` |
 | Cognito Identity Pool | `us-east-1:f9ef35df-041f-4731-813f-67e998dbc98f` (unauthenticated, **classic flow**) |
@@ -22,7 +29,7 @@ AWS CLI (profile `agentcore`). The earlier hand-rolled resources (runtime
 | WebSocket endpoint | `wss://bedrock-agentcore.us-east-1.amazonaws.com/runtimes/<url-encoded runtime ARN>/ws` |
 
 ECR repo `davai-agentcore-backend` predates the stack and is referenced via the `ImageUri`
-parameter (images: `cancelfix-20260807` = current, earlier tags = prior).
+parameter.
 Provider keys (OpenAI/Anthropic/Google) are runtime env vars fed from NoEcho stack parameters.
 
 ### Deploy / update
@@ -58,14 +65,10 @@ us-east-1, managed with the AWS CLI (default profile). Created 2026-11-17. No cl
 |---|---|
 | AgentCore runtime | `davai_agentcore_production-TFK1Yl3Aea` |
 | Runtime ARN | `arn:aws:bedrock-agentcore:us-east-1:612297603577:runtime/davai_agentcore_production-TFK1Yl3Aea` |
-| `DEFAULT` endpoint (release candidates) | version 2, image `davai-agentcore-backend:20261117-a1d684d-v2check` |
-| `production` endpoint (releases) | version 1, image `davai-agentcore-backend:20261117-a1d684d` |
+| Endpoints | `DEFAULT` (release candidates) and `production` (releases) |
 | Execution role | `davai-agentcore-production-execution` |
 | Cognito Identity Pool | `us-east-1:a5e4cbee-dfc7-4a29-b3d6-c8f52fa07b7e` (unauthenticated, classic flow) |
 | Unauth role | `arn:aws:iam::612297603577:role/davai-agentcore-production-unauth` |
-
-Versions 1 and 2 are the same image (same digest) under two tags; version 2 was deployed to check
-that a deploy leaves the `production` endpoint where it is.
 
 ECR repo `davai-agentcore-backend` (immutable tags) and the secrets
 `davai-agentcore/{openai,anthropic,google}-api-key` are outside the stack. The secrets were copied
