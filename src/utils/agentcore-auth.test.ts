@@ -36,3 +36,27 @@ describe("buildPresignParts", () => {
     expect(parts.canonicalPath).toContain("%253A");
   });
 });
+
+describe("buildPresignParts with a qualifier", () => {
+  const opts = {
+    host: "bedrock-agentcore.us-east-1.amazonaws.com",
+    runtimeArn: "arn:aws:bedrock-agentcore:us-east-1:612297603577:runtime/davai_agentcore_production-TFK1Yl3Aea",
+    accessKeyId: "AKIDEXAMPLE",
+    sessionToken: "TOKENTOKEN",
+    sessionId: "smoke-fixed-00000000000000000000",
+    region: "us-east-1",
+    amzDate: "20260807T133925Z",
+    expires: 300,
+  };
+
+  it("signs the qualifier as the last query parameter", () => {
+    const parts = buildPresignParts({ ...opts, qualifier: "production" });
+    // Sorted by byte value, so lowercase "qualifier" follows the "X-Amz" parameters.
+    expect(parts.canonicalQuery).toMatch(/&X-Amzn-Bedrock-AgentCore-Runtime-Session-Id=[^&]+&qualifier=production$/);
+    expect(parts.canonicalRequest).toContain("&qualifier=production\n");
+  });
+
+  it("leaves the qualifier out when none is given", () => {
+    expect(buildPresignParts(opts).canonicalQuery).not.toContain("qualifier");
+  });
+});

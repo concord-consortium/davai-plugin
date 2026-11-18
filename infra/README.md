@@ -26,9 +26,10 @@ Every change to a runtime (a new image, new environment variables) creates a new
 version. A runtime's `DEFAULT` endpoint always serves the newest version.
 
 The production stack also has a `production` endpoint, which stays on one version until it is
-promoted. Release candidates are tested on `DEFAULT`; releases use `production`. Promoting moves
-`production` to the tested version, image and configuration together, without rebuilding or
-redeploying anything. Rolling back is promoting the previous version again.
+promoted. Release candidates are tested on `DEFAULT`, which builds of the plugin's `main` branch
+use; released versions of the plugin use `production`. Builds of other branches use the staging
+stack. Promoting moves `production` to the tested version, image and configuration together,
+without rebuilding or redeploying anything. Rolling back is promoting the previous version again.
 
 ## Prerequisites
 

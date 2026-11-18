@@ -58,8 +58,9 @@ aws cloudformation delete-stack --profile agentcore --region us-east-1 --stack-n
 ## Production stack (main account)
 
 **Source of truth: the `davai-agentcore-production` CloudFormation stack**, account 612297603577,
-us-east-1, managed with the AWS CLI (default profile). Created 2026-11-17. No client uses it yet:
-`src/utils/agentcore-config.ts` still sends release builds to staging.
+us-east-1, managed with the AWS CLI (default profile). Created 2026-11-17. Released versions of
+the plugin use its `production` endpoint, and builds of `main` use its `DEFAULT` endpoint
+(`src/utils/agentcore-config.ts`).
 
 | resource | value |
 |---|---|
@@ -90,5 +91,3 @@ aws cloudformation delete-stack --region us-east-1 --stack-name davai-agentcore-
 Deliberately deferred to the production-stack work:
 - Per-identity throttling/quotas (WAF or Cognito-keyed) on top of the anonymous access model —
   note the legacy SAM setup has the same exposure class (its AUTH_TOKEN ships in the public bundle).
-- Turn the release-build staging fallback in src/utils/agentcore-config.ts from a console
-  warning into a build failure once the production stack exists.
