@@ -151,8 +151,17 @@ ws.on("open", () => {
     message: MESSAGE,
   }));
 });
+// The backend splits frames over 8,000 characters into { type: "chunk", data, last? }
+// envelopes (backend/src/ws.ts); a long reply's result frame arrives that way.
+let chunkBuffer = "";
 ws.on("message", (d) => {
-  const f = JSON.parse(d.toString());
+  let f = JSON.parse(d.toString());
+  if (f.type === "chunk") {
+    chunkBuffer += f.data;
+    if (!f.last) return;
+    f = JSON.parse(chunkBuffer);
+    chunkBuffer = "";
+  }
   console.log(`[ws] ${Date.now() - t0}ms [${f.type}] ${(f.text || JSON.stringify(f.output) || f.error || "").slice(0, 100)}`);
   if (f.type === "result" || f.type === "error") { ws.close(); process.exit(f.type === "error" ? 1 : 0); }
 });

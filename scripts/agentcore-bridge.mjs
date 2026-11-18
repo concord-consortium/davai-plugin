@@ -81,11 +81,41 @@ function sseParser(onFrame) {
 
 // Loopback only: this process signs requests with the developer's AWS credentials,
 // so it must never be reachable from other machines on the network.
-const wss = new WebSocketServer({ host: "127.0.0.1", port: PORT, path: "/ws" });
+//
+// Browsers don't apply the same-origin policy to WebSocket handshakes, so any page
+// open in the developer's browser could otherwise connect and submit turns. Accept
+// only pages served from this machine, or clients that send no Origin (local
+// non-browser tools, which could read the credentials anyway).
+const LOCAL_HOSTS = new Set(["localhost", "127.0.0.1", "[::1]"]);
+function isLocalOrigin(origin) {
+  if (!origin) return true;
+  try {
+    return LOCAL_HOSTS.has(new URL(origin).hostname);
+  } catch {
+    return false;
+  }
+}
+
+// Same bound as backend/src/ws.ts puts on a reassembled chunked message.
+const MAX_REASSEMBLED_CHARS = 2 * 1024 * 1024;
+
+const wss = new WebSocketServer({
+  host: "127.0.0.1",
+  port: PORT,
+  path: "/ws",
+  verifyClient: ({ origin }) => {
+    if (isLocalOrigin(origin)) return true;
+    console.warn(`[bridge] rejected connection from origin ${origin}`);
+    return false;
+  },
+});
 
 wss.on("connection", (ws) => {
   const send = (obj) => { if (ws.readyState === ws.OPEN) ws.send(JSON.stringify(obj)); };
   let inflight = null; // AbortController of the current turn
+  // The client splits frames over 8,000 characters into { type: "chunk", data, last? }
+  // envelopes (backend/src/ws.ts). Turns are serial per socket, so one buffer is enough.
+  let chunkBuffer = "";
 
   ws.on("message", async (raw) => {
     let frame;
@@ -93,6 +123,23 @@ wss.on("connection", (ws) => {
       frame = JSON.parse(raw.toString());
     } catch {
       return send({ type: "error", error: "invalid JSON frame" });
+    }
+
+    if (frame?.type === "chunk") {
+      chunkBuffer += typeof frame.data === "string" ? frame.data : "";
+      if (chunkBuffer.length > MAX_REASSEMBLED_CHARS) {
+        chunkBuffer = "";
+        ws.close(1009, "chunked message too large");
+        return;
+      }
+      if (!frame.last) return;
+      const joined = chunkBuffer;
+      chunkBuffer = "";
+      try {
+        frame = JSON.parse(joined);
+      } catch {
+        return send({ type: "error", error: "invalid chunked frame" });
+      }
     }
 
     if (frame?.type === "cancel") {
