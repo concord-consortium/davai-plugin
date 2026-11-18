@@ -210,6 +210,8 @@ module.exports = (env, argv) => {
         DAVAI_VERSION,                         // derived from DEPLOY_PATH
         AUTH_TOKEN: undefined,                 // required env davai server token
         LANGCHAIN_SERVER_URL: undefined,       // required env langchain server url
+        WS_SERVER_URL: null,                   // optional direct WebSocket endpoint (local container / dev bridge)
+        TRANSPORT: 'agentcore',                // 'agentcore' (deployed stack via Cognito) | 'poll' (legacy SAM path)
         REACT_APP_OPENAI_BASE_URL: null,       // optional openai url
         REACT_APP_OPENAI_API_KEY: null,        // optional openai api
       }),
