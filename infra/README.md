@@ -7,10 +7,14 @@ not deploy them.
 
 There are two stacks:
 
-| stack | account | AWS profile | used by |
-|---|---|---|---|
-| `davai-agentcore-staging` | QA (816253370536) | `agentcore` | testing branches |
-| `davai-agentcore-production` | main (612297603577) | default | release candidates and releases |
+| stack | account | used by |
+|---|---|---|
+| `davai-agentcore-staging` | QA (816253370536) | testing branches |
+| `davai-agentcore-production` | main (612297603577) | release candidates and releases |
+
+The scripts in this folder use the AWS profile named `agentcore` for staging and the default profile
+for production. To use a profile with another name, set `AWS_PROFILE`. Before doing anything, each
+script checks that the profile's credentials are for the stack's account, and stops if they aren't.
 
 [DEPLOYED.md](DEPLOYED.md) records each stack's fixed details (runtime ARN, identity pool, roles)
 and how to tear it down. `./infra/status.sh <staging|production>` shows what each endpoint is
@@ -51,7 +55,8 @@ TAG=$(date +%Y%m%d)-$(git rev-parse --short HEAD)
 # 1. Build the image from backend/
 docker build --platform linux/arm64 -t "davai-agentcore-backend:$TAG" backend
 
-# 2. Push it to the account's ECR repo (add --profile agentcore for staging)
+# 2. Push it to the account's ECR repo (for staging, add --profile with your QA-account
+#    profile, such as agentcore)
 aws ecr get-login-password --region us-east-1 \
   | docker login --username AWS --password-stdin "$REGISTRY"
 docker tag "davai-agentcore-backend:$TAG" "$REGISTRY/davai-agentcore-backend:$TAG"

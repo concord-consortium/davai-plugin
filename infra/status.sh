@@ -4,8 +4,10 @@
 # needs (src/utils/agentcore-config.ts). Usage:
 #   ./status.sh <staging|production>
 #
-# Uses the same AWS profiles as deploy.sh; set AWS_PROFILE to override.
+# Uses the same AWS profiles as deploy.sh, and the same account check
+# (stack-env.sh); set AWS_PROFILE to override.
 set -euo pipefail
+cd "$(dirname "$0")"
 
 if [ $# -ne 1 ]; then
   echo "Usage: $0 <staging|production>" >&2
@@ -13,13 +15,7 @@ if [ $# -ne 1 ]; then
 fi
 
 ENVIRONMENT="$1"
-case "$ENVIRONMENT" in
-  staging) PROFILE="${AWS_PROFILE:-agentcore}" ;;
-  production) PROFILE="${AWS_PROFILE:-default}" ;;
-  *) echo "Unknown environment: $ENVIRONMENT (expected staging or production)" >&2; exit 1 ;;
-esac
-STACK="davai-agentcore-$ENVIRONMENT"
-AWS=(aws --profile "$PROFILE" --region us-east-1)
+source ./stack-env.sh
 
 output() {
   "${AWS[@]}" cloudformation describe-stacks --stack-name "$STACK" \

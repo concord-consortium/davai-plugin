@@ -7,7 +7,8 @@
 # production` shows it). To roll back, promote the previous version again.
 #
 # Only the endpoint changes: the stack keeps its current template and parameters,
-# so nothing else is redeployed. Uses the default AWS profile, or AWS_PROFILE.
+# so nothing else is redeployed. Uses the default AWS profile, or AWS_PROFILE, and
+# stops if that profile isn't for the main account (stack-env.sh).
 set -euo pipefail
 cd "$(dirname "$0")"
 
@@ -17,8 +18,8 @@ if [ $# -ne 1 ] || ! [[ "$1" =~ ^[0-9]+$ ]]; then
 fi
 
 VERSION="$1"
-STACK=davai-agentcore-production
-AWS=(aws --profile "${AWS_PROFILE:-default}" --region us-east-1)
+ENVIRONMENT=production
+source ./stack-env.sh
 
 "${AWS[@]}" cloudformation update-stack \
   --stack-name "$STACK" \

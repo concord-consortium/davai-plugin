@@ -3,11 +3,13 @@
 # time. Usage:
 #   ./deploy.sh <staging|production> <image-uri>
 #
-#   staging     davai-agentcore-staging in the QA account (AWS profile "agentcore")
-#   production  davai-agentcore-production in the main account (default AWS profile)
+#   staging     davai-agentcore-staging in the QA account (816253370536)
+#   production  davai-agentcore-production in the main account (612297603577)
 #
-# Set AWS_PROFILE to use a different profile. The image must already be pushed to
-# that account's davai-agentcore-backend repo with a tag that hasn't been deployed
+# The AWS profile defaults to "agentcore" for staging and "default" for production;
+# set AWS_PROFILE to use another one. The script stops if the profile is for a
+# different account (stack-env.sh). The image must already be pushed to that
+# account's davai-agentcore-backend repo with a tag that hasn't been deployed
 # before (see README.md).
 #
 # Each deploy creates a new runtime version, which the runtime's DEFAULT endpoint
@@ -27,14 +29,7 @@ fi
 
 ENVIRONMENT="$1"
 IMAGE_URI="$2"
-case "$ENVIRONMENT" in
-  staging) PROFILE="${AWS_PROFILE:-agentcore}" ;;
-  production) PROFILE="${AWS_PROFILE:-default}" ;;
-  *) echo "Unknown environment: $ENVIRONMENT (expected staging or production)" >&2; exit 1 ;;
-esac
-REGION=us-east-1
-STACK="davai-agentcore-$ENVIRONMENT"
-AWS=(aws --profile "$PROFILE" --region "$REGION")
+source ./stack-env.sh
 
 secret_arn() {
   "${AWS[@]}" secretsmanager describe-secret --secret-id "davai-agentcore/$1" --query ARN --output text
