@@ -1,19 +1,50 @@
-// Smoke test for the PUBLIC browser access path to the AgentCore staging stack:
+// Smoke test for the PUBLIC browser access path to an AgentCore stack:
 //   Cognito unauthenticated identity -> temp AWS credentials -> SigV4 presigned
 //   WebSocket URL -> AgentCore data plane -> container /ws.
 // This is exactly the sequence the deployed DAVAI client performs (no AWS SDK,
 // plain fetch + HMAC), so it doubles as a reference implementation for the
-// client transport. Requires no AWS profile — the whole point is that it runs
-// with only the public identity-pool id.
+// client transport. With no --stack it needs no AWS profile — the whole point is
+// that it runs with only the public identity-pool id.
 //
-// Usage: node scripts/agentcore-cognito-smoke.mjs [message]
+// Usage: node scripts/agentcore-cognito-smoke.mjs [options] [message]
+//   (no options)          the staging stack, using the public values below
+//   --stack <name>        read the identity pool, role and runtime from that stack's
+//                         outputs (needs AWS credentials for its account)
+//   --profile <profile>   AWS profile for --stack (default: the default profile)
+//   --qualifier <name>    invoke a named endpoint, e.g. "production" (default: DEFAULT)
 import { createHmac, createHash, randomUUID } from "node:crypto";
+import { execFile } from "node:child_process";
+import { promisify } from "node:util";
 import WebSocket from "ws";
 
 const REGION = "us-east-1";
-const IDENTITY_POOL_ID = "us-east-1:f9ef35df-041f-4731-813f-67e998dbc98f";
-const RUNTIME_ARN = "arn:aws:bedrock-agentcore:us-east-1:816253370536:runtime/davai_agentcore_staging-guJgof856F";
-const MESSAGE = process.argv[2] || "Reply with exactly: pong";
+
+const opts = {};
+const positional = [];
+for (let i = 2; i < process.argv.length; i++) {
+  const a = process.argv[i];
+  if (a.startsWith("--")) opts[a.slice(2)] = process.argv[++i];
+  else positional.push(a);
+}
+const MESSAGE = positional[0] || "Reply with exactly: pong";
+const QUALIFIER = opts.qualifier;
+
+// The staging stack's public values (infra/DEPLOYED.md).
+let IDENTITY_POOL_ID = "us-east-1:f9ef35df-041f-4731-813f-67e998dbc98f";
+let UNAUTH_ROLE_ARN = "arn:aws:iam::816253370536:role/davai-agentcore-staging-unauth";
+let RUNTIME_ARN = "arn:aws:bedrock-agentcore:us-east-1:816253370536:runtime/davai_agentcore_staging-guJgof856F";
+
+if (opts.stack) {
+  const args = ["cloudformation", "describe-stacks", "--region", REGION, "--stack-name", opts.stack,
+    "--query", "Stacks[0].Outputs", "--output", "json"];
+  if (opts.profile) args.push("--profile", opts.profile);
+  const { stdout } = await promisify(execFile)("aws", args);
+  const outputs = Object.fromEntries(JSON.parse(stdout).map((o) => [o.OutputKey, o.OutputValue]));
+  IDENTITY_POOL_ID = outputs.IdentityPoolId;
+  UNAUTH_ROLE_ARN = outputs.UnauthenticatedRoleArn;
+  RUNTIME_ARN = outputs.AgentRuntimeArn;
+}
+console.log(`[target] ${RUNTIME_ARN} (endpoint ${QUALIFIER || "DEFAULT"})`);
 
 // ---- 1. Cognito unauthenticated credentials (plain REST, no SDK) ------------
 async function cognito(target, body) {
@@ -32,8 +63,6 @@ async function cognito(target, body) {
 // Classic (basic) flow: the enhanced flow's GetCredentialsForIdentity scopes
 // credentials to a fixed AWS service allowlist that EXCLUDES bedrock-agentcore,
 // so we exchange an OpenID token with STS directly (AllowClassicFlow on the pool).
-const UNAUTH_ROLE_ARN = "arn:aws:iam::816253370536:role/davai-agentcore-staging-unauth";
-
 const { IdentityId } = await cognito("GetId", { IdentityPoolId: IDENTITY_POOL_ID });
 const { Token } = await cognito("GetOpenIdToken", { IdentityId });
 
@@ -65,7 +94,7 @@ const sha256hex = (data) => createHash("sha256").update(data).digest("hex");
 // RFC 3986 encoding (SigV4 requires !'()* encoded too)
 const enc = (s) => encodeURIComponent(s).replace(/[!'()*]/g, (c) => "%" + c.charCodeAt(0).toString(16).toUpperCase());
 
-function presignWsUrl({ accessKeyId, secretKey, sessionToken, runtimeArn, sessionId, expires = 300 }) {
+function presignWsUrl({ accessKeyId, secretKey, sessionToken, runtimeArn, sessionId, qualifier, expires = 300 }) {
   const host = `bedrock-agentcore.${REGION}.amazonaws.com`;
   const service = "bedrock-agentcore";
   const path = `/runtimes/${enc(runtimeArn)}/ws`;
@@ -86,6 +115,8 @@ function presignWsUrl({ accessKeyId, secretKey, sessionToken, runtimeArn, sessio
     "X-Amz-SignedHeaders": "host",
     "X-Amzn-Bedrock-AgentCore-Runtime-Session-Id": sessionId,
   };
+  // The endpoint to invoke. It is signed like the other query parameters.
+  if (qualifier) query.qualifier = qualifier;
   const canonicalQuery = Object.keys(query).sort()
     .map((k) => `${enc(k)}=${enc(query[k])}`)
     .join("&");
@@ -105,6 +136,7 @@ const wsUrl = presignWsUrl({
   sessionToken: Credentials.SessionToken,
   runtimeArn: RUNTIME_ARN,
   sessionId,
+  qualifier: QUALIFIER,
 });
 console.log(`[presign] url ready (session ${sessionId})`);
 
@@ -119,8 +151,17 @@ ws.on("open", () => {
     message: MESSAGE,
   }));
 });
+// The backend splits frames over 8,000 characters into { type: "chunk", data, last? }
+// envelopes (backend/src/ws.ts); a long reply's result frame arrives that way.
+let chunkBuffer = "";
 ws.on("message", (d) => {
-  const f = JSON.parse(d.toString());
+  let f = JSON.parse(d.toString());
+  if (f.type === "chunk") {
+    chunkBuffer += f.data;
+    if (!f.last) return;
+    f = JSON.parse(chunkBuffer);
+    chunkBuffer = "";
+  }
   console.log(`[ws] ${Date.now() - t0}ms [${f.type}] ${(f.text || JSON.stringify(f.output) || f.error || "").slice(0, 100)}`);
   if (f.type === "result" || f.type === "error") { ws.close(); process.exit(f.type === "error" ? 1 : 0); }
 });

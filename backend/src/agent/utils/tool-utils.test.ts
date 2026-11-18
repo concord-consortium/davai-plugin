@@ -1,0 +1,163 @@
+import { AIMessage, BaseMessage, HumanMessage, ToolMessage } from "@langchain/core/messages";
+import { createRequestTool,
+         sonifyGraphTool,
+         tools,
+         toolCallResponse,
+         extractToolCalls,
+         getUnansweredToolCallIds,
+         buildToolRepairMessages,
+         TOOL_NOT_COMPLETED_ERROR
+       } from "./tool-utils";
+
+describe("createRequestTool", () => {
+  it("should return a JSON string with action, resource, and values", async () => {
+    const params = { action: "create", resource: "dataset", values: { name: "test" } };
+    const result = await createRequestTool.func(JSON.stringify(params)) as string;
+    expect(JSON.parse(result)).toEqual(params);
+  });
+
+  it("should handle missing values", async () => {
+    const params = { action: "delete", resource: "dataset" };
+    const result = await createRequestTool.func(JSON.stringify(params)) as string;
+    expect(JSON.parse(result)).toEqual({ ...params, values: undefined });
+  });
+});
+
+describe("sonifyGraphTool", () => {
+  it("should return a JSON string with graphID", async () => {
+    const params = { graphID: 42 };
+    const result = await sonifyGraphTool.func(JSON.stringify(params)) as string;
+    expect(JSON.parse(result)).toEqual(params);
+  });
+});
+
+describe("tools array", () => {
+  it("should contain createRequestTool and sonifyGraphTool", () => {
+    expect(tools).toContain(createRequestTool);
+    expect(tools).toContain(sonifyGraphTool);
+  });
+});
+
+describe("toolCallResponse", () => {
+  it("should return correct response for createRequestTool", async () => {
+    const toolCall = {
+      name: "create_request",
+      args: { action: "update", resource: "item", values: { id: 1 } },
+      id: "abc123"
+    };
+    const response = await toolCallResponse(toolCall);
+    expect(response).toMatchObject({
+      request: { action: "update", resource: "item", values: { id: 1 } },
+      status: "requires_action",
+      tool_call_id: "abc123",
+      type: "create_request"
+    });
+  });
+
+  it("returns an answerable error response if the tool is not found (does not throw)", async () => {
+    const toolCall = { name: "unknown_tool", args: {}, id: "xyz" };
+    const response = await toolCallResponse(toolCall);
+    expect(response).toMatchObject({
+      request: { status: "error" },
+      status: "requires_action",
+      tool_call_id: "xyz",
+      type: "unknown_tool",
+    });
+  });
+
+  it("never throws on schema-violating args and still yields an answerable response", async () => {
+    const toolCall = { name: "create_request", args: { unexpected: true }, id: "bad-1" };
+    const response = await toolCallResponse(toolCall);
+    expect(response.status).toBe("requires_action");
+    expect(response.tool_call_id).toBe("bad-1");
+    expect(response.request).toMatchObject({ status: "error" });
+  });
+});
+
+describe("extractToolCalls", () => {
+  it("should return tool_calls array if present", () => {
+    const msg = { tool_calls: [{ name: "foo" }, { name: "bar" }] } as unknown as BaseMessage;
+    expect(extractToolCalls(msg)).toEqual([{ name: "foo" }, { name: "bar" }]);
+  });
+
+  it("should return empty array if lastMessage is undefined", () => {
+    expect(extractToolCalls(undefined)).toEqual([]);
+  });
+
+  it("should return empty array if tool_calls is not present", () => {
+    const msg = {} as unknown as BaseMessage;
+    expect(extractToolCalls(msg)).toEqual([]);
+  });
+
+  it("should return empty array if tool_calls is not an array", () => {
+    const msg = { tool_calls: "not-an-array" } as unknown as BaseMessage;
+    expect(extractToolCalls(msg)).toEqual([]);
+  });
+});
+
+describe("getUnansweredToolCallIds", () => {
+  it("returns a tool_call id that has no following ToolMessage", () => {
+    const messages = [
+      new HumanMessage({ content: "hi" }),
+      new AIMessage({ content: "", tool_calls: [{ name: "create_request", args: {}, id: "call-1" }] }),
+    ];
+    expect(getUnansweredToolCallIds(messages)).toEqual(["call-1"]);
+  });
+
+  it("excludes tool calls that already have a matching ToolMessage", () => {
+    const messages = [
+      new AIMessage({ content: "", tool_calls: [{ name: "create_request", args: {}, id: "call-1" }] }),
+      new ToolMessage({ content: "ok", tool_call_id: "call-1" }),
+    ];
+    expect(getUnansweredToolCallIds(messages)).toEqual([]);
+  });
+
+  it("returns only the still-unanswered ids from a multi-tool-call message, in order", () => {
+    const messages = [
+      new AIMessage({ content: "", tool_calls: [
+        { name: "create_request", args: {}, id: "call-1" },
+        { name: "sonify_graph", args: {}, id: "call-2" },
+      ]}),
+      new ToolMessage({ content: "ok", tool_call_id: "call-2" }),
+    ];
+    expect(getUnansweredToolCallIds(messages)).toEqual(["call-1"]);
+  });
+
+  it("returns [] for an empty history", () => {
+    expect(getUnansweredToolCallIds([])).toEqual([]);
+  });
+});
+
+describe("buildToolRepairMessages", () => {
+  it("creates one error ToolMessage per unanswered tool call", () => {
+    const messages = [
+      new AIMessage({ content: "", tool_calls: [{ name: "create_request", args: {}, id: "call-1" }] }),
+    ];
+    const repairs = buildToolRepairMessages(messages);
+    expect(repairs).toHaveLength(1);
+    expect(repairs[0].tool_call_id).toBe("call-1");
+    expect(JSON.parse(repairs[0].content as string)).toEqual({
+      status: "error",
+      error: TOOL_NOT_COMPLETED_ERROR,
+    });
+  });
+
+  it("excludes the tool call the current job is answering", () => {
+    const messages = [
+      new AIMessage({ content: "", tool_calls: [
+        { name: "create_request", args: {}, id: "call-1" },
+        { name: "create_request", args: {}, id: "call-2" },
+      ]}),
+    ];
+    const repairs = buildToolRepairMessages(messages, "call-1");
+    expect(repairs.map((r) => r.tool_call_id)).toEqual(["call-2"]);
+  });
+
+  it("returns [] when every tool call is already answered", () => {
+    const messages = [
+      new AIMessage({ content: "", tool_calls: [{ name: "create_request", args: {}, id: "call-1" }] }),
+      new ToolMessage({ content: "ok", tool_call_id: "call-1" }),
+    ];
+    expect(buildToolRepairMessages(messages)).toEqual([]);
+  });
+});
