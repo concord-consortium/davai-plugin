@@ -71,11 +71,51 @@ jest.mock("zod", () => ({
 import { ChatOpenAI } from "@langchain/openai";
 import { ChatGoogleGenerativeAI } from "@langchain/google-genai";
 import { ChatAnthropic } from "@langchain/anthropic";
-import { createModelInstance, getOrCreateModelInstance } from "./llm-utils";
+import { buildSystemMessage, createModelInstance, getOrCreateModelInstance } from "./llm-utils";
 
 afterEach(() => {
   jest.clearAllMocks();
   jest.resetModules();
+});
+
+describe("buildSystemMessage (Anthropic prompt caching)", () => {
+  const dataContexts = { Mammals: { type: "dataContext" } };
+  const graphs = [{ id: 42, plotType: "scatterPlot" }];
+
+  it("splits the Anthropic system prompt into a cached stable block and an uncached volatile block", () => {
+    const msg = buildSystemMessage("Anthropic", dataContexts, graphs);
+    const blocks = msg.content as any[];
+
+    expect(Array.isArray(blocks)).toBe(true);
+    expect(blocks).toHaveLength(2);
+    // Block 1: instructions + API doc, marked cacheable — identical for every request.
+    expect(blocks[0].cache_control).toEqual({ type: "ephemeral" });
+    expect(blocks[0].text).toContain("### CODAP API documentation:");
+    // Block 2: per-request data, NOT cacheable (any breakpoint here would thrash).
+    expect(blocks[1].cache_control).toBeUndefined();
+    expect(blocks[1].text).toContain("### Current CODAP Data Contexts:");
+    expect(blocks[1].text).toContain("Mammals");
+    expect(blocks[1].text).toContain("### Current CODAP Graphs:");
+    // The volatile data must not leak into the cached block.
+    expect(blocks[0].text).not.toContain("Mammals");
+  });
+
+  it("gives other providers a single plain-string system message", () => {
+    for (const provider of ["OpenAI", "Google"]) {
+      const msg = buildSystemMessage(provider, dataContexts, graphs);
+      expect(typeof msg.content).toBe("string");
+      expect(msg.content).toContain("### CODAP API documentation:");
+      expect(msg.content).toContain("Mammals");
+    }
+  });
+
+  it("produces byte-identical prompt text for Anthropic and other providers", () => {
+    // The split must not change what any model actually reads.
+    const anthropic = buildSystemMessage("Anthropic", dataContexts, graphs);
+    const openai = buildSystemMessage("OpenAI", dataContexts, graphs);
+    const joined = (anthropic.content as any[]).map((b) => b.text).join("");
+    expect(joined).toBe(openai.content);
+  });
 });
 
 describe("createModelInstance", () => {
