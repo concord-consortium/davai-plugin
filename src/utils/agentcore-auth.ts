@@ -118,6 +118,7 @@ export function buildPresignParts(opts: {
   region: string;
   amzDate: string;
   expires: number;
+  qualifier?: string;
 }): PresignParts {
   const service = "bedrock-agentcore";
   const dateStamp = opts.amzDate.slice(0, 8);
@@ -133,6 +134,8 @@ export function buildPresignParts(opts: {
     "X-Amz-SignedHeaders": "host",
     "X-Amzn-Bedrock-AgentCore-Runtime-Session-Id": opts.sessionId,
   };
+  // The runtime endpoint to invoke. It is signed like the other query parameters.
+  if (opts.qualifier) query.qualifier = opts.qualifier;
   const canonicalQuery = Object.keys(query).sort().map((k) => `${enc(k)}=${enc(query[k])}`).join("&");
   const canonicalRequest =
     ["GET", canonicalPath, canonicalQuery, `host:${opts.host}\n`, "host", EMPTY_SHA256].join("\n");
@@ -156,6 +159,7 @@ export async function presignAgentCoreWsUrl(
     region: config.region,
     amzDate,
     expires,
+    qualifier: config.qualifier,
   });
   const dateStamp = amzDate.slice(0, 8);
   const stringToSign =

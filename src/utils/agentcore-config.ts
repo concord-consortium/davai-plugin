@@ -10,6 +10,9 @@ export interface AgentCoreConfig {
   // The enhanced flow's fixed service allowlist excludes bedrock-agentcore.
   unauthRoleArn: string;
   runtimeArn: string;
+  // The runtime endpoint to invoke. Omitted, AgentCore uses DEFAULT, which serves the
+  // runtime's newest version.
+  qualifier?: string;
 }
 
 const STAGING: AgentCoreConfig = {
@@ -19,22 +22,25 @@ const STAGING: AgentCoreConfig = {
   runtimeArn: "arn:aws:bedrock-agentcore:us-east-1:816253370536:runtime/davai_agentcore_staging-guJgof856F",
 };
 
-// The production stack does not exist yet; released builds intentionally fall back to
-// staging until it does (matching the current SAM-server situation, where branch and
-// release builds share a server). Replace with the production stack's outputs when created.
-const PRODUCTION: AgentCoreConfig = STAGING;
+// The production stack (infra/README.md). Its DEFAULT endpoint serves the runtime's
+// newest version, where release candidates are tested; its `production` endpoint stays
+// on a tested version until that version is promoted.
+const PRODUCTION_STACK: AgentCoreConfig = {
+  region: "us-east-1",
+  identityPoolId: "us-east-1:a5e4cbee-dfc7-4a29-b3d6-c8f52fa07b7e",
+  unauthRoleArn: "arn:aws:iam::612297603577:role/davai-agentcore-production-unauth",
+  runtimeArn: "arn:aws:bedrock-agentcore:us-east-1:612297603577:runtime/davai_agentcore_production-TFK1Yl3Aea",
+};
+const RELEASE_CANDIDATE: AgentCoreConfig = PRODUCTION_STACK;
+const RELEASE: AgentCoreConfig = { ...PRODUCTION_STACK, qualifier: "production" };
 
-// Branch builds (and local dev) -> staging; released versions (DEPLOY_PATH "version/vX.Y.Z/")
-// -> production. Mirrors how the release pipeline distinguishes builds today.
+// Picks the stack and endpoint from the build's DEPLOY_PATH:
+//   version/vX.Y.Z/  released versions  -> production stack, `production` endpoint
+//   branch/main/     main               -> production stack, DEFAULT endpoint
+//   anything else    other branches and local dev -> staging stack, DEFAULT endpoint
 export function getAgentCoreConfig(): AgentCoreConfig {
   const deployPath = process.env.DEPLOY_PATH || "";
-  if (deployPath.startsWith("version/")) {
-    if (PRODUCTION === STAGING) {
-      // Make the fallback loud, not silent. When the production stack exists, fill in
-      // PRODUCTION above and turn this into a build-time failure instead.
-      console.warn("DAVAI: no production AgentCore stack configured — this release build is using the STAGING backend.");
-    }
-    return PRODUCTION;
-  }
+  if (deployPath.startsWith("version/")) return RELEASE;
+  if (deployPath === "branch/main/") return RELEASE_CANDIDATE;
   return STAGING;
 }
