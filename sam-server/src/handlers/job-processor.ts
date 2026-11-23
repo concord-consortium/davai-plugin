@@ -11,15 +11,21 @@ const pool = new Pool({
   connectionString: process.env.POSTGRES_CONNECTION_STRING
 });
 
-const buildResponse = async (message: any) => {
+// Exported for testing: covers the live SAM poll path (unlike the diverged
+// copy in ../utils/llm-utils.ts, which has no production caller).
+export const buildResponse = async (message: any) => {
   const toolCalls = extractToolCalls(message);
-  if (toolCalls?.[0]) {
-    return await toolCallResponse(toolCalls[0]);
-  }
+  // Provider-reported token usage (LangChain-normalized) rides along on every
+  // turn output so the client can price the session; absent for providers or
+  // paths that do not report it.
+  const usage = message.usage_metadata;
   // Coerce to a string: app.stream's assembled final message can carry an
   // Anthropic content-block array, which the client renders via react-markdown
   // (string-only). Mirrors the streaming partials, which already coerce.
-  return { response: messageTextToString(message.content) };
+  const base = toolCalls?.[0]
+    ? await toolCallResponse(toolCalls[0])
+    : { response: messageTextToString(message.content) };
+  return usage ? { ...base, usage } : base;
 };
 
 // Track currently running jobs

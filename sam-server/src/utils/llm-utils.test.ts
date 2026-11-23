@@ -71,7 +71,7 @@ jest.mock("zod", () => ({
 import { ChatOpenAI } from "@langchain/openai";
 import { ChatGoogleGenerativeAI } from "@langchain/google-genai";
 import { ChatAnthropic } from "@langchain/anthropic";
-import { buildSystemMessage, createModelInstance, getOrCreateModelInstance } from "./llm-utils";
+import { buildResponse, buildSystemMessage, createModelInstance, getOrCreateModelInstance } from "./llm-utils";
 
 afterEach(() => {
   jest.clearAllMocks();
@@ -360,5 +360,20 @@ describe("getOrCreateModelInstance", () => {
       expect.any(Array),
       expect.not.objectContaining({ parallel_tool_calls: expect.anything() })
     );
+  });
+});
+
+describe("buildResponse usage passthrough", () => {
+  it("attaches usage_metadata to plain responses", async () => {
+    const message: any = { content: "hi", usage_metadata: {
+      input_tokens: 100, output_tokens: 5, input_token_details: { cache_read: 80, cache_creation: 0 } } };
+    const out: any = await buildResponse(message);
+    expect(out.response).toBe("hi");
+    expect(out.usage).toEqual(message.usage_metadata);
+  });
+
+  it("omits usage when the message has none", async () => {
+    const out: any = await buildResponse({ content: "hi" } as any);
+    expect(out.usage).toBeUndefined();
   });
 });

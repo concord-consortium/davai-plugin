@@ -3,6 +3,7 @@ import { observer } from "mobx-react-lite";
 import { ChatTranscriptMessage } from "./chat-transcript-message";
 import { ChatTranscript, ChatMessage } from "../types";
 import { LoadingMessage } from "./loading-message";
+import { SessionCost } from "./session-cost";
 import { useAppConfigContext } from "../contexts/app-config-context";
 import { useShortcutsService } from "../contexts/shortcuts-service-context";
 import { useAriaLive } from "../contexts/aria-live-context";
@@ -109,6 +110,7 @@ export const ChatTranscriptComponent = observer(({chatTranscript, isLoading}: IP
     >
       <h2 id="chat-transcript-heading" className="visually-hidden">Chat Transcript</h2>
       <div className="chat-transcript__toolbar">
+        <SessionCost />
         <button
           type="button"
           className="capture-transcript"
