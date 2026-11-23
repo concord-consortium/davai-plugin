@@ -97,9 +97,3 @@ parameters. The first promotion creates the `production` endpoint.
 The client has each stack's outputs (identity pool ID, unauthenticated role ARN and runtime ARN)
 written into `src/utils/agentcore-config.ts`. The runtime ARN ends in a random suffix, so creating
 or recreating a stack means updating that file and rebuilding the client.
-
-## Switching the staging stack to secrets
-
-The staging stack was created when the template took the provider keys as parameters. Before the
-next deploy to it, create the three `davai-agentcore/*` secrets in the QA account. `deploy.sh` then
-switches the stack to the secret ARNs.

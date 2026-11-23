@@ -29,16 +29,16 @@ AWS CLI (profile `agentcore`). The earlier hand-rolled resources (runtime
 | WebSocket endpoint | `wss://bedrock-agentcore.us-east-1.amazonaws.com/runtimes/<url-encoded runtime ARN>/ws` |
 
 ECR repo `davai-agentcore-backend` predates the stack and is referenced via the `ImageUri`
-parameter.
-Provider keys (OpenAI/Anthropic/Google) are runtime env vars fed from NoEcho stack parameters.
+parameter. The secrets `davai-agentcore/{openai,anthropic,google}-api-key` are outside the stack.
+They were created on 2026-11-23 from the keys the stack already had, so the keys didn't change.
 
 ### Deploy / update
 ```bash
 ./infra/deploy.sh staging <image-uri>
 ```
-See [README.md](README.md). The live stack still takes the provider keys as parameters; the next
-deploy switches it to Secrets Manager, so create the three `davai-agentcore/*` secrets in this
-account first.
+See [README.md](README.md). The live stack was created when the template took the provider keys
+as NoEcho parameters, and it still passes them to the runtime that way. The next deploy switches it
+to the secrets above, with no other step needed.
 
 ### Public browser access path (verified live 2026-08-07)
 Anonymous client → Cognito `GetId` + `GetOpenIdToken` → `sts:AssumeRoleWithWebIdentity`
