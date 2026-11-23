@@ -22,8 +22,8 @@ import {
 import type { TurnInput } from "./types.js";
 
 // A tool call becomes a requires_action payload; otherwise coerce content to a
-// string (Anthropic can return content-block arrays).
-const buildResponse = async (message: any) => {
+// string (Anthropic can return content-block arrays). Exported for testing.
+export const buildResponse = async (message: any) => {
   const toolCalls = extractToolCalls(message);
   // Provider-reported token usage (LangChain-normalized) rides along on every
   // turn output so the client can price the session.
