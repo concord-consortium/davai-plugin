@@ -455,7 +455,7 @@ export const AssistantModel = types
           }
           // Record here (not in the caller) so the tokens are attributed to the
           // llmId THIS tool round was sent with, even across a mid-turn model switch.
-          (self as any).recordUsage(wsOut?.usage, reqBody.llmId);
+          self.recordUsage(wsOut?.usage, reqBody.llmId);
           return wsOut;
         }
 
@@ -521,7 +521,7 @@ export const AssistantModel = types
         }
 
         // Same attribution rule as the WS branch above.
-        (self as any).recordUsage(data?.usage, reqBody.llmId);
+        self.recordUsage(data?.usage, reqBody.llmId);
         return data;
       } catch (err) {
         console.error("Failed to send tool output:", err);
@@ -639,7 +639,7 @@ export const AssistantModel = types
             }
           }
 
-          (self as any).recordUsage(data?.usage, reqBody.llmId);
+          self.recordUsage(data?.usage, reqBody.llmId);
           self.addDbgMsg("Response from server", formatJsonMessage(data));
 
           // Tool calls: any user-facing text the model emitted before this tool call is
